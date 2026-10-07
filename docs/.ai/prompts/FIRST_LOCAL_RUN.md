@@ -14,7 +14,9 @@ Goal: resolve dependencies on the owner's Windows machine, generate the real loc
 source foundation and produce the evidence needed to accept it. This continues the same unaccepted
 0.1.0-alpha.1 target. Missing registry access in the source-generation environment was reported, not waived.
 
-Run pnpm doctor. Verify Node 24.x and pnpm 11.25.0. With approval for the network operation, run pnpm install.
+Run the project doctor directly with `node --experimental-strip-types tools/doctor.ts` before installation;
+after installation, use `pnpm run doctor` to avoid pnpm's native doctor command. Verify Node 24.x and
+pnpm 11.25.0. With approval for the network operation, run pnpm install.
 Inspect the resulting pnpm-lock.yaml and native install scripts. Keep explicit top-level versions unless a
 real resolver error requires a narrow compatibility repair; explain it and keep the active target.
 Run pnpm check, pnpm test:desktop, then open pnpm dev for the necessary owner visual smoke. Verify the

@@ -12,13 +12,15 @@ baixar dependências e o Electron; depois disso a execução desta base não usa
 ```powershell
 npm install --global pnpm@11.25.0
 pnpm install
-pnpm doctor
+pnpm run doctor
 pnpm check
 pnpm dev
 ```
 
 Se o pnpm indicado já estiver instalado, ignore o primeiro comando. Não use versões diferentes
-silenciosamente. `pnpm doctor` explica recursos ausentes sem instalar nada por conta própria.
+silenciosamente. `pnpm run doctor` executa o diagnóstico do projeto; `pnpm doctor` pode selecionar
+o comando nativo do gerenciador. Antes de instalar dependências, execute o diagnóstico diretamente
+com `node --experimental-strip-types tools/doctor.ts` para evitar a instalação automática do pnpm.
 
 **Este ZIP não inclui `node_modules`, um executável pronto nem um lockfile fabricado.**
 O ambiente de geração não acessou o registro npm. O primeiro `pnpm install` deve produzir
@@ -65,8 +67,8 @@ e configure `origin` usando o endereço que ele fornecer. O ZIP não cria reposi
 Depois de configurar `origin`, use o GitHub CLI autenticado (`gh`) para preparar os metadados:
 
 ```powershell
-pnpm github:prepare --repo SEU_USUARIO/SEU_REPOSITORIO
-pnpm github:prepare --repo SEU_USUARIO/SEU_REPOSITORIO --apply
+node --experimental-strip-types tools/github-prepare.ts --repo SEU_USUARIO/SEU_REPOSITORIO
+node --experimental-strip-types tools/github-prepare.ts --repo SEU_USUARIO/SEU_REPOSITORIO --apply
 ```
 
 O primeiro comando só mostra a prévia. O segundo autoriza criar/atualizar as labels deste projeto

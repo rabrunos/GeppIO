@@ -9,16 +9,17 @@ From the extracted repository root, in PowerShell:
 ```powershell
 node --version
 npm install --global pnpm@11.25.0
-pnpm doctor
+node --experimental-strip-types tools/doctor.ts
 pnpm install
+pnpm run doctor
 pnpm check
 pnpm test:desktop
 pnpm dev
 ```
 
-The global pnpm installation is an explicit owner step, not performed by project scripts. `doctor` reports a missing dependency directory/lockfile before the first installation; install, then rerun it. Do not use administrator privileges merely to suppress project errors. Use a user-managed Node installation where appropriate.
+The global pnpm installation is an explicit owner step, not performed by project scripts. The project doctor reports a missing dependency directory/lockfile before the first installation; install, then rerun it with `pnpm run doctor`. Explicit `run` avoids selecting pnpm's native doctor command. Before installation, invoke the script directly with Node because pnpm 11 verifies dependencies before scripts and can install automatically. Do not use administrator privileges merely to suppress project errors. Use a user-managed Node installation where appropriate.
 
-`pnpm install` downloads packages and Electron on the first run; extracting the source ZIP alone is not a completely offline installation. After installation the prototype does not need a service/API connection. Package installation uses only the narrow approved-build allowlist for Electron/esbuild.
+`pnpm install` downloads packages; Electron 44.6.0 downloads its binary when first used. Extracting the source ZIP alone is not a completely offline installation. After dependency and binary setup, the prototype does not need a service/API connection. `pnpm-workspace.yaml` permits install scripts only for the reviewed esbuild versions 0.25.12 and 0.28.2. Electron 44.6.0 has no lifecycle install script to approve. Strict engine/peer/build policies and exact dependency saving are configured in this YAML file because pnpm 11 no longer reads non-authentication settings from `.npmrc`.
 
 ## Dependency and validation disclosure
 
@@ -35,7 +36,7 @@ If install/typecheck/build finds a dependency mismatch, repair the smallest inco
 | `pnpm dev` | Local Vite HMR + Electron window; development data origin |
 | `pnpm build` | Compile the source to `out/`; no installer or publication |
 | `pnpm start` | Preview built code through the local production protocol |
-| `pnpm doctor` | Read/check local prerequisites; does not install or publish |
+| `pnpm run doctor` | Run the project prerequisite checks; use direct Node before installation |
 | `pnpm check:repo` | Materialized structure, configuration and local-link checks |
 | `pnpm test` | Dependency-free TS core/control tests using Node |
 | `pnpm typecheck` / `pnpm lint` | Full configured toolchain checks after installation |

@@ -22,13 +22,13 @@ Create an empty repository through the owner's preferred GitHub interface. Bind 
 Preview the intended operation without any GitHub API calls:
 
 ```powershell
-pnpm github:prepare --repo OWNER/REPOSITORY
+node --experimental-strip-types tools/github-prepare.ts --repo OWNER/REPOSITORY
 ```
 
-After reviewing the plan, authenticating GitHub CLI through its own credential mechanism and verifying origin, authorize these metadata writes:
+Direct Node invocation avoids pnpm 11's automatic dependency-install preflight. After reviewing the plan, authenticating GitHub CLI through its own credential mechanism and verifying origin, authorize these metadata writes:
 
 ```powershell
-pnpm github:prepare --repo OWNER/REPOSITORY --apply
+node --experimental-strip-types tools/github-prepare.ts --repo OWNER/REPOSITORY --apply
 ```
 
 This reconciles selected labels and creates one marked foundation-validation Issue if absent. The tool checks origin and remote identity, validates label results and searches open/closed Issues for the marker. It does not create a repository, change protection/visibility, push, close Issues or publish. Ambiguous/failed remote outcomes require inspection before retrying; never infer failure means no write happened. The dry run is a local plan, not proof of the live state.
