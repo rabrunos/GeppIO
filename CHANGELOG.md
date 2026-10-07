@@ -2,6 +2,15 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.2] — 2026-10-07
+
+- Add workspace VS Code launch/validation tasks and recommended Task Buttons shortcuts, with watched development and build-before-preview behavior.
+- Load independently built trusted local plugin packages through a bounded managed directory and versioned manifests.
+- Add Settings > Plugins with directory installation, persistent enable/disable, removal and explicit runtime failures.
+- Run plugin logic in disposable Web Workers with activate/dispose, declarative widget messages and lifecycle timeouts.
+- Add independent counter-widget and background-pulse examples and plugin boundary/lifecycle/desktop tests.
+- Preserve bundled fixtures and the Electron security baseline; no untrusted-plugin isolation or advanced UI/permission broker is claimed.
+
 ## [0.1.0-alpha.1] — 2026-10-07
 
 - Start a new Windows-first Electron/TypeScript/React workbench from scratch.

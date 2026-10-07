@@ -36,6 +36,24 @@ pnpm start
 pnpm test:desktop
 ```
 
+## Atalhos no VS Code
+
+Abra a pasta do projeto no VS Code e instale a extensão recomendada
+**Task Buttons** (`spencerwmiles.vscode-task-buttons`). A barra de status mostra
+**Dev**, **Start**, **Plugins** e **Check**; as mesmas tarefas ficam disponíveis em
+**Terminal > Run Task**, mesmo sem a extensão.
+
+**Dev** executa `pnpm dev --watch`: atualiza o renderer ao salvar e recompila Main/preload
+quando mudam. **Start** executa `pnpm start`; o electron-vite compila antes de abrir o preview.
+**Plugins** gera os exemplos independentes e **Check** executa a validação completa.
+Instale as dependências antes de usar os atalhos.
+
+Cada tarefa usa um terminal dedicado e permite uma instância por janela do workspace.
+Para encerrar Dev/Start, use **Terminal > Terminate Task** e escolha a tarefa, ou a lixeira
+do terminal correspondente. Encerre Dev antes de executar Start/Check, pois eles escrevem
+no mesmo `out/`. Feche também qualquer execução manual anterior antes de iniciar Dev:
+a porta local é fixa e os atalhos não encerram processos iniciados fora das tarefas.
+
 ## O que há na tela
 
 Cabeçalho fixo, Sidebar, Main e Bottom. Dez tipos de widgets fictícios: sete na Main, uma
@@ -51,6 +69,27 @@ não uma decisão definitiva de produto.
 O painel demonstra Overlay e Docked nas quatro bordas; Overlay também permite posição central.
 A barra inferior o reabre. Temas claro/escuro demonstram tokens visuais, não um instalador de temas.
 A sidebar e a barra inferior ainda possuem dimensões fixas nesta fundação.
+
+## Plugins locais de teste
+
+A versão `0.1.0-alpha.2` carrega pacotes externos confiáveis. Para gerar os dois exemplos,
+execute `pnpm plugins:build` e abra o app com `pnpm dev` ou `pnpm start` após `pnpm build`.
+Em **Configurações > Plugins > Instalar pasta local**, escolha
+`.local/plugin-packages/counter` e `.local/plugin-packages/pulse` separadamente.
+A instalação começa desativada; **Ativar** executa o pacote. O contador contribui um widget
+interativo na Main; o pulso não possui widgets e mostra sua atividade nos eventos do gerenciamento.
+**Desativar** descarta o Worker e **Remover** exclui a cópia gerenciada. Instalações e preferências
+persistem ao reiniciar; o estado interno do contador recomeça em cada ativação.
+
+Cada exemplo possui seu próprio `plugin.json` e fonte TypeScript em `examples/plugins/`.
+Adicionar uma nova pasta de exemplo e gerar seus assets não exige editar ou recompilar o core.
+O app copia apenas pacotes prontos de arquivos `.js`/`.json`; escolha a pasta gerada, não a fonte.
+Atualizações exigem remover e reinstalar. Widgets de plugins aparecem em uma faixa na Main,
+sem entrar ainda na persistência/movimentação do layout das fixtures.
+
+Use somente código local revisado e confiável. Workers executam a lógica sem DOM ou ponte
+Node/Electron; isso **não certifica isolamento para terceiros**. Não há marketplace, broker,
+vault, HTML/CSS arbitrário ou superfícies próprias. Veja o [contrato técnico](docs/architecture/plugins.md).
 
 ## Criar o Git e conectar o fluxo
 

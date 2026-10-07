@@ -10,6 +10,7 @@ import { readLayout, writeLayout } from '../../shared/storage.ts'
 import { IDENTITY } from '../../shared/identity.ts'
 import { DEFAULT_LAYOUT, MINIMUMS, WIDGETS } from './fixtures.ts'
 import { WidgetContent } from './WidgetContent.tsx'
+import { usePlugins, PluginSettings, PluginWidgets } from './Plugins.tsx'
 
 type Anchor = 'bottom' | 'top' | 'left' | 'right' | 'floating'
 type Presentation = 'overlay' | 'docked'
@@ -19,6 +20,8 @@ function restore() {
   catch { return { snapshot: structuredClone(DEFAULT_LAYOUT), error: 'Armazenamento local indisponível. As alterações ficarão somente nesta sessão.' } }
 }
 export function App() {
+  const plugins = usePlugins()
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [initial] = useState(restore)
   const committed = useRef<LayoutSnapshot>(initial.snapshot)
   const [placements, setPlacements] = useState(initial.snapshot.placements)
@@ -119,12 +122,14 @@ export function App() {
   </motion.section>
 
   return <MotionConfig reducedMotion="user"><div className="workbench" data-theme={theme} onKeyDown={event => {
+    if (settingsOpen) return
     if (event.key === 'Escape') { if (editing) cancelEdit(); else if (panelOpen) setPanelOpen(false) }
   }}>
     <header className="workbench-header">
       <div className="brand"><span className="brand-icon"><CubeTransparentIcon className="size-6" /></span><div><strong>{IDENTITY.name}</strong><small>LABORATÓRIO DE WORKSPACE</small></div></div>
-      <div className="project-context"><span>Projeto local</span><ChevronRightIcon className="size-3" /><strong>Primeira fundação</strong><span className="badge">sem plugins</span></div>
+      <div className="project-context"><span>Projeto local</span><ChevronRightIcon className="size-3" /><strong>Laboratório</strong><span className="badge">plugins locais</span></div>
       <div className="header-actions"><span className="version">{window.semnome?.version ?? __APP_VERSION__}</span><button className="icon-button" onClick={toggleTheme} aria-label="Alternar tema">{theme === 'dark' ? <SunIcon className="size-5" /> : <MoonIcon className="size-5" />}</button>
+        <button className="button" onClick={() => setSettingsOpen(true)} aria-label="Abrir configurações"><AdjustmentsHorizontalIcon className="size-4" />Configurações</button>
         {!editing ? <button className="button primary" onClick={beginEdit} data-testid="edit-layout"><PencilSquareIcon className="size-4" />Editar layout</button> : <><button className="button" onClick={cancelEdit} data-testid="cancel-layout">Cancelar</button><button className="button primary" onClick={saveEdit} data-testid="save-layout"><CheckIcon className="size-4" />Salvar layout</button></>}
       </div>
     </header>
@@ -137,7 +142,7 @@ export function App() {
         <div className="presentation-options"><AdjustmentsHorizontalIcon className="size-4" /><span>Painel de teste</span><select aria-label="Apresentação do painel" value={presentation} disabled={editing} onChange={e => setPresentation(e.target.value as Presentation)}><option value="overlay">Overlay</option><option value="docked">Docked</option></select><select aria-label="Borda do painel" value={actualAnchor} disabled={editing} onChange={e => setAnchor(e.target.value as Anchor)}><option value="bottom">Inferior</option><option value="top">Superior</option><option value="left">Esquerda</option><option value="right">Direita</option>{presentation === 'overlay' && <option value="floating">Flutuante</option>}</select><button className="button subtle" disabled={editing} onClick={() => setPanelOpen(!panelOpen)}>{panelOpen ? 'Recolher' : 'Abrir painel'}</button><label className="import-layout">Importar layout<input type="file" accept=".json,application/json" disabled={editing} onChange={e => { importLayout(e.target.files?.[0]); e.target.value = '' }} /></label></div>
         <div className={'work-surface ' + (docked ? 'with-dock edge-' + actualAnchor : '')}>
           {docked && ['top', 'left'].includes(actualAnchor) && panel}
-          <div className="canvas-viewport"><div className={'layout-canvas ' + (editing ? 'editing' : '')} ref={canvas} data-testid="layout-canvas">
+          <div className="canvas-viewport"><PluginWidgets plugins={plugins} /><div className={'layout-canvas ' + (editing ? 'editing' : '')} ref={canvas} data-testid="layout-canvas">
             {placements.map(placement => {
               const definition = WIDGETS.find(w => w.id === placement.id)
               const invalid = !canPlace(placement, placements)
@@ -156,7 +161,8 @@ export function App() {
         </div>
         <div className="workspace-feedback" role="status">{message}{editing && selection && <span>{selection.id} · x {(selection.x * 100).toFixed(2)}% · y {(selection.y * 100).toFixed(2)}% · {(selection.width * 100).toFixed(2)} × {(selection.height * 100).toFixed(2)}%</span>}</div>
       </main>
-      <footer className="bottom-region" data-region="bottom"><span className="region-label">BOTTOM</span><button className={'bottom-action ' + (panelOpen ? 'active' : '')} onClick={() => setPanelOpen(!panelOpen)} disabled={editing} aria-label="Abrir ou recolher painel de teste"><CommandLineIcon className="size-4" />Painel de teste</button><div className="bottom-spacer" /><span>10 widgets de demonstração</span><span className="bottom-separator" /><span>0 plugins</span><span className="status-dot" /></footer>
+      <footer className="bottom-region" data-region="bottom"><span className="region-label">BOTTOM</span><button className={'bottom-action ' + (panelOpen ? 'active' : '')} onClick={() => setPanelOpen(!panelOpen)} disabled={editing} aria-label="Abrir ou recolher painel de teste"><CommandLineIcon className="size-4" />Painel de teste</button><div className="bottom-spacer" /><span>10 widgets de demonstração</span><span className="bottom-separator" /><span>{plugins.inventory.plugins.length} plugins locais</span><span className="status-dot" /></footer>
     </div>
+    {settingsOpen && <PluginSettings plugins={plugins} close={() => setSettingsOpen(false)} />}
   </div></MotionConfig>
 }

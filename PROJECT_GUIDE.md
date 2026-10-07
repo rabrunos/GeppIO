@@ -16,14 +16,15 @@ Use [SECURITY_BASELINE](docs/.ai/SECURITY_BASELINE.md) when a trust boundary cha
 ## Durable project facts
 
 The provisional name is `semnome`. The initial target is Windows and the stack is Electron,
-TypeScript, React, Tailwind, Heroicons and Motion. There are no real plugins in the foundation.
+TypeScript, React, Tailwind, Heroicons and Motion. The alpha.1 foundation has static fixtures;
+alpha.2 adds an explicitly trusted local plugin runtime (Issue #21).
 The fixed header is outside the widget layout. Regions are logically peers. Product choices
 not explicitly closed by the owner remain labelled provisional in the specification.
 
 `package.json` is the canonical version source; `CHANGELOG.md` is integrated product history.
-The shipped source baseline is `0.1.0-alpha.1`, awaiting actual local dependency/build/desktop
-acceptance. Repairs needed to accept this same baseline retain that target; do not invent a
-new release just to install dependencies or generate its first lockfile.
+The initial source baseline is `0.1.0-alpha.1`; its owner acceptance remains in Issue #1.
+Issue #21 assigns the independent plugin increment `0.1.0-alpha.2`. Repairs retain their active
+unaccepted target; machine setup does not itself justify a new release.
 
 ## Remote identity and one-time packaging exception
 

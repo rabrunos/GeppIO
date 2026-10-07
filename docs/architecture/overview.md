@@ -9,19 +9,26 @@ Electron Main                           React renderer
   permissions denied                       Sidebar / Main / Bottom
   external navigation denied               trusted fixture widgets
           |                                edit transaction + presentation demo
-          | static preload metadata                     |
+          | preload metadata + fixed plugin management  |
           +---------------------------------------------+
                                              pure layout / storage adapters
 ```
 
-Main owns the native window and a bounded local asset protocol. The preload exposes only immutable `name`, `version`, `platform` metadata. There is no generic IPC entry point, filesystem/terminal function or remote-content embedding.
+Main owns the native window, a bounded local asset protocol and the trusted local package store.
+The preload exposes immutable metadata plus fixed list/install/setEnabled/remove operations for
+the application's main frame. There is no generic IPC entry point, filesystem/terminal function
+or remote-content embedding. Each enabled external package runs in a renderer Web Worker;
+validated declarative contributions are rendered by React in the Main region.
 
 The renderer owns visual state. `src/shared/layout.ts` owns normalized geometry and layout parsing without Electron/React/DOM dependencies. `src/shared/storage.ts` accepts an injected storage interface for tests and returns explicit failures. `src/shared/identity.ts` centralizes runtime identity.
 
 | Responsibility | Files |
 | --- | --- |
 | Native window, production assets, session restrictions | `src/main/index.ts`, `src/main/security.ts` |
-| Metadata-only bridge | `src/preload/index.ts` |
+| Metadata and fixed plugin-management bridge | `src/preload/index.ts` |
+| Managed package snapshots and installation preferences | `src/main/plugins.ts` |
+| Plugin lifecycle, Worker adapter and Settings/widgets | `plugin-runtime.ts`, `plugin-worker.ts`, `Plugins.tsx` in `src/renderer/src/` |
+| Versioned plugin contract and validators | `src/shared/plugins.ts`, `sdk/plugin.d.ts` |
 | App composition and interaction | `src/renderer/src/App.tsx` |
 | Synthetic widget content and registry | `WidgetContent.tsx`, `fixtures.ts` in `src/renderer/src/` |
 | Visual tokens and CSS/Tailwind | `src/renderer/src/styles.css` |
@@ -40,4 +47,7 @@ React fixture components are trusted source in the application renderer. They ar
 
 `electron-vite` builds Main/preload to explicit CJS outputs and the renderer to bundled static assets. Production-preview content is served from `semnome://app/`; development content is a validated loopback Vite server. Node is used to build/run project tools, not exposed to the renderer. Runtime version display comes from `package.json` via the build define/preload.
 
-Before real plugins, perform a separately scoped WebContentsView experiment and define its z-order, clipping, focus, animation and lifecycle behavior. A working DOM demo is not evidence that native web surfaces satisfy those requirements.
+Before adding plugin-owned native UI surfaces, perform a separately scoped WebContentsView experiment
+and define its z-order, clipping, focus, animation and lifecycle behavior. The trusted Worker runtime
+does not implement or certify those surfaces; the declarative contribution contract is separate from
+the logic lifecycle so they can be introduced later.

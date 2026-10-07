@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "apiVersion": 1,
+  "id": "local.counter",
+  "name": "Contador local",
+  "version": "1.0.0",
+  "entry": "entry.js",
+  "widgets": [{ "id": "counter", "title": "Contador do plugin", "surface": "declarative" }]
+}

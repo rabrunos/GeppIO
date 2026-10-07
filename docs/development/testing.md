@@ -25,7 +25,34 @@ Fixtures are synthetic. Tests must not read personal projects or credentials. Ne
 
 Build first. The smoke launcher allocates its own `semnome-smoke-*` directory under the OS temporary root and passes a restricted test override. Never point it at the owner's actual userData. Only that generated test directory is removed afterward. Screenshot output goes to ignored `.local/diagnostics/`.
 
-The automation checks the three regions, seven Main widgets, absence of a Node/native renderer bridge, edit cancel/save, the sample panel, theme persistence after reload and a real process-metrics sample. It must report launch or renderer failures; a screenshot alone cannot replace the assertions.
+The automation checks the three regions, seven Main widgets, absence of renderer Node globals,
+the fixed bridge shape, edit cancel/save, the sample panel, theme persistence after reload and a
+real process-metrics sample. It must report launch or renderer failures; a screenshot alone cannot
+replace the assertions.
+
+For alpha.2, build the independent examples first with `pnpm plugins:build` (`pnpm check` includes
+this). Desktop smoke also installs through Settings/native directory selection in its disposable
+profile, exercises the counter and zero-widget pulse, repeated activate/dispose, malformed/duplicate
+packages, missing/import-failing modules, plugin exceptions and activation hangs. It restarts the
+full Electron process with that same test profile to verify installation, enable/disable and removal
+persistence. The worker/renderer checks assert no Node globals or Worker management bridge. None of
+these tests touch the owner's installed packages. Unit tests cover bounded package validation,
+corrupt state preservation, immutable snapshots, rollback, lifecycle timeout and message floods.
+`pnpm test:desktop:dev` repeats this smoke with built Main/preload and a Vite renderer loaded from
+the project configuration on the exact loopback origin, validating local protocol module imports
+and development CSP/CORS. It does not certify every HMR or electron-vite launcher behavior.
+
+## Owner plugin smoke (Issue #21)
+
+Generate the examples and build/preview the app. In Settings > Plugins install each generated folder;
+confirm disabled status and no widget before activation. Activate the counter, close Settings and
+click Incrementar twice. Activate pulse and confirm advancing status/events with zero widgets.
+Disable/re-enable both repeatedly: counter resets, widgets disappear on disable, and pulse records
+timer cleanup. Restart the same app origin/profile with one disabled; confirm preferences and only
+the enabled contribution. Remove both and restart; confirm no installation/widgets remain. Check
+Settings keyboard/Escape/focus, scrolling and both themes at the usual Windows DPI. Use disposable
+test packages for duplicate IDs, malformed manifests and exceptions; never install unknown code.
+Record owner acceptance in #21; automated Windows smoke does not substitute that UX acceptance.
 
 ## Owner Windows smoke
 
@@ -35,7 +62,9 @@ Enter Edit, move and resize a widget into empty space, move near an edge/centre 
 
 Open the sample panel on all four sides in both Overlay and Docked. Overlay should leave underlying geometry unchanged; Docked should reserve viewport space (the minimum canvas may scroll). Test floating Overlay and the persistent reopen button. Resize the native window and verify overflow remains reachable rather than hiding widgets permanently.
 
-Measure memory/CPU during representative interaction and repeated opens/closes; record environment and workload. There are no real web embeddings, terminal processes or plugin background workers here, so the fixture result cannot certify their future cost.
+Measure memory/CPU during representative interaction and repeated opens/closes; record environment
+and workload. Alpha.2 has real Workers for trusted test logic, but no web embeddings or terminal
+processes. A fixture/sample result cannot certify future plugin costs or OS resource isolation.
 
 ## Completion standard
 

@@ -1,6 +1,6 @@
 {
   "name": "semnome",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.2",
   "private": true,
   "license": "UNLICENSED",
   "description": "A local desktop workbench — foundation prototype, Windows first.",
@@ -16,12 +16,14 @@
     "start": "electron-vite preview",
     "build": "electron-vite build",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src tools tests electron.vite.config.ts",
+    "lint": "eslint src tools tests examples sdk electron.vite.config.ts",
     "test": "node --experimental-strip-types tools/test.ts",
     "check:repo": "node --experimental-strip-types tools/check-repo.ts",
     "doctor": "node --experimental-strip-types tools/doctor.ts",
-    "check": "pnpm check:repo && pnpm typecheck && pnpm lint && pnpm test && pnpm build",
+    "check": "pnpm check:repo && pnpm typecheck && pnpm lint && pnpm test && pnpm plugins:build && pnpm build",
+    "plugins:build": "node --experimental-strip-types tools/build-plugins.ts",
     "test:desktop": "node --experimental-strip-types tools/desktop-smoke.ts",
+    "test:desktop:dev": "node --experimental-strip-types tools/desktop-smoke.ts --dev",
     "github:prepare": "node --experimental-strip-types tools/github-prepare.ts"
   },
   "dependencies": {

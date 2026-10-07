@@ -10,6 +10,7 @@ export default defineConfig({
     build: { rollupOptions: { output: { format: 'cjs', entryFileNames: 'index.cjs' } } }
   },
   renderer: {
+    worker: { format: 'es' },
     plugins: [react(), tailwindcss()],
     define: { __APP_VERSION__: JSON.stringify(pkg.version) },
     server: { host: '127.0.0.1', port: 5173, strictPort: true },

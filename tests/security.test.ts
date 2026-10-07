@@ -18,9 +18,13 @@ test('production script CSP is not the development inline-script policy', () => 
   assert.match(PRODUCTION_CSP, /connect-src 'none'/)
   assert.ok(!PRODUCTION_CSP.includes('unsafe-eval'))
 })
-test('static security regression: renderer has no privileged bridge', () => {
+test('static security regression: renderer has only a fixed plugin-management bridge', () => {
   const preload = readFileSync('src/preload/index.ts', 'utf8'), main = readFileSync('src/main/index.ts', 'utf8')
-  assert.ok(!/ipcRenderer|child_process|node:fs/.test(preload))
+  assert.ok(!/child_process|node:fs|sendSync|\.send\(/.test(preload))
+  assert.deepEqual([...preload.matchAll(/ipcRenderer.invoke\('([^']+)'/g)].map(match => match[1]), ['plugins:list', 'plugins:install', 'plugins:set-enabled', 'plugins:remove'])
+  assert.match(main, /event.senderFrame !== event.sender.mainFrame/)
   assert.match(main, /sandbox: true/); assert.match(main, /contextIsolation: true/)
   assert.match(main, /nodeIntegration: false/); assert.match(main, /webviewTag: false/)
+  assert.match(main, /nodeIntegrationInWorker: false/)
+  assert.match(PRODUCTION_CSP, /worker-src 'self'/)
 })

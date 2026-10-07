@@ -1,0 +1,24 @@
+{
+  "VsCodeTaskButtons.tasks": [
+    {
+      "label": "$(debug-start) Dev",
+      "task": "Geptor: Dev",
+      "tooltip": "Abrir Geptor com atualizações ao salvar"
+    },
+    {
+      "label": "$(play) Start",
+      "task": "Geptor: Start",
+      "tooltip": "Compilar e abrir o preview do Geptor"
+    },
+    {
+      "label": "$(extensions) Plugins",
+      "task": "Geptor: Build Plugins",
+      "tooltip": "Compilar os pacotes de plugins de exemplo"
+    },
+    {
+      "label": "$(check) Check",
+      "task": "Geptor: Check",
+      "tooltip": "Validar estrutura, tipos, lint, testes e build"
+    }
+  ]
+}

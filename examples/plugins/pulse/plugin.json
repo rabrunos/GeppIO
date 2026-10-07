@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "apiVersion": 1,
+  "id": "local.pulse",
+  "name": "Pulso em segundo plano",
+  "version": "1.0.0",
+  "entry": "entry.js",
+  "widgets": []
+}

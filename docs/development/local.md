@@ -45,7 +45,12 @@ If install/typecheck/build finds a dependency mismatch, repair the smallest inco
 
 ## Data and another machine
 
-The prototype stores only a small layout/theme snapshot in renderer localStorage. Development and built-preview origins can have independent drafts. Do not assume an OS profile/name/path rename migrates them. There is no automatic updater, native credential store or application login.
+The prototype stores a small layout/theme snapshot in renderer localStorage and trusted plugin
+copies/preferences under application userData. Development and built-preview origins can have
+independent layout drafts; plugin installation preferences share the same desktop profile.
+Do not assume an OS profile/name/path rename migrates them. There is no automatic updater,
+native credential store or application login. `pnpm plugins:build` generates independent sample
+packages under `.local/plugin-packages`; install those through Settings, never by changing core imports.
 
 Keep diagnostics, temporary configuration and local artifacts under ignored `.local/` only when needed. Never commit machine-specific absolute paths, tokens, raw personal documents or production data. No tracked checkpoint/last-report is required.
 

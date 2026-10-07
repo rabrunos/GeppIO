@@ -1,10 +1,12 @@
 # Security control map
 
-This is a selected control map, not a security certification or a list of claimed test outcomes. Read the active Issue for executed evidence. The current product has trusted bundled fixtures, local layout input and a native window; it has no users/login service, remote embeds or untrusted plugin runtime.
+This is a selected control map, not a security certification or a list of claimed test outcomes. Read the active Issue for executed evidence. The current product has trusted bundled fixtures, trusted local Worker plugins, local layout input and a native window; it has no users/login service, remote embeds or untrusted plugin runtime.
 
 | Exposure | Control / implementation | Check and limitation |
 | --- | --- | --- |
-| Renderer reaches native authority | `nodeIntegration: false`, `contextIsolation: true`, sandbox enabled; metadata-only preload | Source assertions in `tests/security.test.ts`; actual renderer absence of `require`/`process` in `pnpm test:desktop` |
+| Renderer reaches native authority | `nodeIntegration: false`, `nodeIntegrationInWorker: false`, `contextIsolation: true`, sandbox enabled; four fixed plugin-management operations | Source assertions and desktop renderer/Worker absence of `require`/`process`; Workers have no management bridge |
+| Trusted local plugin package input | Native directory picker, bounded manifest/files, no links/traversal, managed copies and inspected JS snapshots, main-frame IPC validation | `tests/plugins.test.ts` and desktop installation/failure cases; not safe for hostile third-party packages or same-user disk attacks |
+| Plugin lifecycle/contributions | Worker-bound identity, literal declarative UI, timeout/terminate, bounded events/message rate | `tests/plugin-runtime.test.ts` and real desktop activation/actions/disposal/restart; no OS resource/storage/session isolation |
 | External page/new window/navigation | Reject window-open, navigation away and attached webviews; production web requests restricted; permissions and downloads denied | Source controls plus actual desktop smoke; a future remote surface requires separate tests |
 | Production asset request | Fixed custom origin, GET only, allowlisted MIME and path containment in `src/main/security.ts`; CSP and nosniff | Parser/traversal negative tests; production startup smoke still required |
 | Dev server selected by environment | Exact validated `127.0.0.1:5173` origin; no arbitrary host fallback | Unit tests; dev-only CSP has HMR allowances and is not production policy |
@@ -14,7 +16,7 @@ This is a selected control map, not a security certification or a list of claime
 | GitHub setup alters wrong repository | Explicit validated OWNER/REPO + matching origin + remote identity verification; dry run default | `tests/github-plan.test.ts`; remote writes require explicit `--apply` and actual authenticated verification |
 | Dependency / source secret leakage | Exact pins, approved install-script list, ignored credentials/local output; read-only CI secret scan | First install/lock review and CI scanner; ignore rules are not access control |
 
-No script injection, safe-storage credential service, PTY, local file browser or unrestricted IPC handler exists. Future controls described in [Plugin boundaries](plugins.md) are requirements, not implemented protections.
+No arbitrary content injection, safe-storage credential service, PTY, general local file browser or unrestricted IPC handler exists. Advanced future controls described in [Plugin boundaries](plugins.md) are requirements, not implemented protections.
 
 ## Production versus development
 

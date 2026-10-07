@@ -1,0 +1,72 @@
+{
+  "version": "2.0.0",
+  "options": {
+    "cwd": "${workspaceFolder}"
+  },
+  "presentation": {
+    "reveal": "always",
+    "panel": "dedicated",
+    "clear": true,
+    "showReuseMessage": true
+  },
+  "tasks": [
+    {
+      "label": "Geptor: Dev",
+      "type": "shell",
+      "command": "pnpm",
+      "args": ["dev", "--watch"],
+      "windows": {
+        "command": "pnpm.cmd",
+        "options": {
+          "shell": { "executable": "cmd.exe", "args": ["/d", "/c"] }
+        }
+      },
+      "isBackground": true,
+      "problemMatcher": [],
+      "runOptions": { "instanceLimit": 1 }
+    },
+    {
+      "label": "Geptor: Start",
+      "type": "shell",
+      "command": "pnpm",
+      "args": ["start"],
+      "windows": {
+        "command": "pnpm.cmd",
+        "options": {
+          "shell": { "executable": "cmd.exe", "args": ["/d", "/c"] }
+        }
+      },
+      "isBackground": true,
+      "problemMatcher": [],
+      "runOptions": { "instanceLimit": 1 }
+    },
+    {
+      "label": "Geptor: Build Plugins",
+      "type": "shell",
+      "command": "pnpm",
+      "args": ["plugins:build"],
+      "windows": {
+        "command": "pnpm.cmd",
+        "options": {
+          "shell": { "executable": "cmd.exe", "args": ["/d", "/c"] }
+        }
+      },
+      "problemMatcher": [],
+      "runOptions": { "instanceLimit": 1 }
+    },
+    {
+      "label": "Geptor: Check",
+      "type": "shell",
+      "command": "pnpm",
+      "args": ["check"],
+      "windows": {
+        "command": "pnpm.cmd",
+        "options": {
+          "shell": { "executable": "cmd.exe", "args": ["/d", "/c"] }
+        }
+      },
+      "problemMatcher": [],
+      "runOptions": { "instanceLimit": 1 }
+    }
+  ]
+}
