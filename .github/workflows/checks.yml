@@ -1,0 +1,59 @@
+name: semnome checks
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: semnome-checks-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1, pinned from the inspected method
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Require the real resolved lockfile
+        shell: pwsh
+        run: |
+          if (-not (Test-Path pnpm-lock.yaml)) { throw 'Run pnpm install locally, validate and commit the real lockfile before CI.' }
+      - name: Install the selected package manager
+        run: npm install --global pnpm@11.25.0
+      - name: Install the locked graph
+        run: pnpm install --frozen-lockfile
+      - name: Check structure, types, lint, tests and build
+        run: pnpm check
+      - name: Built desktop smoke in an isolated profile
+        run: pnpm test:desktop
+  secrets:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Check whitespace
+        run: git show --format= --check HEAD
+      - name: Check history with a checksum-verified scanner
+        shell: bash
+        env:
+          GITLEAKS_VERSION: '8.30.1'
+          GITLEAKS_SHA256: '551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb'
+        run: |
+          set -euo pipefail
+          destination="$RUNNER_TEMP/semnome-gitleaks"
+          mkdir -p "$destination"
+          curl --fail --location --proto '=https' --tlsv1.2 --max-time 120 \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            --output "$destination/scanner.tar.gz"
+          printf '%s  %s\n' "$GITLEAKS_SHA256" "$destination/scanner.tar.gz" | sha256sum --check --status
+          tar -xzf "$destination/scanner.tar.gz" -C "$destination" gitleaks
+          "$destination/gitleaks" git --redact --no-banner --log-opts=--all --timeout=180 .

@@ -1,0 +1,139 @@
+{
+  "$schema": "./schemas/project-profile.schema.json",
+  "schema": "project-profile/v3",
+  "project": {
+    "name": "semnome",
+    "kind": "desktop-workbench-prototype",
+    "summary": "Windows-first local workbench foundation with peer regions, continuous widgets and a future permissioned plugin platform."
+  },
+  "owner": {
+    "repository_language": "en",
+    "report_language": "pt-BR"
+  },
+  "platforms": [
+    "windows-x64"
+  ],
+  "languages": [
+    "TypeScript",
+    "CSS",
+    "HTML"
+  ],
+  "toolchain": [
+    "Node.js 24",
+    "pnpm 11.25.0",
+    "Electron",
+    "React",
+    "Tailwind CSS",
+    "Heroicons",
+    "Motion",
+    "electron-vite",
+    "TypeScript",
+    "Node test runner",
+    "Playwright"
+  ],
+  "constraints": [
+    "Provisional name semnome; no remote repository identity has been assigned.",
+    "No application login, external service or paid AI API.",
+    "No real plugins or native terminal in the first foundation.",
+    "No BootCrate Setup, Console, raw intake or upstream application code.",
+    "Remote metadata and commit/push require explicit authorization."
+  ],
+  "architecture_invariants": [
+    "Fixed header outside widget arrangement.",
+    "The prototype represents Sidebar, Main and Bottom as siblings; the owner discussion about the final abstraction remains open.",
+    "Continuous Main coordinates; no compulsory cell grid.",
+    "Editing layout requires an explicit mode.",
+    "Presentation, anchor and collapsibility remain independent concepts.",
+    "A plugin is not equivalent to a widget; future plugin execution is outside this baseline.",
+    "No Node, filesystem or generic IPC exposed to the renderer."
+  ],
+  "validation": {
+    "canonical_capabilities": [
+      "doctor",
+      "check:repo",
+      "typecheck",
+      "lint",
+      "test",
+      "build",
+      "dev",
+      "test:desktop"
+    ],
+    "required_files": [
+      "PROJECT_GUIDE.md",
+      "AGENTS.md",
+      "package.json",
+      "CHANGELOG.md",
+      "docs/product/requirements.md",
+      "docs/architecture/security.md",
+      ".codex/config.toml",
+      ".codex/agents/scout.toml",
+      ".codex/agents/worker.toml",
+      ".github/workflows/checks.yml"
+    ]
+  },
+  "workflow": {
+    "tracking": "github_issues",
+    "primary_orchestrator": "chatgpt",
+    "fallback_planners": [
+      "codex_plan"
+    ],
+    "implementation_harnesses": [
+      "codex"
+    ],
+    "consumption_preset": "standard",
+    "collaboration": "single"
+  },
+  "execution_permissions": {
+    "safe_default": "protected_manual"
+  },
+  "versioning": {
+    "required": true,
+    "canonical_source": "package.json",
+    "reader": "json",
+    "value_path": "/version",
+    "format": "semver",
+    "history_source": "CHANGELOG.md",
+    "history_format": "markdown-headings",
+    "mirrors": [],
+    "target_version_in_prompt_h1": true,
+    "target_version_in_commit": true,
+    "target_version_in_report_h1": true,
+    "continuations_reuse_target": true
+  },
+  "security": {
+    "exposure": "local",
+    "data_classes": [
+      "internal"
+    ],
+    "untrusted_inputs": [
+      "Imported layout JSON",
+      "Persisted layout bytes",
+      "Custom protocol URLs",
+      "Development URL override",
+      "Third-party build dependencies"
+    ],
+    "modules": [
+      "desktop-mobile"
+    ],
+    "control_map": "docs/architecture/security.md",
+    "verification_commands": [
+      "pnpm test",
+      "pnpm check:repo",
+      "pnpm test:desktop"
+    ]
+  },
+  "services": [],
+  "distribution": {
+    "mode": "none",
+    "targets": []
+  },
+  "console": {
+    "enabled": false
+  },
+  "skills": [
+    "context-discovery",
+    "safe-validation",
+    "concise-report",
+    "diagnostics-analysis"
+  ]
+}

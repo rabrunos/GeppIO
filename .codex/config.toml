@@ -1,0 +1,18 @@
+# semnome defaults, adapted from BootCrate. Verify effective settings in the installed client.
+# Model is intentionally inherited from the owner's signed-in client; no API provider is added.
+model_reasoning_effort = "high"
+approval_policy = "on-request"
+approvals_reviewer = "user"
+sandbox_mode = "workspace-write"
+
+[agents]
+enabled = true
+max_concurrent_threads_per_session = 2
+interrupt_message = true
+
+[sandbox_workspace_write]
+network_access = false
+
+[shell_environment_policy]
+inherit = "core"
+ignore_default_excludes = false

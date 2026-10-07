@@ -1,0 +1,47 @@
+[
+  {
+    "name": "type:epic",
+    "color": "5319e7",
+    "description": "Large coordinated outcome."
+  },
+  {
+    "name": "type:feature",
+    "color": "1d76db",
+    "description": "User-facing capability."
+  },
+  {
+    "name": "type:task",
+    "color": "0e8a16",
+    "description": "Bounded executable work, including tooling."
+  },
+  {
+    "name": "type:bug",
+    "color": "d73a4a",
+    "description": "Unexpected behavior."
+  },
+  {
+    "name": "type:investigation",
+    "color": "fbca04",
+    "description": "Evidence gathering or unresolved design."
+  },
+  {
+    "name": "type:refactor",
+    "color": "c5def5",
+    "description": "Structural change preserving behavior."
+  },
+  {
+    "name": "status:blocked",
+    "color": "b60205",
+    "description": "A verified dependency blocks progress."
+  },
+  {
+    "name": "status:needs-owner",
+    "color": "f9d0c4",
+    "description": "An owner decision or approval is required."
+  },
+  {
+    "name": "status:needs-validation",
+    "color": "fef2c0",
+    "description": "Implementation awaits required evidence or smoke."
+  }
+]

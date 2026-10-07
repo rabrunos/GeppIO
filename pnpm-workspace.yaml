@@ -1,0 +1,5 @@
+# Only the native build tools used by this project may run install scripts.
+# Keep this allowlist narrow when adding dependencies.
+onlyBuiltDependencies:
+  - electron
+  - esbuild

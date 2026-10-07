@@ -1,0 +1,49 @@
+name: "Feature"
+description: "A user-facing capability with a resolved goal."
+title: "[Feature] "
+labels: ["type:feature"]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal / observed problem
+      description: "For a bug, include reproduction and expected versus actual behavior. Do not include secrets."
+    validations:
+      required: true
+  - type: input
+    id: target
+    attributes:
+      label: Target Version
+      description: "Required before tracked changes; use not applicable for read-only work. Continuations retain the unaccepted target."
+  - type: input
+    id: basis
+    attributes:
+      label: Repository basis
+      description: "Observed version, branch and commit when relevant; local executor verifies actual state."
+  - type: textarea
+    id: scope
+    attributes:
+      label: In scope / non-goals
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance / investigation stopping condition
+      placeholder: "- [ ] An observable outcome, not just a file to create."
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation and remaining owner smoke
+      description: "State environment, evidence needed and verifier. Unexecuted checks are not passed."
+  - type: textarea
+    id: authorization
+    attributes:
+      label: Authorized actions and sensitive boundaries
+      description: "Implementation, commit, push, metadata writes and publication are separate authorizations."
+  - type: input
+    id: related
+    attributes:
+      label: Related Issues / Epic / Milestone

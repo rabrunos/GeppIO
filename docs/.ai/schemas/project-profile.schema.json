@@ -1,0 +1,359 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "semnome-project-profile.schema.json",
+  "title": "semnome selected BootCrate v3 profile",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "minLength": 1
+    },
+    "schema": {
+      "const": "project-profile/v3"
+    },
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "name",
+        "kind",
+        "summary"
+      ]
+    },
+    "owner": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "repository_language": {
+          "type": "string",
+          "minLength": 1
+        },
+        "report_language": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "repository_language",
+        "report_language"
+      ]
+    },
+    "platforms": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "languages": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "toolchain": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "constraints": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "architecture_invariants": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "skills": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "canonical_capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "required_files": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "canonical_capabilities",
+        "required_files"
+      ]
+    },
+    "workflow": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tracking": {
+          "const": "github_issues"
+        },
+        "primary_orchestrator": {
+          "const": "chatgpt"
+        },
+        "fallback_planners": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "codex_plan"
+            ]
+          },
+          "uniqueItems": true
+        },
+        "implementation_harnesses": {
+          "const": [
+            "codex"
+          ]
+        },
+        "consumption_preset": {
+          "enum": [
+            "standard",
+            "economy"
+          ]
+        },
+        "collaboration": {
+          "enum": [
+            "single",
+            "coordinated"
+          ]
+        }
+      },
+      "required": [
+        "tracking",
+        "primary_orchestrator",
+        "fallback_planners",
+        "implementation_harnesses",
+        "consumption_preset",
+        "collaboration"
+      ]
+    },
+    "execution_permissions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "safe_default": {
+          "const": "protected_manual"
+        }
+      },
+      "required": [
+        "safe_default"
+      ]
+    },
+    "versioning": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "required": {
+          "const": true
+        },
+        "canonical_source": {
+          "const": "package.json"
+        },
+        "reader": {
+          "const": "json"
+        },
+        "value_path": {
+          "const": "/version"
+        },
+        "format": {
+          "const": "semver"
+        },
+        "history_source": {
+          "const": "CHANGELOG.md"
+        },
+        "history_format": {
+          "const": "markdown-headings"
+        },
+        "mirrors": {
+          "type": "array",
+          "maxItems": 0
+        },
+        "target_version_in_prompt_h1": {
+          "const": true
+        },
+        "target_version_in_commit": {
+          "const": true
+        },
+        "target_version_in_report_h1": {
+          "const": true
+        },
+        "continuations_reuse_target": {
+          "const": true
+        }
+      },
+      "required": [
+        "required",
+        "canonical_source",
+        "reader",
+        "value_path",
+        "format",
+        "history_source",
+        "history_format",
+        "mirrors",
+        "target_version_in_prompt_h1",
+        "target_version_in_commit",
+        "target_version_in_report_h1",
+        "continuations_reuse_target"
+      ]
+    },
+    "security": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "exposure": {
+          "const": "local"
+        },
+        "data_classes": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "public",
+              "internal",
+              "personal",
+              "sensitive",
+              "payments"
+            ]
+          },
+          "uniqueItems": true
+        },
+        "untrusted_inputs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "modules": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "desktop-mobile",
+              "sensitive-data"
+            ]
+          },
+          "uniqueItems": true
+        },
+        "control_map": {
+          "type": "string",
+          "minLength": 1
+        },
+        "verification_commands": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "exposure",
+        "data_classes",
+        "untrusted_inputs",
+        "modules",
+        "control_map",
+        "verification_commands"
+      ]
+    },
+    "services": {
+      "type": "array",
+      "maxItems": 0
+    },
+    "distribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "const": "none"
+        },
+        "targets": {
+          "type": "array",
+          "maxItems": 0
+        }
+      },
+      "required": [
+        "mode",
+        "targets"
+      ]
+    },
+    "console": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "const": false
+        }
+      },
+      "required": [
+        "enabled"
+      ]
+    }
+  },
+  "required": [
+    "$schema",
+    "schema",
+    "project",
+    "owner",
+    "platforms",
+    "languages",
+    "toolchain",
+    "constraints",
+    "architecture_invariants",
+    "skills",
+    "validation",
+    "workflow",
+    "execution_permissions",
+    "versioning",
+    "security",
+    "services",
+    "distribution",
+    "console"
+  ]
+}
