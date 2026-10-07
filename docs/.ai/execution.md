@@ -1,7 +1,9 @@
 # Requested and effective executor settings
 
 Only Codex is enabled. `.codex/config.toml` carries project-scoped defaults: Main High, on-request
-user approvals, workspace-write, sandbox network disabled, and at most two simultaneous subagents.
+automatic approval review, workspace-write, sandbox network enabled, and at most two simultaneous
+subagents. The normalized profile names this combination `protected_auto`. Network access does not
+expand writable roots, grant new task authority, or bypass automatic-review denials.
 `scout` is Medium/read-only; `worker` is Low/bounded workspace execution. Each file inherits the
 signed-in client's available model rather than embedding an unverified model or API key.
 This does not guarantee lower-cost models: only the requested effort differs.
@@ -11,6 +13,9 @@ A trusted workspace/config consent may be necessary. Verify effective sandbox/ne
 in the actual client. Valid TOML proves syntax, not enforcement. Do not edit the user's global config
 or enable full access automatically. If an installed client cannot honor a setting, report the exact
 blocker and use an explicitly approved compatible setting, never an invented option.
+The active client can retain a different network restriction until it reloads the project defaults;
+report that discrepancy and request only the necessary technical exception instead of claiming the
+TOML changed enforcement. Keep `on-request`, never Full Access/`never`, for this workflow.
 
 Main is one role at Medium/High/XHigh as eligible in TASK_POLICY. `standard` / `economy` are
 consumption policies, not model effort levels. Task/local/project/default precedence is evaluated

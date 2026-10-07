@@ -24,7 +24,12 @@ check(profile.versioning.canonical_source === 'package.json' && profile.versioni
 check(text(profile.versioning.history_source).includes('## [' + pkg.version + ']'), 'Canonical changelog needs the integrated version')
 check(profile.workflow.tracking === 'github_issues' && profile.workflow.primary_orchestrator === 'chatgpt', 'Selected work tracking/orchestration missing')
 check(profile.workflow.implementation_harnesses.length === 1 && profile.workflow.implementation_harnesses[0] === 'codex', 'Only the selected Codex harness belongs in this project')
-check(profile.execution_permissions.safe_default === 'protected_manual', 'Unexpected safe execution default')
+check(profile.execution_permissions.safe_default === 'protected_auto', 'Unexpected safe execution default')
+const profileSchema = JSON.parse(text('docs/.ai/schemas/project-profile.schema.json')) as {
+  properties: { execution_permissions: { properties: { safe_default: { const: string } } } }
+}
+check(profileSchema.properties.execution_permissions.properties.safe_default.const === profile.execution_permissions.safe_default,
+  'Profile schema and execution default differ')
 check(!profile.console.enabled, 'No project console was requested')
 check(profile.services.length === 0 && profile.distribution.mode === 'none' && profile.distribution.targets.length === 0, 'This foundation must not silently provision/publish')
 for (const path of profile.validation.required_files) requireFile(path)
@@ -37,7 +42,26 @@ for (const skill of profile.skills) {
 }
 for (const path of ['docs/.human/bootstrap', '.claude', 'CLAUDE.md', 'project-console', 'VERSION', '.github/workflows/bootcrate-validate.yml']) check(!existsSync(path), 'Unselected/upstream material was retained: ' + path)
 const config = text('.codex/config.toml')
-for (const setting of ['model_reasoning_effort = "high"', 'approval_policy = "on-request"', 'sandbox_mode = "workspace-write"', 'network_access = false']) check(config.includes(setting), 'Missing requested Codex default: ' + setting)
+// Inspect active flat defaults in their section, not comments or matching values in another table.
+// This bounded source check is not a general TOML parser or proof of effective client permissions.
+const settings = new Map<string, string[]>()
+let section = ''
+for (const line of config.split(/\r?\n/)) {
+  const table = /^\s*\[([\w.]+)\]\s*(?:#.*)?$/.exec(line)
+  if (table) { section = table[1]!; continue }
+  const assignment = /^\s*(\w+)\s*=\s*(.*?)\s*(?:#.*)?$/.exec(line)
+  if (!assignment) continue
+  const key = section + '.' + assignment[1]
+  settings.set(key, [...(settings.get(key) ?? []), assignment[2]!])
+}
+for (const [key, expected] of Object.entries({
+  '.model_reasoning_effort': '"high"', '.approval_policy': '"on-request"',
+  '.sandbox_mode': '"workspace-write"', '.approvals_reviewer': '"auto_review"',
+  'sandbox_workspace_write.network_access': 'true'
+})) {
+  const values = settings.get(key)
+  check(values?.length === 1 && values[0] === expected, 'Unexpected requested Codex default: ' + key)
+}
 check(text('.codex/agents/scout.toml').includes('sandbox_mode = "read-only"'), 'Scout must request read-only execution')
 check(!config.includes('api_key'), 'Do not place credentials in the Codex config')
 const labels = JSON.parse(text('.github/labels.json')) as { name: string; color: string; description: string }[]

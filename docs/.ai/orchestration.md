@@ -15,6 +15,15 @@ The executor checks its actual checkout, branch, HEAD, status and diff before ed
 discard local work to match your repository-basis SHA. Request the smallest supported tests and
 manual smoke necessary; neither a screenshot nor a generic template check proves the full app.
 
+For approved Geptor Issues, inherit the owner's standing commit/push authorization from TASK_POLICY
+unless the active owner/task instruction explicitly prohibits it. After in-scope checks pass,
+review the intended stage and secrets, verify `rabrunos/Geptor` origin fetch/push URLs, local `main`
+and the remote base, then commit and push normally without a new task-level permission question.
+Sandbox/path/network approvals remain separate technical requirements. Keep workspace-write,
+on-request automatic review and sandbox network enabled; do not modify global settings or other repos.
+Record the actual Git and CI outcomes in the Issue when authorized. Pending manual acceptance stays
+pending; integration never authorizes Issue closure, publication or deployment.
+
 Keep technical instructions in English and explain results to the owner in pt-BR. The final
 report is a response after authorized Git actions; Issues carry durable evidence and acceptance.
 If remote access is blocked, say so rather than writing local task state. Do not close work whose

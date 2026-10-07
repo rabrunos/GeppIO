@@ -84,7 +84,7 @@
     "collaboration": "single"
   },
   "execution_permissions": {
-    "safe_default": "protected_manual"
+    "safe_default": "protected_auto"
   },
   "versioning": {
     "required": true,

@@ -2,7 +2,7 @@
 # Model is intentionally inherited from the owner's signed-in client; no API provider is added.
 model_reasoning_effort = "high"
 approval_policy = "on-request"
-approvals_reviewer = "user"
+approvals_reviewer = "auto_review"
 sandbox_mode = "workspace-write"
 
 [agents]
@@ -11,7 +11,7 @@ max_concurrent_threads_per_session = 2
 interrupt_message = true
 
 [sandbox_workspace_write]
-network_access = false
+network_access = true
 
 [shell_environment_policy]
 inherit = "core"

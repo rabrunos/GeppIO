@@ -2,6 +2,12 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.3] — 2026-10-07
+
+- Apply the owner's standing commit/push authorization to completed, validated Geptor Issues, with explicit task overrides and reviewed origin/main synchronization.
+- Keep workspace-write/on-request, select automatic approval review and enable sandbox network access under the owner's updated project preference; preserve technical boundary approvals.
+- Strengthen repository checks and negative tests for active sandbox, approval, reviewer and network defaults; no runtime or global settings changes.
+
 ## [0.1.0-alpha.2] — 2026-10-07
 
 - Add workspace VS Code launch/validation tasks and recommended Task Buttons shortcuts, with watched development and build-before-preview behavior.

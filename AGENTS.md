@@ -46,7 +46,17 @@ machine setup do not bump version. A future name is an explicit migration, not b
 Run relevant checks; distinguish passed/failed/blocked/not_run. Do not equate type stripping,
 static checks or screenshots with complete TypeScript/build/desktop verification. Review
 `git diff --check`, the intended files and staged diff. Stage only intended changes.
-Commit, push, change Issues, publish, provision or purchase only when explicitly authorized.
+For approved Issues in `rabrunos/Geptor`, the owner's standing authorization is to commit and
+push completed, validated implementation to verified `origin/main` without asking again for
+task-level Git permission. Explicit do-not-commit/do-not-push instructions override this default.
+Verify the actual branch, origin fetch/push URLs and remote base; stop on divergence or an unknown
+remote outcome. No force push, unrelated staging or operations in BootCrate/other repositories.
+Task-level Git authorization does not bypass technical sandbox or network approval requirements.
+Keep `workspace-write`, `on-request`, `auto_review` and sandbox network enabled as project defaults;
+routine workspace work needs no extra prompt. Request bounded elevation when a protected path or
+network operation requires it; never switch to Full Access/`never` or edit global Codex settings.
+Record actual checks, commit/push and CI evidence in the active Issue when comments are authorized.
+Issue closure, publication, provisioning and purchases still need separate owner authorization.
 Never close the foundation Issue before required Windows smoke and owner/ChatGPT acceptance.
 
 ## Local safety and language

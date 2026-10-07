@@ -41,10 +41,34 @@ research and unnecessary context, not effort eligibility, tests or controls. Pre
 explicit task override → ignored local override → project profile → standard. Report requested
 and effective client settings; never invent a model option or spend API credits to enforce a tier.
 
-Technical execution defaults to `protected_manual`: workspace-write, on-request approvals, network
-off in the sandbox. `protected_auto` and `full_access` require explicit owner selection and actual
-client support; neither grants publication/Git/secret permissions. Do not weaken these settings
-to make dependency installation succeed; request the bounded operation when needed.
+Technical execution defaults to `protected_auto`: workspace-write, on-request approvals, network
+enabled in the sandbox and `approvals_reviewer = "auto_review"`. Keep these defaults; do not switch to Full
+Access/`never` or modify global Codex settings. Routine work inside the permitted workspace needs
+no extra approval. Request bounded technical elevation for protected paths or network operations
+when necessary; standing Git authorization does not remove that boundary. Verify and report the
+actual client settings separately from project TOML. Do not weaken security to make a check pass.
+Network access permits in-sandbox connectivity, not operations outside the writable workspace or
+new task authority. Automatic review applies only to eligible technical approvals; a denial must
+be reported, not bypassed. Protected path writes and other boundary crossings may still need elevation.
+
+## Standing Git authorization — Geptor only
+
+The owner authorizes automatic commit and push for completed, validated implementation in an
+approved `rabrunos/Geptor` Issue. This standing decision supplies task-level Git authority; do not
+ask for it again on each task. An explicit do-not-commit/do-not-push instruction overrides it.
+An Issue or successful check alone does not create authority outside this standing scope.
+
+Before committing, inspect branch/HEAD/status/diff, pass the required in-scope checks, review
+secrets and the staged diff, and stage only approved files. Preserve unrelated work. Verify that
+both origin fetch and push URLs identify `rabrunos/Geptor`, the branch is `main`, and the observed
+remote `main` is the expected ancestor before a normal push. Divergence or an unknown remote
+outcome requires inspection, never force push or a blind retry. Do not operate on other repositories.
+
+Commit/push integrates implementation; it does not grant owner acceptance. Keep required manual
+smoke and review pending in the Issue when unobserved. Record actual checks, commit SHA, push
+receipt and CI outcome in the active Issue when comments are authorized. Changes to Issue scope,
+closure, publication, deployment, provisioning, purchases and unrelated actions need separate
+owner authorization. No autonomous Git runner, hook, service or credential storage is introduced.
 
 ## Contracts and acceptance
 
@@ -57,6 +81,7 @@ Default to no subagents. Scout reads and explains scoped evidence; Worker does b
 work. Main integrates. No recursive fan-out, permanent reviewer or duplicate Main roles.
 
 Use temporary roots for tests. Report commands, environment and pass/fail/blocked/not_run honestly.
-Keep manual Windows smoke in its Issue until observed. Commit/push only under explicit authorization;
-report the actual result. Unknown remote outcomes block blind retries. No deployment/upload tooling
-is enabled in this local prototype. No tracked last report, checkpoint or work-state file.
+Keep manual Windows smoke in its Issue until observed. Apply the standing Geptor Git authorization
+and any explicit task override; report the actual result. Unknown remote outcomes block blind retries.
+No deployment/upload tooling is enabled in this local prototype. No tracked last report, checkpoint
+or work-state file.

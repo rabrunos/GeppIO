@@ -178,7 +178,7 @@
       "additionalProperties": false,
       "properties": {
         "safe_default": {
-          "const": "protected_manual"
+          "const": "protected_auto"
         }
       },
       "required": [
