@@ -25,6 +25,24 @@ check(text(profile.versioning.history_source).includes('## [' + pkg.version + ']
 check(profile.workflow.tracking === 'github_issues' && profile.workflow.primary_orchestrator === 'chatgpt', 'Selected work tracking/orchestration missing')
 check(profile.workflow.implementation_harnesses.length === 1 && profile.workflow.implementation_harnesses[0] === 'codex', 'Only the selected Codex harness belongs in this project')
 check(profile.execution_permissions.safe_default === 'protected_auto', 'Unexpected safe execution default')
+// Active repository references are scoped separately from immutable release/provenance records.
+// This source gate does not verify a live Git remote or grant commit/push authorization.
+const canonicalRepository = 'rabrunos/GeppIO'
+for (const path of ['PROJECT_GUIDE.md', 'AGENTS.md', 'README.md', 'docs/.ai/TASK_POLICY.md',
+  'docs/.ai/orchestration.md', 'docs/.ai/project-profile.json', 'docs/development/github.md',
+  'docs/development/renaming.md', 'src/shared/identity.ts']) {
+  const source = text(path)
+  check(source.includes(canonicalRepository), 'Missing canonical repository reference: ' + path)
+  for (const line of source.split(/\r?\n/)) {
+    if (/rabrunos\/geptor\b/i.test(line)) check(line.startsWith('Historical repository name:'), 'Outdated active repository reference: ' + path)
+  }
+}
+const taskPolicy = text('docs/.ai/TASK_POLICY.md')
+check(taskPolicy.includes('## Standing Git authorization — `' + canonicalRepository + '` only')
+  && taskPolicy.includes('approved `' + canonicalRepository + '` Issue')
+  && taskPolicy.includes('both origin fetch and push URLs identify `' + canonicalRepository + '`')
+  && taskPolicy.includes('GitHub repository ID `1409287329`'), 'Standing Git gate must name only the canonical repository and stable ID')
+check(text('AGENTS.md').includes('For approved Issues in `' + canonicalRepository + '`'), 'Agent Git gate must name the canonical repository')
 const profileSchema = JSON.parse(text('docs/.ai/schemas/project-profile.schema.json')) as {
   properties: { execution_permissions: { properties: { safe_default: { const: string } } } }
 }

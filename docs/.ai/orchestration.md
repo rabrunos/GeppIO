@@ -17,8 +17,8 @@ manual smoke necessary; neither a screenshot nor a generic template check proves
 
 For approved GeppIO Issues, inherit the owner's standing commit/push authorization from TASK_POLICY
 unless the active owner/task instruction explicitly prohibits it. After in-scope checks pass,
-review the intended stage and secrets, verify `rabrunos/Geptor` origin fetch/push URLs, local `main`
-and the remote base, then commit and push normally without a new task-level permission question.
+review the intended stage and secrets, verify `rabrunos/GeppIO` origin fetch/push URLs, local `main`
+and the remote base plus stable GitHub repository ID `1409287329` (same repository authorized in Issue #22), then commit and push normally without a new task-level permission question.
 Sandbox/path/network approvals remain separate technical requirements. Keep workspace-write,
 on-request automatic review and sandbox network enabled; do not modify global settings or other repos.
 Record the actual Git and CI outcomes in the Issue when authorized. Pending manual acceptance stays

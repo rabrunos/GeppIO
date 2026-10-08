@@ -4,7 +4,7 @@ Issue #6 assigns GeppIO as the exact display name and `geppio` as the lowercase 
 namespace. It fits package, URL-scheme and Windows directory syntax; repository inventory found
 no competing active identity/bridge. The package is private. No public package registration,
 installer appId, publisher, signing or update-channel contract is introduced.
-The repository remains `rabrunos/Geptor`; origin/link rewrites and domain operations are separate.
+The current repository is `rabrunos/GeppIO` (GitHub repository ID `1409287329`), after the owner completed the separate rename from Geptor and updated local origin. Active links/policies use the canonical name. Domain operations remain separately authorized.
 BootCrate attribution and historical `semnome`/Geptor evidence remain truthful.
 
 | Surface | Current identity | Legacy compatibility |

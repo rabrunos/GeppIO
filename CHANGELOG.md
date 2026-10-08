@@ -2,6 +2,12 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.5] — 2026-10-08
+
+- Align active repository references and standing Git synchronization policies with the owner-renamed rabrunos/GeppIO repository (stable GitHub ID 1409287329), retaining the original Issue #22 authorization scope and safeguards.
+- Update documentation and future metadata command examples; preserve accepted alpha.4 history, runtime identity, profile recovery and existing security protections.
+- Add a focused repository-reference gate and negative regression cases without new dependencies or application behavior changes.
+
 ## [0.1.0-alpha.4] — 2026-10-08
 
 - Adopt GeppIO display identity and geppio package, protocol, bridge, environment and developer automation namespaces (Issue #6); retain rabrunos/Geptor as the GitHub repository.

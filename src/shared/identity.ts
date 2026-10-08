@@ -1,4 +1,4 @@
-/** Product identity approved in Issue #6; the GitHub repository is still rabrunos/Geptor. */
+/** Product identity approved in Issue #6; the canonical GitHub repository is rabrunos/GeppIO. */
 export const IDENTITY = Object.freeze({
   name: 'GeppIO',
   directory: 'geppio',

@@ -1,10 +1,10 @@
 # Git and GitHub handoff
 
-GeppIO uses the existing repository `rabrunos/Geptor`. The original source archive had no `.git`, remote, credentials or live Issues; its historical handoff is documented below. Public/private visibility and a future repository rename remain separate owner decisions.
+GeppIO uses the existing repository `rabrunos/GeppIO`. The original source archive had no `.git`, remote, credentials or live Issues; its historical handoff is documented below. The owner renamed this same repository from Geptor on 2026-10-08; its stable GitHub repository ID is `1409287329`. Verify the canonical name, ID and both origin URLs before synchronization; an old redirect is not a substitute for the canonical origin.
 
 ## Historical initial handoff
 
-The original archive instructions below must not be repeated in this materialized checkout. GeppIO uses `rabrunos/Geptor`; application migration does not rename the repository or change origin.
+The original archive instructions below must not be repeated in this materialized checkout. GeppIO now uses `rabrunos/GeppIO`; the owner completed the separate repository rename and origin update. Do not repeat either operation or the initial handoff.
 
 Extract into an empty directory, validate/install the real dependency graph first, then initialize:
 
@@ -17,13 +17,13 @@ Inspect files, generated `pnpm-lock.yaml` and validation before staging. A suita
 
 Create an empty repository through the owner's preferred GitHub interface. Bind its exact URL as origin. Do not assume that the final remote must literally be `semnome` or owned by a particular account; use the actual identity. Keep unknown remote details out of tracked fake configuration.
 
-## Standing synchronization (`rabrunos/Geptor` only)
+## Standing synchronization (`rabrunos/GeppIO` only)
 
 The owner authorizes commit and push by default after an approved GeppIO implementation is complete
 and its required in-scope checks pass. Explicit do-not-commit/do-not-push instructions override this
 decision. Inspect and preserve local work, review secrets and the intended stage, and retain the
 assigned `[TARGET_VERSION]` in the commit subject. Verify both origin fetch/push URLs resolve to
-`rabrunos/Geptor`, the local branch is `main`, and remote `main` is the expected ancestor before
+`rabrunos/GeppIO` with stable GitHub repository ID `1409287329`, the local branch is `main`, and remote `main` is the expected ancestor before
 `git push origin main`. Stop to inspect divergence or an unknown result; never force push or blindly
 retry. Do not modify or perform Git operations in BootCrate or another repository.
 
@@ -39,16 +39,16 @@ No hook, background Git automation, runtime dependency or global Codex setting i
 
 `.github/labels.json` is the single desired-label definition. JSON is used instead of upstream YAML so this project's Node tool can read it without an extra parser dependency. Unrelated live labels are preserved.
 
-Preview the intended operation without any GitHub API calls:
+The repository and foundation Issue already exist; do not rerun bootstrap for a rename. Only for a separately authorized future metadata task, preview the intended operation without any GitHub API calls:
 
 ```powershell
-node --experimental-strip-types tools/github-prepare.ts --repo OWNER/REPOSITORY
+node --experimental-strip-types tools/github-prepare.ts --repo rabrunos/GeppIO
 ```
 
 Direct Node invocation avoids pnpm 11's automatic dependency-install preflight. After reviewing the plan, authenticating GitHub CLI through its own credential mechanism and verifying origin, authorize these metadata writes:
 
 ```powershell
-node --experimental-strip-types tools/github-prepare.ts --repo OWNER/REPOSITORY --apply
+node --experimental-strip-types tools/github-prepare.ts --repo rabrunos/GeppIO --apply
 ```
 
 This reconciles selected labels and creates one marked foundation-validation Issue if absent. The tool checks origin and remote identity, validates label results and searches open/closed Issues for the marker. It does not create a repository, change protection/visibility, push, close Issues or publish. Ambiguous/failed remote outcomes require inspection before retrying; never infer failure means no write happened. The dry run is a local plan, not proof of the live state.

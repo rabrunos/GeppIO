@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 
-test('repository gate preserves protected defaults and rejects unsafe or misleading config', t => {
+test('repository gate preserves protected defaults and the canonical Git authorization scope', t => {
   // Copy only project source into a disposable fixture; never edit actual client/global settings.
   const root = mkdtempSync(join(tmpdir(), 'geppio-policy-test-'))
   t.after(() => rmSync(root, { recursive: true, force: true }))
@@ -37,6 +37,28 @@ test('repository gate preserves protected defaults and rejects unsafe or mislead
     assert.equal(result.status, 1, key)
     assert(result.stderr.includes('Unexpected requested Codex default: ' + key), result.stderr)
   }
+  // Old release evidence and the explicitly labelled historical name remain valid.
+  assert.equal(gate(original).status, 0)
+  assert.match(readFileSync(join(root, 'CHANGELOG.md'), 'utf8'), /retain rabrunos\/Geptor/)
+  const policyPath = join(root, 'docs/.ai/TASK_POLICY.md'), policy = readFileSync(policyPath, 'utf8')
+  for (const [before, after] of [
+    ['## Standing Git authorization — `rabrunos/GeppIO` only', '## Standing Git authorization — `rabrunos/Geptor` only'],
+    ['both origin fetch and push URLs identify `rabrunos/GeppIO`', 'both origin fetch and push URLs identify `another-owner/GeppIO`'],
+    ['GitHub repository ID `1409287329`', 'GitHub repository ID `1409287330`']
+  ]) {
+    writeFileSync(policyPath, policy.replace(before!, after!))
+    const result = gate(original)
+    assert.equal(result.status, 1)
+    assert(result.stderr.includes('Standing Git gate must name only the canonical repository and stable ID'), result.stderr)
+  }
+  writeFileSync(policyPath, policy)
+  const guidePath = join(root, 'PROJECT_GUIDE.md'), guide = readFileSync(guidePath, 'utf8')
+  writeFileSync(guidePath, guide.replaceAll('rabrunos/GeppIO', 'rabrunos/Geptor'))
+  const outdated = gate(original)
+  assert.equal(outdated.status, 1)
+  assert(outdated.stderr.includes('Outdated active repository reference: PROJECT_GUIDE.md'), outdated.stderr)
+  writeFileSync(guidePath, guide)
+  assert.equal(gate(original).status, 0)
   // The profile and its schema must agree with the owner-selected project defaults.
   const profilePath = join(root, 'docs/.ai/project-profile.json')
   const profile = JSON.parse(readFileSync(profilePath, 'utf8')) as { execution_permissions: { safe_default: string } }

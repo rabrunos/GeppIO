@@ -93,7 +93,7 @@ vault, HTML/CSS arbitrário ou superfícies próprias. Veja o [contrato técnico
 
 ## Git e fluxo do projeto
 
-O repositório permanece **`rabrunos/Geptor`**. A mudança do produto para GeppIO não renomeia o GitHub nem modifica `origin`. O Git e as Issues já existem. Commits e pushes de implementações aprovadas seguem a [política de tarefas](docs/.ai/TASK_POLICY.md), após validação e revisão. Publicação e fechamento de Issues exigem autorização separada.
+O repositório atual é **`rabrunos/GeppIO`** (ID GitHub `1409287329`), após o rename realizado pelo proprietário em 2026-10-08. O proprietário também atualizou `origin`. A autorização de Git continua restrita a esse mesmo repositório e à `main`, com todos os gates anteriores. O Git e as Issues já existem. Commits e pushes de implementações aprovadas seguem a [política de tarefas](docs/.ai/TASK_POLICY.md), após validação e revisão. Publicação e fechamento de Issues exigem autorização separada.
 
 ### Handoff histórico do ZIP
 

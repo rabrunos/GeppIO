@@ -51,16 +51,20 @@ Network access permits in-sandbox connectivity, not operations outside the writa
 new task authority. Automatic review applies only to eligible technical approvals; a denial must
 be reported, not bypassed. Protected path writes and other boundary crossings may still need elevation.
 
-## Standing Git authorization — `rabrunos/Geptor` only
+## Standing Git authorization — `rabrunos/GeppIO` only
+
+The original standing authorization is recorded in [Issue #22](https://github.com/rabrunos/GeppIO/issues/22). Issue #6 aligns it after the owner-initiated rename to the exact same GitHub repository ID `1409287329`; it does not expand the owner, repository, branch or project scope. Verify that ID, the canonical name and both origin URLs before commit/push; an old-name redirect is insufficient.
+
+Historical repository name: `rabrunos/Geptor` was the name used by the 2026-10-07 decision in Issue #22. That dated decision remains historical evidence; its security settings must not override current owner-approved settings.
 
 The owner authorizes automatic commit and push for completed, validated implementation in an
-approved `rabrunos/Geptor` Issue. This standing decision supplies task-level Git authority; do not
+approved `rabrunos/GeppIO` Issue. This standing decision supplies task-level Git authority; do not
 ask for it again on each task. An explicit do-not-commit/do-not-push instruction overrides it.
 An Issue or successful check alone does not create authority outside this standing scope.
 
 Before committing, inspect branch/HEAD/status/diff, pass the required in-scope checks, review
 secrets and the staged diff, and stage only approved files. Preserve unrelated work. Verify that
-both origin fetch and push URLs identify `rabrunos/Geptor`, the branch is `main`, and the observed
+both origin fetch and push URLs identify `rabrunos/GeppIO`, the branch is `main`, and the observed
 remote `main` is the expected ancestor before a normal push. Divergence or an unknown remote
 outcome requires inspection, never force push or a blind retry. Do not operate on other repositories.
 

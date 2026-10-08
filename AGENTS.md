@@ -46,9 +46,9 @@ machine setup do not bump version. A future name is an explicit migration, not b
 Run relevant checks; distinguish passed/failed/blocked/not_run. Do not equate type stripping,
 static checks or screenshots with complete TypeScript/build/desktop verification. Review
 `git diff --check`, the intended files and staged diff. Stage only intended changes.
-For approved Issues in `rabrunos/Geptor`, the owner's standing authorization is to commit and
+For approved Issues in `rabrunos/GeppIO`, the owner's standing authorization is to commit and
 push completed, validated implementation to verified `origin/main` without asking again for
-task-level Git permission. Explicit do-not-commit/do-not-push instructions override this default.
+task-level Git permission. The owner-initiated rename retains the same GitHub repository ID `1409287329` and Issue #22 authorization; verify the canonical name and ID, not an old redirect. Explicit do-not-commit/do-not-push instructions override this default.
 Verify the actual branch, origin fetch/push URLs and remote base; stop on divergence or an unknown
 remote outcome. No force push, unrelated staging or operations in BootCrate/other repositories.
 Task-level Git authorization does not bypass technical sandbox or network approval requirements.
