@@ -23,10 +23,10 @@ export function App() {
   const measured = useMainMetrics(tx.snapshot, centered, panel), interaction = useGridInteraction(tx, measured.metrics, measured.measurementKey)
   return <MotionConfig reducedMotion="user"><div className="workbench" data-theme={tx.snapshot.theme} onKeyDown={event => {
     if (settingsOpen || event.key !== 'Escape') return
-    if (interaction.active()) interaction.end(true); else if (tx.editing) tx.cancel(); else if (panel.open) setPanel({ ...panel, open: false })
+    if (interaction.active()) interaction.end(true); else if (tx.editing) { interaction.end(true); tx.cancel() } else if (panel.open) setPanel({ ...panel, open: false })
   }}>
     <Header editing={tx.editing} theme={tx.snapshot.theme} recovery={tx.recovery} openSettings={() => { interaction.end(true); setSettingsOpen(true) }}
-      toggleTheme={tx.toggleTheme} begin={tx.begin} cancel={() => { interaction.end(true); tx.cancel() }} save={() => { interaction.end(false); tx.save() }} />
+      toggleTheme={tx.toggleTheme} begin={() => { interaction.end(false); tx.begin() }} cancel={() => { interaction.end(true); tx.cancel() }} save={() => { interaction.end(false); tx.save() }} />
     <div ref={regions.area} className="work-area" style={{ gridTemplateColumns: `${regions.sidebar}px 5px minmax(0,1fr)`, gridTemplateRows: `minmax(0,1fr) 5px ${regions.bottom}px` }}>
       <Sidebar selected={interaction.selected} select={interaction.setSelected} />
       <div className="region-splitter sidebar-splitter" role="separator" aria-label="Largura da Sidebar" aria-orientation="vertical" tabIndex={0}

@@ -96,7 +96,18 @@ export async function gridSmoke(page: Page, resizeWindow: (width: number, height
   const pitch = Number(await page.getByTestId('layout-canvas').getAttribute('data-pitch'))
   await page.mouse.move(corner.x + 6 * pitch, corner.y + pitch); await frame(page)
   assert.deepEqual(await placements(page), denseStart); assert.ok((await page.locator('[data-widget="summary"]').getAttribute('class'))?.includes('invalid'))
-  await page.getByRole('status').filter({ hasText: 'Sem espaço' }).waitFor(); await page.mouse.up(); await page.getByTestId('cancel-layout').click()
+  await page.getByRole('status').filter({ hasText: 'Sem espaço' }).waitFor(); await page.mouse.up()
+  const keyboardCorner = page.locator('[data-widget="summary"] [data-resize="se"]'); await keyboardCorner.focus()
+  await page.keyboard.press('Shift+ArrowRight'); await page.keyboard.press('ArrowDown'); await frame(page)
+  await page.getByRole('status').filter({ hasText: 'Sem espaço' }).waitFor()
+  assert.ok((await page.locator('[data-widget="summary"]').getAttribute('class'))?.includes('invalid'))
+  await page.getByTestId('cancel-layout').click()
+  assert.equal(await page.locator('[data-widget].invalid').count(), 0)
+  await importDraft(page, dense); await page.locator('[data-widget="summary"] [data-resize="se"]').focus()
+  await page.keyboard.press('Shift+ArrowRight'); await page.keyboard.press('ArrowDown'); await frame(page)
+  await page.getByRole('status').filter({ hasText: 'Sem espaço' }).waitFor()
+  await page.keyboard.press('Escape'); assert.equal(await page.locator('[data-widget].invalid').count(), 0)
+  await page.getByTestId('edit-layout').click(); assert.equal(await page.locator('[data-widget].invalid').count(), 0); await page.getByTestId('cancel-layout').click()
   // Eight directional zones with real outward/inward gestures in both themes.
   const loose: GridSnapshot = { ...structuredClone(DEFAULT_GRID), placements: [
     { id: 'summary', x: 4, y: 2, w: 4, h: 3 }, { id: 'queue', x: 0, y: 0, w: 3, h: 2 },

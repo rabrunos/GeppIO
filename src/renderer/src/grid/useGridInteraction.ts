@@ -13,6 +13,7 @@ export function useGridInteraction(tx: LayoutTransaction, metrics: GridMetrics, 
   const [dragging, setDragging] = useState(false)
   function end(cancel: boolean) {
     const active = gesture.current
+    setBlocked(null)
     if (!active) return
     gesture.current = null
     if (cancel) { tx.putPlacements(active.snapshot); tx.setMessage('Gesto cancelado. A prévia anterior foi restaurada.') }

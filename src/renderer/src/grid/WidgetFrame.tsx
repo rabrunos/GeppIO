@@ -11,7 +11,7 @@ export function WidgetFrame({ placement: p, metrics, constraint, editing, intera
   placement: GridPlacement; metrics: GridMetrics; constraint: GridConstraint; editing: boolean; interaction: GridInteraction; offset: { left: number; top: number }
 }) {
   const title = WIDGETS.find(w => w.id === p.id)!, rect = pixelRect(p, metrics)
-  return <section className={'widget-frame ' + (interaction.selected === p.id ? 'selected ' : '') + (interaction.blocked === p.id ? 'invalid' : '')}
+  return <section className={'widget-frame ' + (interaction.selected === p.id ? 'selected ' : '') + (editing && interaction.blocked === p.id ? 'invalid' : '')}
     data-widget={p.id} data-x={p.x} data-y={p.y} data-w={p.w} data-h={p.h}
     style={{ ...rect, left: rect.left + offset.left, top: rect.top + offset.top }}>
     <header className="widget-heading"><button className="widget-grip" aria-label={'Mover ' + title.title} tabIndex={editing ? 0 : -1} {...interaction.handlers(p, 'move')}>
