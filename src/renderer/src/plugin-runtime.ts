@@ -88,7 +88,7 @@ export class PluginRuntime {
       worker.onerror = event => { event.preventDefault(); this.fail(entry, 'Exceção ou módulo inválido no plugin.') }
       worker.onmessageerror = () => this.fail(entry, 'Resposta não serializável do plugin.')
       this.emit()
-      await this.request(entry, 'activate', { entry: `semnome://app/plugins/${id}/${plugin.revision}/${plugin.manifest.entry}`, pluginId: id })
+      await this.request(entry, 'activate', { entry: `geppio://app/plugins/${id}/${plugin.revision}/${plugin.manifest.entry}`, pluginId: id })
       if (entry.view.status === 'starting') { entry.view.status = 'active'; this.event(entry, 'activate concluído.') }
       this.emit()
     }

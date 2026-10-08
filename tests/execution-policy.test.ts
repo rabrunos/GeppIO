@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process'
 
 test('repository gate preserves protected defaults and rejects unsafe or misleading config', t => {
   // Copy only project source into a disposable fixture; never edit actual client/global settings.
-  const root = mkdtempSync(join(tmpdir(), 'semnome-policy-test-'))
+  const root = mkdtempSync(join(tmpdir(), 'geppio-policy-test-'))
   t.after(() => rmSync(root, { recursive: true, force: true }))
   for (const path of ['AGENTS.md', 'PROJECT_GUIDE.md', 'README.md', 'CHANGELOG.md', 'package.json',
     '.codex', '.agents', '.github', '.vscode', 'docs', 'tools', 'src', 'tests', 'sdk', 'examples']) {

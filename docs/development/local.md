@@ -48,7 +48,8 @@ If install/typecheck/build finds a dependency mismatch, repair the smallest inco
 The prototype stores a small layout/theme snapshot in renderer localStorage and trusted plugin
 copies/preferences under application userData. Development and built-preview origins can have
 independent layout drafts; plugin installation preferences share the same desktop profile.
-Do not assume an OS profile/name/path rename migrates them. There is no automatic updater,
+Issue #6's bounded migration is documented in [identity recovery](renaming.md); close the prior
+app and keep both profiles backed up. Other profile moves require explicit recovery. There is no automatic updater,
 native credential store or application login. `pnpm plugins:build` generates independent sample
 packages under `.local/plugin-packages`; install those through Settings, never by changing core imports.
 

@@ -5,9 +5,9 @@ import { readFileSync } from 'node:fs'
 import { rendererAsset, validatedDevURL, PRODUCTION_CSP } from '../src/main/security.ts'
 const root = resolve('out/renderer')
 test('custom protocol resolves only known renderer file types within root', () => {
-  assert.equal(rendererAsset(root, 'semnome://app/')?.path, resolve(root, 'index.html'))
-  assert.equal(rendererAsset(root, 'semnome://app/assets/app.js')?.mime, 'text/javascript; charset=utf-8')
-  for (const value of ['file:///private/file.js', 'semnome://other/index.html', 'semnome://user:pass@app/index.html', 'semnome://app:99/index.html', 'semnome://app/%2e%2e%2fprivate.js', 'semnome://app/%5cprivate.js', 'semnome://app/%00file.js', 'semnome://app/.env', 'semnome://app/assets/app.js.map', 'invalid']) assert.equal(rendererAsset(root, value), null, value)
+  assert.equal(rendererAsset(root, 'geppio://app/')?.path, resolve(root, 'index.html'))
+  assert.equal(rendererAsset(root, 'geppio://app/assets/app.js')?.mime, 'text/javascript; charset=utf-8')
+  for (const value of ['file:///private/file.js', 'geppio://other/index.html', 'geppio://user:pass@app/index.html', 'geppio://app:99/index.html', 'geppio://app/%2e%2e%2fprivate.js', 'geppio://app/%5cprivate.js', 'geppio://app/%00file.js', 'geppio://app/.env', 'geppio://app/assets/app.js.map', 'invalid']) assert.equal(rendererAsset(root, value), null, value)
 })
 test('development URL accepts only the configured loopback origin', () => {
   assert.equal(validatedDevURL('http://127.0.0.1:5173/'), 'http://127.0.0.1:5173/')

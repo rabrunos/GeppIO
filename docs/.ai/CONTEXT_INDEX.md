@@ -12,7 +12,7 @@ Read only the rows needed for the active Issue. This is a route map, not task st
 | Task version, effort, scope or approval | [Task policy](TASK_POLICY.md) |
 | New machine or GitHub binding | [Local setup](../development/local.md), [GitHub](../development/github.md) |
 | What validation proves | [Testing](../development/testing.md) |
-| Rename provisional identity | [Renaming](../development/renaming.md) |
+| Product identity and legacy profile recovery | [Identity recovery](../development/renaming.md) |
 | Main/Scout/Worker settings | [Execution profiles](execution.md), `.codex/` |
 
 The normalized [project profile](project-profile.json) contains stable policy, not progress.

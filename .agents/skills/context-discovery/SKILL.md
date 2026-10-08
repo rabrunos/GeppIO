@@ -1,6 +1,6 @@
 ---
 name: context-discovery
-description: Locate only the repository and Issue context needed for a concrete semnome task.
+description: Locate only the repository and Issue context needed for a concrete GeppIO task.
 ---
 
 Identify the actual repository/Issue. Read PROJECT_GUIDE.md and docs/.ai/CONTEXT_INDEX.md only as needed.

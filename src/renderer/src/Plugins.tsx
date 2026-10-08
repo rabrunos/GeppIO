@@ -16,7 +16,7 @@ export function usePlugins() {
     runtime.current = host
     void (async () => {
       try {
-        const result = await window.semnome?.plugins.list()
+        const result = await window.geppio?.plugins.list()
         if (!mounted) return
         if (!result) setMessage('Gerenciamento disponível somente no aplicativo desktop.')
         else if (!result.ok) setMessage(result.error)
@@ -34,7 +34,7 @@ export function usePlugins() {
       const result = await operation()
       if (!result.ok) {
         setMessage(result.error)
-        const refreshed = await window.semnome?.plugins.list()
+        const refreshed = await window.geppio?.plugins.list()
         const actual = refreshed?.ok ? refreshed.value : inventory
         setInventory(actual); await runtime.current?.sync(actual.plugins)
       }
@@ -42,7 +42,7 @@ export function usePlugins() {
     } catch { setMessage('Falha ao gerenciar plugins. Os dados existentes foram preservados.') }
     finally { locked.current = false; setBusy(false) }
   }
-  const bridge = window.semnome?.plugins
+  const bridge = window.geppio?.plugins
   return { inventory, views, message, busy, available: Boolean(bridge),
     install: () => { if (bridge) void manage(() => bridge.install()) },
     toggle: (view: RuntimePlugin) => { if (bridge) void manage(() => bridge.setEnabled(view.plugin.manifest.id, view.status === 'error' || !view.plugin.enabled), view.plugin.manifest.id) },

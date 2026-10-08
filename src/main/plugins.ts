@@ -3,6 +3,7 @@ import { join, resolve, relative, isAbsolute, extname } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { PLUGIN_LIMITS, parseManifest, packagePath, pluginId, isRecord } from '../shared/plugins.ts'
 import type { PluginInventory, PluginManifest, InstalledPlugin } from '../shared/plugins.ts'
+import { IDENTITY } from '../shared/identity.ts'
 
 interface Package { manifest: PluginManifest; files: Map<string, Uint8Array> }
 interface State { schemaVersion: 1; plugins: Record<string, { enabled: boolean; revision: string }> }
@@ -145,7 +146,7 @@ export class PluginStore {
     try {
       if (source.includes('%') || source.includes('/../') || source.includes('/./') || source.includes('\\')) return null
       const url = new URL(source)
-      if (url.protocol !== 'semnome:' || url.host !== 'app' || url.username || url.password || url.search || url.hash) return null
+      if (url.protocol !== IDENTITY.protocol + ':' || url.host !== IDENTITY.host || url.username || url.password || url.search || url.hash) return null
       const match = /^\/plugins\/([^/]+)\/([^/]+)\/(.+)$/.exec(decodeURIComponent(url.pathname))
       if (!match) return null
       const [, id = '', revision, path = ''] = match, item = this.state.plugins[id]

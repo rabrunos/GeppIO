@@ -12,7 +12,8 @@ This is a selected control map, not a security certification or a list of claime
 | Dev server selected by environment | Exact validated `127.0.0.1:5173` origin; no arbitrary host fallback | Unit tests; dev-only CSP has HMR allowances and is not production policy |
 | Stored/imported layout | 64 KiB input bound, known schema/IDs, finite sizes, minimums and non-overlap | `tests/layout.test.ts`, invalid-storage preservation in `tests/storage.test.ts` |
 | Local disk storage fails/corrupts | Error result and fallback copy; do not overwrite malformed state automatically | Storage tests; no guarantee against every OS/browser failure |
-| Test suite touches owner data | Desktop smoke creates a temp `semnome-smoke-*` profile; Main rejects other override roots | Restricted launcher path logic and actual owner-safe smoke; only the created temp root is cleaned |
+| Identity/profile migration | Bounded non-link snapshots, unchanged original/backup, absent destination only; hidden inert recovery windows without preload, fixed Main scripts, legacy scheme only in a separate session | `tests/identity-migration.test.ts`, `tools/identity-smoke.ts` in production/dev; no arbitrary storage/IPC authority or hostile same-user disk isolation |
+| Test suite touches owner data | Desktop smoke creates a temp `geppio-smoke-*` profile; Main rejects other override roots | Restricted launcher path logic and actual owner-safe smoke; only the created temp root is cleaned |
 | GitHub setup alters wrong repository | Explicit validated OWNER/REPO + matching origin + remote identity verification; dry run default | `tests/github-plan.test.ts`; remote writes require explicit `--apply` and actual authenticated verification |
 | Dependency / source secret leakage | Exact pins, approved install-script list, ignored credentials/local output; read-only CI secret scan | First install/lock review and CI scanner; ignore rules are not access control |
 
@@ -20,7 +21,7 @@ No arbitrary content injection, safe-storage credential service, PTY, general lo
 
 ## Production versus development
 
-The production renderer is served from `semnome://app/`, not an arbitrary local file navigation. The renderer's `style-src` permits inline style attributes because continuous layout and animation require them; scripts remain bundled/local. Nothing parses user-supplied HTML. Future custom theme/HTML inputs must not assume this policy alone makes them safe.
+The production renderer is served from `geppio://app/`, not an arbitrary local file navigation. The renderer's `style-src` permits inline style attributes because continuous layout and animation require them; scripts remain bundled/local. Nothing parses user-supplied HTML. Future custom theme/HTML inputs must not assume this policy alone makes them safe.
 
 Dev runs Vite on loopback with HMR, not on all network interfaces. Do not bind it publicly without a new exposure decision. Do not disable sandbox/CSP/web security to repair a failing test.
 

@@ -15,7 +15,7 @@ The executor checks its actual checkout, branch, HEAD, status and diff before ed
 discard local work to match your repository-basis SHA. Request the smallest supported tests and
 manual smoke necessary; neither a screenshot nor a generic template check proves the full app.
 
-For approved Geptor Issues, inherit the owner's standing commit/push authorization from TASK_POLICY
+For approved GeppIO Issues, inherit the owner's standing commit/push authorization from TASK_POLICY
 unless the active owner/task instruction explicitly prohibits it. After in-scope checks pass,
 review the intended stage and secrets, verify `rabrunos/Geptor` origin fetch/push URLs, local `main`
 and the remote base, then commit and push normally without a new task-level permission question.

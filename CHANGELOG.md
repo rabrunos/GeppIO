@@ -2,6 +2,13 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.4] — 2026-10-08
+
+- Adopt GeppIO display identity and geppio package, protocol, bridge, environment and developer automation namespaces (Issue #6); retain rabrunos/Geptor as the GitHub repository.
+- Copy bounded legacy profile storage and installed plugin packages/preferences only into an absent destination, retaining the original and a local-storage backup.
+- Transfer validated layouts/themes between Chromium origins in hidden sandboxed recovery windows; preserve existing destination and corrupt bytes, without expanding the renderer bridge.
+- Add disposable profile, origin-transfer, repeat-launch, corruption and security tests in production and development desktop smoke.
+
 ## [0.1.0-alpha.3] — 2026-10-07
 
 - Apply the owner's standing commit/push authorization to completed, validated Geptor Issues, with explicit task overrides and reviewed origin/main synchronization.

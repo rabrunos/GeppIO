@@ -6,11 +6,11 @@ import assert from 'node:assert/strict'
 import ts from 'typescript'
 import type { Page } from 'playwright'
 import { IDENTITY } from '../src/shared/identity.ts'
-const temporary = await mkdtemp(join(tmpdir(), 'semnome-smoke-'))
+const temporary = await mkdtemp(join(tmpdir(), 'geppio-smoke-'))
 await mkdir('.local/diagnostics', { recursive: true })
 const env: Record<string, string> = {
   ...Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined)),
-  SEMNOME_TEST_USER_DATA: temporary,
+  GEPPIO_TEST_USER_DATA: temporary,
   NODE_ENV: 'production'
 }
 delete env.ELECTRON_RUN_AS_NODE; delete env.ELECTRON_RENDERER_URL; delete env.NODE_OPTIONS
@@ -24,7 +24,7 @@ async function launch(): Promise<Page> {
   page.on('pageerror', error => errors.push(error.message))
   page.on('console', message => { if (message.type() === 'error' && consoleErrors.length < 30) consoleErrors.push(message.text().slice(0, 1024)) })
   await page.getByTestId('edit-layout').waitFor()
-  const listings = await page.evaluate(() => Promise.all([window.semnome!.plugins.list(), window.semnome!.plugins.list()]))
+  const listings = await page.evaluate(() => Promise.all([window.geppio!.plugins.list(), window.geppio!.plugins.list()]))
   assert.ok(listings.every(result => result.ok), 'Concurrent startup inventory reads must succeed')
   return page
 }
@@ -63,9 +63,9 @@ try {
   let page = await launch()
   if (await page.locator('[data-widget]').count() !== 7) throw new Error('Expected seven main fixtures')
   for (const region of ['sidebar', 'main', 'bottom']) if (await page.locator(`[data-region="${region}"]`).count() !== 1) throw new Error('Missing region: ' + region)
-  const privileged = await page.evaluate(() => ({ require: 'require' in window, process: 'process' in window, bridge: Object.keys(window.semnome ?? {}) }))
+  const privileged = await page.evaluate(() => ({ require: 'require' in window, process: 'process' in window, bridge: Object.keys(window.geppio ?? {}) }))
   if (privileged.require || privileged.process || privileged.bridge.some(key => !['name', 'version', 'platform', 'plugins'].includes(key))) throw new Error('Unexpected privileged renderer surface')
-  assert.deepEqual(await page.evaluate(() => Object.keys(window.semnome!.plugins).sort()), ['install', 'list', 'remove', 'setEnabled'])
+  assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.plugins).sort()), ['install', 'list', 'remove', 'setEnabled'])
   await page.getByTestId('edit-layout').click()
   const initial = await page.locator('[data-widget="chart"]').evaluate(element => { const style = (element as HTMLElement).style; return [style.left, style.top, style.width, style.height] })
   const grip = page.getByRole('button', { name: 'Mover Ritmo', exact: true }); await grip.focus(); await page.keyboard.press('ArrowRight')
@@ -100,7 +100,7 @@ try {
   await pulse().getByRole('button', { name: 'Ativar', exact: true }).click(); await status(page, 'local.pulse', 'active')
   await pulse().locator('p[role="status"]').filter({ hasText: /^Pulso \d+/ }).waitFor()
   assert.equal(await page.locator('[data-plugin-widget]').count(), 1)
-  const workerBoundary = await page.workers()[0]!.evaluate(() => ({ require: typeof require, process: typeof process, document: typeof document, bridge: 'semnome' in globalThis }))
+  const workerBoundary = await page.workers()[0]!.evaluate(() => ({ require: typeof require, process: typeof process, document: typeof document, bridge: 'geppio' in globalThis }))
   assert.deepEqual(workerBoundary, { require: 'undefined', process: 'undefined', document: 'undefined', bridge: false })
   await page.getByRole('button', { name: 'Fechar configurações', exact: true }).click()
   await page.getByRole('button', { name: 'Incrementar', exact: true }).click()
@@ -177,7 +177,7 @@ try {
   await application!.close(); page = await launch(); await settings(page)
   await page.getByText('Nenhum plugin instalado.', { exact: true }).waitFor()
   assert.equal(await page.locator('[data-plugin]').count(), 0)
-  const badIPC = await page.evaluate(() => window.semnome!.plugins.setEnabled('../escape', true))
+  const badIPC = await page.evaluate(() => window.geppio!.plugins.setEnabled('../escape', true))
   assert.equal(badIPC.ok, false)
   await page.keyboard.press('Escape'); await page.getByTestId('plugin-settings').waitFor({ state: 'detached' })
   await page.getByTestId('edit-layout').click(); await settings(page); await page.keyboard.press('Escape')

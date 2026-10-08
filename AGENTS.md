@@ -1,4 +1,4 @@
-# semnome — Implementation Agent Rules
+# GeppIO — Implementation Agent Rules
 
 Read [PROJECT_GUIDE.md](PROJECT_GUIDE.md), the relevant Issue and only the context routed by
 [CONTEXT_INDEX](docs/.ai/CONTEXT_INDEX.md). The project is already materialized. Do not restart intake.

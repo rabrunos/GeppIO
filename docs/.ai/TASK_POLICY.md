@@ -51,7 +51,7 @@ Network access permits in-sandbox connectivity, not operations outside the writa
 new task authority. Automatic review applies only to eligible technical approvals; a denial must
 be reported, not bypassed. Protected path writes and other boundary crossings may still need elevation.
 
-## Standing Git authorization — Geptor only
+## Standing Git authorization — `rabrunos/Geptor` only
 
 The owner authorizes automatic commit and push for completed, validated implementation in an
 approved `rabrunos/Geptor` Issue. This standing decision supplies task-level Git authority; do not
@@ -81,7 +81,7 @@ Default to no subagents. Scout reads and explains scoped evidence; Worker does b
 work. Main integrates. No recursive fan-out, permanent reviewer or duplicate Main roles.
 
 Use temporary roots for tests. Report commands, environment and pass/fail/blocked/not_run honestly.
-Keep manual Windows smoke in its Issue until observed. Apply the standing Geptor Git authorization
+Keep manual Windows smoke in its Issue until observed. Apply the standing GeppIO Git authorization
 and any explicit task override; report the actual result. Unknown remote outcomes block blind retries.
 No deployment/upload tooling is enabled in this local prototype. No tracked last report, checkpoint
 or work-state file.

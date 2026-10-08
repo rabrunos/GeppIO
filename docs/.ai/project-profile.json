@@ -2,7 +2,7 @@
   "$schema": "./schemas/project-profile.schema.json",
   "schema": "project-profile/v3",
   "project": {
-    "name": "semnome",
+    "name": "geppio",
     "kind": "desktop-workbench-prototype",
     "summary": "Windows-first local workbench foundation with peer regions, continuous widgets and a future permissioned plugin platform."
   },
@@ -32,7 +32,7 @@
     "Playwright"
   ],
   "constraints": [
-    "Provisional name semnome; no remote repository identity has been assigned.",
+    "Product name GeppIO; technical namespace geppio; GitHub repository remains rabrunos/Geptor (Issue #6).",
     "No application login, external service or paid AI API.",
     "No real plugins or native terminal in the first foundation.",
     "No BootCrate Setup, Console, raw intake or upstream application code.",

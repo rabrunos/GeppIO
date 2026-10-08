@@ -11,7 +11,7 @@
   },
   "tasks": [
     {
-      "label": "Geptor: Dev",
+      "label": "GeppIO: Dev",
       "type": "shell",
       "command": "pnpm",
       "args": ["dev", "--watch"],
@@ -26,7 +26,7 @@
       "runOptions": { "instanceLimit": 1 }
     },
     {
-      "label": "Geptor: Start",
+      "label": "GeppIO: Start",
       "type": "shell",
       "command": "pnpm",
       "args": ["start"],
@@ -41,7 +41,7 @@
       "runOptions": { "instanceLimit": 1 }
     },
     {
-      "label": "Geptor: Build Plugins",
+      "label": "GeppIO: Build Plugins",
       "type": "shell",
       "command": "pnpm",
       "args": ["plugins:build"],
@@ -55,7 +55,7 @@
       "runOptions": { "instanceLimit": 1 }
     },
     {
-      "label": "Geptor: Check",
+      "label": "GeppIO: Check",
       "type": "shell",
       "command": "pnpm",
       "args": ["check"],

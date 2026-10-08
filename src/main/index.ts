@@ -1,6 +1,4 @@
 import { app, BrowserWindow, protocol, session, ipcMain, dialog } from 'electron'
-import { tmpdir } from 'node:os'
-import { resolve, relative, isAbsolute } from 'node:path'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { IDENTITY } from '../shared/identity.ts'
@@ -8,19 +6,33 @@ import { PRODUCTION_CSP, DEVELOPMENT_CSP, rendererAsset, validatedDevURL } from 
 import { PluginStore } from './plugins.ts'
 import { pluginId } from '../shared/plugins.ts'
 import type { PluginResult } from '../shared/plugins.ts'
+import { LEGACY_IDENTITY, prepareProfile, validatedTestProfile } from './profile-migration.ts'
+import { recoverLayout } from './layout-migration.ts'
 
-protocol.registerSchemesAsPrivileged([{ scheme: IDENTITY.protocol, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }])
+protocol.registerSchemesAsPrivileged([
+  { scheme: IDENTITY.protocol, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
+  // Legacy origin is handled only in a dedicated recovery session, never in the app session.
+  { scheme: LEGACY_IDENTITY.protocol, privileges: { standard: true, secure: true } }
+])
 app.setName(IDENTITY.name)
-const testData = !app.isPackaged ? process.env.SEMNOME_TEST_USER_DATA : undefined
+const testData = !app.isPackaged ? process.env.GEPPIO_TEST_USER_DATA : undefined
 if (testData) {
-  const candidate = resolve(testData), rel = relative(tmpdir(), candidate)
-  if (!isAbsolute(testData) || !rel || rel.startsWith('..') || isAbsolute(rel) || !rel.startsWith('semnome-smoke-')) throw new Error('Invalid test data directory')
-  app.setPath('userData', candidate)
+  const candidate = validatedTestProfile(testData)
+  // Both profiles are synthetic children of the restricted smoke root.
+  prepareProfile(join(candidate, LEGACY_IDENTITY.directory), join(candidate, IDENTITY.directory))
+  app.setPath('userData', join(candidate, IDENTITY.directory))
+  app.setPath('sessionData', join(candidate, IDENTITY.directory))
+} else {
+  const base = app.getPath('appData'), destination = join(base, IDENTITY.directory)
+  prepareProfile(join(base, LEGACY_IDENTITY.directory), destination)
+  app.setPath('userData', destination)
+  app.setPath('sessionData', destination)
 }
 const development = !app.isPackaged && Boolean(process.env.ELECTRON_RENDERER_URL)
 const devURL = development ? validatedDevURL(process.env.ELECTRON_RENDERER_URL ?? '') : null
 const plugins = new PluginStore(join(app.getPath('userData'), 'plugins'))
 let managementBusy = false
+let startupComplete = false
 
 async function createWindow(): Promise<void> {
   const win = new BrowserWindow({
@@ -38,6 +50,14 @@ async function createWindow(): Promise<void> {
 }
 
 app.whenReady().then(async () => {
+  session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false))
+  session.defaultSession.setPermissionCheckHandler(() => false)
+  session.defaultSession.on('will-download', event => event.preventDefault())
+  try { await recoverLayout(app.getPath('userData'), devURL) }
+  catch {
+    // Do not expose private OS paths or write over corrupt source/destination bytes.
+    await dialog.showMessageBox({ type: 'warning', title: IDENTITY.name, message: 'Não foi possível migrar o layout anterior. Os dados foram preservados.', detail: 'Feche a versão anterior e consulte o procedimento de recuperação em docs/development/renaming.md. Não salve um layout substituto antes de recuperar o rascunho desejado.' })
+  }
   // Explicit operations only; no IPC channel name or filesystem path comes from the renderer.
   for (const operation of ['list', 'install', 'set-enabled', 'remove'] as const) {
     ipcMain.handle('plugins:' + operation, async (event, ...args: unknown[]): Promise<PluginResult<unknown>> => {
@@ -93,6 +113,7 @@ app.whenReady().then(async () => {
     session.defaultSession.webRequest.onBeforeRequest({ urls: ['http://*/*', 'https://*/*', 'ws://*/*', 'wss://*/*'] }, (_details, callback) => callback({ cancel: true }))
   }
   await createWindow()
+  startupComplete = true
   app.on('activate', () => { if (!BrowserWindow.getAllWindows().length) void createWindow() })
 }).catch(error => { console.error('Application startup failed:', error instanceof Error ? error.message : 'unknown error'); app.exit(1) })
-app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit() })
+app.on('window-all-closed', () => { if (startupComplete && process.platform !== 'darwin') app.quit() })

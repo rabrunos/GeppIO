@@ -23,7 +23,7 @@ Fixtures are synthetic. Tests must not read personal projects or credentials. Ne
 
 ## Desktop smoke
 
-Build first. The smoke launcher allocates its own `semnome-smoke-*` directory under the OS temporary root and passes a restricted test override. Never point it at the owner's actual userData. Only that generated test directory is removed afterward. Screenshot output goes to ignored `.local/diagnostics/`.
+Build first. The smoke launcher allocates its own `geppio-smoke-*` directory under the OS temporary root and passes a restricted test override. Never point it at the owner's actual userData. Only that generated test directory is removed afterward. Screenshot output goes to ignored `.local/diagnostics/`.
 
 The automation checks the three regions, seven Main widgets, absence of renderer Node globals,
 the fixed bridge shape, edit cancel/save, the sample panel, theme persistence after reload and a
@@ -43,6 +43,12 @@ the project configuration on the exact loopback origin, validating local protoco
 and development CSP/CORS. It does not certify every HMR or electron-vite launcher behavior.
 
 ## Owner plugin smoke (Issue #21)
+
+Issue #6 adds a preceding Chromium identity-migration smoke to both desktop commands. It seeds
+only disposable old/new profiles, checks layout/theme transfer, retained plugin IDs/revisions/
+enabled flags, unchanged original/backup bytes, repeat launches, existing/corrupt destination
+preservation and rejected legacy/recovery URLs. See [identity recovery](renaming.md) for backup,
+rollback and migration-specific Windows acceptance. #6 does not accept #21 or #1.
 
 Generate the examples and build/preview the app. In Settings > Plugins install each generated folder;
 confirm disabled status and no widget before activation. Activate the counter, close Settings and

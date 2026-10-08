@@ -8,4 +8,4 @@ const plugins: PluginBridge = Object.freeze({
   setEnabled: (id: string, enabled: boolean) => ipcRenderer.invoke('plugins:set-enabled', id, enabled),
   remove: (id: string) => ipcRenderer.invoke('plugins:remove', id)
 })
-contextBridge.exposeInMainWorld('semnome', Object.freeze({ name: IDENTITY.name, version: __APP_VERSION__, platform: process.platform, plugins }))
+contextBridge.exposeInMainWorld('geppio', Object.freeze({ name: IDENTITY.name, version: __APP_VERSION__, platform: process.platform, plugins }))

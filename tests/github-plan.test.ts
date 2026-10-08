@@ -2,13 +2,13 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { repositoryName, repositoryFromOrigin, labelActions } from '../tools/github-plan.ts'
 test('repository selector rejects injected commands and ambiguous URLs', () => {
-  assert.equal(repositoryName('owner/semnome'), 'owner/semnome')
-  for (const value of ['', 'owner/semnome;rm', '--repo', 'https://github.com/o/r', 'a/b/c', 'a/..']) assert.throws(() => repositoryName(value))
+  assert.equal(repositoryName('owner/geppio'), 'owner/geppio')
+  for (const value of ['', 'owner/geppio;rm', '--repo', 'https://github.com/o/r', 'a/b/c', 'a/..']) assert.throws(() => repositoryName(value))
 })
 test('both normal GitHub origin forms resolve without modifying Git', () => {
-  assert.equal(repositoryFromOrigin('https://github.com/owner/semnome.git'), 'owner/semnome')
-  assert.equal(repositoryFromOrigin('git@github.com:owner/semnome.git'), 'owner/semnome')
-  assert.equal(repositoryFromOrigin('https://example.com/owner/semnome.git'), null)
+  assert.equal(repositoryFromOrigin('https://github.com/owner/geppio.git'), 'owner/geppio')
+  assert.equal(repositoryFromOrigin('git@github.com:owner/geppio.git'), 'owner/geppio')
+  assert.equal(repositoryFromOrigin('https://example.com/owner/geppio.git'), null)
 })
 test('label reconciliation is repeatable and never deletes unrelated labels', () => {
   const a = { name: 'type:task', color: '123456', description: 'Task' }, extra = { ...a, name: 'owner-label' }

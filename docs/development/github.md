@@ -1,8 +1,10 @@
 # Git and GitHub handoff
 
-This archive is source for a new repository. It includes no `.git`, remote, credentials, commits, live labels or Issue IDs. The owner creates/binds the actual repository. Public/private visibility and permanent repository name remain owner choices.
+GeppIO uses the existing repository `rabrunos/Geptor`. The original source archive had no `.git`, remote, credentials or live Issues; its historical handoff is documented below. Public/private visibility and a future repository rename remain separate owner decisions.
 
-## Local history
+## Historical initial handoff
+
+The original archive instructions below must not be repeated in this materialized checkout. GeppIO uses `rabrunos/Geptor`; application migration does not rename the repository or change origin.
 
 Extract into an empty directory, validate/install the real dependency graph first, then initialize:
 
@@ -11,13 +13,13 @@ git init -b main
 git status --short
 ```
 
-Inspect files, generated `pnpm-lock.yaml` and validation before staging. A suitable first commit subject is `[0.1.0-alpha.1] Materialize semnome foundation`. For the materialized Geptor checkout, apply the standing synchronization policy below and any explicit task override. No tool in this package creates the remote or authorizes publication.
+Inspect files, generated `pnpm-lock.yaml` and validation before staging. A suitable first commit subject is `[0.1.0-alpha.1] Materialize semnome foundation`. For the materialized GeppIO checkout, apply the standing synchronization policy below and any explicit task override. No tool in this package creates the remote or authorizes publication.
 
 Create an empty repository through the owner's preferred GitHub interface. Bind its exact URL as origin. Do not assume that the final remote must literally be `semnome` or owned by a particular account; use the actual identity. Keep unknown remote details out of tracked fake configuration.
 
-## Standing synchronization (Geptor only)
+## Standing synchronization (`rabrunos/Geptor` only)
 
-The owner authorizes commit and push by default after an approved Geptor implementation is complete
+The owner authorizes commit and push by default after an approved GeppIO implementation is complete
 and its required in-scope checks pass. Explicit do-not-commit/do-not-push instructions override this
 decision. Inspect and preserve local work, review secrets and the intended stage, and retain the
 assigned `[TARGET_VERSION]` in the commit subject. Verify both origin fetch/push URLs resolve to

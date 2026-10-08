@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "semnome-project-profile.schema.json",
-  "title": "semnome selected BootCrate v3 profile",
+  "$id": "geppio-project-profile.schema.json",
+  "title": "GeppIO selected BootCrate v3 profile",
   "type": "object",
   "additionalProperties": false,
   "properties": {

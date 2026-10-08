@@ -8,7 +8,7 @@ Read AGENTS.md and only the context routed for this Issue. Verify local branch/H
 
 Acceptance: concrete observable criteria. Validation: direct tests plus required negative/desktop checks.
 Effort: inherit High unless explicitly justified otherwise under TASK_POLICY. State remaining local questions.
-Git authority: inherit TASK_POLICY's standing authorization for completed, validated Geptor work;
+Git authority: inherit TASK_POLICY's standing authorization for completed, validated GeppIO work;
 state any explicit do-not-commit/do-not-push override. Verify origin fetch/push URLs, local `main`,
 remote base, required checks and reviewed stage before normal synchronization; no force push.
 Issue authority: explicitly list comment/metadata/closure permissions; absence grants none.

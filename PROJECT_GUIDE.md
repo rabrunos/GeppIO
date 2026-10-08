@@ -1,4 +1,4 @@
-# semnome — Project Guide
+# GeppIO — Project Guide
 
 Stable entry point for ChatGPT and repository-aware planners. This is a **materialized new
 product**, not the BootCrate template. The owner's discovery/review is already normalized in
@@ -15,7 +15,7 @@ Use [SECURITY_BASELINE](docs/.ai/SECURITY_BASELINE.md) when a trust boundary cha
 
 ## Durable project facts
 
-The provisional name is `semnome`. The initial target is Windows and the stack is Electron,
+The product name is **GeppIO**, with lowercase technical namespace `geppio` (Issue #6). The GitHub repository remains `rabrunos/Geptor`; a repository rename requires separate approval. The initial target is Windows and the stack is Electron,
 TypeScript, React, Tailwind, Heroicons and Motion. The alpha.1 foundation has static fixtures;
 alpha.2 adds an explicitly trusted local plugin runtime (Issue #21).
 The fixed header is outside the widget layout. Regions are logically peers. Product choices
@@ -27,6 +27,8 @@ Issue #21 assigns the independent plugin increment `0.1.0-alpha.2`. Repairs reta
 unaccepted target; machine setup does not itself justify a new release.
 
 ## Remote identity and one-time packaging exception
+
+The existing repository is `rabrunos/Geptor`; intake and GitHub binding are complete. Do not repeat them. The following paragraph describes the original pre-repository handoff only.
 
 The owner explicitly requested a ZIP **before creating the new repository**. This is the only
 pre-repository materialization exception. There is no fabricated repository URL, HEAD, Issue,

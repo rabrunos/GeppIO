@@ -2,7 +2,7 @@
 
 ## Purpose and scope
 
-`semnome` is the provisional identity of a Windows-first local desktop workbench. The owner wants to compose useful workspaces from widgets and, later, community plugins. This is a new codebase, not an adoption of the old Electron prototype or of the review HTML application. There is no application account, backend, subscription integration or cloud sync in this foundation.
+**GeppIO** is a Windows-first local desktop workbench, with its product identity approved in Issue #6 and technical namespace `geppio`. The owner wants to compose useful workspaces from widgets and, later, community plugins. This is a new codebase, not an adoption of the old Electron prototype or of the review HTML application. There is no application account, backend, subscription integration or cloud sync in this foundation.
 
 The initial product goal is to validate the workbench with approximately ten synthetic widget formats before building real ChatGPT, Codex, Git or terminal integrations. Existing prototype screenshots are visual inspiration, not a specification of every header action. The fixed header's final content is intentionally deferred to owner experimentation.
 

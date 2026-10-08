@@ -1,5 +1,5 @@
 name = "worker"
-description = "Bounded mechanical worker for semnome file location, extraction, tests and explicitly assigned small edits."
+description = "Bounded mechanical worker for GeppIO file location, extraction, tests and explicitly assigned small edits."
 model_reasoning_effort = "low"
 sandbox_mode = "workspace-write"
 developer_instructions = """

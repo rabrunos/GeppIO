@@ -1,6 +1,6 @@
-# semnome
+# GeppIO
 
-Base local de um workbench desktop. O nome é provisório, sempre escrito `semnome`.
+Base local de um workbench desktop. O nome do produto é **GeppIO**; o namespace técnico é `geppio`.
 O produto começa do zero: nenhum código do aplicativo anterior, nenhum plugin ChatGPT/Codex,
 nenhum terminal real, login, serviço remoto ou aplicativo do BootCrate foi incluído.
 
@@ -22,7 +22,7 @@ silenciosamente. `pnpm run doctor` executa o diagnóstico do projeto; `pnpm doct
 o comando nativo do gerenciador. Antes de instalar dependências, execute o diagnóstico diretamente
 com `node --experimental-strip-types tools/doctor.ts` para evitar a instalação automática do pnpm.
 
-**Este ZIP não inclui `node_modules`, um executável pronto nem um lockfile fabricado.**
+O checkout inclui o lockfile real; use `pnpm install --frozen-lockfile` nas instalações seguintes. A criação do Git já foi concluída; as instruções do ZIP abaixo são históricas e não devem ser repetidas. **O ZIP original não incluía `node_modules`, um executável pronto nem um lockfile fabricado.**
 O ambiente de geração não acessou o registro npm. O primeiro `pnpm install` deve produzir
 `pnpm-lock.yaml`; revise e inclua esse arquivo no primeiro commit. O build completo e o teste
 gráfico Windows devem ser executados localmente antes de aceitar a fundação. A configuração de
@@ -91,7 +91,11 @@ Use somente código local revisado e confiável. Workers executam a lógica sem 
 Node/Electron; isso **não certifica isolamento para terceiros**. Não há marketplace, broker,
 vault, HTML/CSS arbitrário ou superfícies próprias. Veja o [contrato técnico](docs/architecture/plugins.md).
 
-## Criar o Git e conectar o fluxo
+## Git e fluxo do projeto
+
+O repositório permanece **`rabrunos/Geptor`**. A mudança do produto para GeppIO não renomeia o GitHub nem modifica `origin`. O Git e as Issues já existem. Commits e pushes de implementações aprovadas seguem a [política de tarefas](docs/.ai/TASK_POLICY.md), após validação e revisão. Publicação e fechamento de Issues exigem autorização separada.
+
+### Handoff histórico do ZIP
 
 Extraia o conteúdo para a pasta que será a raiz do projeto. Não existe `.git` nem remote no ZIP.
 
@@ -130,5 +134,6 @@ O método fica nos arquivos de orientação, nas configurações do Codex, nas s
 **A situação das tarefas, a evidência e o aceite pertencem às Issues**, não a arquivos de status
 paralelos. A conta do ChatGPT/Codex continua sendo a sua; nenhuma chave ou API paga foi adicionada.
 
-A fonte da versão é `package.json`. Não mude o nome agora por substituição indiscriminada:
-quando escolhermos a identidade definitiva, use o [mapa de renomeação](docs/development/renaming.md).
+A fonte da versão é `package.json`. A migração da Issue #6 usa `geppio://app`, `window.geppio` e o perfil `%APPDATA%\geppio`. Com o perfil novo ausente, copia plugins e armazenamento local de `%APPDATA%\semnome`, sem alterar o original. Layouts válidos são transferidos para a nova chave; dados presentes no destino têm prioridade.
+
+Feche a versão anterior antes de abrir GeppIO. Consulte o [procedimento de recuperação](docs/development/renaming.md) para backup, rollback, corrupção ou perfis novos já existentes. Não apague o perfil antigo.

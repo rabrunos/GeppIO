@@ -8,7 +8,7 @@ import { parseManifest, parseWidgetView, PLUGIN_LIMITS } from '../src/shared/plu
 
 const manifest = { schemaVersion: 1, apiVersion: 1, id: 'test.plugin', name: 'Teste local', version: '1.0.0', entry: 'entry.js', widgets: [] }
 async function fixture() {
-  const root = await mkdtemp(join(tmpdir(), 'semnome-plugin-test-'))
+  const root = await mkdtemp(join(tmpdir(), 'geppio-plugin-test-'))
   const source = join(root, 'source'); await mkdir(source)
   await writeFile(join(source, 'plugin.json'), JSON.stringify(manifest)); await writeFile(join(source, 'entry.js'), 'export function activate() { return { dispose() {} } }')
   return { root, source, installed: join(root, 'managed'), clean: () => rm(root, { recursive: true, force: true }) }
@@ -26,14 +26,14 @@ test('install stays disabled; enable, discovery, immutable assets and restart pe
   try {
     const store = new PluginStore(f.installed)
     const inventory = await store.install(f.source), installed = inventory.plugins[0]!
-    const url = `semnome://app/plugins/${manifest.id}/${installed.revision}/entry.js`
+    const url = `geppio://app/plugins/${manifest.id}/${installed.revision}/entry.js`
     assert.equal(installed.enabled, false); assert.equal(store.asset(url), null)
     await assert.rejects(store.install(f.source), /ID/)
     await store.setEnabled(manifest.id, true)
     assert.match(new TextDecoder().decode(store.asset(url)!), /activate/)
     await writeFile(join(f.source, 'entry.js'), 'changed source')
     assert.match(new TextDecoder().decode(store.asset(url)!), /activate/)
-    for (const invalid of [url.replace('semnome:', 'file:'), url.replace('app/', 'other/'), url + '?x', url + '#x', url.replace('entry.js', '../entry.js'), url.replace('entry.js', '%2e%2e%2fentry.js'), url.replace('entry.js', 'plugin.json'), url.replace(installed.revision, 'wrong'), url.replace('entry.js', '%5centry.js')]) assert.equal(store.asset(invalid), null)
+    for (const invalid of [url.replace('geppio:', 'semnome:'), url.replace('geppio:', 'file:'), url.replace('app/', 'other/'), url + '?x', url + '#x', url.replace('entry.js', '../entry.js'), url.replace('entry.js', '%2e%2e%2fentry.js'), url.replace('entry.js', 'plugin.json'), url.replace(installed.revision, 'wrong'), url.replace('entry.js', '%5centry.js')]) assert.equal(store.asset(invalid), null)
     const restarted = new PluginStore(f.installed)
     assert.equal((await restarted.list()).plugins[0]!.enabled, true)
     assert.ok(restarted.asset(url))

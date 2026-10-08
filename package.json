@@ -1,9 +1,9 @@
 {
-  "name": "semnome",
-  "version": "0.1.0-alpha.3",
+  "name": "geppio",
+  "version": "0.1.0-alpha.4",
   "private": true,
   "license": "UNLICENSED",
-  "description": "A local desktop workbench — foundation prototype, Windows first.",
+  "description": "GeppIO — a local desktop workbench, Windows first.",
   "type": "module",
   "main": "out/main/index.cjs",
   "packageManager": "pnpm@11.25.0",
@@ -22,8 +22,8 @@
     "doctor": "node --experimental-strip-types tools/doctor.ts",
     "check": "pnpm check:repo && pnpm typecheck && pnpm lint && pnpm test && pnpm plugins:build && pnpm build",
     "plugins:build": "node --experimental-strip-types tools/build-plugins.ts",
-    "test:desktop": "node --experimental-strip-types tools/desktop-smoke.ts",
-    "test:desktop:dev": "node --experimental-strip-types tools/desktop-smoke.ts --dev",
+    "test:desktop": "node --experimental-strip-types tools/identity-smoke.ts && node --experimental-strip-types tools/desktop-smoke.ts",
+    "test:desktop:dev": "node --experimental-strip-types tools/identity-smoke.ts --dev && node --experimental-strip-types tools/desktop-smoke.ts --dev",
     "github:prepare": "node --experimental-strip-types tools/github-prepare.ts"
   },
   "dependencies": {

@@ -1,4 +1,4 @@
-name: semnome checks
+name: GeppIO checks
 on:
   push:
   pull_request:
@@ -6,7 +6,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: semnome-checks-${{ github.ref }}
+  group: geppio-checks-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   windows:
@@ -49,7 +49,7 @@ jobs:
           GITLEAKS_SHA256: '551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb'
         run: |
           set -euo pipefail
-          destination="$RUNNER_TEMP/semnome-gitleaks"
+          destination="$RUNNER_TEMP/geppio-gitleaks"
           mkdir -p "$destination"
           curl --fail --location --proto '=https' --tlsv1.2 --max-time 120 \
             "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \

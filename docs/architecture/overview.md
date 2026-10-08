@@ -45,7 +45,7 @@ React fixture components are trusted source in the application renderer. They ar
 
 ## Build and runtime
 
-`electron-vite` builds Main/preload to explicit CJS outputs and the renderer to bundled static assets. Production-preview content is served from `semnome://app/`; development content is a validated loopback Vite server. Node is used to build/run project tools, not exposed to the renderer. Runtime version display comes from `package.json` via the build define/preload.
+`electron-vite` builds Main/preload to explicit CJS outputs and the renderer to bundled static assets. Production-preview content is served from `geppio://app/`; development content is a validated loopback Vite server. Node is used to build/run project tools, not exposed to the renderer. Runtime version display comes from `package.json` via the build define/preload.
 
 Before adding plugin-owned native UI surfaces, perform a separately scoped WebContentsView experiment
 and define its z-order, clipping, focus, animation and lifecycle behavior. The trusted Worker runtime

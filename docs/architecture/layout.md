@@ -6,7 +6,7 @@ A Main placement contains `{id, x, y, width, height}` in normalized units relati
 
 The parser rejects malformed JSON, unsupported versions/themes, invalid numbers, missing/duplicate/unknown widget IDs, too-small rectangles, out-of-bounds geometry and overlaps. Extra unknown properties are not executable and are discarded. Exact fixture-count validation is intentional for this prototype, not a generic plugin layout format.
 
-Local storage key: `semnome:layout:v1`, on the current renderer origin. Vite development and custom-protocol preview may therefore have separate drafts. Do not assume moving to another browser/session/profile transfers saved state. A malformed stored value is left untouched until the user explicitly saves a replacement.
+Local storage key: `geppio:layout:v1`, on the current renderer origin. Vite development and custom-protocol preview have separate drafts. Issue #6 provides bounded legacy profile/origin recovery described in [identity recovery](../development/renaming.md); it preserves destination values and keeps schema v1. Other browser/session/profile moves are not automatically supported. Malformed stored values remain untouched until the user explicitly saves a replacement.
 
 ## Edit transaction
 

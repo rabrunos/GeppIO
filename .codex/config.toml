@@ -1,4 +1,4 @@
-# semnome defaults, adapted from BootCrate. Verify effective settings in the installed client.
+# GeppIO defaults, adapted from BootCrate. Verify effective settings in the installed client.
 # Model is intentionally inherited from the owner's signed-in client; no API provider is added.
 model_reasoning_effort = "high"
 approval_policy = "on-request"

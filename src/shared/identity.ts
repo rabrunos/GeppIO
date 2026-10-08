@@ -1,7 +1,8 @@
-/** Provisional identity: see docs/development/renaming.md before the first public release. */
+/** Product identity approved in Issue #6; the GitHub repository is still rabrunos/Geptor. */
 export const IDENTITY = Object.freeze({
-  name: 'semnome',
-  protocol: 'semnome',
+  name: 'GeppIO',
+  directory: 'geppio',
+  protocol: 'geppio',
   host: 'app',
-  layoutStorageKey: 'semnome:layout:v1'
+  layoutStorageKey: 'geppio:layout:v1'
 })
