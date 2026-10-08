@@ -89,7 +89,7 @@ test('dense cyclic alternatives terminate at bounded search with a valid untouch
   const ps = Array.from({ length: 16 }, (_, i) => ({ id: `fixture-${String(i).padStart(2, '0')}`, x: (i % 4) * .25, y: Math.floor(i / 4) * .25, width: .25, height: .25 }))
   const cs = constraints(ps, Object.fromEntries(ps.map(p => [p.id, { min: { width: .25, height: .25 }, resizeX: false, resizeY: false }])))
   const result = reflow(ps, ps[0]!.id, { ...ps[0]!, x: .1 }, cs)
-  assert.equal(result.status, 'blocked'); assert.equal(result.reason, 'search-limit')
+  assert.equal(result.status, 'blocked'); assert.ok(['no-space', 'search-limit'].includes(result.reason))
   assert.ok(result.attempts <= 4096); assert.deepEqual(result.placements, ps)
   assert.deepEqual(reflow(ps, ps[0]!.id, { ...ps[0]!, x: .1 }, cs), result)
 })

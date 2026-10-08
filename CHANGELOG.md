@@ -7,6 +7,7 @@ Integrated source changes, not a publication ledger. Version comes from package.
 - Add GeppIO-owned bounded continuous Main reflow: live collision chains, displacement before constrained adaptive shrinking, deterministic bounded search and non-destructive rejection (Issue #16; investigation #10).
 - Replace the bottom-right resize icon with eight transparent directional edge/corner zones, anchored opposite edges and keyboard resizing; roll back the entire gesture on Escape, cancellation or lost capture.
 - Preserve schema v1, Smart Guides, Save/Cancel, trusted fixtures/plugins and Electron boundaries; add geometry and disposable Windows desktop interaction coverage. Cross-region movement remains separate.
+- Correct the unaccepted alpha.6 Windows layout UX under Issue #16: provisional 10 CSS-pixel geometry gaps, gesture-aware local reflow with same-axis neighbour compression before lateral resize escape, and resize alignment/size/clearance guides. Normalize touching legacy v1 only in a reversible edit preview, block insufficient-gap Save, and retain the target/security/plugin boundaries; Motion polish remains deferred.
 
 ## [0.1.0-alpha.5] — 2026-10-08
 

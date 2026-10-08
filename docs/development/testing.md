@@ -42,6 +42,15 @@ After a build, `node --experimental-strip-types tools/desktop-smoke.ts --scale12
 interaction and plugin assertions with Chromium's explicit 1.25 device-scale override. This is
 automated scale coverage, not proof of the physical Windows display setting or owner mouse UX.
 
+The alpha.6 corrective continuation adds projection-based 10 CSS-pixel separation at several canvas
+sizes, same-axis fixed-opposite neighbour compression even when lateral space exists, local forward
+chains/order, fixed-axis fallbacks, deterministic reversal, resize edge/centre/size/clearance snap
+and old v1 loading/preview normalization without writes. Desktop assertions test resize guides on
+all eight zones in both themes with Alt and the checkbox disabled, actual gap-valid geometry during
+gestures, South/East neighbour priority, touching legacy Save/Cancel and recoverable impossible-gap
+warning/Save rejection. These assertions distinguish a technically working control from the owner's
+required layout response. Motion polish remains deferred and is not a success criterion here.
+
 For alpha.2, build the independent examples first with `pnpm plugins:build` (`pnpm check` includes
 this). Desktop smoke also installs through Settings/native directory selection in its disposable
 profile, exercises the counter and zero-widget pulse, repeated activate/dispose, malformed/duplicate
@@ -88,6 +97,20 @@ scale, including a small window with reachable scrolling and form typing/selecti
 Use a disposable test profile; never substitute the owner's saved composition as test data. Record
 physical display scale, mouse observations and owner visual acceptance in Issue #16; automated
 Electron assertions do not supply that acceptance.
+
+For the corrective retest, use two vertically stacked widgets with shrink slack and free lateral
+space. Grow the upper widget downward: the lower widget must keep its column/width and bottom while
+its top moves downward and its height reduces. Repeat upward/left/right and with corners; at minima,
+local push or a clear blocked result is acceptable. During a move, paired/stacked neighbours should
+push nearby without exchanging distant rows or columns. Verify the provisional 10 CSS-pixel interval
+on shared horizontal/vertical projections, including canvas boundaries; corner-only contact is the
+documented diagonal exception. Match the size of a widget in another column/row using resize guides,
+then disable guides or hold Alt and verify continuous unsnapped size changes and fixed opposite edges.
+Load an old touching-edge layout: normal mode must preserve it. Edit may normalize spacing only in
+the preview; Cancel must restore the old composition/bytes, and Save may persist only a spaced layout.
+If normalization cannot fit, the warning and blocked Save must be recoverable by reducing widgets
+or Cancel. Repeat in both themes, 100%/usual physical scale and a small scrolling window. The prior
+7/7 functional checklist is not visual acceptance; the owner rejected alpha.6 and must retest.
 
 Open the sample panel on all four sides in both Overlay and Docked. Overlay should leave underlying geometry unchanged; Docked should reserve viewport space (the minimum canvas may scroll). Test floating Overlay and the persistent reopen button. Resize the native window and verify overflow remains reachable rather than hiding widgets permanently.
 
