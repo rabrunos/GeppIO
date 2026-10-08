@@ -2,6 +2,12 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.6] — 2026-10-08
+
+- Add GeppIO-owned bounded continuous Main reflow: live collision chains, displacement before constrained adaptive shrinking, deterministic bounded search and non-destructive rejection (Issue #16; investigation #10).
+- Replace the bottom-right resize icon with eight transparent directional edge/corner zones, anchored opposite edges and keyboard resizing; roll back the entire gesture on Escape, cancellation or lost capture.
+- Preserve schema v1, Smart Guides, Save/Cancel, trusted fixtures/plugins and Electron boundaries; add geometry and disposable Windows desktop interaction coverage. Cross-region movement remains separate.
+
 ## [0.1.0-alpha.5] — 2026-10-08
 
 - Align active repository references and standing Git synchronization policies with the owner-renamed rabrunos/GeppIO repository (stable GitHub ID 1409287329), retaining the original Issue #22 authorization scope and safeguards.

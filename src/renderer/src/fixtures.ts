@@ -1,4 +1,4 @@
-export { DEFAULT_LAYOUT, MINIMUMS } from '../../shared/layout-defaults.ts'
+export { DEFAULT_LAYOUT, MINIMUMS, MAIN_CONSTRAINTS } from '../../shared/layout-defaults.ts'
 export const WIDGETS = [
   { id: 'summary', title: 'Panorama', type: 'Indicador', region: 'main' },
   { id: 'queue', title: 'Fila de trabalho', type: 'Tabela', region: 'main' },

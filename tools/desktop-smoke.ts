@@ -6,6 +6,7 @@ import assert from 'node:assert/strict'
 import ts from 'typescript'
 import type { Page } from 'playwright'
 import { IDENTITY } from '../src/shared/identity.ts'
+import { layoutSmoke } from './layout-smoke.ts'
 const temporary = await mkdtemp(join(tmpdir(), 'geppio-smoke-'))
 await mkdir('.local/diagnostics', { recursive: true })
 const env: Record<string, string> = {
@@ -19,7 +20,7 @@ let devServer: import('vite').ViteDevServer | undefined
 const errors: string[] = []
 const consoleErrors: string[] = []
 async function launch(): Promise<Page> {
-  application = await electron.launch({ args: ['.'], cwd: process.cwd(), env, timeout: 30000 })
+  application = await electron.launch({ args: ['.', ...(process.argv.includes('--scale125') ? ['--force-device-scale-factor=1.25'] : [])], cwd: process.cwd(), env, timeout: 30000 })
   const page = await application.firstWindow()
   page.on('pageerror', error => errors.push(error.message))
   page.on('console', message => { if (message.type() === 'error' && consoleErrors.length < 30) consoleErrors.push(message.text().slice(0, 1024)) })
@@ -66,6 +67,7 @@ try {
   const privileged = await page.evaluate(() => ({ require: 'require' in window, process: 'process' in window, bridge: Object.keys(window.geppio ?? {}) }))
   if (privileged.require || privileged.process || privileged.bridge.some(key => !['name', 'version', 'platform', 'plugins'].includes(key))) throw new Error('Unexpected privileged renderer surface')
   assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.plugins).sort()), ['install', 'list', 'remove', 'setEnabled'])
+  await layoutSmoke(page)
   await page.getByTestId('edit-layout').click()
   const initial = await page.locator('[data-widget="chart"]').evaluate(element => { const style = (element as HTMLElement).style; return [style.left, style.top, style.width, style.height] })
   const grip = page.getByRole('button', { name: 'Mover Ritmo', exact: true }); await grip.focus(); await page.keyboard.press('ArrowRight')

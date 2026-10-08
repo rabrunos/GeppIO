@@ -1,20 +1,21 @@
 import { useRef, useState } from 'react'
 import type { KeyboardEvent, PointerEvent } from 'react'
 import { motion, MotionConfig } from 'motion/react'
-import { AdjustmentsHorizontalIcon, ArrowsPointingOutIcon, Bars3Icon, CheckIcon,
+import { AdjustmentsHorizontalIcon, Bars3Icon, CheckIcon,
   ChevronRightIcon, CommandLineIcon, CubeTransparentIcon, MoonIcon, PencilSquareIcon,
   Squares2X2Icon, SunIcon, XMarkIcon } from '@heroicons/react/24/outline'
-import { canPlace, decodeLayout, moveRect, resizeRect, snapMove } from '../../shared/layout.ts'
-import type { Guide, LayoutSnapshot, Placement, Theme } from '../../shared/layout.ts'
+import { allowsResize, canPlace, decodeLayout, moveRect, reflow, RESIZE_DIRECTIONS, resizeDirectional, snapMove } from '../../shared/layout.ts'
+import type { Guide, LayoutSnapshot, Placement, ResizeDirection, Theme } from '../../shared/layout.ts'
 import { readLayout, writeLayout } from '../../shared/storage.ts'
 import { IDENTITY } from '../../shared/identity.ts'
-import { DEFAULT_LAYOUT, MINIMUMS, WIDGETS } from './fixtures.ts'
+import { DEFAULT_LAYOUT, MAIN_CONSTRAINTS, MINIMUMS, WIDGETS } from './fixtures.ts'
 import { WidgetContent } from './WidgetContent.tsx'
 import { usePlugins, PluginSettings, PluginWidgets } from './Plugins.tsx'
 
 type Anchor = 'bottom' | 'top' | 'left' | 'right' | 'floating'
 type Presentation = 'overlay' | 'docked'
-interface Drag { id: string; pointerId: number; kind: 'move' | 'resize'; x: number; y: number; width: number; height: number; original: Placement }
+interface Drag { id: string; pointerId: number; kind: 'move' | ResizeDirection; x: number; y: number; width: number; height: number; original: Placement; snapshot: Placement[]; target: HTMLButtonElement }
+const DIRECTION_LABELS: Record<ResizeDirection, string> = { n: 'borda superior', e: 'borda direita', s: 'borda inferior', w: 'borda esquerda', ne: 'canto superior direito', nw: 'canto superior esquerdo', se: 'canto inferior direito', sw: 'canto inferior esquerdo' }
 function restore() {
   try { return readLayout(window.localStorage, IDENTITY.layoutStorageKey, DEFAULT_LAYOUT, MINIMUMS) }
   catch { return { snapshot: structuredClone(DEFAULT_LAYOUT), error: 'Armazenamento local indisponível. As alterações ficarão somente nesta sessão.' } }
@@ -31,6 +32,7 @@ export function App() {
   const [snap, setSnap] = useState(true)
   const [selected, setSelected] = useState<string | null>(null)
   const [dragging, setDragging] = useState<string | null>(null)
+  const [blocked, setBlocked] = useState<string | null>(null)
   const [guides, setGuides] = useState<Guide[]>([])
   const [message, setMessage] = useState(initial.error ?? 'Modo de uso · o layout está protegido contra alterações acidentais.')
   const [panelOpen, setPanelOpen] = useState(false)
@@ -40,19 +42,28 @@ export function App() {
   const drag = useRef<Drag | null>(null)
 
   function putPlacements(next: Placement[]) { livePlacements.current = next; setPlacements(next) }
-  function replace(rect: Placement) { putPlacements(livePlacements.current.map(p => p.id === rect.id ? rect : p)) }
   function persist(snapshot: LayoutSnapshot) {
     try { return writeLayout(window.localStorage, IDENTITY.layoutStorageKey, snapshot) }
     catch { return 'Não foi possível salvar o layout. As alterações permanecem apenas nesta sessão.' }
   }
-  function beginEdit() { setEditing(true); setMessage('Arraste pelo título. Redimensione pelo canto. Alt suspende o snap durante o movimento.') }
+  function beginEdit() { setEditing(true); setBlocked(null); setMessage('Arraste pelo título ou use as setas. Redimensione pelas bordas e cantos; no foco de uma borda, use as setas. Shift amplia o passo. Alt suspende o snap.') }
+  function endGesture(cancel: boolean) {
+    const active = drag.current
+    if (!active) return
+    drag.current = null
+    if (cancel) { putPlacements(active.snapshot); setMessage('Gesto cancelado. A prévia anterior foi restaurada.') }
+    setDragging(null); setGuides([]); setBlocked(null)
+    if (active.target.hasPointerCapture(active.pointerId)) active.target.releasePointerCapture(active.pointerId)
+  }
   function cancelEdit() {
-    drag.current = null; setDragging(null); setGuides([])
+    endGesture(true); setBlocked(null); setGuides([])
     putPlacements(structuredClone(committed.current.placements)); setEditing(false)
     setMessage('Edição cancelada. A composição anterior foi mantida.')
   }
   function saveEdit() {
-    if (!livePlacements.current.every(p => canPlace(p, livePlacements.current))) { setMessage('Resolva a sobreposição antes de salvar.'); return }
+    endGesture(false)
+    try { decodeLayout(JSON.stringify({ schemaVersion: 1, theme, placements: livePlacements.current }), DEFAULT_LAYOUT.placements.map(p => p.id), MINIMUMS) }
+    catch { setMessage('Layout inválido. A composição salva foi preservada.'); return }
     const snapshot: LayoutSnapshot = { schemaVersion: 1, theme, placements: structuredClone(livePlacements.current) }
     committed.current = snapshot; setEditing(false); setGuides([]); setSelected(null)
     setMessage(persist(snapshot) ?? 'Layout salvo neste computador. Você voltou ao modo de uso.')
@@ -63,11 +74,11 @@ export function App() {
     const failure = persist(committed.current); if (failure) setMessage(failure)
   }
   function startDrag(event: PointerEvent<HTMLButtonElement>, placement: Placement, kind: Drag['kind']) {
-    if (!editing || event.button !== 0 || !canvas.current) return
-    event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId)
+    if (!editing || drag.current || event.button !== 0 || !canvas.current) return
+    event.preventDefault(); event.currentTarget.focus(); event.currentTarget.setPointerCapture(event.pointerId)
     const bounds = canvas.current.getBoundingClientRect()
     drag.current = { id: placement.id, pointerId: event.pointerId, kind, x: event.clientX, y: event.clientY,
-      width: bounds.width, height: bounds.height, original: { ...placement } }
+      width: bounds.width, height: bounds.height, original: { ...placement }, snapshot: structuredClone(livePlacements.current), target: event.currentTarget }
     setSelected(placement.id); setDragging(placement.id)
   }
   function moveDrag(event: PointerEvent<HTMLButtonElement>) {
@@ -75,31 +86,39 @@ export function App() {
     if (!active || active.pointerId !== event.pointerId) return
     const dx = (event.clientX - active.x) / active.width, dy = (event.clientY - active.y) / active.height
     const raw = active.kind === 'move' ? moveRect(active.original, dx, dy)
-      : resizeRect(active.original, dx, dy, MINIMUMS[active.id] ?? { width: .17, height: .18 })
+      : resizeDirectional(active.original, dx, dy, active.kind, MAIN_CONSTRAINTS[active.id]!)
     const snapped = active.kind === 'move' && snap && !event.altKey
-      ? snapMove(raw, livePlacements.current.filter(p => p.id !== active.id), { width: 7 / active.width, height: 7 / active.height })
+      ? snapMove(raw, active.snapshot.filter(p => p.id !== active.id), { width: 7 / active.width, height: 7 / active.height })
       : { rect: raw, guides: [] }
-    setGuides(snapped.guides); replace({ ...snapped.rect, id: active.id })
+    const result = applyCandidate(active.snapshot, active.id, snapped.rect)
+    setGuides(result ? snapped.guides : [])
+  }
+  function applyCandidate(snapshot: Placement[], id: string, candidate: Placement | Omit<Placement, 'id'>): boolean {
+    const result = reflow(snapshot, id, candidate, MAIN_CONSTRAINTS)
+    if (result.status === 'blocked') {
+      setBlocked(id); setMessage('Sem espaço para esta tentativa dentro dos limites. A última prévia válida foi mantida.'); return false
+    }
+    putPlacements(result.placements); setBlocked(null)
+    setMessage(result.resized.some(changed => changed !== id) ? 'Vizinhos redimensionados dentro dos mínimos. Salve ou cancele a composição.'
+      : 'Prévia válida. Os vizinhos se deslocam quando necessário. Salve ou cancele a composição.')
+    return true
   }
   function finishDrag(event: PointerEvent<HTMLButtonElement>, cancel = false) {
     const active = drag.current
     if (!active || active.pointerId !== event.pointerId) return
-    const candidate = livePlacements.current.find(p => p.id === active.id)
-    if (cancel || !candidate || !canPlace(candidate, livePlacements.current)) {
-      replace(active.original); setMessage(cancel ? 'Movimento cancelado.' : 'Esse espaço está ocupado. O widget voltou à posição anterior.')
-    }
-    drag.current = null; setDragging(null); setGuides([])
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
+    endGesture(cancel)
   }
-  function keyMove(event: KeyboardEvent<HTMLButtonElement>, placement: Placement) {
-    if (!editing || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return
+  function keyMove(event: KeyboardEvent<HTMLButtonElement>, placement: Placement, direction?: ResizeDirection) {
+    if (!editing || drag.current || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return
     event.preventDefault(); const step = event.shiftKey ? .02 : .005
-    const candidate = { ...moveRect(placement, event.key === 'ArrowLeft' ? -step : event.key === 'ArrowRight' ? step : 0,
-      event.key === 'ArrowUp' ? -step : event.key === 'ArrowDown' ? step : 0), id: placement.id }
-    if (canPlace(candidate, livePlacements.current)) replace(candidate)
+    const dx = event.key === 'ArrowLeft' ? -step : event.key === 'ArrowRight' ? step : 0
+    const dy = event.key === 'ArrowUp' ? -step : event.key === 'ArrowDown' ? step : 0
+    const candidate = direction ? resizeDirectional(placement, dx, dy, direction, MAIN_CONSTRAINTS[placement.id]!) : moveRect(placement, dx, dy)
+    setSelected(placement.id); applyCandidate(livePlacements.current, placement.id, candidate)
   }
   function restoreDefault() {
     if (!editing) return
+    endGesture(true); setBlocked(null)
     putPlacements(structuredClone(DEFAULT_LAYOUT.placements)); setGuides([])
     setMessage('Composição inicial em prévia. Salve para aplicar ou cancele para manter a anterior.')
   }
@@ -123,7 +142,7 @@ export function App() {
 
   return <MotionConfig reducedMotion="user"><div className="workbench" data-theme={theme} onKeyDown={event => {
     if (settingsOpen) return
-    if (event.key === 'Escape') { if (editing) cancelEdit(); else if (panelOpen) setPanelOpen(false) }
+    if (event.key === 'Escape') { if (drag.current) endGesture(true); else if (editing) cancelEdit(); else if (panelOpen) setPanelOpen(false) }
   }}>
     <header className="workbench-header">
       <div className="brand"><span className="brand-icon"><CubeTransparentIcon className="size-6" /></span><div><strong>{IDENTITY.name}</strong><small>LABORATÓRIO DE WORKSPACE</small></div></div>
@@ -145,13 +164,18 @@ export function App() {
           <div className="canvas-viewport"><PluginWidgets plugins={plugins} /><div className={'layout-canvas ' + (editing ? 'editing' : '')} ref={canvas} data-testid="layout-canvas">
             {placements.map(placement => {
               const definition = WIDGETS.find(w => w.id === placement.id)
-              const invalid = !canPlace(placement, placements)
+              const invalid = blocked === placement.id || !canPlace(placement, placements)
               return <motion.section key={placement.id} layout={!dragging} transition={{ layout: { duration: .16 } }}
                 className={'widget-frame ' + (selected === placement.id ? 'selected ' : '') + (invalid ? 'invalid' : '')}
                 data-widget={placement.id} style={{ left: placement.x * 100 + '%', top: placement.y * 100 + '%', width: placement.width * 100 + '%', height: placement.height * 100 + '%' }}>
-                <header className="widget-heading"><button className="widget-grip" aria-label={'Mover ' + (definition?.title ?? placement.id)} tabIndex={editing ? 0 : -1} onPointerDown={e => startDrag(e, placement, 'move')} onPointerMove={moveDrag} onPointerUp={e => finishDrag(e)} onPointerCancel={e => finishDrag(e, true)} onKeyDown={e => keyMove(e, placement)}><span className="grip-dots">⠿</span><strong>{definition?.title}</strong></button><span className="widget-kind">{definition?.type}</span></header>
+                <header className="widget-heading"><button className="widget-grip" aria-label={'Mover ' + (definition?.title ?? placement.id)} tabIndex={editing ? 0 : -1} onPointerDown={e => startDrag(e, placement, 'move')} onPointerMove={moveDrag} onPointerUp={e => finishDrag(e)} onPointerCancel={e => finishDrag(e, true)} onLostPointerCapture={e => finishDrag(e, true)} onKeyDown={e => keyMove(e, placement)}><span className="grip-dots">⠿</span><strong>{definition?.title}</strong></button><span className="widget-kind">{definition?.type}</span></header>
                 <div className="widget-content"><WidgetContent id={placement.id} /></div>
-                {editing && <button className="resize-handle" aria-label={'Redimensionar ' + (definition?.title ?? placement.id)} onPointerDown={e => startDrag(e, placement, 'resize')} onPointerMove={moveDrag} onPointerUp={e => finishDrag(e)} onPointerCancel={e => finishDrag(e, true)}><ArrowsPointingOutIcon className="size-3" /></button>}
+                {editing && RESIZE_DIRECTIONS.filter(direction => allowsResize(direction, MAIN_CONSTRAINTS[placement.id]!)).map(direction =>
+                  <button key={direction} className={'resize-zone resize-' + direction} data-resize={direction}
+                    aria-label={'Redimensionar ' + (definition?.title ?? placement.id) + ': ' + DIRECTION_LABELS[direction]}
+                    title={'Redimensionar pela ' + DIRECTION_LABELS[direction] + ' · use as setas com este controle em foco'}
+                    onPointerDown={e => startDrag(e, placement, direction)} onPointerMove={moveDrag} onPointerUp={e => finishDrag(e)}
+                    onPointerCancel={e => finishDrag(e, true)} onLostPointerCapture={e => finishDrag(e, true)} onKeyDown={e => keyMove(e, placement, direction)} />)}
               </motion.section>
             })}
             {editing && guides.map((guide, index) => <div key={index} className={'smart-guide ' + guide.axis} style={guide.axis === 'x' ? { left: guide.value * 100 + '%' } : { top: guide.value * 100 + '%' }} />)}

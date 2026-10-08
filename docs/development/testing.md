@@ -17,7 +17,7 @@ The dependency-free test command may run in a constrained source-inspection envi
 
 ## Core cases
 
-Continuous fractions and boundary clamping; touching edges versus overlaps; minimum-size resize; optional guide snapping; full known-widget layout serialization; malformed/oversized/unknown schema and data rejection; duplicate/out-of-range/unknown IDs; corrupt local data preserved; storage write failures reported; asset traversal and untrusted development URL rejection; pure label reconciliation idempotence and unrelated-label preservation.
+Continuous fractions and boundary clamping; touching edges versus overlaps; all eight directional resizes with opposite-edge anchors, minima/maxima and allowed axes; deterministic bounded collision chains and constrained adaptive shrinking; mixed fixed-size/eligible widgets, impossible compositions, pointer reversal, stable ordering and immutable inputs; optional guide snapping; full known-widget layout serialization; malformed/oversized/unknown schema and data rejection; duplicate/out-of-range/unknown IDs; corrupt local data preserved; storage write failures reported; asset traversal and untrusted development URL rejection; pure label reconciliation idempotence and unrelated-label preservation.
 
 Fixtures are synthetic. Tests must not read personal projects or credentials. Negative inputs are data, never executable instructions.
 
@@ -29,6 +29,18 @@ The automation checks the three regions, seven Main widgets, absence of renderer
 the fixed bridge shape, edit cancel/save, the sample panel, theme persistence after reload and a
 real process-metrics sample. It must report launch or renderer failures; a screenshot alone cannot
 replace the assertions.
+
+For alpha.6 / Issue #16, `tools/layout-smoke.ts` adds real pointer assertions before plugin smoke,
+using validated imported fixture compositions in the same disposable profile. It exercises all eight
+resize zones in both themes (outward/inward drags, anchored opposite edges, cursors/labels), keyboard
+move/resize, live displacement and adaptive resizing before pointer-up, reversal, Escape, pointer
+cancel/lost capture, Save/Cancel/reload, v1 compatibility, invalid import, corrupt-byte preservation
+and normal-mode form/scroll interactions. Cancellation events include a synthetic pointercancel and
+actual capture release; physical mouse interruption and Windows DPI/UX remain owner acceptance.
+The launcher records observed `devicePixelRatio`; do not infer a second display-scale test from it.
+After a build, `node --experimental-strip-types tools/desktop-smoke.ts --scale125` repeats the
+interaction and plugin assertions with Chromium's explicit 1.25 device-scale override. This is
+automated scale coverage, not proof of the physical Windows display setting or owner mouse UX.
 
 For alpha.2, build the independent examples first with `pnpm plugins:build` (`pnpm check` includes
 this). Desktop smoke also installs through Settings/native directory selection in its disposable
@@ -64,7 +76,18 @@ Record owner acceptance in #21; automated Windows smoke does not substitute that
 
 Use the actual Windows setup, including the usual display scaling. Confirm text is legible in both themes and the fixed header/Bottom remain correctly separated. In normal mode try dragging a widget header and using its form/scroll content: no accidental layout movement should occur.
 
-Enter Edit, move and resize a widget into empty space, move near an edge/centre guide, disable guides, and try Alt bypass. Try dropping over another widget: the moved widget should return, not displace unrelated ones. Cancel and verify the prior composition; repeat, Save, then restart the same runtime origin/profile and verify it persists. Try invalid JSON import and verify the prior usable layout remains.
+Enter Edit, move and resize a widget into empty space, move near an edge/centre guide, disable guides, and try Alt bypass. In alpha.6, move into a neighbour and watch it move during the drag; make a chain, then reverse the pointer to verify that positions/sizes return without accumulated drift. Grow a widget into a crowded area: eligible neighbours may shrink within their minima. An impossible attempt must show a warning while keeping a valid preview, with no overlap, hidden widget or canvas growth. Cancel restores the entire saved composition; repeat, Save, then restart the same runtime origin/profile and verify it persists. Try invalid JSON import and verify the prior usable layout remains. The original alpha.1 collision-rejection behavior and its historical Issue #1 evidence remain historical; alpha.6 changes the intended collision behavior under #16/#10.
+
+Test all four borders and four corners: contextual cursors only in Edit, no resize icon, opposite
+edges anchored, side-only gestures changing only one dimension, corners winning their hit zones,
+limits enforced and the grip unaffected. Tab to an edge/corner, use arrows and Shift+arrows, then
+focus the title to verify arrow movement remains distinct. During a colliding gesture press Escape
+or interrupt pointer capture: the entire prior draft must return while Edit remains available.
+Escape afterward cancels Edit. Repeat in both themes at 100% and the usual non-100% Windows display
+scale, including a small window with reachable scrolling and form typing/selection in normal mode.
+Use a disposable test profile; never substitute the owner's saved composition as test data. Record
+physical display scale, mouse observations and owner visual acceptance in Issue #16; automated
+Electron assertions do not supply that acceptance.
 
 Open the sample panel on all four sides in both Overlay and Docked. Overlay should leave underlying geometry unchanged; Docked should reserve viewport space (the minimum canvas may scroll). Test floating Overlay and the persistent reopen button. Resize the native window and verify overflow remains reachable rather than hiding widgets permanently.
 
