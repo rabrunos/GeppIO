@@ -2,6 +2,14 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.7] — 2026-10-08
+
+- Replace the continuous Main editor with an original GeppIO-owned, bounded integer grid: centrally configured 12 columns, 8 initial rows, square cells fit to both viewport dimensions, symmetric provisional gutters and no Main scroll (Issue #24 amendment).
+- Center the grid by default; move laboratory/import/presentation controls into Settings/Development, retain a session-only alignment debug switch and independently resize Sidebar/Bottom in CSS pixels.
+- Add deterministic push, boundary compression, preferred-size relocation and bounded multi-widget search with no gravity, eight resize directions, stable gesture reversal and Save/Cancel.
+- Introduce validated grid schema v2 in a separate key. Convert v1 read-only, preserve its original bytes, block failed conversion recoverably and require explicit recovery preview/Save; retain profile migration, plugins and native protections.
+- Separate workbench, grid rendering/gestures/transactions, pure geometry/occupancy/reflow/schema/storage, Settings and styles by responsibility. Add integer geometry, persistence and disposable Windows interaction coverage.
+
 ## [0.1.0-alpha.6] — 2026-10-08
 
 - Add GeppIO-owned bounded continuous Main reflow: live collision chains, displacement before constrained adaptive shrinking, deterministic bounded search and non-destructive rejection (Issue #16; investigation #10).

@@ -9,6 +9,8 @@ import { PluginStore } from '../src/main/plugins.ts'
 import { snapshotTree, BACKUP_DIRECTORY } from '../src/main/profile-migration.ts'
 import { IDENTITY } from '../src/shared/identity.ts'
 import { DEFAULT_LAYOUT } from '../src/renderer/src/fixtures.ts'
+import { GRID_KEY } from '../src/shared/grid/policy.ts'
+import { migrateV1 } from '../src/shared/grid/schema.ts'
 
 const temporary = await mkdtemp(join(tmpdir(), 'geppio-smoke-identity-'))
 const environment: Record<string, string> = Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined))
@@ -80,17 +82,23 @@ try {
   assert.equal(await page.evaluate(() => 'semnome' in window), false)
   assert.equal(await page.evaluate(key => localStorage.getItem(key), IDENTITY.layoutStorageKey), legacyLayout)
   assert.equal(await page.locator('.workbench').getAttribute('data-theme'), 'light')
-  assert.equal(await page.locator('[data-widget="summary"]').evaluate(element => (element as HTMLElement).style.left), '0.5%')
+  assert.equal(await page.locator('[data-widget="summary"]').getAttribute('data-x'), String(migrateV1(legacyLayout).placements.find(p => p.id === 'summary')!.x))
+  assert.equal(await page.evaluate(key => localStorage.getItem(key), GRID_KEY), null)
   const inventory = await page.evaluate(() => window.geppio!.plugins.list())
   assert.ok(inventory.ok); assert.deepEqual(inventory.value, oldInventory)
   await page.locator('[data-plugin-widget="local.counter:counter"]').waitFor()
   assert.equal(await page.evaluate(async () => { try { await fetch('semnome://app/index.html'); return false } catch { return true } }), true)
   assert.equal(await page.evaluate(async () => { try { await fetch('geppio://app/identity-recovery.html'); return false } catch { return true } }), true)
   await page.getByRole('button', { name: 'Alternar tema', exact: true }).click()
+  assert.equal(await page.evaluate(key => localStorage.getItem(key), GRID_KEY), null)
+  await page.getByTestId('edit-layout').click(); await page.getByTestId('save-layout').click()
+  const gridChanged = await page.evaluate(key => localStorage.getItem(key), GRID_KEY)
   const changed = await page.evaluate(key => localStorage.getItem(key), IDENTITY.layoutStorageKey)
+  assert.equal(changed, legacyLayout)
   await close(); assert.deepEqual(snapshotTree(old), oldBytes)
   page = await launch(root)
   assert.equal(await page.evaluate(key => localStorage.getItem(key), IDENTITY.layoutStorageKey), changed)
+  assert.equal(await page.evaluate(key => localStorage.getItem(key), GRID_KEY), gridChanged)
   assert.deepEqual(await new PluginStore(join(next, 'plugins')).list(), oldInventory)
   await close(); assert.deepEqual(snapshotTree(old), oldBytes)
   assert.deepEqual(snapshotTree(join(next, BACKUP_DIRECTORY, 'Local Storage')), snapshotTree(join(old, 'Local Storage')))
@@ -112,7 +120,7 @@ try {
   await writeFile(join(corrupt, 'geppio', 'plugins', 'state.json'), '{corrupt plugins')
   page = await launch(corrupt)
   assert.equal(await page.evaluate(key => localStorage.getItem(key), IDENTITY.layoutStorageKey), '{corrupt layout')
-  await page.getByText('Não foi possível restaurar o layout. O rascunho anterior não foi apagado.', { exact: true }).waitFor()
+  await page.getByText('Não foi possível converter ou restaurar o layout. Dados preservados. Em Configurações, importe uma cópia válida ou abra uma prévia da composição inicial.', { exact: true }).waitFor()
   assert.equal((await page.evaluate(() => window.geppio!.plugins.list())).ok, false)
   await close()
   assert.equal(await readFile(join(corrupt, 'geppio', 'plugins', 'state.json'), 'utf8'), '{corrupt plugins')

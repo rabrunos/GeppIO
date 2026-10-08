@@ -61,14 +61,19 @@ navegação lateral, a barra inferior e um painel recolhível de demonstração.
 executam integrações: servem para testar espaço, leitura, rolagem e interação.
 
 **Editar layout** libera movimento e redimensionamento dos sete widgets da Main.
-O movimento é contínuo; guias/snap são opcionais e `Alt` suspende o snap durante o movimento.
-Soltar sobre outro widget volta à posição anterior. **Salvar** aplica a composição e
-**Cancelar** restaura a anterior. As regras de colisão são uma hipótese inicial de protótipo,
-não uma decisão definitiva de produto.
+A grade própria do GeppIO começa com 12 colunas e 8 linhas: células quadradas se ajustam à
+largura e à altura disponíveis, sem rolagem na Main. Movimento e as oito bordas/cantos usam
+unidades inteiras; setas no controle em foco também movem/redimensionam. Vizinhos podem ser
+empurrados, comprimidos ou reorganizados dentro dos limites. Tentativas sem espaço mantêm a
+última prévia válida. **Salvar layout** confirma a composição e **Cancelar** restaura a anterior.
+O layout fracionário v1 continua preservado; sua conversão vira uma grade salva somente após
+confirmação explícita. Falhas de recuperação oferecem importação ou prévia inicial nas Configurações.
 
-O painel demonstra Overlay e Docked nas quatro bordas; Overlay também permite posição central.
-A barra inferior o reabre. Temas claro/escuro demonstram tokens visuais, não um instalador de temas.
-A sidebar e a barra inferior ainda possuem dimensões fixas nesta fundação.
+Configurações > Desenvolvimento reúne importação, prévia inicial, painel de teste e um controle
+de depuração para comparar a grade centralizada com o alinhamento superior esquerdo, sem mudar
+o layout salvo. O painel demonstra Overlay e Docked nas quatro bordas; Overlay também permite
+posição central. A barra inferior o reabre. Sidebar e Bottom têm divisores independentes em pixels,
+por mouse ou teclado. Temas claro/escuro demonstram tokens visuais, não um instalador de temas.
 
 ## Plugins locais de teste
 

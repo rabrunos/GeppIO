@@ -53,11 +53,8 @@ export function usePlugins() {
 }
 type Plugins = ReturnType<typeof usePlugins>
 const STATUS = { starting: 'Ativando', active: 'Ativo', stopping: 'Desativando', disabled: 'Desativado', error: 'Falha' }
-export function PluginSettings({ plugins, close }: { plugins: Plugins; close(): void }) {
-  const dialog = useRef<HTMLDialogElement>(null)
-  useEffect(() => { dialog.current?.showModal(); return () => dialog.current?.close() }, [])
-  return <dialog ref={dialog} className="plugin-settings" data-testid="plugin-settings" onCancel={close} aria-labelledby="settings-title">
-    <header><h2 id="settings-title">Configurações</h2><button className="button" onClick={close} aria-label="Fechar configurações">Fechar</button></header>
+export function PluginSettings({ plugins }: { plugins: Plugins }) {
+  return <section aria-label="Plugins">
     <h3>Plugins</h3>
     <p>Instale somente pacotes locais de desenvolvimento confiáveis. Esta versão não oferece isolamento para plugins de terceiros.</p>
     <button className="button primary" disabled={plugins.busy || !plugins.available} onClick={plugins.install}>Instalar pasta local</button>
@@ -73,7 +70,7 @@ export function PluginSettings({ plugins, close }: { plugins: Plugins; close(): 
         {view.status === 'error' && view.plugin.enabled && <button className="button" disabled={plugins.busy} onClick={() => plugins.toggle({ ...view, status: 'active' })}>Desativar</button>}
         <button className="button" disabled={plugins.busy} onClick={() => plugins.remove(view.plugin.manifest.id)}>Remover</button></div>
     </li>)}</ul>
-  </dialog>
+  </section>
 }
 export function PluginWidgets({ plugins }: { plugins: Plugins }) {
   const active = plugins.views.filter(view => view.status === 'active')

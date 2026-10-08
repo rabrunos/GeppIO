@@ -1,49 +1,106 @@
-# Layout contract and prototype choices
+# Bounded square-cell Main grid
 
-## Representation
+The current contract is [Issue #24's owner amendment](https://github.com/rabrunos/GeppIO/issues/24#issuecomment-6069975998).
+It supersedes the alpha.6 continuous editor/minimum scrolling canvas. This is a reversible initial
+prototype, not a finalized permanent row limit. Earlier algorithm/acceptance context remains in
+[#3](https://github.com/rabrunos/GeppIO/issues/3), [#10](https://github.com/rabrunos/GeppIO/issues/10),
+[#16](https://github.com/rabrunos/GeppIO/issues/16) and [#17](https://github.com/rabrunos/GeppIO/issues/17).
 
-A Main placement contains `{id, x, y, width, height}` in normalized units relative to the logical canvas. The valid extent is `[0,1]`; arbitrary finite fractions are allowed. This is not a hidden fixed-column grid. Persisted schema 1 includes `theme` and all seven known Main placements. The entire payload is limited to 64 KiB.
+## Policy and measured rendering
 
-The parser rejects malformed JSON, unsupported versions/themes, invalid numbers, missing/duplicate/unknown widget IDs, too-small rectangles, out-of-bounds geometry and overlaps. Extra unknown properties are not executable and are discarded. Exact fixture-count validation is intentional for this prototype, not a generic plugin layout format.
+`src/shared/grid/policy.ts` centralizes initial 12 columns, 8 rows, provisional 10 CSS-pixel symmetric
+gutters and 9px Main inset. Placements are integer `{id,x,y,w,h,preferred:{w,h}}`, independent of pixel
+size, content, presentation and plugin authority. Fixture minima are 3 columns × 2 rows (the nearest
+safe grid minima covering the retained normalized v1 minimums); maxima use the stored bounds. Each
+fixture allows both resize axes. Typed constraints also support fixed/one-axis widgets.
 
-Local storage key: `geppio:layout:v1`, on the current renderer origin. Vite development and custom-protocol preview have separate drafts. Issue #6 provides bounded legacy profile/origin recovery described in [identity recovery](../development/renaming.md); it preserves destination values and keeps schema v1. Other browser/session/profile moves are not automatically supported. Malformed stored values remain untouched until the user explicitly saves a replacement.
+For usable measured Main W/H, `fitGrid` calculates cell side
+`min((W-(columns-1)*g)/columns, (H-(rows-1)*g)/rows)`. In tiny spaces, g decreases to at most
+`min(W/(2*columns),H/(2*rows))`, so cells remain nonnegative. Unit n occupies `n*(cell+g)-g` pixels.
+The same formula on both axes makes 1×1 and 3×3 square. Leftover space is centered by default.
+Settings > Development has a session-only centered/start debug switch; it never alters grid units,
+saved rows, placements or bytes. Main directly holds fixture frames, without a visible inner canvas,
+heading or toolbar, and has no scrollbar. Fixture content and the separate plugin strip may scroll.
 
-## Edit transaction
+Sidebar width and Bottom height use independent pointer/keyboard pixel splitters with provisional
+160px/43px minima and 160px space reserved for Main. They are session-only, never grid-snapped.
+Window/region changes remeasure Main and cancel an active widget gesture without moving widgets.
+The fixed header remains outside the work area; Sidebar spans the height alongside Main and Bottom.
+Synthetic Docked/Overlay panel controls are in Development, with a persistent reopen button in Bottom.
+Docked reduces usable measured space; Overlay leaves grid geometry alone. Neither controls native work.
 
-Normal mode disables the movement/resize handlers. Entering Edit starts from the committed layout and attempts non-persistent spacing normalization. Legacy v1 geometry still loads with touching edges; decoding/storage recovery retain their old overlap-only validation. New edit previews require a provisional 10 CSS-pixel separation between widgets. If normalization cannot fit, the old draft remains visible with a recoverable warning; the user can reduce/move widgets or Cancel. Save validates both the old schema and current spacing before writing. No normalization is persisted until explicit Save, and Cancel restores the exact committed geometry.
+## Transactions and interaction
 
-Each pointer gesture records a stable snapshot of the entire draft. Every frame solves against that snapshot, including neighbour movement and adaptive resizing; reversing the pointer cannot accumulate shrink or drift. Only fully valid results become the draft. A blocked candidate highlights the active widget and reports missing space while retaining the last valid preview. Pointer-up keeps that preview; pointer cancel, lost capture or Escape restore the entire gesture snapshot. Escape outside a gesture and Cancel return to the committed layout. A storage failure leaves the error visible rather than claiming durable persistence. Theme changes persist the committed placement set, not an unfinished edit. While editing, a logical-canvas size change cancels an active gesture and rechecks spacing as an edit preview; normal mode leaves legacy geometry untouched.
+Normal mode has no active move/resize behavior; forms, text selection and internal scrolling remain
+usable. Edit enables the title grip and eight transparent edge/corner zones with accessible labels,
+directional cursors and keyboard arrows (one cell; Shift two). Opposite resize edges stay anchored.
+Integer snapping is mandatory for this schema; the former fractional snap/Alt controls are retired.
 
-JSON import is bounded and validated before showing a draft. Imported placements do not silently replace the theme. Import is not a plugin/package loader. The baseline has no layout-export UI; do not describe it as a full portable layout manager.
+Every pointer gesture records a stable complete draft and pitch. Every pointer frame solves against
+that start, avoiding accumulated shrinking/drift on reversal. Only valid results become previews.
+Blocked attempts retain the last valid draft and show an error. Pointer-up keeps the preview;
+Escape, pointercancel, lost capture or physical geometry changes restore the entire gesture start.
+Cancel restores the committed composition. Save validates and writes before leaving Edit; quota/read
+failure keeps Edit and prior committed bytes. Concurrent stored byte changes reject replacement.
+Theme changes use committed geometry, never unsaved placements. Pending migration/recovery cannot be
+confirmed by a theme toggle. Imports are bounded, validated and preview-only; they retain current theme.
 
-## Drag, snap and constraints
+## Original bounded reflow
 
-Movement uses pointer capture and canvas-relative coordinates. Neighbour/region edges and centres from the gesture-start snapshot can produce guides within a 7 CSS-pixel tolerance normalized against measured canvas dimensions. Move and all eight directional resizes support optional snap. Resize targets include the moving edge/centre, another widget's width/height even across different rows/columns, and gap-offset neighbour edges. Opposite anchors and min/max/axis permissions remain fixed during snap. A checkbox disables snap; Alt bypasses it temporarily, preserving precise freeform fractions. Guide kinds distinguish alignment, clearance and equal size. Header arrow keys provide movement during editing; Shift moves farther. Eight transparent edge/corner buttons offer directional cursors and accessible labels only in Edit. Focus a resize zone and use arrows to move its edges; Shift increases the step. Corners control both axes and win their hit zones; the move grip remains separate. There are no resize icons.
+`geometry.ts`, `occupancy.ts` and `reflow.ts` contain GeppIO-owned framework-independent algorithms.
+The [React Grid Layout documentation](https://github.com/react-grid-layout/react-grid-layout/blob/main/README.md)
+was consulted only for architectural separation of pure algorithms, React interaction and explicit
+configuration. No dependency, upstream source or algorithm was incorporated.
 
-Persisted legacy rectangles may touch but never overlap. New editor geometry uses `tooClose` / `canPlaceWithGap`: if interiors overlap on one axis, their separating axis must have at least 10 logical CSS px. A diagonal-only pair with no projected interior overlap, including corner contact, does not require extra diagonal clearance. No canvas-edge margins are invented. `canvasGap` converts independently to `10 / measuredWidth` and `10 / measuredHeight`, including the minimum/scrolling canvas. It never uses physical monitor pixels or CSS margins. The trial spacing is provisional and needs owner visual acceptance.
+The requested active rectangle stays locked. Search first pushes impacted neighbours forward on the
+movement/resize axes. At boundaries it allows eligible same-axis compression, retaining orthogonal
+position/size and the far edge when possible. If axis-local solutions fail at minima, it searches
+direct unoccupied slots for neighbours' original preferred sizes, then bounded multi-widget
+rearrangements. Complete solutions rank by fewest changed neighbours, Manhattan proximity, retained
+relative order and least preferred-size change, with stable fixture/coordinate ordering. Unaffected
+widgets are never automatically compacted upward; empty lower/middle placements remain valid.
 
-GeppIO owns the pure continuous solver and resize/snap math in shared layout code. GridStack.js and React Grid Layout are conceptual references only, with no runtime dependency or copied code. The small geometry constraint type separates min/max dimensions and allowed resize axes from content, region, presentation and plugin authority. All seven existing Main fixtures currently allow both axes with their retained v1 minima and canvas-sized maxima; fixed-size/one-axis constraints are covered by tests without changing old layout compatibility.
+Automatic compression changes actual w/h but retains preferred w/h. Explicit resize updates the
+user preference only on its requested axes. Save commits actual compressed geometry **and** its
+original preference. Reversal within a gesture restores the original snapshot; later impacted-widget
+direct-slot fallback tries that persisted preference. There is no background/global size-restoration
+pass or gravity that moves unrelated widgets after a window change.
 
-Planning context separates movement, directional resize and spacing normalization and supplies current logical canvas dimensions. The heuristic locks the requested active rectangle and searches nearby contacts with stable ID tie-breakers. Resize first compresses affected neighbours on the gesture axes, keeping their orthogonal row/column and far edge where feasible. With insufficient slack it can reduce to the permitted minimum and push locally; only after axis-local search fails does it consider lateral adjustments. Movement searches dominant-axis forward pushing, then other local displacement, then adaptive local options. Normalization trims/pushes tight neighbours in the draft.
+Work is bounded to 16 widgets, 4096 visited states per phase (four phases), 131072 candidate probes
+total and recursion depth no greater than widget count. Search is deterministic but conservative,
+not a globally optimal/exhaustive packer. Invalid input, unavailable space and exhausted budget are
+explicit blocked results. No result permits overlap, hidden row growth, widget loss or caller mutation.
 
-Candidate ranking penalizes reverse travel, crossing previous neighbour order, distance and collateral shrink. Contact travel is bounded to the maximum of each neighbour's dimension on that axis and 0.15, plus its clearance; this is an engineering locality heuristic, not a product distance guarantee. There is no global search over remote holes or canvas corners. Final fallback combines nearby contacts. Unaffected widgets retain their geometry except when an old tight pair itself requires explicit spacing normalization. Work is capped at 16 rectangles, three phases of 1024 search states (3072 total), 65536 candidate probes per phase and a recursion depth bounded by the widgets. Every returned composition satisfies finite bounds, constraints, spacing and no overlap. Search can conservatively reject feasible packing; diagnostics distinguish invalid input, unavailable space and exhausted search. This is not a globally optimal or exhaustive packing claim. Calls without editor context retain the zero-gap geometry helper convention; application edit callers always supply measured context.
+## Versioned persistence and recoverable conversion
 
-Solver diagnostics and intermediate placements are session-only and never added to schema v1 or the storage key. Main fixtures are the only layout-engine participants; trusted Counter/Pulse contributions keep their existing separate rendering and lifecycle. Cross-region drag/drop, dock/overlay capability schemas and third-party layout authority remain separately scoped.
+Schema 2 uses `geppio:layout:grid:v2`, with columns, rows, theme, all seven placements and preferred
+sizes. Parsing rejects unsupported versions, oversized UTF-8 input (64 KiB), missing/unknown/duplicate
+IDs, invalid theme/bounds/numbers/min/max/preferences, overlaps and out-of-bounds rectangles. It
+discards non-contract properties and restores canonical fixture order before rendering/writing.
+Stored columns/rows are bounded by the current validator, not silently changed by viewport resize.
 
-## Regions and presentation
+If v2 is absent, v1 `geppio:layout:v1` is validated read-only. Nearest-unit conversion respects minima,
+keeps all known widgets and their rounded requested sizes, and deterministically relocates collisions
+without shrinking. A largest-first nearest-slot search is capped at 32768 probes. Conversion remains
+a preview until explicit Save. The original v1 key/bytes, identity migration backup and plugin state
+remain intact. Development and production origins retain separate storage identities.
 
-The fixed header is outside Work Area. Sidebar/Main/Bottom are peers; CSS controls their visual relationship. The Main presentation demo supports Docked/Overlay, four edges and floating Overlay. Docked changes available viewport space; Overlay is layered inside Main. Bottom remains outside Main, so a bottom panel cannot cover it by default. Closing the demo leaves a persistent reopen control in Bottom.
+If conversion cannot fit or v1/v2 is corrupt/unsupported, show a recoverable warning and withhold the
+composition instead of silently substituting a wrong default. Settings allows valid import or an
+explicit initial-composition preview. Cancel returns to the blocker; Save confirms only the new grid
+key. An existing v2 value always wins, including corruption: do not fall back silently to v1. Recover
+v1 using the original bytes in a disposable profile/import workflow; no database/backup service or
+privileged renderer bridge is added. [Identity recovery](../development/renaming.md) remains unchanged
+at the native v1 transfer boundary.
 
-The demo's content is synthetic. No terminal shell runs. Panel mode, anchor and visibility are session-only demonstration state; only the Main placements/theme are persisted. A future widget capability schema must separate presentation, anchor, collapsibility, visibility and allowed resize axes.
+## Module ownership and pending acceptance
 
-## Small windows and animation
+Shared grid files separate policy/types, geometry, occupancy, reflow, schema/migration and storage.
+Renderer `grid/` separates measured rendering, widget frames, gesture capture and edit transactions;
+`workbench/` owns shell/header/sidebar/splitters/panel, and `settings/` owns modal/Development controls.
+Plugin UI/runtime and native security remain in their existing isolated modules. No renderer Node,
+filesystem, process, generic IPC or plugin permission expansion is introduced.
 
-The canvas has a provisional minimum logical display extent of 960 by 620 CSS pixels and can scroll; the native window also has a minimum size. This avoids pretending proportional geometry can satisfy every content minimum. It is a fallback to evaluate, not final responsive behavior. Docking may cause scrolling rather than shrinking widgets below that minimum.
-
-Motion animates settled React layout transitions; continuous pointer response bypasses layout tweening. Reduced-motion preferences are respected. No performance result, collision solver quality or native web-surface animation guarantee follows merely from including Motion.
-
-Neighbour animation polish remains deferred after the owner's alpha.6 UX rejection. This corrective continuation changes geometry/priority/spacing/guides, not Motion behavior or dependencies. Cursor-owned rectangles continue to respond without interpolation delay.
-
-## Open design questions
-
-Resolve required gaps, adaptive smaller-window composition, region resizing, reorder/move across regions, richer guide types, persistence of presentation and eventual plugin widget constraints using Issues and observed prototype behavior. These are not hidden requirements already implemented by this version. The finite Main heuristic and eight-direction resizing belong to Issue #16 / alpha.6, with algorithm investigation in #10; owner visual acceptance remains separate.
+Tests are routed by [the validation guide](../development/testing.md). Owner physical Windows DPI,
+mouse/legibility/UX, provisional gutters/rows and performance acceptance remain in Issue #24. No
+animation smoothness, subjective approval, plugin cost or native-surface guarantee is inferred.

@@ -17,6 +17,31 @@ The dependency-free test command may run in a constrained source-inspection envi
 
 ## Core cases
 
+### Current alpha.7 grid / Issue #24
+
+`tests/grid-geometry.test.ts`, `grid-reflow.test.ts` and `grid-storage.test.ts` exercise square-cell
+fit in both dimensions (including tiny viewports), centered/start coordinates, eight anchored
+directions, integers, no gravity, push chains, boundary compression, preferred-size relocation,
+bounded rearrangements and rejection, deterministic reversal and immutable input. Storage cases
+cover read-only v1 conversion, original bytes, a valid but unconvertible composition, v2 validation,
+corruption/version mismatch, write failure and concurrent byte changes. Legacy continuous tests
+remain regression evidence for v1 parsing/recovery and historical algorithms, not the active editor.
+
+`tools/grid-smoke.ts`, called by both desktop launchers, replaces the former continuous editor
+smoke. It asserts clean Main, square rendering/no Main scroll, debug alignment preserving units/bytes,
+independent pixel splitters, normal form/scroll interaction, real eight-direction gestures in both
+themes, native 1000×720/1280×740/1480×980 resize, live collision/compression/preferred-size persistence,
+impossible-growth rejection, opposite anchors, reversal, keyboard, Escape/capture/region-change cancellation, Save/Cancel/
+reload, failed Save, v1 conversion/theme behavior, corrupt-v2 recovery and invalid import. Plugin and
+identity smokes remain mandatory. `--scale125` covers an explicit Chromium 1.25 override only.
+
+Owner physical Windows acceptance remains separate: both themes, usual DPI, legibility as cells
+shrink, mouse splitter/resize behavior, compressed neighbours/preferred-size recovery, small window
+with no Main scrollbar, lower/middle empty cells, explicit recovery preview and original v1 rollback.
+Use disposable profiles. Do not claim subjective UX, physical DPI or owner acceptance from automation.
+
+### Historical alpha.1–alpha.6 coverage
+
 Continuous fractions and boundary clamping; touching edges versus overlaps; all eight directional resizes with opposite-edge anchors, minima/maxima and allowed axes; deterministic bounded collision chains and constrained adaptive shrinking; mixed fixed-size/eligible widgets, impossible compositions, pointer reversal, stable ordering and immutable inputs; optional guide snapping; full known-widget layout serialization; malformed/oversized/unknown schema and data rejection; duplicate/out-of-range/unknown IDs; corrupt local data preserved; storage write failures reported; asset traversal and untrusted development URL rejection; pure label reconciliation idempotence and unrelated-label preservation.
 
 Fixtures are synthetic. Tests must not read personal projects or credentials. Negative inputs are data, never executable instructions.

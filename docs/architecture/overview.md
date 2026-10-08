@@ -20,7 +20,10 @@ the application's main frame. There is no generic IPC entry point, filesystem/te
 or remote-content embedding. Each enabled external package runs in a renderer Web Worker;
 validated declarative contributions are rendered by React in the Main region.
 
-The renderer owns visual state. `src/shared/layout.ts` owns normalized geometry and layout parsing without Electron/React/DOM dependencies. `src/shared/storage.ts` accepts an injected storage interface for tests and returns explicit failures. `src/shared/identity.ts` centralizes runtime identity.
+The renderer owns visual state. Pure grid modules in `src/shared/grid/` own integer geometry,
+policy, occupancy, bounded reflow and versioned validation/storage without Electron/React/DOM.
+Legacy `src/shared/layout.ts` remains the fractional v1 validator and historical solver;
+native identity recovery still uses its v1 contract. `src/shared/identity.ts` centralizes identity.
 
 | Responsibility | Files |
 | --- | --- |
@@ -29,17 +32,25 @@ The renderer owns visual state. `src/shared/layout.ts` owns normalized geometry 
 | Managed package snapshots and installation preferences | `src/main/plugins.ts` |
 | Plugin lifecycle, Worker adapter and Settings/widgets | `plugin-runtime.ts`, `plugin-worker.ts`, `Plugins.tsx` in `src/renderer/src/` |
 | Versioned plugin contract and validators | `src/shared/plugins.ts`, `sdk/plugin.d.ts` |
-| App composition and interaction | `src/renderer/src/App.tsx` |
+| Workbench composition, header/sidebar and pixel region splitters | `App.tsx`, `workbench/` in `src/renderer/src/` |
+| Grid rendering, fixture frame, pointer/keyboard capture and edit transaction | `src/renderer/src/grid/` |
+| Modal and Development controls, independently composed plugin settings | `src/renderer/src/settings/`, `Plugins.tsx` |
 | Synthetic widget content and registry | `WidgetContent.tsx`, `fixtures.ts` in `src/renderer/src/` |
-| Visual tokens and CSS/Tailwind | `src/renderer/src/styles.css` |
-| Geometry, input validation, storage | `src/shared/` |
+| Visual tokens, fixtures and domain styles | `styles.css`, `fixtures.css`, `grid/grid.css`, `workbench/workbench.css`, `settings/settings.css` |
+| Grid geometry, policy, collisions, reflow, conversion and storage | `src/shared/grid/` |
 | Project checks and GitHub metadata reconciliation | `tools/` |
 
 ## Intentional simplifications
 
 No Core Utility Process or third-party Plugin Host is started merely to imitate the former prototype. There is no work requiring them yet. Do not load sqlite, node-pty, an interpreter, an updater or a plugin SDK before the corresponding Issue defines a real need and boundary.
 
-Sidebar/Main/Bottom are sibling logical regions in a single CSS grid. Region layouts need not share the same algorithm. The Main canvas is a continuous rectangular surface, not a nested docking tree. A test panel can reserve space or float within Main. The underlying layout engine does not know about this panel's text/content.
+Sidebar/Main/Bottom are peer regions in a CSS grid. Sidebar width and Bottom height are independent
+CSS-pixel dimensions, with accessible pointer/keyboard splitters. Main directly contains the seven
+grid fixture frames, without an inner visible canvas/title/toolbar. Measured Main space determines
+square pixel cells; physical window/region changes never rewrite integer placements or saved rows.
+The synthetic panel remains session-only, controlled outside Main, and can reserve space or overlay.
+Trusted plugin contributions retain a separate internally scrollable strip in Main. Neither panel nor
+plugins acquire grid/native authority. The grid solver knows only typed integer geometry.
 
 React fixture components are trusted source in the application renderer. They are not isolated plugins. Do not infer that third-party React components can safely be loaded here.
 

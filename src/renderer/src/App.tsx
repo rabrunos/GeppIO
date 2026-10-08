@@ -1,234 +1,43 @@
-import { useEffect, useRef, useState } from 'react'
-import type { KeyboardEvent, PointerEvent } from 'react'
-import { motion, MotionConfig } from 'motion/react'
-import { AdjustmentsHorizontalIcon, Bars3Icon, CheckIcon,
-  ChevronRightIcon, CommandLineIcon, CubeTransparentIcon, MoonIcon, PencilSquareIcon,
-  Squares2X2Icon, SunIcon, XMarkIcon } from '@heroicons/react/24/outline'
-import { allowsResize, canPlace, canPlaceWithGap, canvasGap, decodeLayout, moveRect, normalizeSpacing, reflow, RESIZE_DIRECTIONS, resizeDirectional, snapMove, snapResize } from '../../shared/layout.ts'
-import type { Guide, LayoutSnapshot, MinSize, Placement, PlanningContext, ResizeDirection, Theme } from '../../shared/layout.ts'
-import { readLayout, writeLayout } from '../../shared/storage.ts'
-import { IDENTITY } from '../../shared/identity.ts'
-import { DEFAULT_LAYOUT, MAIN_CONSTRAINTS, MINIMUMS, WIDGETS } from './fixtures.ts'
-import { WidgetContent } from './WidgetContent.tsx'
-import { usePlugins, PluginSettings, PluginWidgets } from './Plugins.tsx'
+import { useState } from 'react'
+import { MotionConfig } from 'motion/react'
+import { CommandLineIcon } from '@heroicons/react/24/outline'
+import { usePlugins } from './Plugins.tsx'
+import { MainGrid } from './grid/MainGrid.tsx'
+import { useLayoutTransaction } from './grid/useLayoutTransaction.ts'
+import { useGridInteraction } from './grid/useGridInteraction.ts'
+import { useMainMetrics } from './grid/useMainMetrics.ts'
+import { Header } from './workbench/Header.tsx'
+import { Sidebar } from './workbench/Sidebar.tsx'
+import { useRegions } from './workbench/useRegions.ts'
+import type { PanelState } from './workbench/TestPanel.tsx'
+import { Settings } from './settings/Settings.tsx'
+import './workbench/workbench.css'
+import './settings/settings.css'
+import './fixtures.css'
 
-type Anchor = 'bottom' | 'top' | 'left' | 'right' | 'floating'
-type Presentation = 'overlay' | 'docked'
-interface Drag { id: string; pointerId: number; kind: 'move' | ResizeDirection; x: number; y: number; width: number; height: number; original: Placement; snapshot: Placement[]; target: HTMLButtonElement }
-const DIRECTION_LABELS: Record<ResizeDirection, string> = { n: 'borda superior', e: 'borda direita', s: 'borda inferior', w: 'borda esquerda', ne: 'canto superior direito', nw: 'canto superior esquerdo', se: 'canto inferior direito', sw: 'canto inferior esquerdo' }
-function restore() {
-  try { return readLayout(window.localStorage, IDENTITY.layoutStorageKey, DEFAULT_LAYOUT, MINIMUMS) }
-  catch { return { snapshot: structuredClone(DEFAULT_LAYOUT), error: 'Armazenamento local indisponível. As alterações ficarão somente nesta sessão.' } }
-}
+/** Composition only: native/plugin authority stays in the existing boundaries. */
 export function App() {
-  const plugins = usePlugins()
-  const [settingsOpen, setSettingsOpen] = useState(false)
-  const [initial] = useState(restore)
-  const committed = useRef<LayoutSnapshot>(initial.snapshot)
-  const [placements, setPlacements] = useState(initial.snapshot.placements)
-  const livePlacements = useRef(placements)
-  const [theme, setTheme] = useState<Theme>(initial.snapshot.theme)
-  const [editing, setEditing] = useState(false)
-  const [snap, setSnap] = useState(true)
-  const [selected, setSelected] = useState<string | null>(null)
-  const [dragging, setDragging] = useState<string | null>(null)
-  const [blocked, setBlocked] = useState<string | null>(null)
-  const [guides, setGuides] = useState<Guide[]>([])
-  const [gap, setGap] = useState<MinSize>({ width: 0, height: 0 })
-  const [message, setMessage] = useState(initial.error ?? 'Modo de uso · o layout está protegido contra alterações acidentais.')
-  const [panelOpen, setPanelOpen] = useState(false)
-  const [presentation, setPresentation] = useState<Presentation>('overlay')
-  const [anchor, setAnchor] = useState<Anchor>('bottom')
-  const canvas = useRef<HTMLDivElement>(null)
-  const drag = useRef<Drag | null>(null)
-  const dimensions = useRef<MinSize | null>(null)
-
-  useEffect(() => {
-    if (!editing || !canvas.current) return
-    const observer = new ResizeObserver(() => {
-      const bounds = canvas.current?.getBoundingClientRect()
-      if (!bounds || (dimensions.current?.width === bounds.width && dimensions.current?.height === bounds.height)) return
-      endGesture(true); normalizePreview(livePlacements.current)
-    })
-    observer.observe(canvas.current)
-    return () => observer.disconnect()
-  }, [editing])
-
-  function putPlacements(next: Placement[]) { livePlacements.current = next; setPlacements(next) }
-  function persist(snapshot: LayoutSnapshot) {
-    try { return writeLayout(window.localStorage, IDENTITY.layoutStorageKey, snapshot) }
-    catch { return 'Não foi possível salvar o layout. As alterações permanecem apenas nesta sessão.' }
-  }
-  function planning(gesture: PlanningContext['gesture']): PlanningContext | undefined {
-    const bounds = canvas.current?.getBoundingClientRect()
-    if (!bounds || bounds.width <= 0 || bounds.height <= 0) return undefined
-    dimensions.current = { width: bounds.width, height: bounds.height }
-    setGap(canvasGap(dimensions.current))
-    return { gesture, canvas: dimensions.current }
-  }
-  function normalizePreview(snapshot: Placement[]) {
-    const context = planning('normalize')
-    if (!context) return
-    const result = normalizeSpacing(snapshot, MAIN_CONSTRAINTS, context)
-    if (result.status === 'blocked') {
-      setMessage('Este layout antigo não comporta 10 px entre widgets nesta prévia. Ajuste os tamanhos ou cancele; o layout salvo foi preservado.'); return
-    }
-    putPlacements(result.placements)
-    setMessage(result.moved.length || result.resized.length ? 'Espaçamento de 10 px ajustado somente na prévia. Salve para aplicar ou cancele para preservar o layout anterior.'
-      : 'Prévia com intervalo mínimo de 10 px. Arraste pelo título; redimensione nas bordas/cantos ou use as setas no controle em foco. Alt suspende o snap.')
-  }
-  function beginEdit() { setEditing(true); setBlocked(null); normalizePreview(livePlacements.current) }
-  function endGesture(cancel: boolean) {
-    const active = drag.current
-    if (!active) return
-    drag.current = null
-    if (cancel) { putPlacements(active.snapshot); setMessage('Gesto cancelado. A prévia anterior foi restaurada.') }
-    setDragging(null); setGuides([]); setBlocked(null)
-    if (active.target.hasPointerCapture(active.pointerId)) active.target.releasePointerCapture(active.pointerId)
-  }
-  function cancelEdit() {
-    endGesture(true); setBlocked(null); setGuides([])
-    putPlacements(structuredClone(committed.current.placements)); setEditing(false)
-    setMessage('Edição cancelada. A composição anterior foi mantida.')
-  }
-  function saveEdit() {
-    endGesture(false)
-    try { decodeLayout(JSON.stringify({ schemaVersion: 1, theme, placements: livePlacements.current }), DEFAULT_LAYOUT.placements.map(p => p.id), MINIMUMS) }
-    catch { setMessage('Layout inválido. A composição salva foi preservada.'); return }
-    const context = planning('normalize')
-    if (!context || !livePlacements.current.every(p => canPlaceWithGap(p, livePlacements.current, canvasGap(context.canvas)))) {
-      setMessage('Mantenha pelo menos 10 px entre os widgets antes de salvar. O layout salvo foi preservado.'); return
-    }
-    const snapshot: LayoutSnapshot = { schemaVersion: 1, theme, placements: structuredClone(livePlacements.current) }
-    committed.current = snapshot; setEditing(false); setGuides([]); setSelected(null)
-    setMessage(persist(snapshot) ?? 'Layout salvo neste computador. Você voltou ao modo de uso.')
-  }
-  function toggleTheme() {
-    const next = theme === 'dark' ? 'light' : 'dark'
-    setTheme(next); committed.current = { ...committed.current, theme: next }
-    const failure = persist(committed.current); if (failure) setMessage(failure)
-  }
-  function startDrag(event: PointerEvent<HTMLButtonElement>, placement: Placement, kind: Drag['kind']) {
-    if (!editing || drag.current || event.button !== 0 || !canvas.current) return
-    event.preventDefault(); event.currentTarget.focus(); event.currentTarget.setPointerCapture(event.pointerId)
-    const bounds = canvas.current.getBoundingClientRect()
-    drag.current = { id: placement.id, pointerId: event.pointerId, kind, x: event.clientX, y: event.clientY,
-      width: bounds.width, height: bounds.height, original: { ...placement }, snapshot: structuredClone(livePlacements.current), target: event.currentTarget }
-    setSelected(placement.id); setDragging(placement.id)
-  }
-  function moveDrag(event: PointerEvent<HTMLButtonElement>) {
-    const active = drag.current
-    if (!active || active.pointerId !== event.pointerId) return
-    const dx = (event.clientX - active.x) / active.width, dy = (event.clientY - active.y) / active.height
-    const raw = active.kind === 'move' ? moveRect(active.original, dx, dy)
-      : resizeDirectional(active.original, dx, dy, active.kind, MAIN_CONSTRAINTS[active.id]!)
-    const context = planning(active.kind)
-    if (!context) return
-    const clearance = canvasGap(context.canvas)
-    const tolerance = { width: 7 / context.canvas.width, height: 7 / context.canvas.height }
-    const neighbours = active.snapshot.filter(p => p.id !== active.id)
-    const snapped = snap && !event.altKey
-      ? active.kind === 'move' ? snapMove(raw, neighbours, tolerance, clearance)
-        : snapResize(raw, active.kind, MAIN_CONSTRAINTS[active.id]!, neighbours, tolerance, clearance)
-      : { rect: raw, guides: [] }
-    const result = applyCandidate(active.snapshot, active.id, snapped.rect, context)
-    setGuides(result ? snapped.guides : [])
-  }
-  function applyCandidate(snapshot: Placement[], id: string, candidate: Placement | Omit<Placement, 'id'>, context: PlanningContext): boolean {
-    const result = reflow(snapshot, id, candidate, MAIN_CONSTRAINTS, context)
-    if (result.status === 'blocked') {
-      setBlocked(id); setMessage('Sem espaço para esta tentativa dentro dos limites. A última prévia válida foi mantida.'); return false
-    }
-    putPlacements(result.placements); setBlocked(null)
-    setMessage(result.resized.some(changed => changed !== id) ? 'Vizinhos redimensionados dentro dos mínimos. Salve ou cancele a composição.'
-      : 'Prévia válida. Os vizinhos se deslocam quando necessário. Salve ou cancele a composição.')
-    return true
-  }
-  function finishDrag(event: PointerEvent<HTMLButtonElement>, cancel = false) {
-    const active = drag.current
-    if (!active || active.pointerId !== event.pointerId) return
-    endGesture(cancel)
-  }
-  function keyMove(event: KeyboardEvent<HTMLButtonElement>, placement: Placement, direction?: ResizeDirection) {
-    if (!editing || drag.current || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return
-    event.preventDefault(); const step = event.shiftKey ? .02 : .005
-    const dx = event.key === 'ArrowLeft' ? -step : event.key === 'ArrowRight' ? step : 0
-    const dy = event.key === 'ArrowUp' ? -step : event.key === 'ArrowDown' ? step : 0
-    const candidate = direction ? resizeDirectional(placement, dx, dy, direction, MAIN_CONSTRAINTS[placement.id]!) : moveRect(placement, dx, dy)
-    const context = planning(direction ?? 'move')
-    if (context) { setSelected(placement.id); applyCandidate(livePlacements.current, placement.id, candidate, context) }
-  }
-  function restoreDefault() {
-    if (!editing) return
-    endGesture(true); setBlocked(null)
-    putPlacements(structuredClone(DEFAULT_LAYOUT.placements)); setGuides([])
-    normalizePreview(livePlacements.current)
-  }
-  function importLayout(file: File | undefined) {
-    if (!file) return
-    if (file.size > 64 * 1024) { setMessage('O layout deve ter até 64 KiB.'); return }
-    void file.text().then(text => {
-      const next = decodeLayout(text, DEFAULT_LAYOUT.placements.map(p => p.id), MINIMUMS)
-      putPlacements(next.placements); setEditing(true)
-      normalizePreview(next.placements)
-    }).catch(() => setMessage('Arquivo de layout inválido ou incompatível. Sua composição foi preservada.'))
-  }
-  const selection = placements.find(p => p.id === selected)
-  const actualAnchor = presentation === 'docked' && anchor === 'floating' ? 'bottom' : anchor
-  const docked = panelOpen && presentation === 'docked'
-  const panel = <motion.section className={'test-panel ' + (docked ? 'docked' : 'overlay') + ' edge-' + actualAnchor}
-    initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: .15 }} data-testid="test-panel" aria-label="Painel de teste">
-    <header><span><CommandLineIcon className="size-4" /> Painel de teste <small>conteúdo simulado</small></span><button className="icon-button" onClick={() => setPanelOpen(false)} aria-label="Recolher painel"><XMarkIcon className="size-4" /></button></header>
-    <div className="panel-lines"><p><span>01</span> Nenhum terminal ou processo está sendo executado.</p><p><span>02</span> Experimente Docked, Overlay e as quatro bordas.</p><p><span>03</span> O botão na barra inferior reabre este painel.</p></div>
-  </motion.section>
-
-  return <MotionConfig reducedMotion="user"><div className="workbench" data-theme={theme} onKeyDown={event => {
-    if (settingsOpen) return
-    if (event.key === 'Escape') { if (drag.current) endGesture(true); else if (editing) cancelEdit(); else if (panelOpen) setPanelOpen(false) }
+  const plugins = usePlugins(), tx = useLayoutTransaction(), regions = useRegions()
+  const [settingsOpen, setSettingsOpen] = useState(false), [centered, setCentered] = useState(true)
+  const [panel, setPanel] = useState<PanelState>({ open: false, presentation: 'overlay', anchor: 'bottom' })
+  const measured = useMainMetrics(tx.snapshot, centered, panel), interaction = useGridInteraction(tx, measured.metrics, measured.measurementKey)
+  return <MotionConfig reducedMotion="user"><div className="workbench" data-theme={tx.snapshot.theme} onKeyDown={event => {
+    if (settingsOpen || event.key !== 'Escape') return
+    if (interaction.active()) interaction.end(true); else if (tx.editing) tx.cancel(); else if (panel.open) setPanel({ ...panel, open: false })
   }}>
-    <header className="workbench-header">
-      <div className="brand"><span className="brand-icon"><CubeTransparentIcon className="size-6" /></span><div><strong>{IDENTITY.name}</strong><small>LABORATÓRIO DE WORKSPACE</small></div></div>
-      <div className="project-context"><span>Projeto local</span><ChevronRightIcon className="size-3" /><strong>Laboratório</strong><span className="badge">plugins locais</span></div>
-      <div className="header-actions"><span className="version">{window.geppio?.version ?? __APP_VERSION__}</span><button className="icon-button" onClick={toggleTheme} aria-label="Alternar tema">{theme === 'dark' ? <SunIcon className="size-5" /> : <MoonIcon className="size-5" />}</button>
-        <button className="button" onClick={() => setSettingsOpen(true)} aria-label="Abrir configurações"><AdjustmentsHorizontalIcon className="size-4" />Configurações</button>
-        {!editing ? <button className="button primary" onClick={beginEdit} data-testid="edit-layout"><PencilSquareIcon className="size-4" />Editar layout</button> : <><button className="button" onClick={cancelEdit} data-testid="cancel-layout">Cancelar</button><button className="button primary" onClick={saveEdit} data-testid="save-layout"><CheckIcon className="size-4" />Salvar layout</button></>}
-      </div>
-    </header>
-    <div className="work-area">
-      <aside className="sidebar-region" data-region="sidebar"><div className="region-label"><Bars3Icon className="size-4" />SIDEBAR <span>01 widget</span></div>
-        <section className="navigation-fixture"><div className="sidebar-section">SEU ESPAÇO</div><div className="active-nav"><Squares2X2Icon className="size-4" />Laboratório <span>10</span></div><p>Uma coleção de formatos para testar a base antes das integrações.</p><div className="sidebar-section">NA MAIN</div>{WIDGETS.filter(w => DEFAULT_LAYOUT.placements.some(p => p.id === w.id)).map(w => <button className={'widget-nav ' + (selected === w.id ? 'selected' : '')} key={w.id} onClick={() => setSelected(w.id)}><span className="mini-square" /><span>{w.title}<small>{w.type}</small></span><ChevronRightIcon className="size-3" /></button>)}</section>
-        <div className="sidebar-footer"><span className="status-dot" />Local, sem conexão com serviços<p>GeppIO · laboratório de workspace.</p></div>
-      </aside>
-      <main className="main-region" data-region="main"><div className="workspace-toolbar"><div><span className="eyebrow">MAIN WORKSPACE</span><h1>{editing ? 'Organize do seu jeito.' : 'Tudo no seu lugar.'}</h1></div><div className="toolbar-actions">{editing ? <><label className="toggle-label"><input type="checkbox" checked={snap} onChange={e => setSnap(e.target.checked)} />Guias e snap</label><button className="button subtle" onClick={restoreDefault}>Composição inicial</button></> : <span className="mode-badge"><span className="status-dot" />Modo de uso</span>}</div></div>
-        <div className="presentation-options"><AdjustmentsHorizontalIcon className="size-4" /><span>Painel de teste</span><select aria-label="Apresentação do painel" value={presentation} disabled={editing} onChange={e => setPresentation(e.target.value as Presentation)}><option value="overlay">Overlay</option><option value="docked">Docked</option></select><select aria-label="Borda do painel" value={actualAnchor} disabled={editing} onChange={e => setAnchor(e.target.value as Anchor)}><option value="bottom">Inferior</option><option value="top">Superior</option><option value="left">Esquerda</option><option value="right">Direita</option>{presentation === 'overlay' && <option value="floating">Flutuante</option>}</select><button className="button subtle" disabled={editing} onClick={() => setPanelOpen(!panelOpen)}>{panelOpen ? 'Recolher' : 'Abrir painel'}</button><label className="import-layout">Importar layout<input type="file" accept=".json,application/json" disabled={editing} onChange={e => { importLayout(e.target.files?.[0]); e.target.value = '' }} /></label></div>
-        <div className={'work-surface ' + (docked ? 'with-dock edge-' + actualAnchor : '')}>
-          {docked && ['top', 'left'].includes(actualAnchor) && panel}
-          <div className="canvas-viewport"><PluginWidgets plugins={plugins} /><div className={'layout-canvas ' + (editing ? 'editing' : '')} ref={canvas} data-testid="layout-canvas">
-            {placements.map(placement => {
-              const definition = WIDGETS.find(w => w.id === placement.id)
-              const invalid = blocked === placement.id || !canPlace(placement, placements) || (editing && !canPlaceWithGap(placement, placements, gap))
-              return <motion.section key={placement.id} layout={!dragging} transition={{ layout: { duration: .16 } }}
-                className={'widget-frame ' + (selected === placement.id ? 'selected ' : '') + (invalid ? 'invalid' : '')}
-                data-widget={placement.id} style={{ left: placement.x * 100 + '%', top: placement.y * 100 + '%', width: placement.width * 100 + '%', height: placement.height * 100 + '%' }}>
-                <header className="widget-heading"><button className="widget-grip" aria-label={'Mover ' + (definition?.title ?? placement.id)} tabIndex={editing ? 0 : -1} onPointerDown={e => startDrag(e, placement, 'move')} onPointerMove={moveDrag} onPointerUp={e => finishDrag(e)} onPointerCancel={e => finishDrag(e, true)} onLostPointerCapture={e => finishDrag(e, true)} onKeyDown={e => keyMove(e, placement)}><span className="grip-dots">⠿</span><strong>{definition?.title}</strong></button><span className="widget-kind">{definition?.type}</span></header>
-                <div className="widget-content"><WidgetContent id={placement.id} /></div>
-                {editing && RESIZE_DIRECTIONS.filter(direction => allowsResize(direction, MAIN_CONSTRAINTS[placement.id]!)).map(direction =>
-                  <button key={direction} className={'resize-zone resize-' + direction} data-resize={direction}
-                    aria-label={'Redimensionar ' + (definition?.title ?? placement.id) + ': ' + DIRECTION_LABELS[direction]}
-                    title={'Redimensionar pela ' + DIRECTION_LABELS[direction] + ' · use as setas com este controle em foco'}
-                    onPointerDown={e => startDrag(e, placement, direction)} onPointerMove={moveDrag} onPointerUp={e => finishDrag(e)}
-                    onPointerCancel={e => finishDrag(e, true)} onLostPointerCapture={e => finishDrag(e, true)} onKeyDown={e => keyMove(e, placement, direction)} />)}
-              </motion.section>
-            })}
-            {editing && guides.map((guide, index) => <div key={index} data-guide-kind={guide.kind ?? 'alignment'} className={'smart-guide ' + guide.axis} style={guide.axis === 'x' ? { left: guide.value * 100 + '%' } : { top: guide.value * 100 + '%' }} />)}
-          </div></div>
-          {docked && ['bottom', 'right'].includes(actualAnchor) && panel}
-          {panelOpen && !docked && panel}
-        </div>
-        <div className="workspace-feedback" role="status">{message}{editing && selection && <span>{selection.id} · x {(selection.x * 100).toFixed(2)}% · y {(selection.y * 100).toFixed(2)}% · {(selection.width * 100).toFixed(2)} × {(selection.height * 100).toFixed(2)}%</span>}</div>
-      </main>
-      <footer className="bottom-region" data-region="bottom"><span className="region-label">BOTTOM</span><button className={'bottom-action ' + (panelOpen ? 'active' : '')} onClick={() => setPanelOpen(!panelOpen)} disabled={editing} aria-label="Abrir ou recolher painel de teste"><CommandLineIcon className="size-4" />Painel de teste</button><div className="bottom-spacer" /><span>10 widgets de demonstração</span><span className="bottom-separator" /><span>{plugins.inventory.plugins.length} plugins locais</span><span className="status-dot" /></footer>
+    <Header editing={tx.editing} theme={tx.snapshot.theme} recovery={tx.recovery} openSettings={() => { interaction.end(true); setSettingsOpen(true) }}
+      toggleTheme={tx.toggleTheme} begin={tx.begin} cancel={() => { interaction.end(true); tx.cancel() }} save={() => { interaction.end(false); tx.save() }} />
+    <div ref={regions.area} className="work-area" style={{ gridTemplateColumns: `${regions.sidebar}px 5px minmax(0,1fr)`, gridTemplateRows: `minmax(0,1fr) 5px ${regions.bottom}px` }}>
+      <Sidebar selected={interaction.selected} select={interaction.setSelected} />
+      <div className="region-splitter sidebar-splitter" role="separator" aria-label="Largura da Sidebar" aria-orientation="vertical" tabIndex={0}
+        aria-valuenow={Math.round(regions.sidebar)} aria-valuemin={160} aria-valuemax={Math.round(regions.maxSidebar)} {...regions.handlers('sidebar')} />
+      <MainGrid tx={tx} measured={measured} interaction={interaction} panel={panel} plugins={plugins} closePanel={() => setPanel({ ...panel, open: false })} />
+      <div className="region-splitter bottom-splitter" role="separator" aria-label="Altura da Bottom" aria-orientation="horizontal" tabIndex={0}
+        aria-valuenow={Math.round(regions.bottom)} aria-valuemin={43} aria-valuemax={Math.round(regions.maxBottom)} {...regions.handlers('bottom')} />
+      <footer className="bottom-region" data-region="bottom"><div className="bottom-tools"><span className="region-label">BOTTOM</span><button className={'bottom-action ' + (panel.open ? 'active' : '')} onClick={() => setPanel({ ...panel, open: !panel.open })} disabled={tx.editing} aria-label="Abrir ou recolher painel de teste"><CommandLineIcon className="size-4" />Painel de teste</button><span className="bottom-spacer" /><span>{plugins.inventory.plugins.length} plugins locais</span><span className="status-dot" /></div>
+        <div className="workspace-feedback" role="status">{tx.message}</div>
+      </footer>
     </div>
-    {settingsOpen && <PluginSettings plugins={plugins} close={() => setSettingsOpen(false)} />}
+    {settingsOpen && <Settings plugins={plugins} close={() => setSettingsOpen(false)} tx={tx} panel={panel} setPanel={setPanel} centered={centered} setCentered={setCentered} />}
   </div></MotionConfig>
 }

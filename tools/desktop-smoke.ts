@@ -5,8 +5,8 @@ import { join, resolve } from 'node:path'
 import assert from 'node:assert/strict'
 import ts from 'typescript'
 import type { Page } from 'playwright'
-import { IDENTITY } from '../src/shared/identity.ts'
-import { layoutSmoke } from './layout-smoke.ts'
+import { gridSmoke } from './grid-smoke.ts'
+import { GRID_KEY } from '../src/shared/grid/policy.ts'
 const temporary = await mkdtemp(join(tmpdir(), 'geppio-smoke-'))
 await mkdir('.local/diagnostics', { recursive: true })
 const env: Record<string, string> = {
@@ -67,7 +67,19 @@ try {
   const privileged = await page.evaluate(() => ({ require: 'require' in window, process: 'process' in window, bridge: Object.keys(window.geppio ?? {}) }))
   if (privileged.require || privileged.process || privileged.bridge.some(key => !['name', 'version', 'platform', 'plugins'].includes(key))) throw new Error('Unexpected privileged renderer surface')
   assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.plugins).sort()), ['install', 'list', 'remove', 'setEnabled'])
-  await layoutSmoke(page)
+  const nativeBoundary = await application!.evaluate(({ BrowserWindow }) => {
+    const contents = BrowserWindow.getAllWindows()[0]!.webContents
+    // Electron exposes this diagnostic at runtime but does not include it in public typings.
+    // Keep it test-only and fail explicitly if the observed runtime no longer supports it.
+    if (!('getLastWebPreferences' in contents) || typeof contents.getLastWebPreferences !== 'function') throw new Error('Native preferences diagnostic unavailable')
+    const prefs = contents.getLastWebPreferences() as Record<string, unknown>
+    return { sandbox: prefs.sandbox, contextIsolation: prefs.contextIsolation, nodeIntegration: prefs.nodeIntegration,
+      nodeIntegrationInWorker: prefs.nodeIntegrationInWorker, webviewTag: prefs.webviewTag, webSecurity: prefs.webSecurity }
+  })
+  assert.deepEqual(nativeBoundary, { sandbox: true, contextIsolation: true, nodeIntegration: false, nodeIntegrationInWorker: false, webviewTag: false, webSecurity: true })
+  await gridSmoke(page, async (width, height) => {
+    await application!.evaluate(({ BrowserWindow }, size) => { BrowserWindow.getAllWindows()[0]!.setSize(size.width, size.height) }, { width, height })
+  })
   await page.getByTestId('edit-layout').click()
   const initial = await page.locator('[data-widget="chart"]').evaluate(element => { const style = (element as HTMLElement).style; return [style.left, style.top, style.width, style.height] })
   const grip = page.getByRole('button', { name: 'Mover Ritmo', exact: true }); await grip.focus(); await page.keyboard.press('ArrowRight')
@@ -79,8 +91,9 @@ try {
     return JSON.stringify([style.left, style.top, style.width, style.height]) === JSON.stringify(expected)
   }, initial)
   await page.getByTestId('edit-layout').click(); await page.getByTestId('save-layout').click()
-  const saved = await page.evaluate(key => localStorage.getItem(key), IDENTITY.layoutStorageKey)
+  const saved = await page.evaluate(key => localStorage.getItem(key), GRID_KEY)
   if (!saved) throw new Error('No saved layout')
+  await settings(page)
   await page.getByRole('button', { name: 'Abrir painel', exact: true }).click()
   await page.getByTestId('test-panel').waitFor()
   await page.getByRole('button', { name: 'Recolher painel', exact: true }).click()
