@@ -9,6 +9,7 @@ import { projectGrid } from '../src/shared/grid/projection.ts'
 import { fitGrid } from '../src/shared/grid/geometry.ts'
 import { DEFAULT_LAYOUT } from '../src/shared/layout-defaults.ts'
 import { IDENTITY } from '../src/shared/identity.ts'
+import { regionSmoke } from './region-smoke.ts'
 
 async function frame(page: Page) { await page.evaluate(() => new Promise<void>(done => requestAnimationFrame(() => requestAnimationFrame(() => done())))) }
 async function placements(page: Page) {
@@ -107,6 +108,9 @@ export async function gridSmoke(page: Page, resizeWindow: (width: number, height
   await resizeWindow(1480, 980); await frame(page); assert.deepEqual(await placements(page), initial)
   await resizeWindow(0, 0); await fit(page); assert.deepEqual(await placements(page), await projected(page, DEFAULT_GRID))
   await resizeWindow(1480, 980); await fit(page); assert.deepEqual(await placements(page), initial)
+  await regionSmoke(page, resizeWindow, () => fit(page))
+  assert.deepEqual(await placements(page), initial)
+  assert.equal(await page.evaluate(key => localStorage.getItem(key), GRID_KEY), bytes)
   // Independently resize in non-cell CSS-pixel increments, preserving source bytes.
   const regionStarts = new Map<string, number>()
   for (const [name, dx, dy] of [['Largura da Sidebar', 37, 0], ['Altura da Bottom', 0, -53]] as const) {

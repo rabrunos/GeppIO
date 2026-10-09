@@ -2,6 +2,12 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.8] — 2026-10-09
+
+- Bound session-only Sidebar/Bottom resizing by live Work Area measurements: trial caps of min(300px, 20% width) and min(180px, 25% height), further reserving existing Main space (Issue #26). Keep requested initial sizes 215px/43px and normal minima 160px/43px; relax minima safely when necessary.
+- Centralize sizing and keyboard steps, expose effective ARIA bounds, retain requests across temporary viewport reductions and restore the original request/capture state on cancelled gestures or Work Area resize. Preserve independent splitters, Sidebar overflow, centered square-cell Main projection, persistence and Electron/plugin boundaries.
+- Add policy and disposable desktop regression coverage for bounds, keyboard/Shift, pointer cancellation/capture, narrow windows and reversible viewport/region changes in both themes and DPR 1.25. Trial dimensions remain pending owner visual evaluation.
+
 ## [0.1.0-alpha.7] — 2026-10-08
 
 - Replace the continuous Main editor with an original GeppIO-owned, bounded integer grid: 12×8 reference composition, responsive columns AND rows, square cells, symmetric provisional gutters and no Main scroll (Issue #24 corrective contract).

@@ -22,8 +22,16 @@ there is no user-facing alignment preference, including in Settings > Developmen
 presentation and never alters grid units, saved rows, placements or bytes. Main directly holds fixture frames, without a visible inner canvas,
 heading or toolbar, and has no scrollbar. Fixture content and the separate plugin strip may scroll.
 
-Sidebar width and Bottom height use independent pointer/keyboard pixel splitters with provisional
-160px/43px minima and 160px space reserved for Main. They are session-only, never grid-snapped.
+Sidebar width and Bottom height use independent pointer/keyboard CSS-pixel splitters. Issue #26's
+trial policy lives in `workbench/region-policy.ts`: requested initial sizes 215px/43px, normal minima
+160px/43px, maxima `min(300px, 20% Work Area width, width - 165px)` and
+`min(180px, 25% Work Area height, height - 165px)`, clamped nonnegative. The 165px reserve retains
+160px for Main plus the 5px splitter. Effective minima shrink to the maximum in tiny areas; ARIA
+values use these actual effective bounds. Sidebar keeps independent content scrolling.
+Sizes are session-only, never grid-snapped. Viewport clamping preserves requested sizes for return
+to a larger viewport. Pointer capture starts from the effective size; Escape, pointercancel, lost
+capture or Work Area resize cancels the gesture and restores its original request. Arrows adjust
+10px (Shift 30px). The trial caps remain subject to owner visual evaluation, with no user cap mode.
 Window/region changes remeasure Main, cancel an active widget gesture and derive a reversible projection.
 The fixed header remains outside the work area; Sidebar spans the height alongside Main and Bottom.
 Synthetic Docked/Overlay panel controls are in Development, with a persistent reopen button in Bottom.

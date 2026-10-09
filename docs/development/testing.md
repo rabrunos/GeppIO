@@ -47,6 +47,19 @@ shrink, mouse splitter/resize behavior, compressed neighbours/preferred-size rec
 with no Main scrollbar, lower/middle empty cells, explicit recovery preview and original v1 rollback.
 Use disposable profiles. Do not claim subjective UX, physical DPI or owner acceptance from automation.
 
+### Alpha.8 region sizing / Issue #26
+
+`tests/region-policy.test.ts` checks live proportional/absolute/Main-space caps, requested defaults,
+fractional/tiny/invalid measurements, nonnegative coherent bounds and reversible request clamping.
+`tools/region-smoke.ts`, called by the grid smoke, compares rendered dimensions with effective ARIA
+bounds at native 1000×720, 1280×740, 1480×980 and 1800×720 windows in both themes. It exercises mouse
+and keyboard/Shift limits, independent peers, Escape/pointercancel/real capture loss, viewport resize
+during capture, fresh gestures after cancellation, repeated request A→B→A restoration and zero layout
+storage writes. Synthetic 600×300 and 200×200 Work Areas test relaxed minima below Electron's retained
+1000×720 native minimum, usable Main fit and independent Sidebar scrolling. Existing Save/Cancel/restart,
+Counter/Pulse, security and DPR 1.25 smokes still apply. Synthetic Work Areas and forced Chromium DPR
+do not establish physical Windows DPI or subjective acceptance of the trial caps.
+
 ### Historical alpha.1–alpha.6 coverage
 
 Continuous fractions and boundary clamping; touching edges versus overlaps; all eight directional resizes with opposite-edge anchors, minima/maxima and allowed axes; deterministic bounded collision chains and constrained adaptive shrinking; mixed fixed-size/eligible widgets, impossible compositions, pointer reversal, stable ordering and immutable inputs; optional guide snapping; full known-widget layout serialization; malformed/oversized/unknown schema and data rejection; duplicate/out-of-range/unknown IDs; corrupt local data preserved; storage write failures reported; asset traversal and untrusted development URL rejection; pure label reconciliation idempotence and unrelated-label preservation.

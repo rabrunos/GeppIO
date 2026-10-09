@@ -14,7 +14,7 @@
 .button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .button.subtle { padding: 5px 9px; font-size: 10px; background: transparent; }
 .work-area { flex: 1; min-height: 0; display: grid; grid-template-columns: 215px minmax(0,1fr); grid-template-rows: minmax(0,1fr) 43px; grid-template-areas: 'sidebar main' 'sidebar bottom'; }
-.sidebar-region { grid-area: sidebar; display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--line); background: var(--surface); padding: 17px 13px; overflow: auto; }
+.sidebar-region { grid-area: sidebar; display: flex; flex-direction: column; min-width: 0; min-height: 0; border-right: 1px solid var(--line); background: var(--surface); padding: 17px 13px; overflow: auto; }
 .region-label { display: flex; align-items: center; gap: 7px; font-size: 9px; letter-spacing: 1.3px; font-weight: 600; color: var(--muted); }
 .region-label span { margin-left: auto; font-size: 8px; letter-spacing: 0; font-weight: 400; }
 .sidebar-section { font-size: 9px; color: var(--muted); letter-spacing: 1px; margin: 27px 10px 10px; }

@@ -29,13 +29,13 @@ export function App() {
   }}>
     <Header editing={tx.editing} theme={tx.snapshot.theme} recovery={tx.recovery} openSettings={() => { interaction.end(true); setSettingsOpen(true) }}
       toggleTheme={tx.toggleTheme} begin={() => { interaction.end(false); view.begin() }} cancel={() => { interaction.end(true); tx.cancel() }} save={() => { interaction.end(false); view.save() }} />
-    <div ref={regions.area} className="work-area" style={{ gridTemplateColumns: `${regions.sidebar}px 5px minmax(0,1fr)`, gridTemplateRows: `minmax(0,1fr) 5px ${regions.bottom}px` }}>
+    <div ref={regions.area} className="work-area" style={{ gridTemplateColumns: `${regions.sidebar}px ${regions.splitter}px minmax(0,1fr)`, gridTemplateRows: `minmax(0,1fr) ${regions.splitter}px ${regions.bottom}px` }}>
       <Sidebar selected={interaction.selected} select={interaction.setSelected} />
       <div className="region-splitter sidebar-splitter" role="separator" aria-label="Largura da Sidebar" aria-orientation="vertical" tabIndex={0}
-        aria-valuenow={Math.round(regions.sidebar)} aria-valuemin={160} aria-valuemax={Math.round(regions.maxSidebar)} {...regions.handlers('sidebar')} />
+        aria-valuenow={regions.sidebar} aria-valuemin={regions.bounds.sidebar.min} aria-valuemax={regions.bounds.sidebar.max} {...regions.handlers('sidebar')} />
       <MainGrid tx={view} measured={measured} interaction={interaction} panel={panel} plugins={plugins} closePanel={() => setPanel({ ...panel, open: false })} />
       <div className="region-splitter bottom-splitter" role="separator" aria-label="Altura da Bottom" aria-orientation="horizontal" tabIndex={0}
-        aria-valuenow={Math.round(regions.bottom)} aria-valuemin={43} aria-valuemax={Math.round(regions.maxBottom)} {...regions.handlers('bottom')} />
+        aria-valuenow={regions.bottom} aria-valuemin={regions.bounds.bottom.min} aria-valuemax={regions.bounds.bottom.max} {...regions.handlers('bottom')} />
       <footer className="bottom-region" data-region="bottom"><div className="bottom-tools"><span className="region-label">BOTTOM</span><button className={'bottom-action ' + (panel.open ? 'active' : '')} onClick={() => setPanel({ ...panel, open: !panel.open })} disabled={tx.editing} aria-label="Abrir ou recolher painel de teste"><CommandLineIcon className="size-4" />Painel de teste</button><span className="bottom-spacer" /><span>{plugins.inventory.plugins.length} plugins locais</span><span className="status-dot" /></div>
         <div className="workspace-feedback" role="status">{[measured.warning, tx.message].filter(Boolean).join(' ')}</div>
       </footer>
