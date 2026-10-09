@@ -1,6 +1,7 @@
 # Bounded square-cell Main grid
 
-The current contract is [Issue #24's composition refinement](https://github.com/rabrunos/GeppIO/issues/24#issuecomment-6080536542).
+The current contract is [Issue #24's alpha.10 margin correction](https://github.com/rabrunos/GeppIO/issues/24#issuecomment-6082287645),
+continuing its [composition refinement](https://github.com/rabrunos/GeppIO/issues/24#issuecomment-6080536542).
 It supersedes fixed 12×8 viewport geometry and the alpha.6 continuous editor/minimum scrolling canvas.
 This is a reversible prototype with bounded adaptive limits, subject to owner acceptance. Earlier context remains in
 [#3](https://github.com/rabrunos/GeppIO/issues/3), [#10](https://github.com/rabrunos/GeppIO/issues/10),
@@ -43,11 +44,15 @@ Docked reduces usable measured space; Overlay leaves grid geometry alone. Neithe
 
 `projection.ts` derives one continuous reference pitch:
 `max(sqrt((W+g)*(H+g)/192), (W+g)/24, (H+g)/24)`, with
-`g = min(10, W/48, H/48)`. Columns/rows floor the corresponding measured dimension divided by
-that pitch, bounded by 24 and the composition's required minimum. Every axis also accommodates
-preferred-size metadata, retaining the unchanged v2 validation contract. `fitGrid` caps this pitch
-by the actual bounds. Density therefore changes continuously when integer topology changes.
-Ordinary compositions leave less than one pitch of residual space per axis, always centered.
+`g = min(10, W/48, H/48)`. `projection-topology.ts` jointly resolves both counts and the actual
+feasible pitch. Each axis accommodates its composition minimum and preferred-size metadata,
+retaining unchanged v2 validation. If a minimum reduces pitch, recompute the opposite count using
+that reduced pitch, bounded by 24. Keeping counts from the old reference would create avoidable bands.
+Simply rounding that opposite capacity upward would jump density. Instead, a continuous one-cell
+coverage phase approaches the next count, completing at 80% of the fractional capacity band; its
+strength fades in across one missing unit when the constraint activates. Counts floor dimensions
+at the resulting pitch, and `fitGrid` enforces the measured bounds. Residual space is less than one
+pitch per uncapped axis, always centered. This does not promise a globally optimal packing or scale.
 
 `projection-axis.ts` fits source intervals independently on each axis. Every source left/right or
 above/below separation is mandatory, strict gaps retain at least one logical unit, and outer-edge
@@ -70,9 +75,13 @@ on a two-row widget. No animation or physical smoothness is claimed.
 `useMainMetrics` memoizes only the exact stable source, its explicit edit reference and measured CSS
 width/height. Cold and warm results agree for identical inputs regardless of resize history. Deliberate
 edits use visible bounds, exact CSS measurement and measured pitch as their new source/reference.
-The same interval fit starts at that source's bounds/scale: axis extents vary by the square root of
-the measured aspect-ratio change and pitch by the square root of the area change. At the reference,
-it reproduces the direct result; every changed pixel adapts continuously from it. This reference
+The same interval fit starts at that source's bounds/scale, with pitch initially scaled by the square
+root of the measured area change. Joint feasible-pitch resolution determines both axis extents.
+At the reference it reproduces the direct result. After a direct edit relaxes a minimum, the old
+reference scale can otherwise leave avoidable margins at the 24-cell cap. Recover the minimum
+feasible coverage pitch continuously over one reference cell of viewport travel (maximum absolute
+width/height difference), preserving the direct result at zero travel. Every changed pixel adapts;
+neither a stale projection nor resize history controls the result. This reference
 belongs only to the active transaction, never saved metadata
 or an automatically promoted projection. Cancelled gestures restore both snapshot and reference.
 Save commits the visible coordinates/bounds, then clears the edit reference; the committed source

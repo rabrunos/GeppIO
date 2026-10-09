@@ -41,6 +41,16 @@ twice the delta/minimum viewport dimension. Adjacent area change permits one cel
 continuous viewport motion; a three-sample grow/shrink excursion cannot exceed one cell's area strip.
 These are integer-geometry tolerances, not a smoothness certification. Small-span widgets may show
 large percentage area steps when restoring one cell; report absolute geometry and pitch too.
+`grid-coverage.test.ts` adds an independent feasible 22×11 witness at usable Main 1480×740,
+including neighbouring pixels, minimum-row/column coupling, capped extreme ratios and a recent
+direct edit whose reference scale previously retained avoidable bands. Saved and rebased Edit
+fixtures additionally sweep W 800–2200 at H 740 and H 400–1100 at W 1480 in one-pixel steps,
+using the same unrelaxed safety/continuity/spike budgets. Coverage requires less than one pitch
+of residual space on each uncapped axis; the explicit witness requires full width and ≤5px total
+vertical residual. Count caps and mandatory minima can still make large bands unavoidable.
+`node --experimental-strip-types tools/margin-evidence.ts` records reference/rendered pitch,
+both counts, grid dimensions, four margins, source hashes and logical/pixel rectangles. Its
+`--before` option must only be run on the baseline algorithm, before implementation.
 `node --experimental-strip-types tools/projection-evidence.ts` writes exact source hashes, dimensions,
 topologies, pitch, logical/pixel rectangles, transitions and maxima to ignored `.local/diagnostics/`.
 `--before` labels a baseline run and disables acceptance assertions; run it only against baseline code.
@@ -64,6 +74,17 @@ Its measurements and representative captures remain under ignored `.local/diagno
 direct resize that relaxes the minimum row count additionally checks exact solver geometry during
 pointer/keyboard edits, cancellation of the reference, one-pixel crossings immediately afterward,
 visible-coordinate Save, absence of reference metadata in v2 and identical saved cold/warm views.
+
+`tools/margin-smoke.ts` adds repeated restored/maximized/restored and horizontal-resize/maximize
+journeys for left, mirrored, dense and intentional-gap sources in both themes. It repeats after
+Edit entry/Cancel, region changes, deliberate pointer/keyboard edits and explicit Save/reload.
+Read-only renderer datasets expose requested pitch and the active edit reference for diagnostics;
+they add no settings, persistence fields or privileged bridge. The independent DOM oracle checks
+coverage as well as centering, safe rectangles and preserved source relationships. Identical
+source/reference/measurements must reproduce geometry throughout the journey and on cold projection.
+Storage spies exclude the explicit Save and require zero viewport writes. A direct pointer move
+places a widget at the logical right edge while the left edge remains occupied. Measurements and
+representative captures are ignored diagnostics, not owner visual acceptance.
 
 Owner physical Windows acceptance remains separate: both themes, usual DPI, legibility as cells
 shrink, mouse splitter/resize behavior, compressed neighbours/preferred-size recovery, small window

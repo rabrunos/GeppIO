@@ -4,6 +4,7 @@ Integrated source changes, not a publication ledger. Version comes from package.
 
 ## [0.1.0-alpha.10] — 2026-10-09
 
+- Correct avoidable Main bands in this unaccepted target (Issue #24): jointly resolve feasible square-cell pitch and both topology axes, with continuous coverage recovery for constrained and recently edited sources. Add independent 1480×740 coverage witnesses, unchanged one-pixel budgets and repeated disposable maximize/Edit/Save/region/edge-placement journeys; retain warned mathematically constrained margins and pending owner evaluation.
 - Preserve spatial composition during native window and region resizing (Issue #24): fit source-derived intervals with mandatory separation, intentional gaps and edge affinity; compress eligible spans before moving neighbours, without viewport-only free-slot packing.
 - Replace aspect-ranked density jumps and history-dependent caching with continuous pixel pitch and deterministic exact-measurement projection. Preserve square cells, permanent centering, declared minima, preferred-size metadata and unchanged explicit Save/Cancel/storage semantics; constrained compositions may retain larger warned margins.
 - Add sanitized left/mirrored/dense/gap/recent-edit reproductions, independent one-pixel continuity/order oracles, before/after geometry evidence tooling and disposable saved/draft desktop resize coverage. Keep the approved direct collision solver, region caps, plugin authority and Electron boundaries unchanged. Owner visual acceptance remains separate.

@@ -45,6 +45,13 @@ Main supports two-dimensional rectangular compositions, not just equal columns. 
 
 **Window changes (Issue #24 composition refinement).** Derive responsive columns, rows, positions and dimensions from the current saved/edit composition, including recent deliberate edits; never accumulate automatic projections. Fit square pixel cells using both available dimensions, reducing symmetric gutters safely in extremely small viewports. Fine-step rendered geometry, order and cold/warm consistency matter in addition to A→B→A equality. Centering itself changes only pixel offsets, not logical units or saved bytes. Internal widget scrolling is allowed; Main scrolling and hidden row growth are not. Independently resize Sidebar width and Bottom height in pixels under Issue #26's unchanged provisional live bounds. Persisted input is validated/versioned and invalid data must not silently overwrite usable state. Integer-cell size steps and constrained-space legibility remain subject to owner visual evaluation; animation polish is deferred.
 
+The [alpha.10 margin correction](https://github.com/rabrunos/GeppIO/issues/24#issuecomment-6082287645)
+requires both topology axes to follow the actual feasible square-cell size. A constraint on one
+axis must not leave an avoidable band on the other. Retain intentional empty cells within the
+composition; distinguish unavoidable margins under declared limits from unused space that a
+valid, composition-preserving topology can recover. Identical source, edit reference and Main
+measurements must agree across maximize/restore, repeated Edit/Cancel and cold rendering.
+
 **Presentation.** Normal widgets participate in their region. Docked panels consume region space. Overlays cover content without resizing it. Top/right/bottom/left anchors are separate from presentation. An overlay can be unanchored/floating. Collapsibility is separate from presentation and from resize capability; a permanent widget is possible. A collapsed widget must have an obvious way to reopen. Hiding UI must not be confused with stopping its future background activity.
 
 **First fixtures.** Cards, lists, a table, a grid, a long scroll area, a form, text, toolbar-like navigation, status and a presentation panel exercise different needs. The initial registry has ten fixture definitions; seven are on Main and three cover Sidebar, Bottom and the presentation panel. They are trusted local test components, not third-party plugins.

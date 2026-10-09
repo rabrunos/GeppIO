@@ -11,6 +11,7 @@ import { DEFAULT_LAYOUT } from '../src/shared/layout-defaults.ts'
 import { IDENTITY } from '../src/shared/identity.ts'
 import { regionSmoke } from './region-smoke.ts'
 import { compositionSmoke } from './composition-smoke.ts'
+import { marginSmoke } from './margin-smoke.ts'
 
 async function frame(page: Page) { await page.evaluate(() => new Promise<void>(done => requestAnimationFrame(() => requestAnimationFrame(() => done())))) }
 async function placements(page: Page) {
@@ -282,5 +283,6 @@ export async function gridSmoke(page: Page, resizeWindow: (width: number, height
   await page.getByRole('status').filter({ hasText: 'Arquivo inválido' }).waitFor(); assert.deepEqual(await placements(page), await projected(page, DEFAULT_GRID))
   if (await page.locator('.workbench').getAttribute('data-theme') !== 'dark') await page.getByRole('button', { name: 'Alternar tema', exact: true }).click()
   await compositionSmoke(page, resizeWindow, importDraft)
+  await marginSmoke(page, resizeWindow)
   console.log(JSON.stringify({ result: 'passed', subsystem: 'integer grid', devicePixelRatio: await page.evaluate(() => devicePixelRatio), checks: ['square fit/no Main scroll', 'native 1000x720/1280x740/1480x980 resize', 'clean Main', 'mandatory centering/no alignment control in both themes', 'independent pixel splitters', 'normal forms/scroll', 'live collisions/compression/preferred persistence', 'impossible growth blocks', '8 directions both themes', 'live reversal/opposite anchors', 'keyboard', 'capture/Escape/region resize cancellation', 'Save/Cancel/reload', 'quota failure', 'read-only v1/theme migration', 'corrupt v2 recovery', 'invalid import'] }))
 }

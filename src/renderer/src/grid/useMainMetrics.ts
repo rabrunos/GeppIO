@@ -23,6 +23,6 @@ export function useMainMetrics(source: GridSnapshot, panel: PanelState, editView
   const projection = useMemo(() => projectGrid(source, width, height, editViewport), [source, width, height, editViewport])
   const metrics = projection.metrics
   const available = { width, height }
-  return { main, tray, metrics, snapshot: projection.snapshot, warning: projection.warning, probes: projection.probes, measurementKey: `${size.width},${size.height},${size.tray},${dockWidth},${dockHeight},${panel.anchor}`, offset: { left: inset + metrics.left + (panel.anchor === 'left' ? dockWidth : 0),
+  return { main, tray, metrics, requestedPitch: projection.requestedPitch, editViewport, snapshot: projection.snapshot, warning: projection.warning, probes: projection.probes, measurementKey: `${size.width},${size.height},${size.tray},${dockWidth},${dockHeight},${panel.anchor}`, offset: { left: inset + metrics.left + (panel.anchor === 'left' ? dockWidth : 0),
     top: inset + size.tray + metrics.top + (panel.anchor === 'top' ? dockHeight : 0) }, dockWidth, dockHeight, available }
 }

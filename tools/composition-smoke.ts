@@ -13,7 +13,7 @@ import { assertContinuous, assertSafe, changes, rectangles } from '../tests/help
 import type { ProjectionSample } from '../tests/helpers/projection-oracle.ts'
 
 async function frame(page: Page) { await page.evaluate(() => new Promise<void>(done => requestAnimationFrame(() => requestAnimationFrame(() => done())))) }
-async function sample(page: Page, source: GridSnapshot): Promise<ProjectionSample> {
+export async function sample(page: Page, source: GridSnapshot): Promise<ProjectionSample> {
   await frame(page)
   const observed = await page.getByTestId('layout-canvas').evaluate(e => {
     const main = e as HTMLElement, d = main.dataset, origin = main.getBoundingClientRect()
@@ -34,7 +34,7 @@ async function sample(page: Page, source: GridSnapshot): Promise<ProjectionSampl
   }
   return { width: result.width, height: result.height, snapshot: result.snapshot, metrics: result.metrics }
 }
-async function observeWrites(page: Page) {
+export async function observeWrites(page: Page) {
   await page.evaluate(key => {
     const original = Storage.prototype.setItem
     document.documentElement.dataset.layoutWrites = '0'
@@ -44,7 +44,7 @@ async function observeWrites(page: Page) {
     }
   }, GRID_KEY)
 }
-async function noWrites(page: Page, bytes: string | null) {
+export async function noWrites(page: Page, bytes: string | null) {
   assert.equal(await page.locator('html').getAttribute('data-layout-writes'), '0', 'viewport adaptation must never write layout storage')
   assert.equal(await page.evaluate(key => localStorage.getItem(key), GRID_KEY), bytes)
 }
