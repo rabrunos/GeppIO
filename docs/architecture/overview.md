@@ -45,10 +45,12 @@ native identity recovery still uses its v1 contract. `src/shared/identity.ts` ce
 No Core Utility Process or third-party Plugin Host is started merely to imitate the former prototype. There is no work requiring them yet. Do not load sqlite, node-pty, an interpreter, an updater or a plugin SDK before the corresponding Issue defines a real need and boundary.
 
 Sidebar/Main/Bottom are peer regions in a CSS grid. Sidebar width and Bottom height are independent
-CSS-pixel dimensions, with accessible pointer/keyboard splitters. Main directly contains the seven
-grid fixture frames, without an inner visible canvas/title/toolbar. Measured Main space determines
-square pixel cells; physical window/region changes never rewrite integer placements or saved rows.
-The synthetic panel remains session-only, controlled outside Main, and can reserve space or overlay.
+CSS-pixel dimensions, with accessible pointer/keyboard splitters. Main contains seven mounted fixture
+frames in a stable world/viewport pair, without an inner visible canvas/title/toolbar. Issue #28 adds
+a default horizontal ten-row engine with a single fixed 15px frame and overlaid scrollbar; the alpha.10
+centered responsive engine remains selectable with separate persistence. Measured Main height sizes
+horizontal cells; width only changes the visible range. Viewport changes never write saved layouts.
+The synthetic panel is session-only: responsive supports Docked/Overlay, horizontal uses Overlay.
 Trusted plugin contributions retain a separate internally scrollable strip in Main. Neither panel nor
 plugins acquire grid/native authority. The grid solver knows only typed integer geometry.
 

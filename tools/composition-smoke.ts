@@ -1,3 +1,4 @@
+import { reloadResponsive } from './layout-mode-smoke.ts'
 /** Independent rendered-geometry checks on the desktop caller's disposable profile only. */
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
@@ -55,8 +56,8 @@ export async function compositionSmoke(page: Page, resizeWindow: (width: number,
     const source = { ...structuredClone(fixture), theme }, draft = theme === 'light'
     await resizeWindow(1480, 980)
     // Seed only this smoke's disposable profile. Draft mode has a different committed composition.
-    await page.evaluate(({ key, value }) => localStorage.setItem(key, value), { key: GRID_KEY, value: JSON.stringify(draft ? { ...DEFAULT_GRID, theme } : source) })
-    await page.reload(); await page.getByTestId('edit-layout').waitFor()
+    await page.evaluate(({ key, value, theme }) => { localStorage.setItem(key, value); localStorage.setItem('geppio:theme:v1', theme) }, { key: GRID_KEY, value: JSON.stringify(draft ? { ...DEFAULT_GRID, theme } : source), theme })
+    await reloadResponsive(page)
     if (draft) await importDraft(page, source)
     const bytes = await page.evaluate(key => localStorage.getItem(key), GRID_KEY)
     await observeWrites(page)
@@ -85,7 +86,7 @@ export async function compositionSmoke(page: Page, resizeWindow: (width: number,
     if (draft) {
       await page.getByTestId('cancel-layout').click(); await sample(page, { ...DEFAULT_GRID, theme }); await noWrites(page, bytes)
     } else {
-      await page.reload(); await page.getByTestId('edit-layout').waitFor(); assert.deepEqual(await sample(page, source), initial, 'cold render equals warm renderer')
+      await reloadResponsive(page); assert.deepEqual(await sample(page, source), initial, 'cold render equals warm renderer')
     }
   }
   // At wide/short bounds, direct reflow can relax a chain minimum. It must not reproject itself.
@@ -118,7 +119,7 @@ export async function compositionSmoke(page: Page, resizeWindow: (width: number,
   assert.deepEqual(parseGrid(storedPlane).placements, directSource.placements, 'Save commits visible direct coordinates, not a different projection')
   assert.deepEqual(Object.keys(JSON.parse(storedPlane)).sort(), ['columns', 'placements', 'rows', 'schemaVersion', 'theme'], 'no edit reference enters v2 storage')
   const committed = await sample(page, directSource)
-  await page.reload(); await page.getByTestId('edit-layout').waitFor(); assert.deepEqual(await sample(page, directSource), committed, 'saved source has identical cold/warm adaptation')
+  await reloadResponsive(page); assert.deepEqual(await sample(page, directSource), committed, 'saved source has identical cold/warm adaptation')
   // Recent deliberate edits become the stable source; expectations use the unchanged direct solver.
   await resizeWindow(1480, 980); await importDraft(page, COMPOSITIONS.edited)
   let source = (await sample(page, COMPOSITIONS.edited)).snapshot
@@ -148,11 +149,11 @@ export async function compositionSmoke(page: Page, resizeWindow: (width: number,
   await page.getByTestId('save-layout').click()
   const saved = await page.evaluate(key => localStorage.getItem(key), GRID_KEY); assert.ok(saved)
   assert.deepEqual(parseGrid(saved).placements, source.placements)
-  await page.reload(); await page.getByTestId('edit-layout').waitFor(); assert.deepEqual((await sample(page, source)).snapshot.placements, source.placements)
+  await reloadResponsive(page); assert.deepEqual((await sample(page, source)).snapshot.placements, source.placements)
   await writeFile(`.local/diagnostics/composition-smoke${suffix}.json`, JSON.stringify(evidence, null, 2))
   // Restore the expected fixture for the existing plugin/security/restart smoke that follows.
-  await page.evaluate(({ key, value }) => localStorage.setItem(key, value), { key: GRID_KEY, value: JSON.stringify(DEFAULT_GRID) })
-  await page.reload(); await page.getByTestId('edit-layout').waitFor()
+  await page.evaluate(({ key, value }) => { localStorage.setItem(key, value); localStorage.setItem('geppio:theme:v1', 'dark') }, { key: GRID_KEY, value: JSON.stringify(DEFAULT_GRID) })
+  await reloadResponsive(page)
   console.log(JSON.stringify({ result: 'passed', subsystem: 'composition continuity', cases: evidence.length, devicePixelRatio: await page.evaluate(() => devicePixelRatio),
     checks: ['independent rendered rectangles/order/gaps/minima/centering', 'saved and draft/both themes', 'native fine steps/maximize/restore', 'splitter one-pixel forward/back', 'zero layout writes', 'cold/warm', 'recent direct edits unchanged', 'native resize during capture', 'Save/reload'] }))
 }

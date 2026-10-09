@@ -1,6 +1,67 @@
 # Bounded square-cell Main grid
 
-The current contract is [Issue #24's alpha.10 margin correction](https://github.com/rabrunos/GeppIO/issues/24#issuecomment-6082287645),
+## Experimental horizontal engine — Issue #28
+
+Alpha.11 starts each session with **Horizontal — 10 linhas**; Settings > Development selects
+**Responsivo atual** independently. Neither experiment has final owner acceptance. The responsive
+engine described below retains alpha.10 projection, permanent centering, constraints and v2 codec.
+The selector refuses switches while editing (including import/recovery previews), with Save/Cancel
+guidance. Both transactions remain alive. Widget frames share one stable parent and identity across
+modes, retaining uncontrolled form/React state. `usePlugins()` remains App-owned; no visibility or
+layout operation enters Worker activation/disposal.
+
+`horizontal.ts` owns the separate geometry and codec. For whole measured Main height H, cell side is
+`(H - 30 - 9*10)/10`, pitch is cell+10. The horizontal scrollport alone owns `inset:15px`; world/widget
+coordinates start at zero, with no alpha.10 inset, outside gutter or world-end padding. Width changes
+only the visible range. Ten rows and logical coordinates remain unchanged by native/region resizing.
+Native scrollbars are hidden on both axes, leaving no reservation; an accessible native range control
+has a 4px track/thumb inside the bottom 15px interaction area. Touchpad/horizontal wheel and native
+focus reveal remain available; Shift+vertical wheel scrolls Main, ordinary vertical wheel is untouched.
+The port supports arrows, PageUp/PageDown, Home/End. Native integer scroll extents are mapped to the
+exact fractional CSS range with a subpixel world translation; the terminal occupied edge meets the
+right inner frame exactly, without rounding padding. Pointer mapping uses that same effective offset.
+
+World width is max(visible interior width, furthest occupied right edge). No empty-column DOM exists.
+The ten-row domain allows 4096 columns and spans up to 24×10, seven known fixture IDs in storage,
+64 KiB UTF-8 and a 1,000,000px browser-world ceiling. Pitch is capped to maintain that ceiling at
+extreme heights; below 120px Main height, gutters decrease to keep nonnegative cells. Very short,
+narrow or extremely tall Main shows a warning and may be unusably small: no automatic row change is
+introduced. Physical pathological-size UX remains a later owner decision.
+
+The original reflow entry still uses original rectangle/layout validation and exhaustive bounded
+slots. `horizontal-reflow.ts` injects horizontal validation plus sparse fallback slots within 24 units
+of the displaced/active rectangles and occupied edges. Push, compression, ranking, state/probe budgets
+and snapshot reversal are shared. Empty horizontal distance does not allocate candidate arrays or
+scan thousands of columns. Fallback is conservative, not a guaranteed global packer. Pointer deltas
+include current minus gesture-start scrollLeft; edge animation recomputes against the stable snapshot.
+Temporary extent is limited to twelve columns beyond occupancy and cleared on end/cancellation.
+Keyboard moves reveal the edited widget. Height/width changes cancel an active gesture without moving
+the stored composition. Scrolling never writes placements.
+
+The persisted **horizontal** representation is `{schemaVersion:1,engine:'horizontal',rows:10,placements}`
+under `geppio:layout:horizontal:v1`. Renderer transactions use an internal grid-shaped view, never a
+serialized v2 migration. Exact known identities, integers, minima/maxima, preferences and overlap are
+validated and canonicalized. Loading does not read/migrate/write old layout keys. Only explicit Save
+writes horizontal bytes; import/reset are previews, corruption blocks rendering recoverably, and Save
+compares observed bytes before replacement under a same-origin Web Lock. Queued Save is invalidated
+by Cancel; uncooperative external writes still require recovery, rather than a database guarantee.
+Shared theme uses `geppio:theme:v1`, falling back to responsive
+theme; horizontal theme changes do not write either composition. Plugin preferences remain native.
+
+`content-visibility:auto` on explicitly sized mounted horizontal frames skips unnecessary offscreen
+paint/layout while retaining contents, focus reveal and background functionality. Static fixture
+content is memoized. Plugin contributions remain in a separate stationary overlay strip inside Main,
+without reducing the ten-row height; they can overlap fixture visuals, a limitation of this bounded
+experiment rather than full plugin grid integration. The synthetic test panel also overlays in this
+mode; responsive Docked behavior remains available. No plugin authority or capability changes.
+
+`tools/horizontal-smoke.ts` independently measures DOM geometry, scrollbar reservation, terminal
+rounding, input/form/mode continuity, expansion/contraction, real gestures and recovery in disposable
+profiles. It observes Counter/Pulse Worker identity/state across scroll/mode changes and a bounded
+120-surface/12,000-child synthetic paint workload. This is not a generalized CPU/plugin performance
+guarantee. Physical Windows UX, gutter choice and owner visual comparison remain required.
+
+The responsive contract is [Issue #24's alpha.10 margin correction](https://github.com/rabrunos/GeppIO/issues/24#issuecomment-6082287645),
 continuing its [composition refinement](https://github.com/rabrunos/GeppIO/issues/24#issuecomment-6080536542).
 It supersedes fixed 12×8 viewport geometry and the alpha.6 continuous editor/minimum scrolling canvas.
 This is a reversible prototype with bounded adaptive limits, subject to owner acceptance. Earlier context remains in

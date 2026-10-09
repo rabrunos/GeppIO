@@ -1,6 +1,19 @@
 .main-region { grid-area: main; position: relative; min-width: 0; min-height: 0; overflow: hidden; }
-.plugin-tray { position: absolute; left: 9px; right: 9px; top: 9px; max-height: 35%; overflow: auto; }
+.main-scrollport, .main-world { position: absolute; inset: 0; }
+.main-scrollport { overflow: hidden; }
+/* This scrollport alone owns the frame. No grid inset, margin or scrollbar reservation. */
+.horizontal-main .main-scrollport { inset: 15px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; overscroll-behavior-x: contain; }
+.horizontal-main .main-scrollport::-webkit-scrollbar { display: none; width: 0; height: 0; }
+.horizontal-main .main-world { right: auto; bottom: auto; }
+.horizontal-main .widget-frame { content-visibility: auto; }
+.horizontal-main .plugin-tray { left: auto; top: 15px; right: 15px; width: min(300px,40%); z-index: 10; }
+.horizontal-scrollbar { position: absolute; left: 15px; bottom: 0; width: calc(100% - 30px); height: 15px; margin: 0; padding: 0; appearance: none; background: transparent; cursor: pointer; z-index: 15; }
+.horizontal-scrollbar::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: color-mix(in srgb,var(--muted) 15%,transparent); }
+.horizontal-scrollbar::-webkit-slider-thumb { appearance: none; width: var(--thumb-width); height: 4px; border-radius: 2px; background: var(--muted); }
+.horizontal-scrollbar:focus-visible { outline-offset: -2px; }
+.plugin-tray { position: absolute; left: 9px; right: 9px; top: 9px; max-height: 35%; overflow: auto; z-index: 5; }
 .widget-frame { position: absolute; overflow: hidden; border: 1px solid var(--line); background: var(--surface); border-radius: 10px; display: flex; flex-direction: column; }
+.widget-frame[hidden] { display: none; }
 .widget-frame.selected { border-color: var(--accent); }.widget-frame.invalid { border-color: var(--warning); box-shadow: 0 0 0 1px var(--warning); }
 .widget-heading { display: flex; align-items: center; gap: 7px; min-height: 34px; border-bottom: 1px solid var(--line); padding-right: 10px; background: color-mix(in srgb,var(--surface) 75%,var(--raised)); }
 .widget-grip { display: flex; align-items: center; gap: 6px; text-align: left; padding: 9px 10px; min-width: 0; flex: 1; cursor: default; touch-action: none; }

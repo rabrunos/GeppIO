@@ -4,11 +4,15 @@ import { importGrid, parseGrid } from '../../../shared/grid/schema.ts'
 import { readGrid, writeGrid } from '../../../shared/grid/storage.ts'
 import type { GridPlacement, GridSnapshot } from '../../../shared/grid/types.ts'
 import type { GridViewport } from '../../../shared/grid/projection.ts'
+import { DEFAULT_HORIZONTAL, HORIZONTAL_KEY, parseHorizontal, readHorizontal, serializeHorizontal, writeHorizontal } from '../../../shared/grid/horizontal.ts'
 
 export interface GridEditSource { snapshot: GridSnapshot; viewport: GridViewport | null }
 
-export function useLayoutTransaction() {
-  const [initial] = useState(() => { try { return readGrid(window.localStorage) } catch { return readGrid({ getItem() { throw new Error('Unavailable') }, setItem() {} }) } })
+export function useLayoutTransaction(engine: 'responsive' | 'horizontal' = 'responsive') {
+  const read = engine === 'horizontal' ? readHorizontal : readGrid
+  const write = engine === 'horizontal' ? writeHorizontal : writeGrid
+  const validate = engine === 'horizontal' ? serializeHorizontal : (s: GridSnapshot) => parseGrid(JSON.stringify(s))
+  const [initial] = useState(() => { try { return read(window.localStorage) } catch { return read({ getItem() { throw new Error('Unavailable') }, setItem() {} }) } })
   const committed = useRef(initial.snapshot), observed = useRef(initial.raw), writable = useRef(initial.writable)
   const [snapshot, setSnapshot] = useState(initial.snapshot), live = useRef(snapshot)
   const [editViewport, setEditViewport] = useState<GridViewport | null>(null), viewport = useRef(editViewport)
@@ -16,37 +20,47 @@ export function useLayoutTransaction() {
   const [message, setMessage] = useState(initial.message)
   const importEpoch = useRef(0)
   function put(next: GridSnapshot, reference: GridViewport | null = null) {
+    importEpoch.current++
     live.current = next; setSnapshot(next); viewport.current = reference; setEditViewport(reference)
   }
   function captureSource(): GridEditSource { return structuredClone({ snapshot: live.current, viewport: viewport.current }) }
   function restoreSource(source: GridEditSource) { put(source.snapshot, source.viewport) }
   function persist(next: GridSnapshot) {
-    try { return writeGrid(window.localStorage, next, observed.current) }
+    try { return write(window.localStorage, next, observed.current) }
     catch { return { raw: observed.current, error: 'Armazenamento local indisponível. A prévia foi mantida; tente novamente ou cancele.' } }
   }
   function putPlacements(placements: GridPlacement[]) { put({ ...live.current, placements }) }
   function begin(projected: GridSnapshot = live.current, reference: GridViewport | null = null) { if (!recovery) { importEpoch.current++; put(structuredClone(projected), reference); setEditing(true); setMessage('Arraste pelo título ou use as setas. Bordas e cantos redimensionam em células. Salve ou cancele a prévia.') } }
   function cancel() { importEpoch.current++; put(structuredClone(committed.current)); setEditing(false); setMessage(initial.recovery && !writable.current ? initial.message : 'Edição cancelada. A composição salva foi mantida.') }
-  function save(projected: GridSnapshot = live.current) {
-    importEpoch.current++
-    try { parseGrid(JSON.stringify(projected)) } catch { setMessage('Layout inválido. Os dados salvos foram preservados.'); return }
-    const result = persist(projected)
+  async function save(projected: GridSnapshot = live.current) {
+    const epoch = ++importEpoch.current
+    try { validate(projected) } catch { setMessage('Layout inválido. Os dados salvos foram preservados.'); return }
+    // Cooperating same-origin windows serialize commits; later previews/Cancel invalidate queued Save.
+    let result: { raw: string | null; error: string | null }
+    try {
+      result = engine === 'horizontal' ? await navigator.locks.request(HORIZONTAL_KEY, () => epoch === importEpoch.current
+        ? persist(projected) : { raw: observed.current, error: 'Gravação cancelada; dados anteriores preservados.' }) : persist(projected)
+    } catch { setMessage('Não foi possível obter acesso seguro ao layout. A prévia foi preservada; tente salvar novamente.'); return }
+    if (epoch !== importEpoch.current) return
     if (result.error) { setMessage(result.error); return }
     observed.current = result.raw; committed.current = structuredClone(projected); put(structuredClone(projected)); writable.current = true
-    setRecovery(false); setEditing(false); setMessage('Layout salvo neste computador. O layout v1 continua preservado.')
+    setRecovery(false); setEditing(false); setMessage(engine === 'horizontal' ? 'Layout horizontal salvo. Os layouts responsivo v2 e antigo v1 foram preservados.' : 'Layout salvo neste computador. O layout v1 continua preservado.')
   }
-  function toggleTheme() {
-    const theme = live.current.theme === 'dark' ? 'light' : 'dark'
+  function setSessionTheme(theme: GridSnapshot['theme']) {
+    put({ ...live.current, theme }, viewport.current); committed.current = { ...committed.current, theme }
+  }
+  function toggleTheme(requested?: GridSnapshot['theme']) {
+    const theme = requested ?? (live.current.theme === 'dark' ? 'light' : 'dark')
     put({ ...live.current, theme }, viewport.current)
     const next: GridSnapshot = { ...committed.current, theme }
     committed.current = next
     // A theme change must not implicitly approve a pending migration or replace corruption.
-    if (!writable.current) return
+    if (!writable.current || engine === 'horizontal') return
     const result = persist(next)
     if (result.error) setMessage(result.error); else observed.current = result.raw
   }
   function resetPreview() {
-    importEpoch.current++; put({ ...structuredClone(DEFAULT_GRID), theme: live.current.theme }); setEditing(true)
+    importEpoch.current++; put({ ...structuredClone(engine === 'horizontal' ? DEFAULT_HORIZONTAL : DEFAULT_GRID), theme: live.current.theme }); setEditing(true)
     setMessage('Composição inicial somente na prévia. Salvar confirma a nova composição; Cancelar preserva os dados anteriores.')
   }
   async function importFile(file?: File) {
@@ -54,11 +68,12 @@ export function useLayoutTransaction() {
     const epoch = ++importEpoch.current
     if (file.size > 64 * 1024) { setMessage('O layout deve ter até 64 KiB.'); return }
     try {
-      const next = importGrid(await file.text())
+      const next = (engine === 'horizontal' ? parseHorizontal : importGrid)(await file.text())
       if (epoch !== importEpoch.current) return
       put({ ...next, theme: live.current.theme }); setEditing(true); setMessage('Layout importado somente na prévia. Salve para confirmar ou cancele.')
     } catch { if (epoch === importEpoch.current) setMessage('Arquivo inválido, incompatível ou sem espaço na grade. Sua composição e os dados antigos foram preservados.') }
   }
-  return { snapshot, live, editViewport, captureSource, restoreSource, editing, recovery, message, setMessage, put, putPlacements, begin, cancel, save, toggleTheme, resetPreview, importFile }
+  return { snapshot, live, editViewport, captureSource, restoreSource, editing, recovery, message, setMessage, put, putPlacements, begin, cancel, save, toggleTheme, setSessionTheme, resetPreview, importFile,
+    invalidateImports() { importEpoch.current++ } }
 }
 export type LayoutTransaction = ReturnType<typeof useLayoutTransaction>

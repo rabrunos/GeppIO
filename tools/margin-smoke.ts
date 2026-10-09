@@ -1,3 +1,4 @@
+import { reloadResponsive } from './layout-mode-smoke.ts'
 /** Coverage and operation-history checks on the desktop caller's disposable profile. */
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
@@ -21,8 +22,8 @@ export async function marginSmoke(page: Page, resizeWindow: (width: number, heig
     let bytes = JSON.stringify(source)
     const seen = new Map<string, ProjectionSample>()
     await resizeWindow(1480, 980)
-    await page.evaluate(({ key, value }) => localStorage.setItem(key, value), { key: GRID_KEY, value: bytes })
-    await page.reload(); await page.getByTestId('edit-layout').waitFor(); await observeWrites(page)
+    await page.evaluate(({ key, value, theme }) => { localStorage.setItem(key, value); localStorage.setItem('geppio:theme:v1', theme) }, { key: GRID_KEY, value: bytes, theme })
+    await reloadResponsive(page); await observeWrites(page)
     async function read(label: string) {
       const s = await sample(page, source), m = s.metrics
       const diagnostics = await page.getByTestId('layout-canvas').evaluate(e => {
@@ -101,15 +102,15 @@ export async function marginSmoke(page: Page, resizeWindow: (width: number, heig
       assert.deepEqual(parseGrid(bytes), visible.snapshot)
       source = parseGrid(bytes); reference = null; await observeWrites(page)
       const committed = await read('explicit Save'); await journey('after Save')
-      await page.reload(); await page.getByTestId('edit-layout').waitFor(); await observeWrites(page)
+      await reloadResponsive(page); await observeWrites(page)
       assert.deepEqual(await read('saved reload'), committed)
     }
     await page.screenshot({ path: `.local/diagnostics/margins-${name}-${theme}${suffix}.png` })
   }
   await writeFile(`.local/diagnostics/margin-smoke${suffix}.json`, JSON.stringify({ devicePixelRatio: await page.evaluate(() => devicePixelRatio), samples: evidence }, null, 2))
   await resizeWindow(1480, 980)
-  await page.evaluate(({ key, value }) => localStorage.setItem(key, value), { key: GRID_KEY, value: JSON.stringify(DEFAULT_GRID) })
-  await page.reload(); await page.getByTestId('edit-layout').waitFor()
+  await page.evaluate(({ key, value }) => { localStorage.setItem(key, value); localStorage.setItem('geppio:theme:v1', 'dark') }, { key: GRID_KEY, value: JSON.stringify(DEFAULT_GRID) })
+  await reloadResponsive(page)
   console.log(JSON.stringify({ result: 'passed', subsystem: 'Main margin journeys', samples: evidence.length,
     checks: ['saved/Edit source and reference', 'repeated maximize/restore/horizontal resize', 'legal region sizes', 'independent coverage/order/bounds/pixels', 'cold/warm equality', 'zero viewport writes', 'logical edge placement', 'unchanged pointer/keyboard reflow', 'Cancel/Save/reload', 'both themes'] }))
 }

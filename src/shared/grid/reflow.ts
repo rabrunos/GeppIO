@@ -1,9 +1,13 @@
-import { allowsResize, validRect } from './geometry.ts'
-import { overlaps, validLayout } from './occupancy.ts'
+import { allowsResize, validRect as responsiveRect } from './geometry.ts'
+import { overlaps, validLayout as responsiveLayout } from './occupancy.ts'
 import { GRID_POLICY } from './policy.ts'
 import type { Direction, GridBounds, GridConstraints, GridPlacement, GridRect, GridSize } from './types.ts'
 
 export interface ReflowResult { status: 'valid' | 'blocked'; placements: GridPlacement[]; reason?: 'invalid' | 'space' | 'budget'; states: number }
+export interface ReflowDomain {
+  validRect: typeof responsiveRect; validLayout: typeof responsiveLayout;
+  slots?(p: GridPlacement, ps: GridPlacement[], size: GridSize, bounds: GridBounds): Iterable<readonly [number, number]>
+}
 const same = (a: GridRect, b: GridRect) => a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h
 const distance = (a: GridRect, b: GridRect) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y)
 const lex = (a: readonly number[], b: readonly number[]) => { for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i]! - b[i]!; return 0 }
@@ -13,6 +17,11 @@ const lex = (a: readonly number[], b: readonly number[]) => { for (let i = 0; i 
  * bounded multi-widget relocation. Compare complete solutions, not greedy partial packs.
  */
 export function reflow(snapshot: readonly GridPlacement[], id: string, rect: GridRect, bounds: GridBounds, cs: GridConstraints, gesture: 'move' | Direction): ReflowResult {
+  return reflowInDomain(snapshot, id, rect, bounds, cs, gesture, { validRect: responsiveRect, validLayout: responsiveLayout })
+}
+/** Domain injection keeps responsive validation and exhaustive bounded slots unchanged. */
+export function reflowInDomain(snapshot: readonly GridPlacement[], id: string, rect: GridRect, bounds: GridBounds, cs: GridConstraints, gesture: 'move' | Direction, domain: ReflowDomain): ReflowResult {
+  const { validRect, validLayout } = domain
   const unchanged = () => structuredClone([...snapshot])
   const original = snapshot.find(p => p.id === id), constraint = cs[id]
   if (!original || !constraint || snapshot.length > GRID_POLICY.maxWidgets || !validLayout(snapshot, bounds, cs) || !validRect(rect, bounds, constraint)
@@ -87,7 +96,13 @@ export function reflow(snapshot: readonly GridPlacement[], id: string, rect: Gri
       } else {
         const sizes = phase === 2 ? [p.preferred] : [p.preferred, { w: p.w, h: p.h },
           { w: c.resizeX && axes.includes('x') ? c.min.w : p.w, h: c.resizeY && axes.includes('y') ? c.min.h : p.h }]
-        for (const size of sizes) for (let y = 0; y + size.h <= bounds.rows; y++) for (let x = 0; x + size.w <= bounds.columns; x++) add(x, y, size)
+        for (const size of sizes) {
+          if (domain.slots) {
+            for (const [x, y] of domain.slots(p, ps, size, bounds)) { add(x, y, size); if (probes >= maxProbes) break }
+          } else {
+            for (let y = 0; y + size.h <= bounds.rows; y++) for (let x = 0; x + size.w <= bounds.columns; x++) add(x, y, size)
+          }
+        }
       }
       return options.sort((a, b) => lex([distance(a, p), Math.abs(a.w - p.preferred.w) + Math.abs(a.h - p.preferred.h), a.y, a.x, -a.w, -a.h],
         [distance(b, p), Math.abs(b.w - p.preferred.w) + Math.abs(b.h - p.preferred.h), b.y, b.x, -b.w, -b.h]))

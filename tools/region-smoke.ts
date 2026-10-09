@@ -26,11 +26,15 @@ async function bounds(page: Page) {
   if (area.width >= 165 && area.height >= 165) assert.ok(main.width >= 159.98 && main.height >= 159.98)
 }
 async function begin(page: Page, kind: Kind) {
+  // Establish the disposable window's foreground/layout precondition for native capture.
+  await page.bringToFront(); await frame(page)
   const sep = separator(page, kind), box = await sep.boundingBox(); assert.ok(box)
   await sep.evaluate(e => e.addEventListener('pointerdown', event => { (e as HTMLElement).dataset.testPointer = String((event as PointerEvent).pointerId) }, { once: true }))
   const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
   await page.mouse.move(point.x, point.y); await page.mouse.down()
-  assert.ok(await sep.evaluate(e => e.hasPointerCapture(Number((e as HTMLElement).dataset.testPointer))))
+  const capture = await sep.evaluate((e, point) => ({ captured: e.hasPointerCapture(Number((e as HTMLElement).dataset.testPointer)),
+    pointer: (e as HTMLElement).dataset.testPointer, focused: document.hasFocus(), hit: document.elementFromPoint(point.x, point.y)?.className }), point)
+  assert.ok(capture.captured, JSON.stringify({ kind, point, box, capture }))
   return point
 }
 async function move(page: Page, kind: Kind, point: { x: number; y: number }, delta: number) {
@@ -59,8 +63,10 @@ export async function regionSmoke(page: Page, resizeWindow: (width: number, heig
       for (const kind of ['sidebar', 'bottom'] as const) {
         const sep = separator(page, kind), other = kind === 'sidebar' ? 'bottom' : 'sidebar', peer = await now(page, other)
         const min = Number(await sep.getAttribute('aria-valuemin')), max = Number(await sep.getAttribute('aria-valuemax'))
-        await dragTo(page, kind, max + 600); assert.equal(await now(page, kind), max)
-        await dragTo(page, kind, min - 600); assert.equal(await now(page, kind), min)
+        // Overshoot the logical caps while keeping native pointer coordinates inside the window.
+        // A 600px overshoot leaves the Electron surface and can correctly cancel native capture.
+        await dragTo(page, kind, max + 20); assert.equal(await now(page, kind), max)
+        await dragTo(page, kind, min - 20); assert.equal(await now(page, kind), min)
         const increase = kind === 'sidebar' ? 'ArrowRight' : 'ArrowUp', decrease = kind === 'sidebar' ? 'ArrowLeft' : 'ArrowDown'
         await sep.press(increase); assert.equal(await now(page, kind), Math.min(max, min + 10))
         const beforeShift = await now(page, kind)

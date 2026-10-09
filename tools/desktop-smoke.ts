@@ -7,6 +7,8 @@ import ts from 'typescript'
 import type { Page } from 'playwright'
 import { gridSmoke } from './grid-smoke.ts'
 import { GRID_KEY } from '../src/shared/grid/policy.ts'
+import { horizontalPluginSmoke, horizontalSmoke } from './horizontal-smoke.ts'
+import { selectLayoutMode } from './layout-mode-smoke.ts'
 const temporary = await mkdtemp(join(tmpdir(), 'geppio-smoke-'))
 await mkdir('.local/diagnostics', { recursive: true })
 const env: Record<string, string> = {
@@ -77,7 +79,7 @@ try {
       nodeIntegrationInWorker: prefs.nodeIntegrationInWorker, webviewTag: prefs.webviewTag, webSecurity: prefs.webSecurity }
   })
   assert.deepEqual(nativeBoundary, { sandbox: true, contextIsolation: true, nodeIntegration: false, nodeIntegrationInWorker: false, webviewTag: false, webSecurity: true })
-  await gridSmoke(page, async (width, height) => {
+  const resizeWindow = async (width: number, height: number) => {
     const viewport = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }))
     const content = await application!.evaluate(({ BrowserWindow }, size) => {
       const window = BrowserWindow.getAllWindows()[0]!
@@ -91,9 +93,13 @@ try {
       && Math.abs(innerHeight - content.after[1]! * viewport.height / content.before[1]!) <= 2, { content, viewport })
     await page.waitForFunction(() => {
       const main = document.querySelector<HTMLElement>('[data-testid="layout-canvas"]')!, r = main.getBoundingClientRect()
-      return Math.abs(Number(main.dataset.usableWidth) - (r.width - 18)) < .1 && Math.abs(Number(main.dataset.usableHeight) - (r.height - 18)) < .1
+      const inset = main.dataset.engine === 'horizontal' ? 30 : 18
+      return Math.abs(Number(main.dataset.usableWidth) - (r.width - inset)) < .1 && Math.abs(Number(main.dataset.usableHeight) - (r.height - inset)) < .1
     })
-  })
+  }
+  await horizontalSmoke(page, resizeWindow)
+  await selectLayoutMode(page, 'responsive')
+  await gridSmoke(page, resizeWindow)
   await page.getByTestId('edit-layout').click()
   const initial = await page.locator('[data-widget="chart"]').evaluate(element => { const style = (element as HTMLElement).style; return [style.left, style.top, style.width, style.height] })
   const grip = page.getByRole('button', { name: 'Mover Ritmo', exact: true }); await grip.focus(); await page.keyboard.press('ArrowRight')
@@ -134,6 +140,7 @@ try {
   await page.getByRole('button', { name: 'Fechar configurações', exact: true }).click()
   await page.getByRole('button', { name: 'Incrementar', exact: true }).click()
   await page.getByText('Cliques nesta ativação: 1', { exact: true }).waitFor()
+  await horizontalPluginSmoke(page)
   for (let cycle = 0; cycle < 3; cycle++) {
     await settings(page)
     await counter().getByRole('button', { name: 'Desativar', exact: true }).click(); await status(page, 'local.counter', 'disabled')

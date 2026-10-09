@@ -39,6 +39,17 @@ Main supports two-dimensional rectangular compositions, not just equal columns. 
 
 **Intentional editing.** Normal use must not accidentally move or resize widgets. The user explicitly enters layout editing, enabling title movement and eight-direction resize with integer grid snapping. Core content remains usable in normal mode. Issue #24 retains explicit Save/Cancel and accessible keyboard controls.
 
+**Alpha.11 comparison ([Issue #28](https://github.com/rabrunos/GeppIO/issues/28)).** Each session starts
+with **Horizontal — 10 linhas**; Development also offers **Responsivo atual**. Horizontal uses the whole
+Main height for ten square-cell rows, one fixed 15px viewport frame, internal 10px gutters and a thin
+non-reserving scrollbar inside the bottom frame. Width changes only the visible horizontal range;
+occupied content expands/contracts the finite world. Coordinates survive window/region resizing.
+Each engine has independent validated persistence, with no automatic conversion or viewport writes.
+Only explicit Save commits horizontal data; drafts block mode switching. Mounted fixture/form state
+and plugin Worker functionality survive scrolling/switching. The alpha.10 rules below apply to the
+preserved responsive engine. Neither engine is the final accepted design; physical visual comparison
+and pathological-size policy remain owner decisions. See [layout](../architecture/layout.md) for bounds.
+
 **Current Main grid ([Issue #24 composition contract](https://github.com/rabrunos/GeppIO/issues/24#issuecomment-6080536542)).** The owner superseded the alpha.1–alpha.6 continuous editor and fixed 12×8 viewport geometry with a GeppIO-owned responsive integer grid. Both columns and rows adapt to usable Main dimensions from one stable saved/edit source, with square cells and no Main scrolling. 12×8 remains a reference composition. Preserve sides/corners, meaningful separation/order, neighborhood, intentional gaps and no gravity. Adapt positions and actual spans together within declared constraints before displacing neighbours; viewport-only adaptation must never freely pack widgets across Main or reverse their spatial relationships. Continuous pixel density and coherent integer quantization take priority over unchanged preferred spans or marginal coverage. Preserve preferred-size intent separately. Viewport projections are reversible and never overwrite saved v1/v2 bytes; explicit Save commits the projected draft and its bounds, Cancel restores the prior source. Always center in both axes; there is no alignment preference or Development switch. Retain approved direct eight-direction resize/collision behavior separately. Constrained projections retain composition and warn about larger margins instead of lowering minima or hiding widgets.
 
 **Constraints and collisions.** Typed per-widget grid constraints separate min/default/max size and allowed axes from content and plugin authority. Under Issue #24, Main has no gravity or hidden row growth. Move/resize uses local push, boundary compression, original preferred-size relocation and bounded minimal rearrangement; impossible attempts keep the last valid snapshot. The symmetric provisional gutter and initial row policy remain subject to owner visual acceptance.

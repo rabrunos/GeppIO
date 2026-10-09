@@ -1,7 +1,8 @@
 import { ArchiveBoxIcon, CubeIcon, DocumentTextIcon, PhotoIcon } from '@heroicons/react/24/outline'
+import { memo } from 'react'
 
 /** All content is synthetic. These components are fixtures, not installed plugins. */
-export function WidgetContent({ id }: { id: string }) {
+export const WidgetContent = memo(function WidgetContent({ id }: { id: string }) {
   switch (id) {
     case 'summary': return <div className="summary-fixture"><span className="eyebrow">ESPAÇO EM CONSTRUÇÃO</span><strong>Seu próximo<br />ambiente de trabalho.</strong><p>7 widgets de demonstração na Main.</p></div>
     case 'queue': return <div className="table-fixture"><div className="fixture-toolbar"><span>Conteúdo simulado</span><span className="badge">04 itens</span></div><table><thead><tr><th>Experimento</th><th>Tipo</th><th>Estado</th></tr></thead><tbody>{[
@@ -18,4 +19,4 @@ export function WidgetContent({ id }: { id: string }) {
     case 'chart': return <div className="chart-fixture"><div className="chart-title"><span>Ritmo fictício</span><strong>+24%</strong></div><div className="bars" aria-label="Gráfico com dados fictícios">{[30, 45, 37, 63, 52, 81, 74, 92, 64, 85, 97, 78].map((height, index) => <span key={index} style={{ height: height + '%' }} />)}</div><span className="fixture-caption">Não representa memória, CPU nem métricas reais.</span></div>
     default: return <p>Widget de teste</p>
   }
-}
+})

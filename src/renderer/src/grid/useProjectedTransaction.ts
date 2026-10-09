@@ -10,7 +10,7 @@ export function useProjectedTransaction(tx: LayoutTransaction, snapshot: GridSna
     putPlacements(placements: GridPlacement[]) {
       const next = { ...live.current, placements }; live.current = next; tx.put(next, viewport)
     },
-    begin() { tx.begin(live.current, viewport) }, save() { tx.save(live.current) }
+    begin() { tx.begin(live.current, viewport) }, save() { return tx.save(live.current) }
   }
 }
 export type ProjectedTransaction = ReturnType<typeof useProjectedTransaction>

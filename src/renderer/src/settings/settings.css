@@ -5,7 +5,7 @@
 .toggle-label { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 10px; white-space: nowrap; }
 input[type="checkbox"] { accent-color: var(--accent); }
 .presentation-options { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 10px; margin: 0 0 15px; min-height: 29px; }
-.presentation-options select { background: var(--surface); color: var(--ink); padding: 4px 6px; border: 1px solid var(--line); border-radius: 5px; font-size: 10px; }
+.development-settings select { background: var(--surface); color: var(--ink); padding: 4px 6px; border: 1px solid var(--line); border-radius: 5px; font-size: 10px; }
 .import-layout { margin-left: auto; cursor: pointer; font-size: 10px; }.import-layout input { display: none; }
 
 .development-settings { padding-bottom: 16px; border-bottom: 1px solid var(--line); }

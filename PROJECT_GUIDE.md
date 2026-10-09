@@ -26,7 +26,8 @@ separate configuration surface.
 The product name is **GeppIO**, with lowercase technical namespace `geppio` (Issue #6). The canonical GitHub repository is `rabrunos/GeppIO` (GitHub repository ID `1409287329`), following the owner-initiated rename on 2026-10-08. Verify both origin URLs and the same repository identity before synchronization. The initial target is Windows and the stack is Electron,
 TypeScript, React, Tailwind, Heroicons and Motion. The alpha.1 foundation introduced static fixtures;
 alpha.2 added the trusted experimental local plugin runtime (Issue #21), not an untrusted-plugin
-platform. Main now uses a responsive integer square-cell grid with permanent centering (Issue #24).
+platform. Main compares a default horizontal ten-row grid with the preserved permanently centered
+responsive integer square-cell engine (Issues #28/#24); neither experiment has final acceptance.
 The fixed header is outside the widget layout. Regions are logically peers. Product choices
 not explicitly closed by the owner remain labelled provisional in the specification.
 

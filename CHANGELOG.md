@@ -2,6 +2,13 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.11] — 2026-10-09
+
+- Add the default experimental Horizontal — 10 linhas engine beside the independently selectable alpha.10 responsive engine (Issue #28). Size square cells from complete Main height, with a single fixed 15px viewport frame and a non-reserving 4px scrollbar inside its bottom edge.
+- Bound horizontal extent by occupied widgets, support finite coordinates beyond column 24, contract unused space and add scroll-aware pointer/keyboard edits with bounded edge extension. Reuse collision push/compression/ranking through an isolated domain adapter; preserve responsive projection and validation.
+- Isolate versioned horizontal persistence and explicit Save/Cancel/recovery/concurrent-write checks from old v1/v2 bytes. Keep mode selection session-only, reject switches during editing and retain shared theme preferences independently.
+- Keep fixture components mounted across scroll/mode changes, skip offscreen painting with content-visibility and preserve the separate Counter/Pulse runtime. Add independent geometry, scrolling, persistence, interaction and synthetic paint evidence in disposable profiles; both engines remain pending owner visual comparison.
+
 ## [0.1.0-alpha.10] — 2026-10-09
 
 - Correct avoidable Main bands in this unaccepted target (Issue #24): jointly resolve feasible square-cell pitch and both topology axes, with continuous coverage recovery for constrained and recently edited sources. Add independent 1480×740 coverage witnesses, unchanged one-pixel budgets and repeated disposable maximize/Edit/Save/region/edge-placement journeys; retain warned mathematically constrained margins and pending owner evaluation.

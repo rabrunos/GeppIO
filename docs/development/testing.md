@@ -1,5 +1,24 @@
 # Validation guide
 
+## Alpha.11 horizontal comparison / Issue #28
+
+`tests/grid-horizontal.test.ts` covers height-only ten-row geometry, bounded extent, the independent
+codec, hostile/corrupt/oversized input, unchanged old keys, quota/concurrent-save rejection and reflow
+beyond column 24. Responsive schema/projection/reflow tests retain their existing assertions.
+Desktop responsive suites explicitly select **Responsivo atual** after reload, since the session default
+is horizontal; selection goes through Development, never a persisted/test-only bypass.
+
+Both desktop launchers also execute `tools/horizontal-smoke.ts`: independent actual DOM rectangles,
+single 15px frame, no reserving scrollbar, occupied-world bounds, focus/keyboard/wheel/slider, nonzero
+scroll pointer movement and eight resize directions, reversal/auto-scroll/Escape, Save/Cancel/reload,
+switch rejection, form retention and corrupt/unsupported/oversized/concurrent state in disposable
+profiles. Native dimensions, both themes and explicit DPR 1.25 are recorded under ignored diagnostics.
+Counter/Pulse checks retain Worker identities and published/action/background state across scrolling
+and mode changes. A bounded 120-surface/12,000-child synthetic workload measures DOM construction,
+skipped surfaces and Chromium performance counters. This does not establish generalized CPU or plugin
+budgets. Comparison captures use the preserved alpha.10 engine and horizontal engine in the same
+executable; physical owner acceptance remains separate.
+
 This file defines repeatable checks and the meaning of their evidence. It is not a last-report/status file. Record the actual environment, commands, output/failures and pending manual checks in the active GitHub Issue or delivery response.
 
 ## Layers

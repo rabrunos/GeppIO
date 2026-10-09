@@ -11,6 +11,7 @@ import { IDENTITY } from '../src/shared/identity.ts'
 import { DEFAULT_LAYOUT } from '../src/renderer/src/fixtures.ts'
 import { GRID_KEY } from '../src/shared/grid/policy.ts'
 import { migrateV1 } from '../src/shared/grid/schema.ts'
+import { selectLayoutMode } from './layout-mode-smoke.ts'
 
 const temporary = await mkdtemp(join(tmpdir(), 'geppio-smoke-identity-'))
 const environment: Record<string, string> = Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined))
@@ -55,7 +56,7 @@ async function launch(root: string): Promise<Page> {
     page = application.windows().find(p => !p.isClosed() && p.url() === url)
     if (!page) await new Promise(done => setTimeout(done, 50))
   }
-  assert.ok(page); await page.getByTestId('edit-layout').waitFor()
+  assert.ok(page); await page.getByTestId('edit-layout').waitFor(); await selectLayoutMode(page, 'responsive')
   return page
 }
 async function close() { await application!.close(); application = undefined }

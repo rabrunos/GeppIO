@@ -61,8 +61,17 @@ navegação lateral, a barra inferior e um painel recolhível de demonstração.
 executam integrações: servem para testar espaço, leitura, rolagem e interação.
 
 **Editar layout** libera movimento e redimensionamento dos sete widgets da Main.
-A grade própria do GeppIO usa 12×8 como composição de referência. Colunas e linhas se adaptam
-à largura e à altura da Main, redistribuindo os widgets com células quadradas e sem rolagem.
+Configurações > Desenvolvimento permite comparar **Horizontal — 10 linhas** (inicial a cada
+sessão) e **Responsivo atual** (motor da alpha.10, preservado). O horizontal usa dez linhas,
+células quadradas calculadas pela altura da Main, uma única moldura fixa de 15px e rolagem
+horizontal limitada ao conteúdo. A barra discreta fica dentro dos 15px inferiores, sem reservar
+espaço. Alterar largura, altura ou divisores preserva as coordenadas lógicas. Cada modo carrega
+e salva sua própria composição; somente **Salvar layout** grava o horizontal. Salve ou cancele
+a edição antes de trocar de modo. Campos e plugins permanecem ativos fora da tela.
+
+No responsivo, a grade usa 12×8 como composição de referência. Colunas e linhas se adaptam
+à largura e à altura da Main, redistribuindo os widgets com células quadradas, centralização
+permanente e sem rolagem.
 Os tamanhos preferidos e a vizinhança são preservados quando há espaço; margens maiores em
 proporções extremas recebem um aviso. Redimensionar a janela ou os divisores gera uma projeção
 reversível, sem gravar nem acumular alterações no layout. Movimento e as oito bordas/cantos usam
@@ -73,9 +82,9 @@ composição e seus limites atuais. **Cancelar** restaura a composição salva, 
 O layout fracionário v1 continua preservado; sua conversão vira uma grade salva somente após
 confirmação explícita. Falhas de recuperação oferecem importação ou prévia inicial nas Configurações.
 
-Configurações > Desenvolvimento reúne importação, prévia inicial, painel de teste e um controle
-de depuração para comparar a grade centralizada com o alinhamento superior esquerdo, sem mudar
-o layout salvo. O painel demonstra Overlay e Docked nas quatro bordas; Overlay também permite
+Configurações > Desenvolvimento reúne seleção experimental, importação e prévia inicial do
+modo ativo, além do painel de teste. O painel demonstra Overlay e Docked no responsivo;
+no horizontal ele aparece em Overlay para preservar a geometria da Main. Overlay também permite
 posição central. A barra inferior o reabre. Sidebar e Bottom têm divisores independentes em pixels,
 por mouse ou teclado. Temas claro/escuro demonstram tokens visuais, não um instalador de temas.
 

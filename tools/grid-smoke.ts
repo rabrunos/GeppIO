@@ -1,3 +1,4 @@
+import { reloadResponsive } from './layout-mode-smoke.ts'
 /** Real renderer interaction on the caller's disposable Electron profile. */
 import assert from 'node:assert/strict'
 import type { Page } from 'playwright'
@@ -248,7 +249,7 @@ export async function gridSmoke(page: Page, resizeWindow: (width: number, height
   await page.getByTestId('edit-layout').click(); await resizeWindow(1280, 740); await fit(page); await page.getByTestId('cancel-layout').click()
   assert.equal(await page.evaluate(key => localStorage.getItem(key), GRID_KEY), saved)
   await resizeWindow(1480, 980); await fit(page)
-  await page.reload(); await page.getByTestId('edit-layout').waitFor(); await frame(page); assert.deepEqual(await placements(page), await projected(page, parseGrid(saved))); await fit(page)
+  await reloadResponsive(page); await frame(page); assert.deepEqual(await placements(page), await projected(page, parseGrid(saved))); await fit(page)
   // Storage failures and concurrent drafts leave edit active, never claim a successful Save.
   await page.getByTestId('edit-layout').click()
   const concurrent = JSON.stringify({ ...parseGrid(saved), theme: parseGrid(saved).theme === 'light' ? 'dark' : 'light' })
@@ -260,20 +261,20 @@ export async function gridSmoke(page: Page, resizeWindow: (width: number, height
   await page.evaluate(() => { Storage.prototype.setItem = () => { throw new DOMException('Quota', 'QuotaExceededError') } })
   await page.getByTestId('save-layout').click(); assert.equal(await page.getByTestId('save-layout').count(), 1)
   assert.equal(await page.evaluate(key => localStorage.getItem(key), GRID_KEY), saved)
-  await page.reload(); await page.getByTestId('edit-layout').waitFor()
+  await reloadResponsive(page)
   // Original fractional bytes survive conversion, Cancel, theme, explicit Save and reload.
   const legacy = JSON.stringify({ ...DEFAULT_LAYOUT, theme: 'dark' }, null, 2)
   await page.evaluate(({ key, legacy, oldKey }) => { localStorage.removeItem(key); localStorage.setItem(oldKey, legacy) }, { key: GRID_KEY, legacy, oldKey: IDENTITY.layoutStorageKey })
-  await page.reload(); await page.getByTestId('edit-layout').waitFor()
+  await reloadResponsive(page)
   assert.equal(await page.evaluate(key => localStorage.getItem(key), GRID_KEY), null)
   await page.getByRole('button', { name: 'Alternar tema', exact: true }).click(); assert.equal(await page.evaluate(key => localStorage.getItem(key), GRID_KEY), null)
   await page.getByTestId('edit-layout').click(); await page.getByTestId('cancel-layout').click()
   assert.equal(await page.evaluate(key => localStorage.getItem(key), IDENTITY.layoutStorageKey), legacy)
   await page.getByTestId('edit-layout').click(); await page.getByTestId('save-layout').click()
   assert.equal(await page.evaluate(key => localStorage.getItem(key), IDENTITY.layoutStorageKey), legacy)
-  await page.reload(); await page.getByTestId('edit-layout').waitFor()
+  await reloadResponsive(page)
   // Corrupt v2 is preserved and blocks composition until an explicit valid recovery preview.
-  await page.evaluate(key => localStorage.setItem(key, '{corrupt grid'), GRID_KEY); await page.reload(); await page.getByTestId('edit-layout').waitFor()
+  await page.evaluate(key => localStorage.setItem(key, '{corrupt grid'), GRID_KEY); await reloadResponsive(page)
   assert.equal(await page.locator('[data-widget]').count(), 0); assert.equal(await page.getByTestId('edit-layout').isDisabled(), true)
   await page.getByRole('button', { name: 'Alternar tema', exact: true }).click(); assert.equal(await page.evaluate(key => localStorage.getItem(key), GRID_KEY), '{corrupt grid')
   await settings(page); await page.getByRole('button', { name: 'Prévia da composição inicial', exact: true }).click(); await page.getByTestId('cancel-layout').click()
