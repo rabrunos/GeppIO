@@ -13,11 +13,20 @@ Use [TASK_POLICY](docs/.ai/TASK_POLICY.md) for target versions, effort and autho
 Use [SECURITY_BASELINE](docs/.ai/SECURITY_BASELINE.md) when a trust boundary changes.
 `AGENTS.md` addresses implementation agents; it is not a ChatGPT Project instruction dump.
 
+When the owner approves implementation, follow [orchestration](docs/.ai/orchestration.md):
+load the applicable prompt template before preparing the handoff. For ordinary implementation,
+use [EXECUTION](docs/.ai/prompts/EXECUTION.md) and automatically deliver a complete, copy-ready
+Codex contract when no direct executor call is available. An Issue or task summary does not replace
+that handoff. Discussion-only and record-only requests do not launch implementation.
+These repository instructions do not update ChatGPT website Project Instructions; that is a
+separate configuration surface.
+
 ## Durable project facts
 
 The product name is **GeppIO**, with lowercase technical namespace `geppio` (Issue #6). The canonical GitHub repository is `rabrunos/GeppIO` (GitHub repository ID `1409287329`), following the owner-initiated rename on 2026-10-08. Verify both origin URLs and the same repository identity before synchronization. The initial target is Windows and the stack is Electron,
-TypeScript, React, Tailwind, Heroicons and Motion. The alpha.1 foundation has static fixtures;
-alpha.2 adds an explicitly trusted local plugin runtime (Issue #21).
+TypeScript, React, Tailwind, Heroicons and Motion. The alpha.1 foundation introduced static fixtures;
+alpha.2 added the trusted experimental local plugin runtime (Issue #21), not an untrusted-plugin
+platform. Main now uses a responsive integer square-cell grid with permanent centering (Issue #24).
 The fixed header is outside the widget layout. Regions are logically peers. Product choices
 not explicitly closed by the owner remain labelled provisional in the specification.
 

@@ -4,7 +4,7 @@
   "project": {
     "name": "geppio",
     "kind": "desktop-workbench-prototype",
-    "summary": "Windows-first local workbench foundation with peer regions, continuous widgets and a future permissioned plugin platform."
+    "summary": "Windows-first local workbench prototype with peer regions, a responsive integer square-cell Main grid, trusted experimental local plugins and a future permissioned untrusted-plugin platform."
   },
   "owner": {
     "repository_language": "en",
@@ -34,17 +34,17 @@
   "constraints": [
     "Product name GeppIO; technical namespace geppio; Canonical GitHub repository rabrunos/GeppIO, stable repository ID 1409287329 (Issue #6).",
     "No application login, external service or paid AI API.",
-    "No real plugins or native terminal in the first foundation.",
+    "The alpha.1 foundation used static fixtures; alpha.2 added trusted experimental local plugins (Issue #21). No native terminal or secure untrusted-plugin platform is implemented.",
     "No BootCrate Setup, Console, raw intake or upstream application code.",
-    "Remote metadata and commit/push require explicit authorization."
+    "Completed, validated approved GeppIO Issues inherit standing commit/push authorization under TASK_POLICY after repository ID/origin/main/staged-diff verification; explicit task overrides apply. Issue metadata/closure and publication require separate authority."
   ],
   "architecture_invariants": [
     "Fixed header outside widget arrangement.",
     "The prototype represents Sidebar, Main and Bottom as siblings; the owner discussion about the final abstraction remains open.",
-    "Continuous Main coordinates; no compulsory cell grid.",
+    "Responsive integer Main grid: columns and rows adapt from stable sources, square cells are permanently centered, no Main scrolling; viewport changes do not write saved layouts (Issue #24).",
     "Editing layout requires an explicit mode.",
     "Presentation, anchor and collapsibility remain independent concepts.",
-    "A plugin is not equivalent to a widget; future plugin execution is outside this baseline.",
+    "A plugin is not equivalent to a widget; trusted local packages run in disposable Web Workers with declarative widgets and lifecycle limits. This experimental runtime is not secure isolation for untrusted plugins.",
     "No Node, filesystem or generic IPC exposed to the renderer."
   ],
   "validation": {
@@ -54,9 +54,11 @@
       "typecheck",
       "lint",
       "test",
+      "plugins:build",
       "build",
       "dev",
-      "test:desktop"
+      "test:desktop",
+      "test:desktop:dev"
     ],
     "required_files": [
       "PROJECT_GUIDE.md",
@@ -110,6 +112,7 @@
       "Persisted layout bytes",
       "Custom protocol URLs",
       "Development URL override",
+      "Local plugin manifests, installed package/state bytes and Worker messages (validated inputs; executable plugins must still be trusted)",
       "Third-party build dependencies"
     ],
     "modules": [

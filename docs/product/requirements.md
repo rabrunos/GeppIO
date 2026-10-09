@@ -39,17 +39,31 @@ Main supports two-dimensional rectangular compositions, not just equal columns. 
 
 **Intentional editing.** Normal use must not accidentally move or resize widgets. The user explicitly enters layout editing, enabling title movement and eight-direction resize with integer grid snapping. Core content remains usable in normal mode. Issue #24 retains explicit Save/Cancel and accessible keyboard controls.
 
-**Current Main grid ([Issue #24 corrective contract](https://github.com/rabrunos/GeppIO/issues/24#issuecomment-6072025821)).** The owner superseded fixed 12×8 viewport geometry with a GeppIO-owned responsive integer grid. Both columns and rows adapt to usable Main dimensions, redistributing widgets from a stable source, with square cells, small residual margins and no Main scrolling. 12×8 remains a reference composition. Preserve feasible preferred sizes, logical neighborhood, empty spaces and no gravity. Viewport projections are reversible and never overwrite saved v1/v2 bytes; explicit Save commits the projected draft and its bounds, Cancel restores the prior source. Center by default, with a session-only debug switch outside Main. Retain eight-direction resize and bounded reorganization; infeasible projections preserve a valid layout and show a recoverable warning.
+**Current Main grid ([Issue #24 corrective contract](https://github.com/rabrunos/GeppIO/issues/24#issuecomment-6072025821)).** The owner superseded the alpha.1–alpha.6 continuous editor and fixed 12×8 viewport geometry with a GeppIO-owned responsive integer grid. Both columns and rows adapt to usable Main dimensions, redistributing widgets from a stable source, with square cells, small residual margins and no Main scrolling. 12×8 remains a reference composition. Preserve feasible preferred sizes, logical neighborhood, empty spaces and no gravity. Viewport projections are reversible and never overwrite saved v1/v2 bytes; explicit Save commits the projected draft and its bounds, Cancel restores the prior source. Always center in both axes; there is no user-facing alignment preference or Development switch. Retain eight-direction resize and bounded reorganization; infeasible projections preserve a valid layout and show a recoverable warning.
 
 **Constraints and collisions.** Typed per-widget grid constraints separate min/default/max size and allowed axes from content and plugin authority. Under Issue #24, Main has no gravity or hidden row growth. Move/resize uses local push, boundary compression, original preferred-size relocation and bounded minimal rearrangement; impossible attempts keep the last valid snapshot. The symmetric provisional gutter and initial row policy remain subject to owner visual acceptance.
 
-**Window changes (Issue #24 amendment).** Adjust square pixel cell size using both available dimensions, reducing symmetric gutters safely in extremely small viewports. Keep logical widget units/rows unchanged. Internal widget scrolling is allowed; Main scrolling and hidden row growth are not. Independently resize Sidebar width and Bottom height in pixels. Persisted input is validated/versioned and invalid data must not silently overwrite usable state.
+**Window changes (Issue #24 responsive correction).** Derive responsive columns, rows and widget placements from the stable saved/edit source; fit square pixel cells using both available dimensions, reducing symmetric gutters safely in extremely small viewports. Centering itself changes only pixel offsets, not logical units or saved bytes. Internal widget scrolling is allowed; Main scrolling and hidden row growth are not. Independently resize Sidebar width and Bottom height in pixels under Issue #26's provisional live bounds. Persisted input is validated/versioned and invalid data must not silently overwrite usable state.
 
 **Presentation.** Normal widgets participate in their region. Docked panels consume region space. Overlays cover content without resizing it. Top/right/bottom/left anchors are separate from presentation. An overlay can be unanchored/floating. Collapsibility is separate from presentation and from resize capability; a permanent widget is possible. A collapsed widget must have an obvious way to reopen. Hiding UI must not be confused with stopping its future background activity.
 
 **First fixtures.** Cards, lists, a table, a grid, a long scroll area, a form, text, toolbar-like navigation, status and a presentation panel exercise different needs. The initial registry has ten fixture definitions; seven are on Main and three cover Sidebar, Bottom and the presentation panel. They are trusted local test components, not third-party plugins.
 
-## Future plugin model (not implemented in this version)
+## Implemented trusted experimental local plugins (Issue #21)
+
+Separate from the bundled fixtures, the application already installs owner-authored/reviewed local
+packages with versioned manifests into a managed directory. Settings supports install, enable/disable
+and removal; new installs are disabled. Independently built examples include a counter widget and a
+zero-widget background pulse. Activation/disposal runs in disposable module Web Workers, with bounded
+declarative text/actions, lifecycle timeouts and message validation. No package executes in Main/preload,
+and no Node, filesystem, process or generic IPC authority is supplied to plugins or the renderer.
+
+This runtime is for trusted test plugins, not a secure community sandbox: Workers share browser
+origin/storage authority, and per-plugin permission/storage/session isolation and OS resource quotas
+are absent. See [plugin boundaries](../architecture/plugins.md) for implemented limits and future gates.
+The following model remains future design intent, not shipped capability or approval to expand authority.
+
+## Future secure untrusted-plugin model (not implemented)
 
 A plugin may provide zero or many widgets, background functionality, a public interface, commands, UI extension points and generic surface modifications. Plugins without widgets are valid. Community extensions must be able to improve another plugin, including substantial layout/behavior changes where authorized.
 
@@ -69,7 +83,7 @@ A Core-supplied contextual value can be limited to a selected code block. A Java
 
 External-service authentication belongs to the relevant plugin, not a global app login. A future secret facility should avoid each plugin inventing a plain-text token file. Secret ownership is exclusive; there is no ordinary permission for another plugin to read the owner's stored credential. An authorized operation may use a credential inside its owner and return only the allowed result.
 
-Windows OS-backed encryption alone is not complete isolation from other code running as the same OS user. A secret exposed into a moddable DOM/runtime is already outside the vault's protection. Unrestricted filesystem or process execution can invalidate stronger isolation claims. The design must reconcile native authority with exclusive-secret promises before allowing untrusted native-capable plugins. No such vault, PTY, arbitrary process bridge, script injection engine or plugin loader exists in this baseline.
+Windows OS-backed encryption alone is not complete isolation from other code running as the same OS user. A secret exposed into a moddable DOM/runtime is already outside the vault's protection. Unrestricted filesystem or process execution can invalidate stronger isolation claims. The design must reconcile native authority with exclusive-secret promises before allowing untrusted native-capable plugins. No such vault, PTY, arbitrary process bridge or script injection engine exists. The trusted experimental local plugin loader above does not supply those powers or establish secure untrusted-plugin isolation.
 
 ## Community and iterative implementation
 

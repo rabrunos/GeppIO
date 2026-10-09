@@ -2,6 +2,12 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.9] — 2026-10-09
+
+- Require current template loading, completeness review and automatic delivery of a full copy-ready Codex contract when no direct executor call is available (Issue #27). Identify one root contract per Target Version, respect discussion/record-only requests and inherit canonical policies with proportional task detail.
+- Route approved implementation from PROJECT_GUIDE and add a fresh-conversation acceptance specification, explicitly distinct from an executed model-behavior test or changes to ChatGPT website Project Instructions.
+- Reconcile agent, profile and product guidance with the responsive integer square-cell Main grid, permanent centering and existing trusted experimental local plugin runtime; retain historical context, future untrusted-plugin gates and standing Git/security boundaries. No application behavior changes.
+
 ## [0.1.0-alpha.8] — 2026-10-09
 
 - Bound session-only Sidebar/Bottom resizing by live Work Area measurements: trial caps of min(300px, 20% width) and min(180px, 25% height), further reserving existing Main space (Issue #26). Keep requested initial sizes 215px/43px and normal minima 160px/43px; relax minima safely when necessary.
