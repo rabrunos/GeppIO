@@ -17,9 +17,9 @@ fixture allows both resize axes. Typed constraints also support fixed/one-axis w
 For usable measured Main W/H, `fitGrid` calculates cell side
 `min((W-(columns-1)*g)/columns, (H-(rows-1)*g)/rows)`. In tiny spaces, g decreases to at most
 `min(W/(2*columns),H/(2*rows))`, so cells remain nonnegative. Unit n occupies `n*(cell+g)-g` pixels.
-The same formula on both axes makes 1×1 and 3×3 square. Leftover space is centered by default.
-Settings > Development has a session-only centered/start debug switch; it never alters grid units,
-saved rows, placements or bytes. Main directly holds fixture frames, without a visible inner canvas,
+The same formula on both axes makes 1×1 and 3×3 square. Leftover space is always centered in both axes;
+there is no user-facing alignment preference, including in Settings > Development. Centering is pixel
+presentation and never alters grid units, saved rows, placements or bytes. Main directly holds fixture frames, without a visible inner canvas,
 heading or toolbar, and has no scrollbar. Fixture content and the separate plugin strip may scroll.
 
 Sidebar width and Bottom height use independent pointer/keyboard pixel splitters with provisional
@@ -58,7 +58,7 @@ live. Once a projected draft is edited, its bounds stay fixed within that band, 
 resize/reflow cannot trigger a topology switch during its own gesture. A changed band projects
 from the same saved/edit source, never the previous transient viewport result. Gesture cancellation
 restores the full source snapshot before painting the new projection. A→B→A reproduces A without
-accumulated displacement/compression. Center/start only changes pixel offsets.
+accumulated displacement/compression. Permanent centering only determines pixel offsets.
 
 ## Transactions and interaction
 

@@ -20,7 +20,7 @@ The dependency-free test command may run in a constrained source-inspection envi
 ### Current alpha.7 grid / Issue #24
 
 `tests/grid-geometry.test.ts`, `grid-projection.test.ts`, `grid-reflow.test.ts` and `grid-storage.test.ts` exercise square-cell
-fit in both dimensions (including tiny viewports), centered/start coordinates, eight anchored
+fit in both dimensions (including tiny viewports), mandatory centered coordinates, eight anchored
 directions, integers, no gravity, push chains, boundary compression, preferred-size relocation,
 bounded rearrangements and rejection, deterministic reversal and immutable input. Storage cases
 cover read-only v1 conversion, original bytes, a valid but unconvertible composition, v2 validation,
@@ -33,7 +33,8 @@ sources, repeat A→B→A without drift, exercise stable aspect bands, bounded f
 ratio warnings, and round-trip explicit responsive Save through the unchanged v2 schema.
 
 `tools/grid-smoke.ts`, called by both desktop launchers, replaces the former continuous editor
-smoke. It asserts clean Main, square rendering/no Main scroll, debug alignment preserving units/bytes,
+smoke. It asserts clean Main, square rendering/no Main scroll, permanent centering across window/region/panel
+changes and both themes, absence of an alignment control in Settings, unchanged units/bytes,
 independent pixel splitters, normal form/scroll interaction, real eight-direction gestures in both
 themes, native wide/medium/narrow/portrait resize, a free-size sweep, maximize/restore, numeric margins
 against fixed 12×8, Docked/Overlay on four edges, actual 3×3 retention, live collision/preferred-size persistence,

@@ -5,15 +5,13 @@ import { DIRECTIONS } from '../src/shared/grid/types.ts'
 import { constraintsFor, DEFAULT_GRID } from '../src/shared/grid/policy.ts'
 import { validLayout } from '../src/shared/grid/occupancy.ts'
 
-test('square cells fit both dimensions, centered and start; tiny viewports reduce symmetric gutters', () => {
+test('square cells always center in both dimensions; tiny viewports reduce symmetric gutters', () => {
   for (const [width, height] of [[1200, 800], [400, 800], [1500, 250], [1, 1], [0, 0]]) {
     for (const scale of [1, 1.25, 1.5, 2]) {
-      const m = fitGrid(width! / scale, height! / scale, DEFAULT_GRID), start = fitGrid(width! / scale, height! / scale, DEFAULT_GRID, false)
+      const m = fitGrid(width! / scale, height! / scale, DEFAULT_GRID)
       assert.ok(m.width <= width! / scale + 1e-9 && m.height <= height! / scale + 1e-9)
       assert.ok(m.cell >= 0 && m.gutter >= 0 && m.gutter <= 10)
       assert.equal(m.cell + m.gutter, m.pitch)
-      assert.equal(start.left, 0); assert.equal(start.top, 0)
-      assert.equal(start.cell, m.cell)
       for (const units of [1, 3]) {
         const r = pixelRect({ x: 1, y: 1, w: units, h: units }, m)
         assert.equal(r.width, r.height); assert.equal(r.left, r.top)

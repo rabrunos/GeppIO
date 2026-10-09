@@ -19,9 +19,9 @@ import './fixtures.css'
 /** Composition only: native/plugin authority stays in the existing boundaries. */
 export function App() {
   const plugins = usePlugins(), tx = useLayoutTransaction(), regions = useRegions()
-  const [settingsOpen, setSettingsOpen] = useState(false), [centered, setCentered] = useState(true)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [panel, setPanel] = useState<PanelState>({ open: false, presentation: 'overlay', anchor: 'bottom' })
-  const measured = useMainMetrics(tx.snapshot, centered, panel), view = useProjectedTransaction(tx, measured.snapshot)
+  const measured = useMainMetrics(tx.snapshot, panel), view = useProjectedTransaction(tx, measured.snapshot)
   const interaction = useGridInteraction(view, measured.metrics, measured.measurementKey)
   return <MotionConfig reducedMotion="user"><div className="workbench" data-theme={tx.snapshot.theme} onKeyDown={event => {
     if (settingsOpen || event.key !== 'Escape') return
@@ -40,6 +40,6 @@ export function App() {
         <div className="workspace-feedback" role="status">{[measured.warning, tx.message].filter(Boolean).join(' ')}</div>
       </footer>
     </div>
-    {settingsOpen && <Settings plugins={plugins} close={() => setSettingsOpen(false)} tx={tx} panel={panel} setPanel={setPanel} centered={centered} setCentered={setCentered} />}
+    {settingsOpen && <Settings plugins={plugins} close={() => setSettingsOpen(false)} tx={tx} panel={panel} setPanel={setPanel} />}
   </div></MotionConfig>
 }

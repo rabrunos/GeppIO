@@ -48,13 +48,20 @@ async function fit(page: Page) {
   await frame(page)
   const info = await page.getByTestId('layout-canvas').evaluate(e => {
     const main = e as HTMLElement, d = main.dataset, rect = main.getBoundingClientRect()
+    const dock = main.querySelector('.test-panel.docked'), style = getComputedStyle(main)
+    const originX = 9 + (dock?.classList.contains('edge-left') ? parseFloat(style.getPropertyValue('--dock-width')) : 0)
+    const originY = 9 + (main.querySelector('.plugin-tray')?.getBoundingClientRect().height ?? 0)
+      + (dock?.classList.contains('edge-top') ? parseFloat(style.getPropertyValue('--dock-height')) : 0)
     return { width: rect.width, height: rect.height, scrollWidth: main.scrollWidth, scrollHeight: main.scrollHeight,
+      usableWidth: Number(d.usableWidth), usableHeight: Number(d.usableHeight), originX, originY,
       overflow: getComputedStyle(main).overflow, cell: Number(d.cell), gutter: Number(d.gutter), pitch: Number(d.pitch),
       gridWidth: Number(d.gridWidth), gridHeight: Number(d.gridHeight), left: Number(d.gridLeft), top: Number(d.gridTop),
       widgets: [...main.querySelectorAll<HTMLElement>('[data-widget]')].map(w => { const r = w.getBoundingClientRect(); return { w: Number(w.dataset.w), h: Number(w.dataset.h), width: r.width, height: r.height, left: r.left - rect.left, top: r.top - rect.top } }) }
   })
   assert.equal(info.overflow, 'hidden'); assert.ok(info.scrollWidth <= info.width + 1 && info.scrollHeight <= info.height + 1)
   assert.ok(info.gridWidth <= info.width - 18 + .02 && info.gridHeight <= info.height - 18 + .02)
+  assert.ok(Math.abs(info.left - info.originX - (info.usableWidth - info.gridWidth) / 2) < .02, 'Main grid stays horizontally centered')
+  assert.ok(Math.abs(info.top - info.originY - (info.usableHeight - info.gridHeight) / 2) < .02, 'Main grid stays vertically centered')
   for (const p of info.widgets) {
     assert.ok(Math.abs((p.width + info.gutter) / p.w - info.pitch) < .02)
     assert.ok(Math.abs((p.height + info.gutter) / p.h - info.pitch) < .02)
@@ -64,18 +71,24 @@ async function fit(page: Page) {
   return info
 }
 export async function gridSmoke(page: Page, resizeWindow: (width: number, height: number) => Promise<void>) {
+  await fit(page)
   // Windows can constrain the launch bounds to the display under forced DPR; establish A explicitly.
   await resizeWindow(1480, 980)
   assert.equal(await page.locator('main h1, main .workspace-toolbar, main .presentation-options, main .canvas-viewport, main .layout-canvas').count(), 0)
   const initialFit = await fit(page), initial = await placements(page)
   assert.ok(Math.abs(initialFit.left - (initialFit.width - initialFit.gridWidth) / 2) < .02)
   assert.ok(Math.abs(initialFit.top - (initialFit.height - initialFit.gridHeight) / 2) < .02)
+  for (const theme of ['light', 'dark']) {
+    if (await page.locator('.workbench').getAttribute('data-theme') !== theme) await page.getByRole('button', { name: 'Alternar tema', exact: true }).click()
+    const themeBytes = await page.evaluate(key => localStorage.getItem(key), GRID_KEY)
+    await settings(page)
+    assert.equal(await page.getByRole('checkbox', { name: /Centralizar grade/ }).count(), 0)
+    await page.keyboard.press('Escape'); await fit(page)
+    assert.deepEqual(await placements(page), initial)
+    assert.equal(await page.evaluate(key => localStorage.getItem(key), GRID_KEY), themeBytes)
+  }
   const bytes = await page.evaluate(key => localStorage.getItem(key), GRID_KEY)
-  await settings(page); await page.getByRole('checkbox', { name: 'Centralizar grade (depuração)' }).uncheck()
-  await page.getByRole('button', { name: 'Fechar configurações', exact: true }).click()
-  const aligned = await fit(page); assert.equal(aligned.left, 9); assert.equal(aligned.top, 9)
-  assert.deepEqual(await placements(page), initial); assert.equal(await page.evaluate(key => localStorage.getItem(key), GRID_KEY), bytes)
-  await settings(page); await page.getByRole('checkbox', { name: 'Centralizar grade (depuração)' }).check(); await page.keyboard.press('Escape')
+  assert.deepEqual(parseGrid(bytes!), DEFAULT_GRID)
   const measurements: unknown[] = []
   for (const [width, height] of [[1800, 720], [1280, 740], [1000, 1100], [1000, 720], [1480, 980]] as const) {
     await resizeWindow(width, height); const info = await fit(page)
@@ -170,7 +183,7 @@ export async function gridSmoke(page: Page, resizeWindow: (width: number, height
   for (const theme of ['dark', 'light']) {
     if (await page.locator('.workbench').getAttribute('data-theme') !== theme) await page.getByRole('button', { name: 'Alternar tema', exact: true }).click()
     for (const direction of DIRECTIONS) {
-      await importDraft(page, loose); const old = await placements(page), original = old[0]!
+      await importDraft(page, loose); await fit(page); const old = await placements(page), original = old[0]!
       assert.equal(await page.locator(`[data-widget="summary"] [data-resize="${direction}"]`).getAttribute('aria-label'), 'Redimensionar Panorama: ' + ({ n: 'borda superior', s: 'borda inferior', e: 'borda direita', w: 'borda esquerda', ne: 'canto superior direito', nw: 'canto superior esquerdo', se: 'canto inferior direito', sw: 'canto inferior esquerdo' })[direction])
       const target = await start(page, 'summary', direction), dx = direction.includes('w') ? -1 : direction.includes('e') ? 1 : 0, dy = direction.includes('n') ? -1 : direction.includes('s') ? 1 : 0
       await drag(page, target, dx, dy); const next = (await placements(page))[0]!
@@ -264,5 +277,5 @@ export async function gridSmoke(page: Page, resizeWindow: (width: number, height
   await settings(page); await page.locator('input[type="file"]').setInputFiles({ name: 'bad.json', mimeType: 'application/json', buffer: Buffer.from('{bad') })
   await page.getByRole('status').filter({ hasText: 'Arquivo inválido' }).waitFor(); assert.deepEqual(await placements(page), await projected(page, DEFAULT_GRID))
   if (await page.locator('.workbench').getAttribute('data-theme') !== 'dark') await page.getByRole('button', { name: 'Alternar tema', exact: true }).click()
-  console.log(JSON.stringify({ result: 'passed', subsystem: 'integer grid', devicePixelRatio: await page.evaluate(() => devicePixelRatio), checks: ['square fit/no Main scroll', 'native 1000x720/1280x740/1480x980 resize', 'clean Main', 'centering debug preserves units/bytes', 'independent pixel splitters', 'normal forms/scroll', 'live collisions/compression/preferred persistence', 'impossible growth blocks', '8 directions both themes', 'live reversal/opposite anchors', 'keyboard', 'capture/Escape/region resize cancellation', 'Save/Cancel/reload', 'quota failure', 'read-only v1/theme migration', 'corrupt v2 recovery', 'invalid import'] }))
+  console.log(JSON.stringify({ result: 'passed', subsystem: 'integer grid', devicePixelRatio: await page.evaluate(() => devicePixelRatio), checks: ['square fit/no Main scroll', 'native 1000x720/1280x740/1480x980 resize', 'clean Main', 'mandatory centering/no alignment control in both themes', 'independent pixel splitters', 'normal forms/scroll', 'live collisions/compression/preferred persistence', 'impossible growth blocks', '8 directions both themes', 'live reversal/opposite anchors', 'keyboard', 'capture/Escape/region resize cancellation', 'Save/Cancel/reload', 'quota failure', 'read-only v1/theme migration', 'corrupt v2 recovery', 'invalid import'] }))
 }
