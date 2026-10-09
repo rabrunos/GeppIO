@@ -61,11 +61,15 @@ navegação lateral, a barra inferior e um painel recolhível de demonstração.
 executam integrações: servem para testar espaço, leitura, rolagem e interação.
 
 **Editar layout** libera movimento e redimensionamento dos sete widgets da Main.
-A grade própria do GeppIO começa com 12 colunas e 8 linhas: células quadradas se ajustam à
-largura e à altura disponíveis, sem rolagem na Main. Movimento e as oito bordas/cantos usam
+A grade própria do GeppIO usa 12×8 como composição de referência. Colunas e linhas se adaptam
+à largura e à altura da Main, redistribuindo os widgets com células quadradas e sem rolagem.
+Os tamanhos preferidos e a vizinhança são preservados quando há espaço; margens maiores em
+proporções extremas recebem um aviso. Redimensionar a janela ou os divisores gera uma projeção
+reversível, sem gravar nem acumular alterações no layout. Movimento e as oito bordas/cantos usam
 unidades inteiras; setas no controle em foco também movem/redimensionam. Vizinhos podem ser
 empurrados, comprimidos ou reorganizados dentro dos limites. Tentativas sem espaço mantêm a
-última prévia válida. **Salvar layout** confirma a composição e **Cancelar** restaura a anterior.
+última prévia válida. **Editar layout** parte da projeção visível; **Salvar layout** confirma sua
+composição e seus limites atuais. **Cancelar** restaura a composição salva, projetada nesta janela.
 O layout fracionário v1 continua preservado; sua conversão vira uma grade salva somente após
 confirmação explícita. Falhas de recuperação oferecem importação ou prévia inicial nas Configurações.
 

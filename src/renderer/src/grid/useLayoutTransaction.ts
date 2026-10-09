@@ -17,14 +17,14 @@ export function useLayoutTransaction() {
     catch { return { raw: observed.current, error: 'Armazenamento local indisponível. A prévia foi mantida; tente novamente ou cancele.' } }
   }
   function putPlacements(placements: GridPlacement[]) { put({ ...live.current, placements }) }
-  function begin() { if (!recovery) { importEpoch.current++; setEditing(true); setMessage('Arraste pelo título ou use as setas. Bordas e cantos redimensionam em células. Salve ou cancele a prévia.') } }
+  function begin(projected: GridSnapshot = live.current) { if (!recovery) { importEpoch.current++; put(structuredClone(projected)); setEditing(true); setMessage('Arraste pelo título ou use as setas. Bordas e cantos redimensionam em células. Salve ou cancele a prévia.') } }
   function cancel() { importEpoch.current++; put(structuredClone(committed.current)); setEditing(false); setMessage(initial.recovery && !writable.current ? initial.message : 'Edição cancelada. A composição salva foi mantida.') }
-  function save() {
+  function save(projected: GridSnapshot = live.current) {
     importEpoch.current++
-    try { parseGrid(JSON.stringify(live.current)) } catch { setMessage('Layout inválido. Os dados salvos foram preservados.'); return }
-    const result = persist(live.current)
+    try { parseGrid(JSON.stringify(projected)) } catch { setMessage('Layout inválido. Os dados salvos foram preservados.'); return }
+    const result = persist(projected)
     if (result.error) { setMessage(result.error); return }
-    observed.current = result.raw; committed.current = structuredClone(live.current); writable.current = true
+    observed.current = result.raw; committed.current = structuredClone(projected); put(structuredClone(projected)); writable.current = true
     setRecovery(false); setEditing(false); setMessage('Layout salvo neste computador. O layout v1 continua preservado.')
   }
   function toggleTheme() {
@@ -51,6 +51,6 @@ export function useLayoutTransaction() {
       put({ ...next, theme: live.current.theme }); setEditing(true); setMessage('Layout importado somente na prévia. Salve para confirmar ou cancele.')
     } catch { if (epoch === importEpoch.current) setMessage('Arquivo inválido, incompatível ou sem espaço na grade. Sua composição e os dados antigos foram preservados.') }
   }
-  return { snapshot, live, editing, recovery, message, setMessage, putPlacements, begin, cancel, save, toggleTheme, resetPreview, importFile }
+  return { snapshot, live, editing, recovery, message, setMessage, put, putPlacements, begin, cancel, save, toggleTheme, resetPreview, importFile }
 }
 export type LayoutTransaction = ReturnType<typeof useLayoutTransaction>

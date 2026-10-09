@@ -19,7 +19,7 @@ The dependency-free test command may run in a constrained source-inspection envi
 
 ### Current alpha.7 grid / Issue #24
 
-`tests/grid-geometry.test.ts`, `grid-reflow.test.ts` and `grid-storage.test.ts` exercise square-cell
+`tests/grid-geometry.test.ts`, `grid-projection.test.ts`, `grid-reflow.test.ts` and `grid-storage.test.ts` exercise square-cell
 fit in both dimensions (including tiny viewports), centered/start coordinates, eight anchored
 directions, integers, no gravity, push chains, boundary compression, preferred-size relocation,
 bounded rearrangements and rejection, deterministic reversal and immutable input. Storage cases
@@ -27,12 +27,18 @@ cover read-only v1 conversion, original bytes, a valid but unconvertible composi
 corruption/version mismatch, write failure and concurrent byte changes. Legacy continuous tests
 remain regression evidence for v1 parsing/recovery and historical algorithms, not the active editor.
 
+Projection cases reproduce wide/short Main, compare both-axis coverage numerically against fixed
+12×8, assert right-edge redistribution, retain logical 3×3 preferences, intentional gaps and immutable
+sources, repeat A→B→A without drift, exercise stable aspect bands, bounded feasibility and extreme
+ratio warnings, and round-trip explicit responsive Save through the unchanged v2 schema.
+
 `tools/grid-smoke.ts`, called by both desktop launchers, replaces the former continuous editor
 smoke. It asserts clean Main, square rendering/no Main scroll, debug alignment preserving units/bytes,
 independent pixel splitters, normal form/scroll interaction, real eight-direction gestures in both
-themes, native 1000×720/1280×740/1480×980 resize, live collision/compression/preferred-size persistence,
+themes, native wide/medium/narrow/portrait resize, a free-size sweep, maximize/restore, numeric margins
+against fixed 12×8, Docked/Overlay on four edges, actual 3×3 retention, live collision/preferred-size persistence,
 impossible-growth rejection, opposite anchors, reversal, keyboard, Escape/capture/region-change cancellation, Save/Cancel/
-reload, failed Save, v1 conversion/theme behavior, corrupt-v2 recovery and invalid import. Plugin and
+reload, responsive Save/resize/Cancel, quota and concurrent Save rejection, v1 conversion/theme behavior, corrupt-v2 recovery and invalid import. Plugin and
 identity smokes remain mandatory. `--scale125` covers an explicit Chromium 1.25 override only.
 
 Owner physical Windows acceptance remains separate: both themes, usual DPI, legibility as cells

@@ -1,7 +1,8 @@
 import type { GridBounds, GridConstraints, GridSnapshot } from './types.ts'
 
-/** Reversible prototype policy; window changes never change logical bounds. */
+/** Reference composition and bounded responsive policy; viewport projections are never stored implicitly. */
 export const GRID_POLICY = Object.freeze({ columns: 12, rows: 8, gutter: 10, inset: 9, maxColumns: 24, maxRows: 24, maxWidgets: 16 })
+export const RESPONSIVE_POLICY = Object.freeze({ ratioSteps: 64, maxArea: 192, candidates: 24, states: 4096, attemptProbes: 8192, probes: 131072 })
 export const GRID_KEY = 'geppio:layout:grid:v2'
 export const DEFAULT_GRID: GridSnapshot = { schemaVersion: 2, theme: 'dark', columns: GRID_POLICY.columns, rows: GRID_POLICY.rows, placements: [
   { id: 'summary', x: 0, y: 0, w: 3, h: 2 },

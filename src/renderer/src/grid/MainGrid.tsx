@@ -16,6 +16,8 @@ export function MainGrid({ tx, interaction, measured, panel, closePanel, plugins
 }) {
   const cs = constraintsFor(tx.snapshot), m = measured.metrics
   return <main ref={measured.main} className={'main-region ' + (tx.editing ? 'editing' : '')} data-region="main" data-testid="layout-canvas"
+    data-columns={tx.snapshot.columns} data-rows={tx.snapshot.rows} data-projection-probes={measured.probes}
+    data-usable-width={measured.available.width} data-usable-height={measured.available.height}
     data-cell={m.cell} data-gutter={m.gutter} data-pitch={m.pitch} data-grid-left={measured.offset.left} data-grid-top={measured.offset.top}
     data-grid-width={m.width} data-grid-height={m.height} style={{ '--dock-width': measured.dockWidth + 'px', '--dock-height': measured.dockHeight + 'px' } as CSSProperties}>
     <div ref={measured.tray} className="plugin-tray"><PluginWidgets plugins={plugins} /></div>

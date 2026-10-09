@@ -78,7 +78,21 @@ try {
   })
   assert.deepEqual(nativeBoundary, { sandbox: true, contextIsolation: true, nodeIntegration: false, nodeIntegrationInWorker: false, webviewTag: false, webSecurity: true })
   await gridSmoke(page, async (width, height) => {
-    await application!.evaluate(({ BrowserWindow }, size) => { BrowserWindow.getAllWindows()[0]!.setSize(size.width, size.height) }, { width, height })
+    const viewport = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }))
+    const content = await application!.evaluate(({ BrowserWindow }, size) => {
+      const window = BrowserWindow.getAllWindows()[0]!
+      const before = window.getContentSize()
+      if (size.width === 0) window.maximize()
+      else { window.unmaximize(); window.setSize(size.width, size.height) }
+      return { before, after: window.getContentSize() }
+    }, { width, height })
+    // Forced Chromium DPR can differ from Windows DIP coordinates; retain the observed conversion.
+    await page.waitForFunction(({ content, viewport }) => Math.abs(innerWidth - content.after[0]! * viewport.width / content.before[0]!) <= 2
+      && Math.abs(innerHeight - content.after[1]! * viewport.height / content.before[1]!) <= 2, { content, viewport })
+    await page.waitForFunction(() => {
+      const main = document.querySelector<HTMLElement>('[data-testid="layout-canvas"]')!, r = main.getBoundingClientRect()
+      return Math.abs(Number(main.dataset.usableWidth) - (r.width - 18)) < .1 && Math.abs(Number(main.dataset.usableHeight) - (r.height - 18)) < .1
+    })
   })
   await page.getByTestId('edit-layout').click()
   const initial = await page.locator('[data-widget="chart"]').evaluate(element => { const style = (element as HTMLElement).style; return [style.left, style.top, style.width, style.height] })

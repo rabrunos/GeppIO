@@ -6,7 +6,7 @@ Read only the rows needed for the active Issue. This is a route map, not task st
 | --- | --- |
 | What is the owner building? What remains provisional? | [Product requirements](../product/requirements.md) |
 | Which code owns a responsibility? | [Architecture](../architecture/overview.md) |
-| Integer grid policy, geometry, occupancy, reflow and persistence | [Layout](../architecture/layout.md), `src/shared/grid/`, `tests/grid-*.test.ts` |
+| Integer grid policy, responsive projection, geometry, occupancy, reflow and persistence | [Layout](../architecture/layout.md), `src/shared/grid/`, `tests/grid-*.test.ts` |
 | Grid presentation, pointer/keyboard capture and edit transactions | `src/renderer/src/grid/`, `tools/grid-smoke.ts` |
 | Workbench composition, pixel splitters and Development controls | `src/renderer/src/workbench/`, `src/renderer/src/settings/`, `src/renderer/src/App.tsx` |
 | Legacy fractional v1 validation and identity recovery | `src/shared/layout.ts`, `src/shared/layout-defaults.ts`, `src/shared/layout-migration.ts`, `src/main/layout-migration.ts` |

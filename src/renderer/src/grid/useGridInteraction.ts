@@ -1,14 +1,14 @@
-import { useEffect, useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import type { KeyboardEvent, PointerEvent } from 'react'
 import { moveRect, resizeRect } from '../../../shared/grid/geometry.ts'
 import type { GridMetrics } from '../../../shared/grid/geometry.ts'
 import { constraintsFor } from '../../../shared/grid/policy.ts'
 import { reflow } from '../../../shared/grid/reflow.ts'
-import type { Direction, GridPlacement } from '../../../shared/grid/types.ts'
-import type { LayoutTransaction } from './useLayoutTransaction.ts'
+import type { Direction, GridPlacement, GridSnapshot } from '../../../shared/grid/types.ts'
+import type { ProjectedTransaction } from './useProjectedTransaction.ts'
 
-interface Gesture { id: string; pointer: number; kind: 'move' | Direction; x: number; y: number; pitch: number; original: GridPlacement; snapshot: GridPlacement[]; target: HTMLButtonElement }
-export function useGridInteraction(tx: LayoutTransaction, metrics: GridMetrics, measurementKey: string) {
+interface Gesture { id: string; pointer: number; kind: 'move' | Direction; x: number; y: number; pitch: number; original: GridPlacement; snapshot: GridPlacement[]; source: GridSnapshot; target: HTMLButtonElement }
+export function useGridInteraction(tx: ProjectedTransaction, metrics: GridMetrics, measurementKey: string) {
   const gesture = useRef<Gesture | null>(null), [selected, setSelected] = useState<string | null>(null), [blocked, setBlocked] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
   function end(cancel: boolean) {
@@ -16,12 +16,12 @@ export function useGridInteraction(tx: LayoutTransaction, metrics: GridMetrics, 
     setBlocked(null)
     if (!active) return
     gesture.current = null
-    if (cancel) { tx.putPlacements(active.snapshot); tx.setMessage('Gesto cancelado. A prévia anterior foi restaurada.') }
+    if (cancel) { tx.put(active.source); tx.setMessage('Gesto cancelado. A prévia anterior foi restaurada.') }
     setDragging(false); setBlocked(null)
     if (active.target.hasPointerCapture(active.pointer)) active.target.releasePointerCapture(active.pointer)
   }
-  // Physical resize/alignment/presentation changes cancel capture, never rewrite grid units.
-  useEffect(() => { end(true) }, [measurementKey, metrics.pitch, metrics.left, metrics.top])
+  // Restore the stable source before painting a changed viewport, including changed bounds.
+  useLayoutEffect(() => { end(true) }, [measurementKey, metrics.pitch, metrics.left, metrics.top])
   function apply(ps: GridPlacement[], p: GridPlacement, dx: number, dy: number, kind: Gesture['kind']) {
     const bounds = tx.live.current, cs = constraintsFor(bounds)
     const candidate = kind === 'move' ? moveRect(p, dx, dy, bounds) : resizeRect(p, dx, dy, kind, bounds, cs[p.id]!)
@@ -34,7 +34,7 @@ export function useGridInteraction(tx: LayoutTransaction, metrics: GridMetrics, 
     if (!tx.editing || gesture.current || event.button !== 0 || metrics.pitch <= 0) return
     event.preventDefault(); event.currentTarget.focus(); event.currentTarget.setPointerCapture(event.pointerId)
     gesture.current = { id: p.id, pointer: event.pointerId, kind, x: event.clientX, y: event.clientY, pitch: metrics.pitch,
-      original: structuredClone(p), snapshot: structuredClone(tx.live.current.placements), target: event.currentTarget }
+      original: structuredClone(p), snapshot: structuredClone(tx.live.current.placements), source: structuredClone(tx.source.current), target: event.currentTarget }
     setSelected(p.id); setDragging(true)
   }
   function move(event: PointerEvent<HTMLButtonElement>) {

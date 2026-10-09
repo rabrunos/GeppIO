@@ -37,7 +37,7 @@ native identity recovery still uses its v1 contract. `src/shared/identity.ts` ce
 | Modal and Development controls, independently composed plugin settings | `src/renderer/src/settings/`, `Plugins.tsx` |
 | Synthetic widget content and registry | `WidgetContent.tsx`, `fixtures.ts` in `src/renderer/src/` |
 | Visual tokens, fixtures and domain styles | `styles.css`, `fixtures.css`, `grid/grid.css`, `workbench/workbench.css`, `settings/settings.css` |
-| Grid geometry, policy, collisions, reflow, conversion and storage | `src/shared/grid/` |
+| Grid geometry, policy, responsive topology/projection, collisions, reflow, conversion and storage | `src/shared/grid/` |
 | Project checks and GitHub metadata reconciliation | `tools/` |
 
 ## Intentional simplifications
