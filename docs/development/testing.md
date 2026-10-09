@@ -17,7 +17,7 @@ The dependency-free test command may run in a constrained source-inspection envi
 
 ## Core cases
 
-### Current alpha.7 grid / Issue #24
+### Current alpha.10 grid / Issue #24
 
 `tests/grid-geometry.test.ts`, `grid-projection.test.ts`, `grid-reflow.test.ts` and `grid-storage.test.ts` exercise square-cell
 fit in both dimensions (including tiny viewports), mandatory centered coordinates, eight anchored
@@ -27,20 +27,43 @@ cover read-only v1 conversion, original bytes, a valid but unconvertible composi
 corruption/version mismatch, write failure and concurrent byte changes. Legacy continuous tests
 remain regression evidence for v1 parsing/recovery and historical algorithms, not the active editor.
 
-Projection cases reproduce wide/short Main, compare both-axis coverage numerically against fixed
-12×8, assert right-edge redistribution, retain logical 3×3 preferences, intentional gaps and immutable
-sources, repeat A→B→A without drift, exercise stable aspect bands, bounded feasibility and extreme
-ratio warnings, and round-trip explicit responsive Save through the unchanged v2 schema.
+Projection cases reproduce wide/short Main, compare coverage against fixed 12×8, assert edge affinity,
+retain 3×3 preferences while allowing temporary constrained spans, preserve intentional gaps/immutable
+sources, repeat A→B→A, exercise bounded feasibility/extreme-ratio warnings and round-trip explicit
+responsive Save through unchanged v2. `grid-projection-continuity.test.ts` sweeps sanitized left-Library,
+mirrored, dense, intentional-gap and recent-edit sources at one CSS-pixel increments (W 650–1700 at
+H 650, H 400–1000 at W 1100). Its independent oracle checks separation/order, edges, IDs, minima,
+overlap/clipping, cold/warm equality and rendered-scale continuity without calling projection helpers.
+
+Quantization budgets are defined in `tests/helpers/projection-oracle.ts`: density change ≤0.5% per
+CSS px; edge movement ≤0.75 pitch plus twice the viewport delta; normalized edge movement ≤0.08 plus
+twice the delta/minimum viewport dimension. Adjacent area change permits one cell per dimension plus
+continuous viewport motion; a three-sample grow/shrink excursion cannot exceed one cell's area strip.
+These are integer-geometry tolerances, not a smoothness certification. Small-span widgets may show
+large percentage area steps when restoring one cell; report absolute geometry and pitch too.
+`node --experimental-strip-types tools/projection-evidence.ts` writes exact source hashes, dimensions,
+topologies, pitch, logical/pixel rectangles, transitions and maxima to ignored `.local/diagnostics/`.
+`--before` labels a baseline run and disables acceptance assertions; run it only against baseline code.
 
 `tools/grid-smoke.ts`, called by both desktop launchers, replaces the former continuous editor
 smoke. It asserts clean Main, square rendering/no Main scroll, permanent centering across window/region/panel
 changes and both themes, absence of an alignment control in Settings, unchanged units/bytes,
 independent pixel splitters, normal form/scroll interaction, real eight-direction gestures in both
 themes, native wide/medium/narrow/portrait resize, a free-size sweep, maximize/restore, numeric margins
-against fixed 12×8, Docked/Overlay on four edges, actual 3×3 retention, live collision/preferred-size persistence,
+against fixed 12×8, Docked/Overlay on four edges, 3×3 preferred-size retention, live collision/preferred-size persistence,
 impossible-growth rejection, opposite anchors, reversal, keyboard, Escape/capture/region-change cancellation, Save/Cancel/
 reload, responsive Save/resize/Cancel, quota and concurrent Save rejection, v1 conversion/theme behavior, corrupt-v2 recovery and invalid import. Plugin and
 identity smokes remain mandatory. `--scale125` covers an explicit Chromium 1.25 override only.
+
+`tools/composition-smoke.ts` supplements projector comparisons with independent actual DOM rectangles,
+source separation/edge/gap assertions and the same continuity budgets. Both themes cover saved and
+active-draft custom compositions, bounded native one-pixel samples, maximize/restore, both splitters
+forward/back in one-pixel steps, zero storage calls/byte changes, cold reload, recent edits compared
+with the unchanged direct reflow solver, native resize during capture and explicit Save/reload.
+Its measurements and representative captures remain under ignored `.local/diagnostics/`. A wide/short
+direct resize that relaxes the minimum row count additionally checks exact solver geometry during
+pointer/keyboard edits, cancellation of the reference, one-pixel crossings immediately afterward,
+visible-coordinate Save, absence of reference metadata in v2 and identical saved cold/warm views.
 
 Owner physical Windows acceptance remains separate: both themes, usual DPI, legibility as cells
 shrink, mouse splitter/resize behavior, compressed neighbours/preferred-size recovery, small window

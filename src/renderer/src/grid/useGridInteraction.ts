@@ -4,10 +4,11 @@ import { moveRect, resizeRect } from '../../../shared/grid/geometry.ts'
 import type { GridMetrics } from '../../../shared/grid/geometry.ts'
 import { constraintsFor } from '../../../shared/grid/policy.ts'
 import { reflow } from '../../../shared/grid/reflow.ts'
-import type { Direction, GridPlacement, GridSnapshot } from '../../../shared/grid/types.ts'
+import type { Direction, GridPlacement } from '../../../shared/grid/types.ts'
+import type { GridEditSource } from './useLayoutTransaction.ts'
 import type { ProjectedTransaction } from './useProjectedTransaction.ts'
 
-interface Gesture { id: string; pointer: number; kind: 'move' | Direction; x: number; y: number; pitch: number; original: GridPlacement; snapshot: GridPlacement[]; source: GridSnapshot; target: HTMLButtonElement }
+interface Gesture { id: string; pointer: number; kind: 'move' | Direction; x: number; y: number; pitch: number; original: GridPlacement; snapshot: GridPlacement[]; source: GridEditSource; target: HTMLButtonElement }
 export function useGridInteraction(tx: ProjectedTransaction, metrics: GridMetrics, measurementKey: string) {
   const gesture = useRef<Gesture | null>(null), [selected, setSelected] = useState<string | null>(null), [blocked, setBlocked] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
@@ -16,7 +17,7 @@ export function useGridInteraction(tx: ProjectedTransaction, metrics: GridMetric
     setBlocked(null)
     if (!active) return
     gesture.current = null
-    if (cancel) { tx.put(active.source); tx.setMessage('Gesto cancelado. A prévia anterior foi restaurada.') }
+    if (cancel) { tx.restoreSource(active.source); tx.setMessage('Gesto cancelado. A prévia anterior foi restaurada.') }
     setDragging(false); setBlocked(null)
     if (active.target.hasPointerCapture(active.pointer)) active.target.releasePointerCapture(active.pointer)
   }
@@ -34,7 +35,7 @@ export function useGridInteraction(tx: ProjectedTransaction, metrics: GridMetric
     if (!tx.editing || gesture.current || event.button !== 0 || metrics.pitch <= 0) return
     event.preventDefault(); event.currentTarget.focus(); event.currentTarget.setPointerCapture(event.pointerId)
     gesture.current = { id: p.id, pointer: event.pointerId, kind, x: event.clientX, y: event.clientY, pitch: metrics.pitch,
-      original: structuredClone(p), snapshot: structuredClone(tx.live.current.placements), source: structuredClone(tx.source.current), target: event.currentTarget }
+      original: structuredClone(p), snapshot: structuredClone(tx.live.current.placements), source: tx.captureSource(), target: event.currentTarget }
     setSelected(p.id); setDragging(true)
   }
   function move(event: PointerEvent<HTMLButtonElement>) {

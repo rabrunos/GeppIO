@@ -21,7 +21,8 @@ export function App() {
   const plugins = usePlugins(), tx = useLayoutTransaction(), regions = useRegions()
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [panel, setPanel] = useState<PanelState>({ open: false, presentation: 'overlay', anchor: 'bottom' })
-  const measured = useMainMetrics(tx.snapshot, panel), view = useProjectedTransaction(tx, measured.snapshot)
+  const measured = useMainMetrics(tx.snapshot, panel, tx.editViewport)
+  const view = useProjectedTransaction(tx, measured.snapshot, { ...measured.available, pitch: measured.metrics.pitch })
   const interaction = useGridInteraction(view, measured.metrics, measured.measurementKey)
   return <MotionConfig reducedMotion="user"><div className="workbench" data-theme={tx.snapshot.theme} onKeyDown={event => {
     if (settingsOpen || event.key !== 'Escape') return

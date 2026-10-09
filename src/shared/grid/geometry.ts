@@ -36,11 +36,13 @@ export function resizeRect(p: GridRect, dx: number, dy: number, d: Direction, b:
 
 export interface GridMetrics { cell: number; gutter: number; pitch: number; width: number; height: number; left: number; top: number }
 /** Fit BOTH measured dimensions. A unit occupies cell; n units occupy n*pitch-gutter. */
-export function fitGrid(width: number, height: number, b: GridBounds, requestedGutter = GRID_POLICY.gutter): GridMetrics {
+export function fitGrid(width: number, height: number, b: GridBounds, requestedGutter: number = GRID_POLICY.gutter, requestedPitch?: number): GridMetrics {
   if (![width, height, requestedGutter].every(Number.isFinite) || width < 0 || height < 0 || requestedGutter < 0 || !validBounds(b)) throw new Error('Invalid grid measurement')
+  if (requestedPitch !== undefined && (!Number.isFinite(requestedPitch) || requestedPitch < 0)) throw new Error('Invalid grid pitch')
   // Keep room for positive cells even in tiny viewports; symmetric gutters remain bounded.
   const gutter = Math.min(requestedGutter, width / (2 * b.columns), height / (2 * b.rows))
-  const cell = Math.max(0, Math.min((width - (b.columns - 1) * gutter) / b.columns, (height - (b.rows - 1) * gutter) / b.rows))
+  const cell = Math.max(0, Math.min((width - (b.columns - 1) * gutter) / b.columns, (height - (b.rows - 1) * gutter) / b.rows,
+    requestedPitch === undefined ? Infinity : requestedPitch - gutter))
   const gridWidth = b.columns * cell + (b.columns - 1) * gutter, gridHeight = b.rows * cell + (b.rows - 1) * gutter
   return { cell, gutter, pitch: cell + gutter, width: gridWidth, height: gridHeight,
     left: Math.max(0, (width - gridWidth) / 2), top: Math.max(0, (height - gridHeight) / 2) }

@@ -3,21 +3,29 @@ import { DEFAULT_GRID } from '../../../shared/grid/policy.ts'
 import { importGrid, parseGrid } from '../../../shared/grid/schema.ts'
 import { readGrid, writeGrid } from '../../../shared/grid/storage.ts'
 import type { GridPlacement, GridSnapshot } from '../../../shared/grid/types.ts'
+import type { GridViewport } from '../../../shared/grid/projection.ts'
+
+export interface GridEditSource { snapshot: GridSnapshot; viewport: GridViewport | null }
 
 export function useLayoutTransaction() {
   const [initial] = useState(() => { try { return readGrid(window.localStorage) } catch { return readGrid({ getItem() { throw new Error('Unavailable') }, setItem() {} }) } })
   const committed = useRef(initial.snapshot), observed = useRef(initial.raw), writable = useRef(initial.writable)
   const [snapshot, setSnapshot] = useState(initial.snapshot), live = useRef(snapshot)
+  const [editViewport, setEditViewport] = useState<GridViewport | null>(null), viewport = useRef(editViewport)
   const [editing, setEditing] = useState(false), [recovery, setRecovery] = useState(initial.recovery)
   const [message, setMessage] = useState(initial.message)
   const importEpoch = useRef(0)
-  function put(next: GridSnapshot) { live.current = next; setSnapshot(next) }
+  function put(next: GridSnapshot, reference: GridViewport | null = null) {
+    live.current = next; setSnapshot(next); viewport.current = reference; setEditViewport(reference)
+  }
+  function captureSource(): GridEditSource { return structuredClone({ snapshot: live.current, viewport: viewport.current }) }
+  function restoreSource(source: GridEditSource) { put(source.snapshot, source.viewport) }
   function persist(next: GridSnapshot) {
     try { return writeGrid(window.localStorage, next, observed.current) }
     catch { return { raw: observed.current, error: 'Armazenamento local indisponível. A prévia foi mantida; tente novamente ou cancele.' } }
   }
   function putPlacements(placements: GridPlacement[]) { put({ ...live.current, placements }) }
-  function begin(projected: GridSnapshot = live.current) { if (!recovery) { importEpoch.current++; put(structuredClone(projected)); setEditing(true); setMessage('Arraste pelo título ou use as setas. Bordas e cantos redimensionam em células. Salve ou cancele a prévia.') } }
+  function begin(projected: GridSnapshot = live.current, reference: GridViewport | null = null) { if (!recovery) { importEpoch.current++; put(structuredClone(projected), reference); setEditing(true); setMessage('Arraste pelo título ou use as setas. Bordas e cantos redimensionam em células. Salve ou cancele a prévia.') } }
   function cancel() { importEpoch.current++; put(structuredClone(committed.current)); setEditing(false); setMessage(initial.recovery && !writable.current ? initial.message : 'Edição cancelada. A composição salva foi mantida.') }
   function save(projected: GridSnapshot = live.current) {
     importEpoch.current++
@@ -29,7 +37,7 @@ export function useLayoutTransaction() {
   }
   function toggleTheme() {
     const theme = live.current.theme === 'dark' ? 'light' : 'dark'
-    put({ ...live.current, theme })
+    put({ ...live.current, theme }, viewport.current)
     const next: GridSnapshot = { ...committed.current, theme }
     committed.current = next
     // A theme change must not implicitly approve a pending migration or replace corruption.
@@ -51,6 +59,6 @@ export function useLayoutTransaction() {
       put({ ...next, theme: live.current.theme }); setEditing(true); setMessage('Layout importado somente na prévia. Salve para confirmar ou cancele.')
     } catch { if (epoch === importEpoch.current) setMessage('Arquivo inválido, incompatível ou sem espaço na grade. Sua composição e os dados antigos foram preservados.') }
   }
-  return { snapshot, live, editing, recovery, message, setMessage, put, putPlacements, begin, cancel, save, toggleTheme, resetPreview, importFile }
+  return { snapshot, live, editViewport, captureSource, restoreSource, editing, recovery, message, setMessage, put, putPlacements, begin, cancel, save, toggleTheme, resetPreview, importFile }
 }
 export type LayoutTransaction = ReturnType<typeof useLayoutTransaction>

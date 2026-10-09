@@ -1,6 +1,6 @@
 # Bounded square-cell Main grid
 
-The current contract is [Issue #24's responsive correction](https://github.com/rabrunos/GeppIO/issues/24#issuecomment-6072025821).
+The current contract is [Issue #24's composition refinement](https://github.com/rabrunos/GeppIO/issues/24#issuecomment-6080536542).
 It supersedes fixed 12×8 viewport geometry and the alpha.6 continuous editor/minimum scrolling canvas.
 This is a reversible prototype with bounded adaptive limits, subject to owner acceptance. Earlier context remains in
 [#3](https://github.com/rabrunos/GeppIO/issues/3), [#10](https://github.com/rabrunos/GeppIO/issues/10),
@@ -17,7 +17,9 @@ fixture allows both resize axes. Typed constraints also support fixed/one-axis w
 For usable measured Main W/H, `fitGrid` calculates cell side
 `min((W-(columns-1)*g)/columns, (H-(rows-1)*g)/rows)`. In tiny spaces, g decreases to at most
 `min(W/(2*columns),H/(2*rows))`, so cells remain nonnegative. Unit n occupies `n*(cell+g)-g` pixels.
-The same formula on both axes makes 1×1 and 3×3 square. Leftover space is always centered in both axes;
+Responsive fitting additionally caps pitch at the continuous density described below. The same formula
+on both axes makes equal logical spans square; a preferred 3×3 may temporarily render as 3×2 within
+declared constraints. Leftover space is always centered in both axes;
 there is no user-facing alignment preference, including in Settings > Development. Centering is pixel
 presentation and never alters grid units, saved rows, placements or bytes. Main directly holds fixture frames, without a visible inner canvas,
 heading or toolbar, and has no scrollbar. Fixture content and the separate plugin strip may scroll.
@@ -39,34 +41,45 @@ Docked reduces usable measured space; Overlay leaves grid geometry alone. Neithe
 
 ## Responsive topology and stable sources
 
-`projection.ts` selects both columns and rows from the usable `(W+g)/(H+g)` aspect ratio, quantized
-into 1/64 bands. Selection does not depend on resize history. Candidates rank by aspect match, then
-a small reference-area penalty to avoid unnecessarily tiny cells. Integer bounds remain at most
-24×24. Candidate area is capped at 192 cells unless the source area/preferences require more;
-each axis accommodates persisted preferences, so v2 validation never needs reinterpretation.
+`projection.ts` derives one continuous reference pitch:
+`max(sqrt((W+g)*(H+g)/192), (W+g)/24, (H+g)/24)`, with
+`g = min(10, W/48, H/48)`. Columns/rows floor the corresponding measured dimension divided by
+that pitch, bounded by 24 and the composition's required minimum. Every axis also accommodates
+preferred-size metadata, retaining the unchanged v2 validation contract. `fitGrid` caps this pitch
+by the actual bounds. Density therefore changes continuously when integer topology changes.
+Ordinary compositions leave less than one pitch of residual space per axis, always centered.
 
-Up to 24 candidate topologies are considered. Prefer an anchor-preserving arrangement with about
-95% coverage in each dimension over gratuitous repacking. Positions scale within available free
-space: `targetX = round(sourceX/(sourceColumns-sourceW)*(targetColumns-targetW))`, with the analogous
-vertical formula. Left/right/top/bottom anchors and intentional gaps survive when feasible. Widgets
-use their preferred logical dimensions, rather than stretching to fill new columns. The rightmost
-widgets therefore approach the right edge of a wider grid instead of staying in its first 12 columns.
+`projection-axis.ts` fits source intervals independently on each axis. Every source left/right or
+above/below separation is mandatory, strict gaps retain at least one logical unit, and outer-edge
+affinity stays exact. These acyclic relationships provide earliest/latest feasible positions.
+Actual spans scale with the target extent, rounded and clamped between declared minima and preferred
+sizes. If they do not fit, eligible intervals shrink one unit at a time, preferring reductions of
+the required extent and then least normalized distortion. Positions use source free-space anchors
+within those feasible bounds. There is no whole-Main slot search, gravity, permutation or viewport
+write-back. Work is bounded by widget count (16), extent (24) and unit compression; the conservative
+probe ceiling is `2 * 16⁴ * 24` (unit reductions × candidates × separation pairs on two axes).
+This is a local composition fit, not a general constraint framework.
 
-If direct projection collides, deterministic bounded packing visits widgets in logical reading
-order and slots by Manhattan distance from projected anchors, with stable coordinate tie-breaks.
-Try preferred sizes across candidate topologies before retained actual sizes, then conservative
-axis compression towards 3×2 minima. No gravity/top-edge objective or unlimited rows is used.
-Search is conservative, not globally optimal: 4096 states and 8192 probes per packing attempt,
-131072 probes overall with budget reserved for later compression phases. If no candidate fits,
-fit the unchanged valid source with square cells. Coverage below 85% or failed packing produces
-a recoverable warning explaining residual margins; all widgets/preferences and stored bytes survive.
+A valid source itself proves a feasible bounded arrangement at its declared minima. If its required
+extent exceeds the ideal viewport topology, retain that extent and reduce square-cell pitch instead
+of reversing relationships or violating minima. Coverage below 85% on either axis shows a recoverable
+warning explaining larger margins. Narrow/extreme spaces can make content small; internal scrolling
+remains available. Integer span restoration can still produce a one-cell size step, especially visible
+on a two-row widget. No animation or physical smoothness is claimed.
 
-`useMainMetrics` caches packing per stable source/aspect band; pixel changes still update metrics
-live. Once a projected draft is edited, its bounds stay fixed within that band, so intentional
-resize/reflow cannot trigger a topology switch during its own gesture. A changed band projects
-from the same saved/edit source, never the previous transient viewport result. Gesture cancellation
-restores the full source snapshot before painting the new projection. A→B→A reproduces A without
-accumulated displacement/compression. Permanent centering only determines pixel offsets.
+`useMainMetrics` memoizes only the exact stable source, its explicit edit reference and measured CSS
+width/height. Cold and warm results agree for identical inputs regardless of resize history. Deliberate
+edits use visible bounds, exact CSS measurement and measured pitch as their new source/reference.
+The same interval fit starts at that source's bounds/scale: axis extents vary by the square root of
+the measured aspect-ratio change and pitch by the square root of the area change. At the reference,
+it reproduces the direct result; every changed pixel adapts continuously from it. This reference
+belongs only to the active transaction, never saved metadata
+or an automatically promoted projection. Cancelled gestures restore both snapshot and reference.
+Save commits the visible coordinates/bounds, then clears the edit reference; the committed source
+uses the same normal projection on warm render and restart. This can normalize its responsive view
+when a deliberate edit changed the minimum feasible topology. A→B→A reproduces A without accumulated
+displacement/compression; fine-step tests additionally check the transitions, not just endpoints.
+Permanent centering only determines pixel offsets. The direct manipulation solver remains separate.
 
 ## Transactions and interaction
 

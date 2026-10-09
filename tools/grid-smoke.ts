@@ -10,6 +10,7 @@ import { fitGrid } from '../src/shared/grid/geometry.ts'
 import { DEFAULT_LAYOUT } from '../src/shared/layout-defaults.ts'
 import { IDENTITY } from '../src/shared/identity.ts'
 import { regionSmoke } from './region-smoke.ts'
+import { compositionSmoke } from './composition-smoke.ts'
 
 async function frame(page: Page) { await page.evaluate(() => new Promise<void>(done => requestAnimationFrame(() => requestAnimationFrame(() => done())))) }
 async function placements(page: Page) {
@@ -95,15 +96,14 @@ export async function gridSmoke(page: Page, resizeWindow: (width: number, height
     await resizeWindow(width, height); const info = await fit(page)
     assert.deepEqual(await placements(page), await projected(page, DEFAULT_GRID))
     const usableWidth = info.width - 18, usableHeight = info.height - 18, old = fitGrid(usableWidth, usableHeight, DEFAULT_GRID)
-    assert.ok(info.gridWidth / usableWidth >= .95 && info.gridHeight / usableHeight >= .95)
+    assert.ok(usableWidth - info.gridWidth < info.pitch + .02 && usableHeight - info.gridHeight < info.pitch + .02)
     if (Math.min(old.width / usableWidth, old.height / usableHeight) < .9) assert.ok(info.gridWidth * info.gridHeight > old.width * old.height)
-    else assert.ok(info.gridWidth * info.gridHeight >= old.width * old.height * .95)
     measurements.push({ width, height, columns: await page.getByTestId('layout-canvas').getAttribute('data-columns'), rows: await page.getByTestId('layout-canvas').getAttribute('data-rows'), horizontalMargin: usableWidth - info.gridWidth, verticalMargin: usableHeight - info.gridHeight, oldHorizontalMargin: usableWidth - old.width, oldVerticalMargin: usableHeight - old.height })
     await page.screenshot({ path: `.local/diagnostics/grid-${width}x${height}${process.argv.includes('--dev') ? '-dev' : ''}${process.argv.includes('--scale125') ? '-125' : ''}.png` })
   }
   assert.deepEqual(await placements(page), initial)
   console.log(JSON.stringify({ subsystem: 'responsive coverage', measurements }))
-  // Free native resize sweeps cross aspect bands; every projection uses the same stable source.
+  // Free native resize sweeps cross integer topologies; every projection uses the same stable source.
   for (let i = 0; i <= 12; i++) { await resizeWindow(1000 + i * 55, 720 + i * 17); await fit(page); assert.deepEqual(await placements(page), await projected(page, DEFAULT_GRID)) }
   await resizeWindow(1480, 980); await frame(page); assert.deepEqual(await placements(page), initial)
   await resizeWindow(0, 0); await fit(page); assert.deepEqual(await placements(page), await projected(page, DEFAULT_GRID))
@@ -129,7 +129,7 @@ export async function gridSmoke(page: Page, resizeWindow: (width: number, height
     await settings(page); await page.getByLabel('Apresentação do painel').selectOption(presentation); await page.getByLabel('Borda do painel').selectOption(anchor)
     await page.getByRole('button', { name: 'Abrir painel', exact: true }).click(); const info = await fit(page)
     const main = page.getByTestId('layout-canvas'), w = Number(await main.getAttribute('data-usable-width')), h = Number(await main.getAttribute('data-usable-height'))
-    assert.ok(info.gridWidth / w >= .95 && info.gridHeight / h >= .95)
+    assert.ok(w - info.gridWidth < info.pitch + .02 && h - info.gridHeight < info.pitch + .02)
     assert.deepEqual(await placements(page), await projected(page, DEFAULT_GRID))
     if (presentation === 'overlay') assert.deepEqual(await placements(page), before)
     await page.getByRole('button', { name: 'Recolher painel', exact: true }).click(); await frame(page); assert.deepEqual(await placements(page), before)
@@ -205,7 +205,7 @@ export async function gridSmoke(page: Page, resizeWindow: (width: number, height
   await importDraft(page, { ...loose, placements: loose.placements.map(p => p.id === 'summary' ? { ...p, w: 3, preferred: { w: 3, h: 3 } } : p) })
   for (const [w, h] of [[1800, 720], [1000, 1100], [1480, 980]]) {
     await resizeWindow(w!, h!); await fit(page); const square = (await placements(page))[0]!
-    assert.equal(square.w, 3); assert.equal(square.h, 3)
+    assert.equal(square.w, 3); assert.ok(square.h >= 2 && square.h <= 3)
   }
   await importDraft(page, loose)
   const keyboardStart = await placements(page)
@@ -281,5 +281,6 @@ export async function gridSmoke(page: Page, resizeWindow: (width: number, height
   await settings(page); await page.locator('input[type="file"]').setInputFiles({ name: 'bad.json', mimeType: 'application/json', buffer: Buffer.from('{bad') })
   await page.getByRole('status').filter({ hasText: 'Arquivo inválido' }).waitFor(); assert.deepEqual(await placements(page), await projected(page, DEFAULT_GRID))
   if (await page.locator('.workbench').getAttribute('data-theme') !== 'dark') await page.getByRole('button', { name: 'Alternar tema', exact: true }).click()
+  await compositionSmoke(page, resizeWindow, importDraft)
   console.log(JSON.stringify({ result: 'passed', subsystem: 'integer grid', devicePixelRatio: await page.evaluate(() => devicePixelRatio), checks: ['square fit/no Main scroll', 'native 1000x720/1280x740/1480x980 resize', 'clean Main', 'mandatory centering/no alignment control in both themes', 'independent pixel splitters', 'normal forms/scroll', 'live collisions/compression/preferred persistence', 'impossible growth blocks', '8 directions both themes', 'live reversal/opposite anchors', 'keyboard', 'capture/Escape/region resize cancellation', 'Save/Cancel/reload', 'quota failure', 'read-only v1/theme migration', 'corrupt v2 recovery', 'invalid import'] }))
 }

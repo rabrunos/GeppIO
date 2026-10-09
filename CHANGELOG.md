@@ -2,6 +2,12 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.10] — 2026-10-09
+
+- Preserve spatial composition during native window and region resizing (Issue #24): fit source-derived intervals with mandatory separation, intentional gaps and edge affinity; compress eligible spans before moving neighbours, without viewport-only free-slot packing.
+- Replace aspect-ranked density jumps and history-dependent caching with continuous pixel pitch and deterministic exact-measurement projection. Preserve square cells, permanent centering, declared minima, preferred-size metadata and unchanged explicit Save/Cancel/storage semantics; constrained compositions may retain larger warned margins.
+- Add sanitized left/mirrored/dense/gap/recent-edit reproductions, independent one-pixel continuity/order oracles, before/after geometry evidence tooling and disposable saved/draft desktop resize coverage. Keep the approved direct collision solver, region caps, plugin authority and Electron boundaries unchanged. Owner visual acceptance remains separate.
+
 ## [0.1.0-alpha.9] — 2026-10-09
 
 - Require current template loading, completeness review and automatic delivery of a full copy-ready Codex contract when no direct executor call is available (Issue #27). Identify one root contract per Target Version, respect discussion/record-only requests and inherit canonical policies with proportional task detail.
