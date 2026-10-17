@@ -11,8 +11,12 @@ region ownership, constraints, collision, projection, transfers, codecs and stor
 ### Coordinates, constraints and regions
 
 Each region owns one ordinary 15px content inset. Coordinates start at that inner content origin.
-Bounded mode retains all four insets; expanded Main/Bottom omit the right inset and use a native
-thin horizontal scrollbar. Its normal space reservation is included in measured available height.
+Bounded mode retains all four insets; expanded Main omits the right inset and uses a native
+thin horizontal scrollbar only when content overflows. Its normal reservation is measured.
+Sidebar has one vertical scroll owner containing navigation and the occupied placement world;
+width follows its inner content area, including native scrollbar reservation. Bottom and its
+placement port use overflow:clip, which prevents even programmatic/focus scrolling. Its eligible
+summary/chart fixtures adapt to the available height without internal scrolling or removing text.
 No overlay border/mask, duplicate 9px inset, range-input scrollbar or phantom world-end margin exists.
 The clearance predicate reuses the project's legacy continuous tooClose: 10px on a separating axis
 whose orthogonal interiors intersect, with the historical diagonal-only exception. Exterior margins
@@ -41,28 +45,41 @@ The newer project-owned grid solver supplies the operational phases/ranking, ada
 contact edges: forward local push; impacted-axis boundary compression; preferred-size nearby contact
 slots; bounded multi-widget rearrangement. Each complete solution ranks affected widget count,
 Manhattan travel, spatial-order changes and preference error. Contact combinations replace integer
-slot enumeration; local travel is capped at twice the affected widget's largest dimension plus gap.
-There are at most 4096 states per phase and 131072 probes per operation. This is conservative bounded
+slot enumeration. Forward candidates come only from actual locked contacts; duplicate coordinates,
+out-of-bounds axes and collisions with locked neighbors are pruned before sorting. Broad fallback
+settles tall constrained victims first and explores branches recruiting fewer neighbors first.
+Complete-solution ranking remains authoritative. Local travel uses twice the affected widget's
+largest dimension plus gap, enlarged only by its directly blocking rectangle to allow thin widgets
+to reach that adjacent contact edge; all broad travel is capped at 1024px. Current-size direct
+slots accompany preferred slots. There are at most 512 states per phase and 8192 probes per operation
+(including rejected probes). This is conservative bounded
 search, not a complete global packer. Failure keeps the last valid preview and reports the constraint.
 No gravity or compulsory compaction exists. Preferred recovery tries in-place then nearby valid contact
 positions without displacing unrelated widgets; remaining in-place slack can restore partially.
 Recovery never undoes newly required compression through an immediate lateral escape in the same gesture.
 
-Pointer gestures derive every update from their original snapshot, include scrollLeft/scrollTop and
+Pointer gestures coalesce intentions once per animation frame and flush the final intention on
+release; they derive every update from their original snapshot, include scrollLeft/scrollTop and
 keep real CSS-pixel deltas without rounding or snapping. Opposite resize edges stay anchored. Edge
 auto-scroll advances concrete active intention; only successful occupied rectangles grow the world.
 Escape, pointercancel, lost capture or changed region measurements restore the gesture source.
+Physical frame measurements distinguish a real region resize from native scrollbar reservation;
+the latter projects the original gesture source into current usable height without cancellation or drift.
 Keyboard steps are 1px, Shift 10px. Layout Cancel restores the previously committed canonical source.
 
 ### Stable projection, expansion and recovery
 
 Horizontal expansion defaults OFF, remembered independently under geppio:layout:expansion:v1.
-Both settings use the same rectangles/solver. Expanded Main/Bottom preserve horizontal coordinates
+Both settings use the same rectangles/solver. Expanded Main preserves horizontal coordinates
 and dimensions across width changes; world width is max(visible width, furthest occupied right edge),
 without trailing padding. Browser integer scrollWidth may round its final subpixel (under one CSS px).
-During pointer capture only, hold the starting occupied width so contraction-induced native scroll
-clamping cannot feed back into the gesture's delta. Release contracts immediately to current occupancy.
-Sidebar never acquires arbitrary horizontal placement. Coordinates/worlds are capped at 100000px,
+During pointer capture only, hold Main's starting occupied width or Sidebar's occupied height so
+contraction-induced native scroll clamping cannot feed back into the gesture's delta. Release
+contracts immediately to current occupancy.
+Sidebar never acquires arbitrary horizontal placement. Its y coordinates and heights are preserved
+across viewport changes; occupied bottom edges define finite vertical extent. Navigation and widgets
+share one scroll owner, and renderer mapping includes the navigation offset. Bottom ignores Main's
+expansion option and always solves/projects into actual finite dimensions. Coordinates/worlds are capped at 100000px,
 individual dimensions at 4096px, known documents at seven fixtures (engine cap 16), input at 64 KiB.
 No pixel/cell-count-dependent arrays are allocated.
 
@@ -72,8 +89,11 @@ edge affinity and intentional normalized gaps where feasible, and scales/compres
 to declared pixel minima. Binary fitting replaces integer steps. Equal source/reference/measurements
 produce equal results; A→B→A never accumulates drift. Empty spaces do not attract widgets. Sidebar
 width/Bottom height track the measured cross axis. If the source relationships/minima cannot fit,
-retain source rectangles in a finite recoverable scroll area and warn rather than overlap/delete/shrink
-below minima. Restore region space to recover. Save is blocked while an occupied region is infeasible.
+retain source rectangles and warn rather than overlap/delete/shrink below minima. Main can use a
+finite recovery scroll area. Bottom retains its finite world, keeps infeasible content mounted but
+withheld, and exposes enlargement plus edit-only transfers to Main. Restore region space to recover.
+Save is blocked while an occupied region is infeasible. Surface measurements run on resize/scroll,
+not every React commit; size-only projection memoization avoids work on pure scroll/selection updates.
 Scrolling, window/region resizing, collapse and preference toggles never write layout positions.
 
 ### Persistence and historical data
@@ -104,11 +124,13 @@ need reopening/enlargement. Installed plugin preferences and lifecycle boundarie
 
 ### Workbench chrome
 
-Open Sidebar/Bottom keep the established pixel bounds (including 300px/20% and 180px/25% caps,
+Open Sidebar/Bottom request initial/minimum sizes of 230px/120px and keep the established maximum
+bounds (including 300px/20% and 180px/25% caps,
 Main reserve and safe relaxed minima in tiny viewports). Dragging 20px past the functional minimum
 collapses completely; header controls reopen the prior requested size, clamped for the viewport.
 Arrow steps, Shift, Home collapse and Escape/capture cancellation are supported. A separate empty
 15px status strip spans the window below Work Area and cannot enter widget collision/scroll geometry.
+Its subtle border and raised tone distinguish it in both themes without increasing its 15px total.
 Its contents are an extension point, not invented indicators. The test panel retains Overlay/Docked.
 
 ## Historical alpha.7–alpha.11 engines (inactive placement)

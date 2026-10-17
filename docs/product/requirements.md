@@ -45,29 +45,36 @@ compression, preferred-size restoration, bounded minimal rearrangement, intentio
 snapshot reversal and safe rejection. There is no snapping grid, square-cell or fixed row/column rule.
 
 Main is two-dimensional. Sidebar organizes widgets vertically with width following its inner region;
-Bottom organizes horizontally with height following its inner region. Keep navigation/toolbar fixed;
+Bottom organizes horizontally with height following its inner region. Keep navigation/toolbar structural;
 eligible bundled fixtures can transfer between feasible regions without losing mounted form state.
 The small initial Bottom cannot fit the 112px content minimum; reject rather than relax minima/caps.
 Full third-party plugin-to-region integration is outside this increment.
 
 Placement is bounded by default. **Ativar expansão horizontal** is initially OFF and remembered
-independently of positions. Expanded Main/Bottom use only occupied horizontal extent, finite limits
-and ordinary scrolling; Sidebar preserves vertical organization. Every region owns one provisional
+independently of positions. Expanded Main uses only occupied horizontal extent, finite limits
+and ordinary scrolling only when needed. Sidebar has one vertical scroll owner including navigation,
+never horizontal scrolling. Bottom is finite and never scrolls, including recovery, focus and
+programmatic scrolling. Every region owns one provisional
 15px inset (no right-world inset when expanded), independent of approximately 10px widget clearance.
 Remove the stationary frame, overlay mask and special bottom-frame scrollbar. Stateful offscreen
 fixtures and App-owned trusted Workers continue running.
 
 Window/region resizing derives reversible presentation from stable canonical pixel references and
 must never write saved positions. When minima/source relationships cannot fit, preserve composition
-in an explicitly warned finite recoverable scroll area, without overlap, deletion or illegal shrinking.
+without overlap, deletion or illegal shrinking. Main can use a finite recovery scroll area. Bottom
+withholds infeasible frames while preserving mounted content and shows explicit enlargement/transfer
+actions; it cannot hide active content behind clipping or scrolling. No pagination is introduced.
 Save adopts a validated freeform source under its own versioned key; Cancel restores the prior source.
 Preserve fractional v1, responsive v2 and horizontal v1 bytes. Offer historical preview choices without
 silently selecting among customizations. Corrupt/future/unknown/missing-widget input is recoverable.
 
-Sidebar/Bottom retain existing live resize limits and Main reserve; collapsing beyond the minimum
+Sidebar/Bottom start/request minimum dimensions of 230px/120px respectively. Retain the existing
+300px/20% and 180px/25% maxima and Main reserve, clamping effective minima in small windows.
+Collapsing beyond the minimum
 removes the whole region. Accessible header controls reopen its prior requested size and composition.
 Keep keyboard/capture cancellation. A separate empty provisional 15px status strip remains fixed at
-the window bottom, outside region placement/scroll/collision. Themes remain independent preferences.
+the window bottom, outside region placement/scroll/collision, with a visible subtle separator in
+both themes. Themes remain independent preferences.
 The [layout architecture](../architecture/layout.md) defines projection, limits and historical pitches.
 Physical Windows UX, provisional margins and final visual acceptance remain owner checks in Issue #29.
 

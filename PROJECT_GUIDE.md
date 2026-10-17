@@ -28,7 +28,8 @@ TypeScript, React, Tailwind, Heroicons and Motion. The alpha.1 foundation introd
 alpha.2 added the trusted experimental local plugin runtime (Issue #21), not an untrusted-plugin
 platform. Issue #29 supersedes mandatory cell grids with continuous CSS-pixel widget geometry in Main,
 Sidebar and Bottom. Placement is bounded by default, with optional content-bounded horizontal
-expansion. Historical layouts remain read-only recovery sources. Visual policies remain provisional.
+expansion in Main. Sidebar scrolls vertically; Bottom never scrolls and exposes infeasibility recovery.
+Historical layouts remain read-only recovery sources. Visual policies remain provisional.
 The fixed header is outside the widget layout. Regions are logically peers. Product choices
 not explicitly closed by the owner remain labelled provisional in the specification.
 

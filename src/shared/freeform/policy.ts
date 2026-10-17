@@ -1,6 +1,6 @@
 import type { Constraint, Constraints, Region, Snapshot, Surface } from './types.ts'
 
-export const POLICY = Object.freeze({ inset: 15, gap: 10, maxCoordinate: 100_000, maxSize: 4096, maxWidgets: 16, maxBytes: 64 * 1024 })
+export const POLICY = Object.freeze({ inset: 15, gap: 10, maxLocalTravel: 1024, maxCoordinate: 100_000, maxSize: 4096, maxWidgets: 16, maxBytes: 64 * 1024 })
 export const FREEFORM_KEY = 'geppio:layout:freeform:v1'
 export const EXPANSION_KEY = 'geppio:layout:expansion:v1'
 const define = (width: number, height: number, regions: readonly Region[], defaultWidth: number, defaultHeight: number): Constraint => ({ min: { width, height },
@@ -37,4 +37,5 @@ export function constraintsFor(surface: Surface): Constraints {
       resizeX: c.resizeX && surface.region !== 'sidebar', resizeY: c.resizeY && surface.region !== 'bottom' }]
   }))
 }
-export function surfaceLimit(s: Surface) { return { width: s.expanded && s.region !== 'sidebar' ? POLICY.maxCoordinate : s.width, height: s.height } }
+export function surfaceLimit(s: Surface) { return { width: s.expanded && s.region === 'main' ? POLICY.maxCoordinate : s.width,
+  height: s.region === 'sidebar' ? POLICY.maxCoordinate : s.height } }

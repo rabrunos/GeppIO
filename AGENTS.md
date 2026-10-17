@@ -32,7 +32,8 @@ models inherit the available signed-in client model; no unavailable model or pai
 
 Keep source separated into main/preload/renderer/shared. Widgets use region-aware continuous CSS-pixel geometry
 (Issue #29), bounded by default with optional content-bounded horizontal expansion. Main edits both
-axes; Sidebar follows width and Bottom follows height. Stable-source viewport projections never
+axes; Sidebar follows width with vertical-only scrolling; Bottom follows height and never scrolls.
+Stable-source viewport projections never
 write saved layouts; historical cell-grid data remains preserved. Trial visual policies still
 require owner acceptance.
 The alpha.1 static fixtures remain; alpha.2 added a trusted experimental local plugin runtime

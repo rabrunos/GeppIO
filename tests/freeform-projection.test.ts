@@ -54,3 +54,24 @@ test('region cross axes follow available sizes and return without cumulative cha
   assert.equal(projectRegion(bottom, 'bottom', { width: 960, height: 115 }, false).placements[0]!.height, 115)
   assert.equal(projectRegion(bottom, 'bottom', { width: 960, height: 50 }, false).feasible, false)
 })
+
+test('Sidebar owns vertical extent; Main expansion cannot expand Bottom or Sidebar sideways', () => {
+  const source = structuredClone(DEFAULT_FREEFORM)
+  const side = source.placements[0]!
+  Object.assign(side, { region: 'sidebar', x: 0, y: 900.125, width: 230, height: 140 })
+  source.reference.sidebar = { width: 230, height: 1040.125 }
+  const before = structuredClone(source)
+  for (const expanded of [false, true]) {
+    const view = projectRegion(source, 'sidebar', { width: 240, height: 300 }, expanded)
+    assert.equal(view.feasible, true); assert.equal(view.placements[0]!.y, 900.125)
+    assert.equal(view.placements[0]!.height, 140); assert.equal(view.world.height, 1040.125); assert.equal(view.world.width, 240)
+  }
+  Object.assign(side, { region: 'bottom', x: 900.125, y: 0, width: 230, height: 128 })
+  source.reference.bottom = { width: 1200, height: 128 }
+  for (const expanded of [false, true]) {
+    const view = projectRegion(source, 'bottom', { width: 200, height: 50 }, expanded)
+    assert.equal(view.feasible, false); assert.deepEqual(view.world, { width: 200, height: 50 })
+    assert.deepEqual(view.placements, [side])
+  }
+  assert.equal(before.placements[0]!.y, 900.125)
+})

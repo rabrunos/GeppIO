@@ -26,6 +26,27 @@ corrupt/future/oversized data, quota, concurrent bytes and queued Save followed 
 smoke retains real Counter/Pulse Worker identities/actions/background updates across offscreen
 scrolling and expansion; existing lifecycle/identity/negative-Electron tests remain mandatory.
 
+Corrective region assertions include Sidebar vertical content extent with a single navigation/widget
+scroll owner, no horizontal range, and Bottom zero ranges on both axes in normal/expanded/recovery
+states. Attempt programmatic scrolling, focus, keyboard and wheel input. Compact eligible Bottom
+content must fit without an internal scroll owner or omitted text. Check desired 230px/120px
+minima against DOM/DPR and coherent ARIA/collapse bounds, plus the status strip's 15px total,
+border and tone in both themes. Main's first automatic scrollbar must not cancel a gesture.
+
+`node --experimental-strip-types tools/freeform-performance.ts` measures the built Electron renderer
+using a disposable profile and the default seven-widget dense composition near 960×620 CSS pixels.
+Repeat with `--scale125`. Four move/resize paths include fast movement, two reversals and up to several
+affected neighbors. Opt-in browser Performance measures report per-call solver duration, states,
+probes, candidates and affected widgets; the tool records pointer intervals, RAF frame intervals,
+solver-start to geometry DOM mutation delivery and solver-start to the subsequent RAF
+as distributions and raw samples under `.local/diagnostics`. `--baseline` labels measurements only;
+it does not select or restore older source. Baseline measurements require the actual older build.
+Mutation delivery observes DOM commit completion, not React component render duration; RAF intervals
+are frame scheduling evidence, not GPU presentation or a measured paint duration.
+Compare fixtures, viewport/DPR and environment before attributing differences. The deterministic
+budget is 512 states per phase and 8192 total probes; no universal timing guarantee is asserted.
+Narrow/wide relocation tests independently validate the destination rectangle before calling reflow.
+
 Representative before/after captures, numeric geometry and bounded DOM observations live in ignored
 .local/diagnostics. No empty cells or large synthetic world arrays are required. Observed resource
 samples do not certify arbitrary third-party plugin performance. Forced Chromium DPR 1.25 is automated

@@ -4,8 +4,8 @@ export interface RegionBounds { min: number; max: number }
 /** Trial CSS-pixel policy (Issue #26), pending owner visual acceptance. */
 export const REGION_POLICY = {
   splitter: 5, mainMinimum: 160, step: 10, shiftStep: 30,
-  sidebar: { initial: 215, min: 160, max: 300, fraction: .2 },
-  bottom: { initial: 43, min: 43, max: 180, fraction: .25 }
+  sidebar: { initial: 230, min: 230, max: 300, fraction: .2 },
+  bottom: { initial: 120, min: 120, max: 180, fraction: .25 }
 } as const
 
 export function regionBounds(kind: RegionKind, measuredExtent: number): RegionBounds {

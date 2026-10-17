@@ -4,6 +4,10 @@ Integrated source changes, not a publication ledger. Version comes from package.
 
 ## [0.1.0-alpha.12] — 2026-10-16
 
+- Correct live multi-widget reflow with contact pruning, deterministic constrained-first fallback, reduced finite search budgets and frame-coalesced pointer updates. Allow minimum-size narrow widgets to reach adjacent free space without distant-hole search.
+- Make horizontal expansion Main-only and content-dependent. Use one vertical Sidebar scroll owner; enforce finite, non-scrolling Bottom with explicit infeasibility recovery and compact eligible fixtures retaining all text.
+- Set provisional requested/minimum Sidebar width to 230px and Bottom height to 120px, preserving maximum caps, safe viewport clamps and collapse restoration. Distinguish the existing 15px status strip with a subtle border and tone.
+
 - Replace active cell-grid placement with one CSS-pixel freeform engine in Main, Sidebar and Bottom (Issue #29). Preserve continuous pointer input, local pushing, boundary compression, preferred-size recovery and bounded contact rearrangement; retain grid codecs/tests as historical recovery.
 - Add typed pixel minima/defaults/maxima, region eligibility and axis constraints. Main edits both axes, Sidebar follows inner width and Bottom follows inner height. Eligible fixture transfers retain mounted content; insufficient minima reject safely.
 - Default to bounded, reversible source-derived viewport projection. Persist optional horizontal expansion independently; occupied content owns its finite extent with no right-world padding. Use one 15px inset and 10px inter-widget clearance, ordinary accessible region scrolling and no stationary frame/overlay scrollbar.

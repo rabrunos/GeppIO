@@ -49,18 +49,21 @@ function axisFit(ps: readonly Placement[], horizontal: boolean, reference: numbe
 }
 export interface Projection { placements: Placement[]; feasible: boolean; world: Size }
 export function projectRegion(source: Snapshot, region: Region, available: Size, expanded: boolean): Projection {
+  expanded = expanded && region === 'main'
   const ps = source.placements.filter(p => p.region === region), reference = source.reference[region]
   const width = clamp(available.width, 0, POLICY.maxCoordinate), height = clamp(available.height, 0, POLICY.maxCoordinate)
   const x = region === 'sidebar' || expanded ? null : axisFit(ps, true, reference.width, width)
-  const y = region === 'bottom' ? null : axisFit(ps, false, reference.height, height)
+  const y = region !== 'main' ? null : axisFit(ps, false, reference.height, height)
   const feasible = (region === 'sidebar' ? ps.every(p => width >= CONSTRAINTS[p.id]!.min.width && width <= CONSTRAINTS[p.id]!.max.width) : expanded || !!x)
-    && (region === 'bottom' ? ps.every(p => height >= CONSTRAINTS[p.id]!.min.height && height <= CONSTRAINTS[p.id]!.max.height) : !!y)
+    && (region === 'bottom' ? ps.every(p => height >= CONSTRAINTS[p.id]!.min.height && height <= CONSTRAINTS[p.id]!.max.height) : region === 'sidebar' || !!y)
   if (!feasible) return { placements: structuredClone(ps), feasible: false,
-    world: { width: Math.max(width, reference.width, ...ps.map(p => p.x + p.width)), height: Math.max(height, reference.height) } }
+    world: region === 'main' ? { width: Math.max(width, reference.width, ...ps.map(p => p.x + p.width)), height: Math.max(height, reference.height) }
+      : { width, height: region === 'sidebar' ? Math.max(0, ...ps.map(p => p.y + p.height)) : height } }
   const placements = ps.map(p => ({ ...p,
     x: region === 'sidebar' ? 0 : expanded ? p.x : x!.get(p.id)!.start,
-    y: region === 'bottom' ? 0 : y!.get(p.id)!.start,
+    y: region === 'bottom' ? 0 : region === 'sidebar' ? p.y : y!.get(p.id)!.start,
     width: region === 'sidebar' ? width : expanded ? p.width : x!.get(p.id)!.size,
-    height: region === 'bottom' ? height : y!.get(p.id)!.size }))
-  return { placements, feasible: true, world: { width: Math.max(width, ...placements.map(p => p.x + p.width)), height } }
+    height: region === 'bottom' ? height : region === 'sidebar' ? p.height : y!.get(p.id)!.size }))
+  return { placements, feasible: true, world: { width: region === 'main' ? Math.max(width, ...placements.map(p => p.x + p.width)) : width,
+    height: region === 'sidebar' ? Math.max(0, ...placements.map(p => p.y + p.height)) : height } }
 }

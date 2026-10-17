@@ -77,13 +77,45 @@ test('representative composition sweeps keep active intention, constraints, budg
   for (const widget of source) for (const delta of [-31.125, .25, 21.375]) for (const kind of ['move' as const, ...DIRECTIONS]) {
     const requested = candidate(widget, delta, delta, kind, s, cs[widget.id]!)
     const result = reflow(source, widget.id, requested, s, cs, kind)
-    assert.ok(result.states <= 16384); assert.ok(validLayout(result.placements, s, cs))
+    assert.ok(result.states <= 2048); assert.ok(result.probes <= 8192); assert.ok(validLayout(result.placements, s, cs))
     if (result.status === 'valid') {
       const active = result.placements.find(p => p.id === widget.id)!
       for (const key of ['x', 'y', 'width', 'height'] as const) assert.equal(active[key], requested[key])
     } else assert.deepEqual(result.placements, source)
     assert.deepEqual(reflow(source, widget.id, requested, s, cs, kind), result)
   }
+})
+
+test('compressed narrow and wide widgets reach independently verified adjacent free space', () => {
+  const surface = { ...main, width: 1000, height: 500 }, cs = constraintsFor(surface)
+  for (const width of [164, 320]) {
+    const upper = p('queue', 0, 0, 600, 200), lower = { ...p('summary', 0, 210, width, 112), preferred: { width, height: 220 } }
+    const request = { ...upper, height: 400 }, witness = [request, { ...lower, x: 610 }]
+    assert.ok(validLayout(witness, surface, cs), 'Feasibility checked without the search algorithm')
+    const result = reflow([upper, lower], upper.id, request, surface, cs, 's')
+    assert.equal(result.status, 'valid'); assert.ok(validLayout(result.placements, surface, cs))
+    const relocated = result.placements[1]!
+    assert.equal(relocated.x, 610); assert.equal(relocated.y, 210); assert.equal(relocated.height, 220)
+    assert.deepEqual(relocated.preferred, lower.preferred)
+  }
+})
+
+test('bounded pruning preserves previously successful dense rearrangements', () => {
+  const s = { ...main, ...DEFAULT_FREEFORM.reference.main }, cs = constraintsFor(s)
+  for (const [id, kind, delta] of [['queue', 'move', 300], ['notes', 'move', 50], ['notes', 'move', 100], ['chart', 'e', 300]] as const) {
+    const active = DEFAULT_FREEFORM.placements.find(p => p.id === id)!
+    const result = reflow(DEFAULT_FREEFORM.placements, id, candidate(active, delta, delta, kind, s, cs[id]!), s, cs, kind)
+    assert.equal(result.status, 'valid', `${id} ${kind} ${delta}`); assert.ok(validLayout(result.placements, s, cs))
+    assert.ok(result.probes <= 8192)
+  }
+})
+
+test('an adjacent destination beyond the finite local radius cannot teleport a neighbor', () => {
+  const surface = { ...main, width: 5000, height: 500 }, cs = constraintsFor(surface)
+  const upper = p('queue', 0, 0, 2000, 200), lower = p('summary', 0, 210, 164, 112), request = { ...upper, height: 400 }
+  assert.ok(validLayout([request, { ...lower, x: 2010 }], surface, cs), 'Globally feasible but intentionally outside local interaction scope')
+  const result = reflow([upper, lower], upper.id, request, surface, cs, 's')
+  assert.equal(result.status, 'blocked'); assert.deepEqual(result.placements, [upper, lower])
 })
 test('eligible transfers are atomic; Sidebar follows width, Bottom height, small Bottom rejects', () => {
   const old = structuredClone(DEFAULT_FREEFORM)

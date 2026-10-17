@@ -81,5 +81,6 @@ export function useRegions() {
     }
   }
   return { area, sidebar, bottom, bounds, collapsed, splitter: REGION_POLICY.splitter, handlers,
+    expand(kind: RegionKind) { set(kind, bounds[kind].max); setCollapsed(prev => ({ ...prev, [kind]: false })) },
     reopen(kind: RegionKind) { setCollapsed(prev => ({ ...prev, [kind]: false })) } }
 }

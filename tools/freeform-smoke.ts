@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict'
 import { writeFile } from 'node:fs/promises'
 import type { Page } from 'playwright'
-import { CONSTRAINTS, DEFAULT_FREEFORM, EXPANSION_KEY, FREEFORM_KEY } from '../src/shared/freeform/policy.ts'
+import { CONSTRAINTS, constraintsFor, DEFAULT_FREEFORM, EXPANSION_KEY, FREEFORM_KEY } from '../src/shared/freeform/policy.ts'
+import { validLayout } from '../src/shared/freeform/geometry.ts'
 import { DEFAULT_LAYOUT } from '../src/shared/layout-defaults.ts'
 import { DEFAULT_GRID, GRID_KEY } from '../src/shared/grid/policy.ts'
 import { DEFAULT_HORIZONTAL, HORIZONTAL_KEY, serializeHorizontal } from '../src/shared/grid/horizontal.ts'
 import { DIRECTIONS } from '../src/shared/freeform/types.ts'
+import { projectRegion } from '../src/shared/freeform/projection.ts'
 import type { Snapshot } from '../src/shared/freeform/types.ts'
 
 const settle = (page: Page) => page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
@@ -57,18 +59,39 @@ async function transferSelected(page: Page, id: string, region: string) {
 async function dimensions(page: Page) {
   return page.locator('[data-surface="main"]').evaluate(e => ({ width: (e as HTMLElement).clientWidth, height: (e as HTMLElement).clientHeight }))
 }
+async function assertBottomNoScroll(page: Page) {
+  const result = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>('[data-region="bottom"], [data-surface="bottom"], [data-owner-region="bottom"] .widget-content')].map(e => {
+    e.scrollTo(10000, 10000); e.scrollLeft = 10000; e.scrollTop = 10000
+    return { x: e.scrollLeft, y: e.scrollTop, width: e.clientWidth, height: e.clientHeight, worldWidth: e.scrollWidth, worldHeight: e.scrollHeight }
+  }))
+  for (const r of result) {
+    assert.equal(r.x, 0); assert.equal(r.y, 0)
+    assert.ok(r.worldWidth <= r.width + 1 && r.worldHeight <= r.height + 1, JSON.stringify(r))
+  }
+}
 async function assertGeometry(page: Page) {
   const evidence = await page.evaluate(() => {
     const main = document.querySelector('[data-region="main"]')!.getBoundingClientRect(), port = document.querySelector<HTMLElement>('[data-surface="main"]')!, r = port.getBoundingClientRect()
     return { inset: [r.left - main.left, r.top - main.top, main.right - r.right, main.bottom - r.bottom], width: port.clientWidth, height: port.clientHeight,
       scrollWidth: port.scrollWidth, scrollHeight: port.scrollHeight, status: document.querySelector('.fixed-status-bar')!.getBoundingClientRect().toJSON(), innerHeight,
       viewportBottom: document.querySelector('.workbench')!.getBoundingClientRect().bottom,
+      dpr: devicePixelRatio,
+      regions: ['sidebar', 'bottom'].map(kind => {
+        const region = document.querySelector(`[data-region="${kind}"]`)!.getBoundingClientRect(), divider = document.querySelector(`[aria-label="${kind === 'sidebar' ? 'Largura da Sidebar' : 'Altura da Bottom'}"]`)!
+        return { kind, width: region.width, height: region.height, min: Number(divider.getAttribute('aria-valuemin')), max: Number(divider.getAttribute('aria-valuemax')), now: Number(divider.getAttribute('aria-valuenow')) }
+      }),
+      statusStyle: { border: getComputedStyle(document.querySelector('.fixed-status-bar')!).borderTopWidth,
+        background: getComputedStyle(document.querySelector('.fixed-status-bar')!).backgroundColor, bottomBackground: getComputedStyle(document.querySelector('[data-region="bottom"]')!).backgroundColor },
       widgets: [...document.querySelectorAll<HTMLElement>('[data-widget]')].map(e => ({ id: e.dataset.widget!, x: Number(e.dataset.x), y: Number(e.dataset.y), width: Number(e.dataset.w), height: Number(e.dataset.h) })) }
   })
   evidence.inset.forEach(n => near(n, 15, 'single region inset'))
   near(evidence.status.height as number, 15); near(evidence.status.bottom as number, evidence.viewportBottom)
+  assert.ok(Number.parseFloat(evidence.statusStyle.border) > 0 && Number.parseFloat(evidence.statusStyle.border) <= 1)
+  assert.notEqual(evidence.statusStyle.background, evidence.statusStyle.bottomBackground)
+  for (const r of evidence.regions) { near(r.kind === 'sidebar' ? r.width : r.height, r.now); near(r.min, Math.min(r.kind === 'sidebar' ? 230 : 120, r.max)); assert.ok(r.now >= r.min && r.now <= r.max) }
   assert.ok(Math.abs(evidence.viewportBottom - evidence.innerHeight) < 1, 'integer innerHeight can round a fractional CSS viewport at DPR 1.25')
   assert.equal(evidence.scrollWidth, evidence.width); assert.equal(evidence.scrollHeight, evidence.height)
+  await assertBottomNoScroll(page)
   for (const [i, p] of evidence.widgets.entries()) {
     const c = CONSTRAINTS[p.id]!
     assert.ok(p.width >= c.min.width && p.height >= c.min.height)
@@ -97,6 +120,7 @@ export async function freeformSmoke(page: Page, resizeWindow: (width: number, he
     for (const [width, height] of [[1280, 900], [1000, 720], [1800, 980], [0, 0], [1280, 900]]) {
       await resizeWindow(width!, height!); await settle(page); evidence.push({ theme, windowWidth: width, windowHeight: height, ...await assertGeometry(page) })
     }
+    await page.screenshot({ path: `.local/diagnostics/freeform-chrome-${theme}-${await page.evaluate(() => devicePixelRatio)}.png` })
   }
   // Preserve the existing session-only panel presentations on all four edges.
   const undocked = await dimensions(page)
@@ -121,10 +145,15 @@ export async function freeformSmoke(page: Page, resizeWindow: (width: number, he
   await page.getByRole('button', { name: 'Reabrir Sidebar', exact: true }).waitFor()
   assert.equal(await page.locator('[data-region="sidebar"]').isVisible(), false)
   await page.getByRole('button', { name: 'Reabrir Sidebar', exact: true }).click(); await settle(page)
-  near(Number(await page.getByRole('separator', { name: 'Largura da Sidebar' }).getAttribute('aria-valuenow')), 215)
+  near(Number(await page.getByRole('separator', { name: 'Largura da Sidebar' }).getAttribute('aria-valuenow')), 230)
   const separator = page.getByRole('separator', { name: 'Altura da Bottom' })
   await separator.focus(); await page.keyboard.press('ArrowUp'); await page.keyboard.press('ArrowUp'); await page.keyboard.press('Escape')
-  near(Number(await separator.getAttribute('aria-valuenow')), 43)
+  near(Number(await separator.getAttribute('aria-valuenow')), 120)
+  const cancelDivider = await separator.boundingBox(); assert.ok(cancelDivider)
+  await page.mouse.move(cancelDivider.x + cancelDivider.width / 2, cancelDivider.y + cancelDivider.height / 2); await page.mouse.down()
+  await page.mouse.move(cancelDivider.x + cancelDivider.width / 2, cancelDivider.y + cancelDivider.height / 2 - 20); await settle(page)
+  await separator.evaluate(e => { if (!e.hasPointerCapture(1)) throw new Error('Expected divider capture'); e.releasePointerCapture(1) })
+  await page.mouse.up(); await settle(page); near(Number(await separator.getAttribute('aria-valuenow')), 120, 'lost divider capture restores size')
   const beforeViewportGesture = await rect(page, 'chart')
   await page.getByTestId('edit-layout').click()
   const viewportGrip = await page.locator('[data-widget="chart"] .widget-grip').boundingBox(); assert.ok(viewportGrip)
@@ -133,11 +162,19 @@ export async function freeformSmoke(page: Page, resizeWindow: (width: number, he
   await resizeWindow(1300, 900); await page.mouse.up(); await resizeWindow(1280, 900); await settle(page)
   near((await rect(page, 'chart')).x, beforeViewportGesture.x, 'viewport cancels capture')
   await page.getByTestId('cancel-layout').click()
-  await resizeRegion(page, 'bottom', 0); await page.getByRole('button', { name: 'Reabrir Bottom', exact: true }).click(); await settle(page)
-  near(Number(await separator.getAttribute('aria-valuenow')), 43)
+  await resizeRegion(page, 'bottom', 0)
+  near(await page.locator('.fixed-status-bar').evaluate(e => e.getBoundingClientRect().height), 15)
+  assert.equal(await page.locator('.fixed-status-bar').evaluate(e => { const r = e.getBoundingClientRect(); return document.elementFromPoint(r.width / 2, r.top + 7) === e }), true)
+  await page.getByRole('button', { name: 'Reabrir Bottom', exact: true }).click(); await settle(page)
+  near(Number(await separator.getAttribute('aria-valuenow')), 120)
   assert.deepEqual(await page.evaluate(() => (window as unknown as { layoutWrites: string[] }).layoutWrites), [])
   await page.evaluate(() => { const t = window as unknown as { originalSet: typeof Storage.prototype.setItem }; Storage.prototype.setItem = t.originalSet })
   await expansion(page, true)
+  await page.getByTestId('edit-layout').click()
+  const beforeFirstOverflow = await rect(page, 'chart')
+  await drag(page, 'chart', 'move', 1100, 0)
+  assert.ok((await rect(page, 'chart')).x >= beforeFirstOverflow.x + 1099, 'Adding the first Main scrollbar must not cancel a live gesture')
+  await page.getByTestId('cancel-layout').click()
   const sparse = structuredClone(DEFAULT_FREEFORM); sparse.reference.main = await dimensions(page)
   sparse.placements = sparse.placements.map((p, i) => ({ ...p, x: 600 + i * 350, y: 0, width: 260, height: 200, preferred: { width: 260, height: 200 } }))
   sparse.placements[6] = { ...sparse.placements[6]!, x: 137.25, y: 83.125, width: 327.75, height: 246.5, preferred: { width: 327.75, height: 246.5 } }
@@ -160,6 +197,7 @@ export async function freeformSmoke(page: Page, resizeWindow: (width: number, he
   }
   // Live collision parity against the baseline semantics: same-axis local compression,
   // fixed far edge, stable snapshot reversal and cancellation before pointer-up.
+  sparse.reference.main = await dimensions(page)
   const stack = structuredClone(sparse), stackHeight = stack.reference.main.height
   stack.placements[6] = { ...stack.placements[6]!, x: 0, y: 0, width: 220, height: 200, preferred: { width: 220, height: 200 } }
   stack.placements[0] = { ...stack.placements[0]!, x: 0, y: 210, width: 220, height: stackHeight - 210, preferred: { width: 220, height: stackHeight - 210 } }
@@ -181,6 +219,36 @@ export async function freeformSmoke(page: Page, resizeWindow: (width: number, he
   near((await rect(page, 'chart')).width, beforeBlocked.width)
   near((await rect(page, 'chart')).height, beforeBlocked.height)
   await page.locator('.workspace-feedback').filter({ hasText: 'Sem espaço' }).waitFor()
+  for (const width of [164, 320]) {
+    const fixture = structuredClone(sparse), size = await dimensions(page), surface = { ...size, region: 'main' as const, expanded: true }
+    fixture.reference.main = size
+    fixture.placements = fixture.placements.map((p, i) => p.id === 'queue' ? { ...p, x: 0, y: 0, width: 600, height: 200, preferred: { width: 600, height: 200 } }
+      : p.id === 'summary' ? { ...p, x: 0, y: 210, width, height: 112, preferred: { width, height: 220 } } : { ...p, x: 1200 + i * 350, y: 0 })
+    const targetHeight = size.height - 100
+    const witness = fixture.placements.map(p => p.id === 'queue' ? { ...p, height: targetHeight } : p.id === 'summary' ? { ...p, x: 610, height: 220 } : p)
+    assert.ok(validLayout(witness, surface, constraintsFor(surface)), 'Independent narrow/wide feasible destination')
+    await preview(page, fixture); await drag(page, 'queue', 's', 0, targetHeight - 200)
+    const relocated = await rect(page, 'summary')
+    near(relocated.x, 610); near(relocated.y, 210); near(relocated.width, width); near(relocated.height, 220)
+    if (width === 164) await page.screenshot({ path: `.local/diagnostics/freeform-narrow-relocation-${await page.evaluate(() => devicePixelRatio)}.png` })
+  }
+  await preview(page, sparse)
+  // A burst faster than one display frame is coalesced, and pointer-up flushes exactly
+  // one final solution synchronously. No delayed jump may follow the release.
+  const burst = await page.locator('[data-widget="chart"] .widget-grip').boundingBox(); assert.ok(burst)
+  const bx = burst.x + 40, by = burst.y + 16
+  await page.mouse.move(bx, by); await page.mouse.down()
+  const invocations = await page.evaluate(({ x, y }) => new Promise<number>(resolve => {
+    performance.mark('geppio:profile'); let count = 0
+    const observer = new PerformanceObserver(list => { count += list.getEntries().filter(e => e.name === 'geppio:reflow').length })
+    observer.observe({ entryTypes: ['measure'] })
+    const grip = document.querySelector('[data-widget="chart"] .widget-grip')!
+    for (let i = 1; i <= 100; i++) grip.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, pointerId: 1, buttons: 1, clientX: x + i / 8, clientY: y }))
+    grip.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1, clientX: x + 12.5, clientY: y }))
+    requestAnimationFrame(() => requestAnimationFrame(() => { observer.disconnect(); performance.clearMarks('geppio:profile'); resolve(count) }))
+  }), { x: bx, y: by })
+  assert.equal(invocations, 1); near((await rect(page, 'chart')).x, sparse.placements[6]!.x + 12.5)
+  await page.mouse.up(); await settle(page); near((await rect(page, 'chart')).x, sparse.placements[6]!.x + 12.5)
   await preview(page, sparse)
   await drag(page, 'chart', 'move', 13.25, 11.5)
   let exact = await rect(page, 'chart'); near(exact.x, 150.5); near(exact.y, 94.625)
@@ -237,30 +305,43 @@ export async function freeformSmoke(page: Page, resizeWindow: (width: number, he
   // Genuine placement in both peer regions, without lowering Bottom minima or its 180px cap.
   await expansion(page, false); await preview(page, DEFAULT_FREEFORM); await resizeWindow(1800, 980); await resizeRegion(page, 'sidebar', 290)
   await transferSelected(page, 'properties', 'sidebar')
-  assert.equal((await rect(page, 'properties')).region, 'sidebar'); near((await rect(page, 'properties')).width, 260)
+  assert.equal((await rect(page, 'properties')).region, 'sidebar'); near((await rect(page, 'properties')).width, await page.locator('[data-surface="sidebar"]').evaluate(e => e.clientWidth))
   assert.equal(await form.getAttribute('data-mounted-proof'), 'same')
   const sideBefore = await rect(page, 'properties')
   await drag(page, 'properties', 's', 0, 13.25); near((await rect(page, 'properties')).height, sideBefore.height + 13.25)
   await drag(page, 'properties', 'move', 50, 13.125)
   near((await rect(page, 'properties')).x, 0); near((await rect(page, 'properties')).y, 13.125)
-  await resizeRegion(page, 'sidebar', 280); near((await rect(page, 'properties')).width, 250)
+  await resizeRegion(page, 'sidebar', 280); near((await rect(page, 'properties')).width, await page.locator('[data-surface="sidebar"]').evaluate(e => e.clientWidth))
+  // One Sidebar scroll owner includes navigation and content; no horizontal range.
+  await page.locator('[data-region="sidebar"]').evaluate(e => { e.scrollTop = e.scrollHeight; e.scrollLeft = 10000 }); await settle(page)
+  const sidebarScroll = await page.locator('[data-region="sidebar"]').evaluate(e => ({ x: e.scrollLeft, y: e.scrollTop, width: e.clientWidth, world: e.scrollWidth }))
+  assert.equal(sidebarScroll.x, 0); assert.equal(sidebarScroll.width, sidebarScroll.world); assert.ok(sidebarScroll.y > 0)
   await transferSelected(page, 'chart', 'bottom')
   assert.equal((await rect(page, 'chart')).region, 'main', 'small Bottom rejects')
   await resizeRegion(page, 'bottom', 180); await transferSelected(page, 'chart', 'bottom')
   assert.equal((await rect(page, 'chart')).region, 'bottom')
   const bottom = await rect(page, 'chart'), bottomPort = await page.locator('[data-surface="bottom"]').evaluate(e => e.clientHeight)
   near(bottom.height, bottomPort)
+  evidence.push({ scenario: 'placed-regions', sidebar: await rect(page, 'properties'), bottom,
+    bottomRegionHeight: Number(await separator.getAttribute('aria-valuenow')), bottomContentHeight: bottomPort,
+    dpr: await page.evaluate(() => devicePixelRatio) })
+  await assertBottomNoScroll(page)
   await drag(page, 'chart', 'e', 17.375, 0); near((await rect(page, 'chart')).width, bottom.width + 17.375)
   await drag(page, 'chart', 'move', 13.25, 20); near((await rect(page, 'chart')).y, 0)
   await resizeRegion(page, 'bottom', 175)
   near((await rect(page, 'chart')).height, await page.locator('[data-surface="bottom"]').evaluate(e => e.clientHeight))
   await expansion(page, true)
-  assert.equal(await page.locator('[data-surface="bottom"]').getAttribute('data-feasible'), 'false', 'scrollbar reservation cannot cause a render/recovery oscillation')
+  assert.equal(await page.locator('[data-surface="bottom"]').getAttribute('data-feasible'), 'true', 'Main expansion never changes Bottom measurements')
+  await assertBottomNoScroll(page)
+  await page.locator('[data-widget="chart"] .widget-grip').focus()
+  await page.keyboard.press('End'); await page.keyboard.press('PageDown'); await settle(page); await assertBottomNoScroll(page)
+  await page.locator('[data-surface="bottom"]').hover(); await page.mouse.wheel(1000, 1000); await settle(page); await assertBottomNoScroll(page)
   await resizeRegion(page, 'bottom', 180)
   assert.equal(await page.locator('[data-surface="bottom"]').getAttribute('data-feasible'), 'true')
   await drag(page, 'chart', 'move', 1600, 0)
-  const expandedBottom = await rect(page, 'chart')
-  near(Number.parseFloat(await page.locator('[data-surface="bottom"] .placement-world').evaluate(e => (e as HTMLElement).style.width)), expandedBottom.x + expandedBottom.width)
+  const finiteBottom = await rect(page, 'chart')
+  assert.ok(finiteBottom.x + finiteBottom.width <= await page.locator('[data-surface="bottom"]').evaluate(e => e.clientWidth) + .01)
+  near(Number.parseFloat(await page.locator('[data-surface="bottom"] .placement-world').evaluate(e => (e as HTMLElement).style.width)), await page.locator('[data-surface="bottom"]').evaluate(e => e.clientWidth))
   await expansion(page, false)
   // A real pointer transfer uses the target content origin and preserves content identity.
   const dropFrom = await page.locator('[data-widget="chart"] .widget-grip').boundingBox(), dropTo = await page.locator('[data-surface="main"]').boundingBox()
@@ -281,8 +362,21 @@ export async function freeformSmoke(page: Page, resizeWindow: (width: number, he
   assert.equal((await rect(page, 'properties')).region, 'sidebar'); assert.equal((await rect(page, 'chart')).region, 'bottom')
   // Restart restores composition even if session-only region sizes initially cannot fit it.
   assert.equal(await page.locator('[data-surface="bottom"]').getAttribute('data-feasible'), 'false')
+  await page.getByTestId('bottom-recovery').waitFor(); await assertBottomNoScroll(page)
+  await expansion(page, true); await assertBottomNoScroll(page); await expansion(page, false)
+  const recoveryBytes = await page.evaluate(key => localStorage.getItem(key), FREEFORM_KEY)
+  await page.getByRole('button', { name: 'Ampliar Bottom', exact: true }).click(); await settle(page)
+  assert.equal(await page.locator('[data-surface="bottom"]').getAttribute('data-feasible'), 'true')
+  assert.equal(await page.evaluate(key => localStorage.getItem(key), FREEFORM_KEY), recoveryBytes)
   await resizeRegion(page, 'sidebar', 290); await resizeRegion(page, 'bottom', 180)
   assert.equal(await page.locator('[data-surface="bottom"]').getAttribute('data-feasible'), 'true')
+  const farSidebar = structuredClone(DEFAULT_FREEFORM), sideWidth = await page.locator('[data-surface="sidebar"]').evaluate(e => e.clientWidth)
+  farSidebar.reference.sidebar = { width: sideWidth, height: 1210.125 }
+  farSidebar.placements = farSidebar.placements.map(p => p.id === 'properties' ? { ...p, region: 'sidebar', x: 0, y: 900.125, width: sideWidth, height: 310 } : p)
+  await preview(page, farSidebar)
+  await page.locator('[data-region="sidebar"]').evaluate(e => { e.scrollTop = e.scrollHeight }); await settle(page)
+  await drag(page, 'properties', 'move', 0, -57.25)
+  near((await rect(page, 'properties')).y, 842.875, 'Sidebar contraction cannot feed scroll clamping back into pointer delta')
   await preview(page, DEFAULT_FREEFORM); await page.getByTestId('save-layout').click(); await page.getByTestId('edit-layout').waitFor()
   // Cooperative Save queue + Cancel, quota failure and byte-CAS conflicts.
   const stable = await page.evaluate(key => localStorage.getItem(key), FREEFORM_KEY)
@@ -333,6 +427,7 @@ export async function freeformPluginSmoke(page: Page) {
   const workers = [...page.workers()]; assert.equal(workers.length, 2)
   await expansion(page, true)
   const source = structuredClone(DEFAULT_FREEFORM); source.reference.main = await dimensions(page)
+  source.placements = projectRegion(DEFAULT_FREEFORM, 'main', source.reference.main, false).placements
   source.placements = source.placements.map(p => p.id === 'properties' ? { ...p, x: 14000.125 } : p)
   await preview(page, source)
   const form = page.getByRole('textbox', { name: 'Nome de exemplo', exact: true })

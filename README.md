@@ -65,7 +65,7 @@ obrigatório. Arraste pelo título ou use setas (1px; Shift: 10px). Main permite
 direções de redimensionamento; Sidebar organiza verticalmente e acompanha sua largura interna;
 Bottom organiza horizontalmente e acompanha sua altura interna. Selecione um widget e use
 **Mover widget** no cabeçalho para transferi-lo a uma região compatível. A navegação e a toolbar
-continuam fixas. Bottom precisa ser ampliada antes de receber os exemplos compatíveis.
+continuam estruturais. Bottom precisa ser ampliada antes de receber os exemplos compatíveis.
 
 Vizinhos podem ser empurrados, comprimidos até seus mínimos em pixels e recuperar tamanhos
 preferidos. Rearranjos são limitados; tentativas impossíveis preservam a última prévia válida.
@@ -73,22 +73,26 @@ Não há gravidade nem compactação de espaços vazios. Cada região tem uma ma
 o afastamento entre widgets é de aproximadamente 10px.
 
 **Ativar expansão horizontal**, em Configurações > Desenvolvimento, começa desligado e persiste
-independentemente da composição. Quando ativo, Main e Bottom expandem somente até os widgets
-ocupados, sem margem vazia permanente à direita. Sidebar mantém sua organização vertical.
+independentemente da composição. Quando ativo, Main expande somente até os widgets
+ocupados, sem margem vazia permanente à direita. Sidebar tem uma única rolagem vertical,
+incluindo a navegação, e nunca rola para os lados. Bottom é finita e nunca tem rolagem.
 Campos e Workers continuam montados e ativos fora da tela. O plugin experimental ainda usa
 sua própria faixa; esta versão não adiciona integração geral de plugins às regiões.
 
 Janela e divisores geram projeções reversíveis a partir de uma referência estável, sem gravar
-posições. Quando os mínimos não cabem, uma área recuperável com rolagem conserva a composição
-e mostra um aviso. **Salvar layout** adota a prévia em uma nova representação livre; **Cancelar**
+posições. Quando os mínimos não cabem, a composição é preservada com um aviso. Main oferece
+rolagem de recuperação; Bottom apresenta ações para ampliar a região ou, em edição, mover
+os widgets para Main, sem exibir conteúdo cortado. **Salvar layout** adota a prévia livre; **Cancelar**
 restaura a composição anterior. Layouts fracionário v1, responsivo v2 e horizontal v1 permanecem
 intactos. Configurações oferece prévias históricas separadas, importação de cópias JSON e composição inicial;
 somente Salvar confirma a adoção. Conversões impossíveis informam o limite e preservam o original.
 
-Sidebar e Bottom mantêm os divisores em pixels e os limites anteriores. Arrastar além do mínimo
+Sidebar começa com mínimo desejado de 230px e Bottom de 120px. Os limites máximos e a reserva
+para Main continuam ativos; janelas pequenas reduzem os mínimos efetivos com segurança.
+Sidebar e Bottom mantêm os divisores em pixels. Arrastar além do mínimo
 recolhe a região completamente; **Reabrir Sidebar/Bottom** no cabeçalho restaura o tamanho pedido.
 Setas operam os divisores; Home recolhe e Escape cancela a sequência ou o gesto em andamento.
-Uma faixa estrutural vazia de 15px permanece fixa na base da janela, fora da disposição dos widgets.
+Uma faixa estrutural vazia de 15px, com borda e contraste discretos, permanece fixa na base da janela, fora da disposição dos widgets.
 O painel de teste mantém Overlay/Docked e suas bordas. Temas claro/escuro demonstram tokens visuais.
 
 ## Plugins locais de teste

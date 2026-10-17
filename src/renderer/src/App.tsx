@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { MotionConfig } from 'motion/react'
 import { CommandLineIcon } from '@heroicons/react/24/outline'
@@ -16,6 +16,7 @@ import { Header } from './workbench/Header.tsx'
 import { Sidebar } from './workbench/Sidebar.tsx'
 import { useRegions } from './workbench/useRegions.ts'
 import { TestPanel } from './workbench/TestPanel.tsx'
+import { WIDGETS } from './fixtures.ts'
 import type { PanelState } from './workbench/TestPanel.tsx'
 import { Settings } from './settings/Settings.tsx'
 import './workbench/workbench.css'
@@ -37,12 +38,14 @@ export function App() {
   })
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [panel, setPanel] = useState<PanelState>({ open: false, presentation: 'overlay', anchor: 'bottom' })
-  const projected = Object.fromEntries(REGIONS.map(r => [r, projectRegion(tx.snapshot, r, surfaces.measures[r], expanded && r !== 'sidebar')])) as Record<Region, ReturnType<typeof projectRegion>>
+  const surfaceSizes = REGIONS.map(r => `${surfaces.measures[r].width},${surfaces.measures[r].height}`).join(';')
+  const projected = useMemo(() => Object.fromEntries(REGIONS.map(r => [r, projectRegion(tx.snapshot, r, surfaces.measures[r], expanded && r === 'main')])) as Record<Region, ReturnType<typeof projectRegion>>, [tx.snapshot, surfaceSizes, expanded])
   const feasible = Object.fromEntries(REGIONS.map(r => [r, projected[r].feasible])) as Record<Region, boolean>
   const view: Snapshot = { ...tx.snapshot, reference: { ...tx.snapshot.reference }, placements: tx.snapshot.placements.map(p => projected[p.region].placements.find(q => q.id === p.id)!) }
   for (const r of REGIONS) {
     const m = surfaces.measures[r]
-    if (feasible[r] && m.width > 0 && m.height > 0) view.reference[r] = { width: m.width, height: m.height }
+    if (feasible[r] && m.width > 0 && m.height > 0) view.reference[r] = { width: m.width,
+      height: r === 'sidebar' ? Math.max(m.height, projected.sidebar.world.height) : m.height }
   }
   const interaction = useInteraction(tx, view, surfaces, expanded, feasible)
   const selected = view.placements.find(p => p.id === interaction.selected)
@@ -56,14 +59,15 @@ export function App() {
   }
   function port(region: Region) {
     const projection = projected[region]
+    const height = Math.max(projection.world.height, region === 'sidebar' && interaction.heldExtent?.region === region ? interaction.heldExtent.height : 0)
     return <div ref={surfaces.ports[region]} className={'placement-port ' + (!projection.feasible ? 'recovery-surface' : '')}
       data-surface={region} data-feasible={projection.feasible} data-usable-width={surfaces.measures[region].width} data-usable-height={surfaces.measures[region].height}
-      role="region" tabIndex={expanded || !projection.feasible ? 0 : -1} aria-label={'Área de widgets da ' + REGION_LABELS[region]} onScroll={surfaces.measure}
+      role="region" tabIndex={region === 'main' && (expanded || !projection.feasible) ? 0 : -1} aria-label={'Área de widgets da ' + REGION_LABELS[region]} onScroll={surfaces.measure}
       onKeyDown={e => {
-        if (e.target !== e.currentTarget) return
+        if (e.target !== e.currentTarget || region !== 'main') return
         const element = e.currentTarget, delta = e.key === 'ArrowRight' ? 30 : e.key === 'ArrowLeft' ? -30 : e.key === 'PageDown' ? element.clientWidth : e.key === 'PageUp' ? -element.clientWidth : 0
         if (delta || e.key === 'Home' || e.key === 'End') { e.preventDefault(); element.scrollLeft = e.key === 'Home' ? 0 : e.key === 'End' ? element.scrollWidth : element.scrollLeft + delta }
-      }}><div className="placement-world" style={{ width: Math.max(projection.world.width, interaction.heldExtent?.region === region ? interaction.heldExtent.width : 0), height: projection.world.height }} /></div>
+      }} style={region === 'sidebar' ? { height } : undefined}><div className="placement-world" style={{ width: Math.max(projection.world.width, region === 'main' && interaction.heldExtent?.region === region ? interaction.heldExtent.width : 0), height }} /></div>
   }
   const docked = panel.open && panel.presentation === 'docked'
   const mainElement = surfaces.ports.main.current?.closest<HTMLElement>('[data-region="main"]')
@@ -84,11 +88,11 @@ export function App() {
         {tx.editing && selected && <label className="region-transfer">Mover widget<select aria-label="Região do widget selecionado" value={selected.region} onChange={e => interaction.transferTo(selected.id, e.target.value as Region)}>{REGIONS.map(r => <option key={r} value={r}>{REGION_LABELS[r]}</option>)}</select></label>}
       </div></Header>
     <div ref={element => { regions.area.current = element; surfaces.root.current = element }} className="work-area" style={{ gridTemplateColumns: `${regions.sidebar}px ${regions.collapsed.sidebar ? 0 : regions.splitter}px minmax(0,1fr)`, gridTemplateRows: `minmax(0,1fr) ${regions.collapsed.bottom ? 0 : regions.splitter}px ${regions.bottom}px` }}>
-      <aside className={'sidebar-region surface-region ' + (view.placements.some(p => p.region === 'sidebar') ? 'has-widgets' : '')} data-region="sidebar" hidden={regions.collapsed.sidebar}>
+      <aside className={'sidebar-region surface-region ' + (view.placements.some(p => p.region === 'sidebar') ? 'has-widgets' : '')} data-region="sidebar" hidden={regions.collapsed.sidebar} onScroll={surfaces.measure} tabIndex={0} aria-label="Navegação e widgets da Sidebar">
         <Sidebar selected={interaction.selected} select={interaction.setSelected} />{port('sidebar')}
       </aside>
       <div className="region-splitter sidebar-splitter" role="separator" aria-label="Largura da Sidebar" aria-orientation="vertical" tabIndex={regions.collapsed.sidebar ? -1 : 0}
-        aria-valuenow={regions.sidebar} aria-valuemin={0} aria-valuemax={regions.bounds.sidebar.max} {...regions.handlers('sidebar')} />
+        aria-valuenow={regions.sidebar} aria-valuemin={regions.collapsed.sidebar ? 0 : regions.bounds.sidebar.min} aria-valuemax={regions.bounds.sidebar.max} {...regions.handlers('sidebar')} />
       <main className={'main-region surface-region ' + (expanded ? 'expanded' : '')} data-region="main" data-testid="layout-canvas" data-engine="freeform" data-expanded={expanded}
         style={{ '--dock-width': dockWidth + 'px', '--dock-height': dockHeight + 'px' } as CSSProperties}>
         <div className="plugin-tray"><PluginWidgets plugins={plugins} /></div>
@@ -98,16 +102,23 @@ export function App() {
         <TestPanel state={panel} close={() => setPanel({ ...panel, open: false })} />
       </main>
       <div className="region-splitter bottom-splitter" role="separator" aria-label="Altura da Bottom" aria-orientation="horizontal" tabIndex={regions.collapsed.bottom ? -1 : 0}
-        aria-valuenow={regions.bottom} aria-valuemin={0} aria-valuemax={regions.bounds.bottom.max} {...regions.handlers('bottom')} />
-      <footer className={'bottom-region surface-region ' + (expanded ? 'expanded' : '')} data-region="bottom" hidden={regions.collapsed.bottom}>
+        aria-valuenow={regions.bottom} aria-valuemin={regions.collapsed.bottom ? 0 : regions.bounds.bottom.min} aria-valuemax={regions.bounds.bottom.max} {...regions.handlers('bottom')} />
+      <footer className="bottom-region surface-region" data-region="bottom" hidden={regions.collapsed.bottom}>
         <div className="bottom-tools"><span className="region-label">BOTTOM</span><button className={'bottom-action ' + (panel.open ? 'active' : '')} onClick={() => setPanel({ ...panel, open: !panel.open })} disabled={tx.editing} aria-label="Abrir ou recolher painel de teste"><CommandLineIcon className="size-4" />Painel de teste</button><span className="bottom-spacer" /><span>{plugins.inventory.plugins.length} plugins locais</span><span className="status-dot" /></div>{port('bottom')}
+        {!feasible.bottom && view.placements.some(p => p.region === 'bottom') && <div className="bottom-recovery" role="alert" data-testid="bottom-recovery">
+          <span>Bottom sem espaço para os mínimos. Widgets e dados preservados; amplie a região ou a janela.</span>
+          <button className="button subtle" onClick={() => regions.expand('bottom')}>Ampliar Bottom</button>
+          {tx.editing && view.placements.filter(p => p.region === 'bottom').map(p => <button key={p.id} className="button subtle" onClick={() => interaction.transferTo(p.id, 'main')}>Mover {WIDGETS.find(w => w.id === p.id)!.title} para Main</button>)}
+        </div>}
       </footer>
       <div className="freeform-layer">{view.placements.map(p => <WidgetFrame key={p.id} placement={p} measurement={surfaces.measures[p.region]}
         constraint={feasible[p.region] ? constraintsFor({ ...surfaces.measures[p.region], region: p.region, expanded })[p.id]! : CONSTRAINTS[p.id]!}
-        editing={tx.editing && feasible[p.region]} withheld={tx.recovery && !tx.editing} interaction={interaction}
-        wheel={delta => { const element = surfaces.ports[p.region].current; if (element && expanded && p.region !== 'sidebar') element.scrollLeft += delta }} />)}</div>
+        editing={tx.editing && feasible[p.region]} withheld={tx.recovery && !tx.editing} unavailable={p.region === 'bottom' && !feasible.bottom} interaction={interaction}
+        wheel={(dx, dy) => { const element = surfaces.scroller(p.region); if (!element) return
+          if (p.region === 'main' && expanded) element.scrollLeft += dx
+          if (p.region === 'sidebar') element.scrollTop += dy }} />)}</div>
     </div>
-    <div className="workspace-feedback" role="status">{[REGIONS.some(r => !feasible[r] && view.placements.some(p => p.region === r)) ? 'Espaço insuficiente para os mínimos. Composição preservada em área recuperável com rolagem; amplie ou reabra a região.' : '', tx.message].filter(Boolean).join(' ')}</div>
+    <div className="workspace-feedback" role="status">{[REGIONS.some(r => !feasible[r] && view.placements.some(p => p.region === r)) ? 'Espaço insuficiente para os mínimos. Composição preservada; amplie ou reabra a região.' : '', tx.message].filter(Boolean).join(' ')}</div>
     <div className="fixed-status-bar" aria-label="Barra de estado" />
     {settingsOpen && <Settings plugins={plugins} close={() => setSettingsOpen(false)} tx={tx} panel={panel} setPanel={setPanel} expanded={expanded} setExpanded={toggleExpansion} />}
   </div></MotionConfig>

@@ -10,7 +10,7 @@ export function transfer(snapshot: Snapshot, id: string, target: Surface, at?: P
   const p = snapshot.placements.find(p => p.id === id), c = CONSTRAINTS[id]
   if (!p || !c?.regions.includes(target.region)) return null
   const limit = surfaceLimit(target), cs = constraintsFor(target)
-  if (target.width < c.min.width || target.height < c.min.height) return null
+  if (target.width < c.min.width || (target.region !== 'sidebar' && target.height < c.min.height)) return null
   const width = target.region === 'sidebar' ? target.width : clamp(p.preferred.width, c.min.width, Math.min(c.max.width, limit.width))
   const height = target.region === 'bottom' ? target.height : clamp(p.preferred.height, c.min.height, Math.min(c.max.height, limit.height))
   const moved = { ...p, region: target.region, width, height,
@@ -27,7 +27,8 @@ export function transfer(snapshot: Snapshot, id: string, target: Surface, at?: P
     if (!validLayout([...peers, seed], target, cs)) continue
     const result = reflow([...peers, seed], id, moved, target, cs, 'move')
     if (result.status !== 'valid') continue
-    return { ...snapshot, reference: { ...snapshot.reference, [target.region]: { width: target.width, height: target.height } },
+    return { ...snapshot, reference: { ...snapshot.reference, [target.region]: { width: target.width,
+      height: target.region === 'sidebar' ? Math.max(target.height, ...result.placements.map(q => q.y + q.height)) : target.height } },
       placements: snapshot.placements.map(q => result.placements.find(next => next.id === q.id) ?? q) }
   }
   return null

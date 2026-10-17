@@ -1,13 +1,10 @@
 /* Each region owns one ordinary inset. Scrollable content has no second padding,
    stationary overlay frame, mask or decorative scrollbar housing. */
 .main-region { grid-area: main; position: relative; min-width: 0; min-height: 0; display: flex; flex-direction: column; padding: 15px; overflow: hidden; }
-.surface-region.expanded { padding-right: 0; }
+.main-region.expanded { padding-right: 0; }
 .placement-port { position: relative; flex: 1; min-width: 0; min-height: 0; overflow: hidden; scrollbar-width: thin; overscroll-behavior-x: contain; }
-.expanded .placement-port { overflow-x: scroll; }
-.placement-port.recovery-surface { overflow: auto; }
-/* Keep scrollbar reservation stable across feasible/recovery transitions. Otherwise a
-   near-minimum Bottom could alternate between auto/no bar and forced horizontal bar. */
-.expanded .placement-port.recovery-surface { overflow-x: scroll; overflow-y: auto; }
+.main-region.expanded .placement-port { overflow-x: auto; }
+.main-region .placement-port.recovery-surface { overflow: auto; }
 .placement-world { pointer-events: none; }
 .freeform-layer { position: absolute; inset: 0; pointer-events: none; z-index: 10; overflow: hidden; }
 .freeform-layer .widget-frame { pointer-events: auto; content-visibility: auto; }
@@ -27,14 +24,26 @@
 .resize-e, .resize-w { top: 14px; bottom: 14px; width: 7px; cursor: ew-resize; }.resize-e { right: 0; }.resize-w { left: 0; }
 .resize-ne, .resize-nw, .resize-se, .resize-sw { width: 14px; height: 14px; z-index: 3; }.resize-ne { top: 0; right: 0; cursor: nesw-resize; }.resize-nw { top: 0; left: 0; cursor: nwse-resize; }.resize-se { bottom: 0; right: 0; cursor: nwse-resize; }.resize-sw { bottom: 0; left: 0; cursor: nesw-resize; }
 @container (max-width: 220px) { .widget-kind { display: none; }.properties-fixture label:not(.check-fixture) { grid-template-columns: 1fr; gap: 4px; }.library-fixture { grid-template-columns: 1fr; }.prose-fixture { padding: 10px; } }
-.sidebar-region.surface-region { padding: 15px; border: 0; overflow: hidden; gap: 10px; }
-.sidebar-navigation { min-height: 0; overflow: auto; scrollbar-width: thin; flex: 0 1 300px; }
+.sidebar-region.surface-region { padding: 15px; border: 0; overflow-x: hidden; overflow-y: auto; scrollbar-width: thin; scrollbar-gutter: stable; gap: 10px; overscroll-behavior-y: contain; }
+.sidebar-navigation { min-width: 0; flex: 0 0 auto; }
+.sidebar-region .placement-port { flex: 0 0 auto; overflow: clip; }
 .sidebar-navigation .sidebar-footer { padding-top: 10px; }
 .sidebar-region[hidden], .bottom-region[hidden] { display: none; }
-.bottom-region.surface-region { padding: 15px; border: 0; gap: 6px; overflow: hidden; }
+.bottom-region.surface-region { position: relative; padding: 15px; border: 0; gap: 6px; overflow: clip; }
+.bottom-region .placement-port, .bottom-region .placement-port.recovery-surface { overflow: clip; }
+/* The two eligible demonstration formats fit their declared minima without an
+   internal Bottom scroll owner. Text remains present; the chart consumes slack. */
+.widget-frame[data-owner-region="bottom"] .widget-content { overflow: clip; }
+.widget-frame[data-owner-region="bottom"] .chart-fixture { height: 100%; padding: 4px 8px; display: flex; flex-direction: column; }
+.widget-frame[data-owner-region="bottom"] .bars { flex: 1; min-height: 4px; height: auto; margin: 2px 0; }
+.widget-frame[data-owner-region="bottom"] .fixture-caption { line-height: 1.3; }
+.widget-frame[data-owner-region="bottom"] .summary-fixture { padding: 4px 8px; }
+.widget-frame[data-owner-region="bottom"] .summary-fixture strong { font-size: 14px; margin: 3px 0; }
+.widget-frame[data-owner-region="bottom"] .summary-fixture p { margin-top: 3px; }
+.bottom-recovery { position: absolute; inset: 15px; z-index: 20; display: flex; align-items: center; align-content: center; flex-wrap: wrap; gap: 6px; background: var(--surface); color: var(--ink); }
+.bottom-recovery span { flex-basis: 100%; }
 .bottom-tools { flex-shrink: 0; min-height: 18px; }
-.bottom-region.surface-region.expanded { padding-right: 0; }
-.fixed-status-bar { height: 15px; flex: 0 0 15px; width: 100%; background: var(--surface); }
+.fixed-status-bar { height: 15px; flex: 0 0 15px; width: 100%; border-top: 1px solid var(--line); background: var(--raised); }
 .work-area { position: relative; }
 .workspace-feedback { position: absolute; bottom: 16px; left: max(15px,var(--main-start)); right: 15px; z-index: 50; color: var(--muted); font-size: 10px; pointer-events: none; background: var(--surface); }
 .region-transfer { display: flex; align-items: center; gap: 5px; font-size: 10px; }
