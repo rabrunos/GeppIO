@@ -48,6 +48,17 @@ export function App() {
       height: r === 'sidebar' ? Math.max(m.height, projected.sidebar.world.height) : m.height }
   }
   const interaction = useInteraction(tx, view, surfaces, expanded, feasible)
+  const displayed = { ...projected }
+  if (interaction.preview && interaction.activeRegion) {
+    const region = interaction.activeRegion, preview = interaction.preview
+    // Direct previews already solved the usable bounds (including an entering native
+    // scrollbar). Do not project them again while ResizeObserver catches up.
+    view.placements = view.placements.map(p => p.region === region ? preview.placements.find(q => q.id === p.id)! : p)
+    const ps = view.placements.filter(p => p.region === region), m = surfaces.measures[region]
+    displayed[region] = { placements: ps, feasible: true, world: {
+      width: region === 'main' ? Math.max(m.width, ...ps.map(p => p.x + p.width)) : m.width,
+      height: region === 'sidebar' ? Math.max(0, ...ps.map(p => p.y + p.height)) : preview.reference[region].height } }
+  }
   const selected = view.placements.find(p => p.id === interaction.selected)
   function toggleExpansion(next: boolean) {
     interaction.end(true); setExpanded(next)
@@ -58,7 +69,7 @@ export function App() {
     try { localStorage.setItem('geppio:theme:v1', next) } catch { tx.setMessage('Tema alterado nesta sessão; não foi possível salvar a preferência.') }
   }
   function port(region: Region) {
-    const projection = projected[region]
+    const projection = displayed[region]
     const height = Math.max(projection.world.height, region === 'sidebar' && interaction.heldExtent?.region === region ? interaction.heldExtent.height : 0)
     return <div ref={surfaces.ports[region]} className={'placement-port ' + (!projection.feasible ? 'recovery-surface' : '')}
       data-surface={region} data-feasible={projection.feasible} data-usable-width={surfaces.measures[region].width} data-usable-height={surfaces.measures[region].height}

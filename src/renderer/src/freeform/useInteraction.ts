@@ -3,6 +3,8 @@ import type { KeyboardEvent, PointerEvent } from 'react'
 import { candidate } from '../../../shared/freeform/geometry.ts'
 import { constraintsFor, POLICY } from '../../../shared/freeform/policy.ts'
 import { reflow } from '../../../shared/freeform/reflow.ts'
+import type { Result } from '../../../shared/freeform/reflow.ts'
+import { settleSnapshot } from '../../../shared/freeform/settlement.ts'
 import { projectRegion } from '../../../shared/freeform/projection.ts'
 import { transfer, REGION_LABELS } from '../../../shared/freeform/transfer.ts'
 import { REGIONS } from '../../../shared/freeform/types.ts'
@@ -13,12 +15,13 @@ import type { Surfaces } from './useSurfaces.ts'
 interface Gesture {
   id: string; pointer: number; kind: 'move' | Direction; x: number; y: number; original: Placement;
   snapshot: Snapshot; source: Snapshot; target: HTMLButtonElement; scrollX: number; scrollY: number;
-  clientX: number; clientY: number; time: number; last: string; extension: number; directionX: number
+  clientX: number; clientY: number; time: number; last: string; extension: number; directionX: number; preview: Snapshot | null
 }
 export function useInteraction(tx: Transaction, view: Snapshot, surfaces: Surfaces, expanded: boolean, feasible: Record<Region, boolean>) {
   const gesture = useRef<Gesture | null>(null), animation = useRef(0)
   const [selected, setSelected] = useState<string | null>(null), [blocked, setBlocked] = useState<string | null>(null)
   const [heldExtent, setHeldExtent] = useState<{ region: Region; width: number; height: number } | null>(null)
+  const [released, setReleased] = useState<{ snapshot: Snapshot; region: Region } | null>(null)
   const latest = useRef({ view, apply, tick, surfaces }); latest.current = { view, apply, tick, surfaces }
   function surface(region: Region): Surface { return { ...surfaces.measures[region], region, expanded: expanded && region === 'main' } }
   function end(cancel: boolean) {
@@ -26,35 +29,78 @@ export function useInteraction(tx: Transaction, view: Snapshot, surfaces: Surfac
     if (!a) return
     gesture.current = null; cancelAnimationFrame(animation.current); setBlocked(null); setHeldExtent(null)
     if (cancel) { tx.put(a.source); tx.setMessage('Gesto cancelado. A prévia anterior foi restaurada.') }
+    else {
+      let settled = settleSnapshot(tx.live.current)
+      const port = surfaces.ports.main.current
+      if (a.original.region === 'main' && expanded && port && port.scrollWidth > port.clientWidth
+        && settled.placements.filter(p => p.region === 'main').every(p => p.x + p.width <= port.clientWidth)) {
+        // Dropping the held extent removes the scrollbar. Accept the same rectangles
+        // at that full usable height, and bridge the ResizeObserver notification.
+        settled = { ...settled, reference: { ...settled.reference, main: { ...settled.reference.main,
+          height: Math.floor(port.getBoundingClientRect().height) } } }
+        setReleased({ snapshot: settled, region: 'main' })
+      }
+      if (settled !== tx.live.current) tx.put(settled)
+    }
     if (a.target.hasPointerCapture(a.pointer)) a.target.releasePointerCapture(a.pointer)
   }
   const measurementKey = REGIONS.map(r => `${surfaces.measures[r].frameWidth},${surfaces.measures[r].frameHeight},${surfaces.measures[r].left},${surfaces.measures[r].top}`).join(';') + expanded
   useLayoutEffect(() => { end(true) }, [measurementKey])
+  // Releasing occupied extent can synchronously clamp the native scroll offset.
+  // Refresh the frame mapping before paint, rather than waiting for its scroll event.
+  useLayoutEffect(() => { surfaces.measure() }, [heldExtent])
+  useLayoutEffect(() => {
+    if (released && released.snapshot.reference[released.region].height === surfaces.measures[released.region].height) setReleased(null)
+  }, [released, surfaces.measures.main.height])
   useLayoutEffect(() => () => cancelAnimationFrame(animation.current), [])
   function apply(snapshot: Snapshot, p: Placement, dx: number, dy: number, kind: Gesture['kind']) {
     if (!feasible[p.region]) return
-    const s = surface(p.region), cs = constraintsFor(s)
-    // A native scrollbar can change the usable rectangle without changing the physical
-    // region. Project the stable gesture source once into that rectangle; a real region
-    // resize still cancels through frame measurements above. Never accumulate projections.
-    const adapted = p.region === 'main' && snapshot.reference.main.height !== s.height ? projectRegion(snapshot, 'main', s, s.expanded) : null
-    if (adapted && !adapted.feasible) { setBlocked(p.id); tx.setMessage('Sem espaço para os mínimos. A última prévia válida foi mantida.'); return }
     // Opt-in, bounded browser-only diagnostics. No bridge, storage or user telemetry.
     const profiling = performance.getEntriesByName('geppio:profile').length > 0, started = profiling ? performance.now() : 0
-    const peers = adapted?.placements ?? snapshot.placements.filter(q => q.region === p.region)
-    const requested = candidate(peers.find(q => q.id === p.id)!, dx, dy, kind, s, cs[p.id]!)
-    const result = reflow(peers, p.id, requested, s, cs, kind)
+    const tracing = performance.getEntriesByName('geppio:anchors').length > 0
+    const attempts: unknown[] = []
+    let s = surface(p.region)
+    const peers = snapshot.placements.filter(q => q.region === p.region)
+    function solve(at: Surface, budget?: { probes: number; states: number }): Result {
+      const cs = constraintsFor(at)
+      const adapted = p.region === 'main' && snapshot.reference.main.height !== at.height ? projectRegion(snapshot, 'main', at, at.expanded) : null
+      if (adapted && !adapted.feasible) return { status: 'blocked', placements: peers, reason: 'space', probes: 0, states: 0, candidates: 0 }
+      const source = adapted?.placements ?? peers
+      // Responsive neighbor fitting cannot change a resize's stable opposite edges.
+      const original = kind === 'move' ? source.find(q => q.id === p.id)! : p
+      const requested = candidate(original, dx, dy, kind, at, cs[p.id]!), result = reflow(source, p.id, requested, at, cs, kind, budget)
+      if (tracing) attempts.push({ source: original, requested, activeResult: result.placements.find(q => q.id === p.id), status: result.status, surface: at })
+      return result
+    }
+    let result = solve(s)
+    const port = surfaces.ports.main.current
+    if (result.status === 'valid' && p.region === 'main' && s.expanded && port && port.scrollWidth <= port.clientWidth
+      && result.placements.some(q => q.x + q.width > s.width)) {
+      // Solve against the measured future client height before the first scrollbar
+      // is committed. Share one operation budget with the initial collision pass.
+      s = { ...s, height: s.height - surfaces.scrollbarHeight.current }
+      const initial = result
+      result = solve(s, { probes: 8192 - initial.probes, states: 2048 - initial.states })
+      result = { ...result, probes: result.probes + initial.probes, states: result.states + initial.states, candidates: result.candidates + initial.candidates }
+    }
     if (profiling) {
       performance.clearMeasures('geppio:reflow')
       performance.measure('geppio:reflow', { start: started, end: performance.now(), detail: { status: result.status,
         states: result.states, probes: result.probes, candidates: result.candidates,
         affected: result.placements.filter(q => q.id !== p.id && peers.some(old => old.id === q.id && (old.x !== q.x || old.y !== q.y || old.width !== q.width || old.height !== q.height))).length } })
     }
+    if (tracing) {
+      performance.clearMeasures('geppio:anchor-solve')
+      performance.measure('geppio:anchor-solve', { start: performance.now(), detail: { kind, dx, dy, stable: p, reference: snapshot.reference[p.region],
+        measurement: surfaces.measures[p.region], attempts, probes: result.probes, states: result.states } })
+    }
     if (result.status === 'blocked') { setBlocked(p.id); tx.setMessage('Sem espaço para os mínimos deste widget. A última prévia válida foi mantida.'); return }
-    tx.put({ ...snapshot, reference: { ...snapshot.reference, [p.region]: { width: s.width,
+    const next = { ...snapshot, reference: { ...snapshot.reference, [p.region]: { width: s.width,
       height: p.region === 'sidebar' ? Math.max(s.height, ...result.placements.map(q => q.y + q.height)) : s.height } },
-      placements: snapshot.placements.map(q => result.placements.find(next => next.id === q.id) ?? q) })
-    setBlocked(null); tx.setMessage('Prévia válida. Salve ou cancele; a compressão dos vizinhos preserva seus tamanhos preferidos.')
+      placements: snapshot.placements.map(q => result.placements.find(next => next.id === q.id) ?? q) }
+    if (gesture.current) gesture.current.preview = next
+    tx.put(next)
+    setBlocked(null); tx.setMessage('Prévia válida. Ao soltar, posições e tamanhos serão mantidos para o próximo gesto. Salve ou cancele.')
   }
   function update(a: Gesture) {
     const port = latest.current.surfaces.scroller(a.original.region)
@@ -89,9 +135,9 @@ export function useInteraction(tx: Transaction, view: Snapshot, surfaces: Surfac
   }
   function transferTo(id: string, region: Region, at?: { x: number; y: number }) {
     if (!tx.editing || !feasible[region]) { tx.setMessage('Região sem espaço disponível. Reabra ou amplie a região antes de transferir.'); return false }
-    const result = transfer(latest.current.view, id, surface(region), at)
+    const result = transfer(settleSnapshot(latest.current.view), id, surface(region), at)
     if (!result) { tx.setMessage(`Transferência para ${REGION_LABELS[region]} incompatível ou sem espaço para os mínimos. Composição preservada.`); setBlocked(id); return false }
-    tx.put(result); setBlocked(null); tx.setMessage(`Widget transferido para ${REGION_LABELS[region]} na prévia. Salve ou cancele.`)
+    tx.put(settleSnapshot(result)); setBlocked(null); tx.setMessage(`Widget transferido para ${REGION_LABELS[region]} na prévia. Salve ou cancele.`)
     requestAnimationFrame(() => {
       const moved = result.placements.find(p => p.id === id)!, owner = surfaces.scroller(region)
       if (owner && region === 'sidebar') owner.scrollTop += moved.y - surfaces.measures.sidebar.scrollTop
@@ -101,7 +147,7 @@ export function useInteraction(tx: Transaction, view: Snapshot, surfaces: Surfac
   }
   function start(e: PointerEvent<HTMLButtonElement>, p: Placement, kind: Gesture['kind']) {
     if (!tx.editing || gesture.current || e.button !== 0 || !feasible[p.region]) return
-    e.preventDefault(); e.currentTarget.focus(); e.currentTarget.setPointerCapture(e.pointerId)
+    e.preventDefault(); setReleased(null); e.currentTarget.focus({ preventScroll: true }); e.currentTarget.setPointerCapture(e.pointerId)
     const port = surfaces.scroller(p.region)!
     // Native scroll clamping caused by shrinking our own occupied extent must not feed
     // back into this gesture's pointer delta. Hold only its starting occupied width,
@@ -110,9 +156,9 @@ export function useInteraction(tx: Transaction, view: Snapshot, surfaces: Surfac
     setHeldExtent({ region: p.region, width: Math.max(surfaces.measures[p.region].width, ...peers.map(q => q.x + q.width)),
       height: p.region === 'sidebar' ? Math.max(0, ...peers.map(q => q.y + q.height)) : 0 })
     gesture.current = { id: p.id, pointer: e.pointerId, kind, x: e.clientX, y: e.clientY, original: structuredClone(p),
-      snapshot: structuredClone(view), source: structuredClone(tx.live.current), target: e.currentTarget,
+      snapshot: settleSnapshot(structuredClone(view)), source: structuredClone(tx.live.current), target: e.currentTarget,
       scrollX: port.scrollLeft, scrollY: port.scrollTop, clientX: e.clientX, clientY: e.clientY, time: 0,
-      last: `0,0,${surfaces.measures[p.region].width},${surfaces.measures[p.region].height}`, extension: 0, directionX: 0 }
+      last: `0,0,${surfaces.measures[p.region].width},${surfaces.measures[p.region].height}`, extension: 0, directionX: 0, preview: null }
     setSelected(p.id); animation.current = requestAnimationFrame(time => latest.current.tick(time))
   }
   function move(e: PointerEvent<HTMLButtonElement>) {
@@ -137,7 +183,7 @@ export function useInteraction(tx: Transaction, view: Snapshot, surfaces: Surfac
         const s = surface(region), result = feasible[region] ? transfer(a.snapshot, a.id, s, {
           x: e.clientX - r.left + (surfaces.ports[region].current?.scrollLeft ?? 0),
           y: e.clientY - r.top + (surfaces.ports[region].current?.scrollTop ?? 0) }) : null
-        if (result) { tx.put(result); tx.setMessage(`Widget transferido para ${REGION_LABELS[region]}. Salve ou cancele.`) }
+        if (result) { tx.put(settleSnapshot(result)); tx.setMessage(`Widget transferido para ${REGION_LABELS[region]}. Salve ou cancele.`) }
         else { setBlocked(a.id); tx.setMessage('Transferência incompatível ou sem espaço. A composição anterior foi restaurada.') }
         return
       }
@@ -146,10 +192,20 @@ export function useInteraction(tx: Transaction, view: Snapshot, surfaces: Surfac
     end(cancel)
   }
   function keyboard(e: KeyboardEvent<HTMLButtonElement>, p: Placement, kind: Gesture['kind']) {
-    if (!tx.editing || gesture.current || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return
+    if (!import.meta.env.DEV || !tx.editing || gesture.current || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return
     e.preventDefault(); const step = e.shiftKey ? 10 : 1
-    setSelected(p.id); apply(view, p, e.key === 'ArrowRight' ? step : e.key === 'ArrowLeft' ? -step : 0,
+    // Several key events can arrive before React renders. Each discrete action uses
+    // the synchronous live draft, never the preceding render's stale placement.
+    const live = tx.live.current, at = surface(p.region), projection = projectRegion(live, p.region, at, at.expanded)
+    if (!projection.feasible) return
+    const action = settleSnapshot({ ...live, reference: { ...live.reference, [p.region]: { width: at.width,
+      height: p.region === 'sidebar' ? Math.max(at.height, projection.world.height) : at.height } },
+      placements: live.placements.map(q => projection.placements.find(next => next.id === q.id) ?? q) })
+    const active = action.placements.find(q => q.id === p.id)!
+    setSelected(p.id); apply(action, active, e.key === 'ArrowRight' ? step : e.key === 'ArrowLeft' ? -step : 0,
       e.key === 'ArrowDown' ? step : e.key === 'ArrowUp' ? -step : 0, kind)
+    const settled = settleSnapshot(tx.live.current)
+    if (settled !== tx.live.current) tx.put(settled)
     requestAnimationFrame(() => {
       const port = surfaces.scroller(p.region), next = tx.live.current.placements.find(q => q.id === p.id)
       if (!port || !next) return
@@ -169,6 +225,7 @@ export function useInteraction(tx: Transaction, view: Snapshot, surfaces: Surfac
       onPointerUp: (e: PointerEvent<HTMLButtonElement>) => finish(e), onPointerCancel: (e: PointerEvent<HTMLButtonElement>) => finish(e, true),
       onLostPointerCapture: (e: PointerEvent<HTMLButtonElement>) => finish(e, true), onKeyDown: (e: KeyboardEvent<HTMLButtonElement>) => keyboard(e, p, kind) }
   }
-  return { selected, setSelected, blocked, heldExtent, handlers, end, active: () => !!gesture.current, transferTo }
+  return { selected, setSelected, blocked, heldExtent, handlers, end, active: () => !!gesture.current, transferTo,
+    preview: gesture.current?.preview ?? released?.snapshot ?? null, activeRegion: gesture.current?.original.region ?? released?.region ?? null }
 }
 export type Interaction = ReturnType<typeof useInteraction>

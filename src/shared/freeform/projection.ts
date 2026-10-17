@@ -11,8 +11,10 @@ function axisFit(ps: readonly Placement[], horizontal: boolean, reference: numbe
   const intervals = [...ps].sort((a, b) => a[position] - b[position] || a.id.localeCompare(b.id))
   const predecessors = intervals.map(b => intervals.map((a, index) => a.id !== b.id && a[position] + a[dimension] <= b[position] + EPSILON ? index : -1).filter(i => i >= 0))
   if (reference === limit && intervals.every(p => p[dimension] >= CONSTRAINTS[p.id]!.min[dimension]
-    && p[position] + p[dimension] <= limit + EPSILON)
-    && intervals.every((p, j) => predecessors[j]!.every(i => intervals[i]![position] + intervals[i]![dimension] + POLICY.gap <= p[position] + EPSILON))) {
+    && p[position] + p[dimension] <= limit + EPSILON)) {
+    // A validated direct composition already satisfies two-dimensional clearance.
+    // Disjoint orthogonal interiors may have sub-gap axis separation (the diagonal
+    // exception). Re-imposing the projection DAG here would move anchored previews.
     return new Map(intervals.map(p => [p.id, { start: p[position], size: p[dimension] }]))
   }
   const resizable = intervals.map(p => horizontal ? CONSTRAINTS[p.id]!.resizeX : CONSTRAINTS[p.id]!.resizeY)

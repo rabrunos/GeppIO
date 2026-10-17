@@ -6,6 +6,7 @@ import assert from 'node:assert/strict'
 import ts from 'typescript'
 import type { Page } from 'playwright'
 import { freeformSmoke, freeformPluginSmoke } from './freeform-smoke.ts'
+import { freeformCorrectionSmoke } from './freeform-correction-smoke.ts'
 import { FREEFORM_KEY } from '../src/shared/freeform/policy.ts'
 const temporary = await mkdtemp(join(tmpdir(), 'geppio-smoke-'))
 await mkdir('.local/diagnostics', { recursive: true })
@@ -94,10 +95,17 @@ try {
       return Math.abs(Number(port.dataset.usableWidth) - port.clientWidth) < .1 && Math.abs(Number(port.dataset.usableHeight) - port.clientHeight) < .1
     })
   }
-  await freeformSmoke(page, resizeWindow)
+  await freeformCorrectionSmoke(page, process.argv.includes('--dev'), resizeWindow)
+  await freeformSmoke(page, resizeWindow, process.argv.includes('--dev'))
   await page.getByTestId('edit-layout').click()
   const initial = await page.locator('[data-widget="chart"]').evaluate(element => { const style = (element as HTMLElement).style; return [style.left, style.top, style.width, style.height] })
-  const grip = page.getByRole('button', { name: 'Mover Ritmo', exact: true }); await grip.focus(); await page.keyboard.press('ArrowRight')
+  const grip = page.getByRole('button', { name: 'Mover Ritmo', exact: true })
+  if (process.argv.includes('--dev')) { await grip.focus(); await page.keyboard.press('ArrowRight') }
+  else {
+    const box = await grip.boundingBox(); assert.ok(box)
+    await page.mouse.move(box.x + 40, box.y + 16); await page.mouse.down()
+    await page.mouse.move(box.x + 41, box.y + 16); await page.mouse.up()
+  }
   await page.getByTestId('cancel-layout').click()
   await page.waitForFunction(expected => {
     const element = document.querySelector<HTMLElement>('[data-widget="chart"]')

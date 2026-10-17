@@ -4,6 +4,23 @@ import { collides } from '../src/shared/freeform/geometry.ts'
 import { CONSTRAINTS, DEFAULT_FREEFORM } from '../src/shared/freeform/policy.ts'
 import { projectRegion } from '../src/shared/freeform/projection.ts'
 import { transfer } from '../src/shared/freeform/transfer.ts'
+import { candidate, same } from '../src/shared/freeform/geometry.ts'
+import { constraintsFor } from '../src/shared/freeform/policy.ts'
+import { reflow } from '../src/shared/freeform/reflow.ts'
+import { DIRECTIONS } from '../src/shared/freeform/types.ts'
+
+test('every feasible intermediate resize is identical at its own reference, including diagonal sub-gap contacts', () => {
+  const source = DEFAULT_FREEFORM, surface = { ...source.reference.main, region: 'main' as const, expanded: false }, cs = constraintsFor(surface)
+  const p = source.placements.find(p => p.id === 'properties')!
+  for (const direction of DIRECTIONS) for (const delta of [1, 4.25, 9.125, 30.5, 80, 5000, 0]) {
+    const wanted = candidate(p, /w/.test(direction) ? -delta : delta, /n/.test(direction) ? -delta : delta, direction, surface, cs[p.id]!)
+    const result = reflow(source.placements, p.id, wanted, surface, cs, direction)
+    if (result.status === 'blocked') continue
+    const view = projectRegion({ ...source, placements: result.placements }, 'main', surface, false)
+    assert.deepEqual(view.placements, result.placements, `${direction} ${delta}: projection cannot re-solve a valid direct preview`)
+    assert.ok(same(view.placements.find(q => q.id === p.id)!, wanted))
+  }
+})
 
 test('bounded projections are continuous, reversible, lossless and derived from one stable source', () => {
   const original = structuredClone(DEFAULT_FREEFORM)

@@ -16,7 +16,7 @@ export const WidgetFrame = memo(function WidgetFrame({ placement: p, measurement
   const left = m.left + p.x - m.scrollLeft, top = m.top + p.y - m.scrollTop
   const outside = p.x + p.width <= m.scrollLeft || p.x >= m.scrollLeft + m.width || p.y + p.height <= m.scrollTop || p.y >= m.scrollTop + m.height
   return <section className={'widget-frame ' + (editing ? 'editing ' : '') + (interaction.selected === p.id ? 'selected ' : '') + (editing && interaction.blocked === p.id ? 'invalid' : '')}
-    hidden={withheld || unavailable || m.width <= 0 || m.height <= 0} inert={withheld || unavailable || outside} data-widget={withheld ? undefined : p.id} data-owner-region={p.region}
+    hidden={withheld || unavailable || m.width <= 0 || m.height <= 0} inert={withheld || unavailable || outside} data-widget={withheld ? undefined : p.id} data-owner-region={p.region} data-layout-keyboard={import.meta.env.DEV}
     data-x={p.x} data-y={p.y} data-w={p.width} data-h={p.height} data-preferred-w={p.preferred.width} data-preferred-h={p.preferred.height}
     style={{ left, top, width: p.width, height: p.height,
       clipPath: `inset(${Math.max(0, m.top - top)}px ${Math.max(0, left + p.width - m.left - m.width)}px ${Math.max(0, top + p.height - m.top - m.height)}px ${Math.max(0, m.left - left)}px)` }}
@@ -27,10 +27,11 @@ export const WidgetFrame = memo(function WidgetFrame({ placement: p, measurement
         if (!content || (e.deltaY > 0 ? content.scrollTop + content.clientHeight >= content.scrollHeight : content.scrollTop <= 0)) wheel(0, e.deltaY)
       }
     }}>
-    <header className="widget-heading"><button className="widget-grip" aria-label={'Mover ' + title.title} tabIndex={editing ? 0 : -1} {...interaction.handlers(p, 'move')}>
+    <header className="widget-heading"><button className="widget-grip" aria-label={'Mover ' + title.title} tabIndex={editing && import.meta.env.DEV ? 0 : -1} {...interaction.handlers(p, 'move')}>
       <span className="grip-dots">⠿</span><strong>{title.title}</strong></button><span className="widget-kind">{title.type}</span></header>
     <div className="widget-content"><WidgetContent id={p.id} /></div>
     {editing && DIRECTIONS.filter(d => allowsResize(d, constraint)).map(d => <button key={d} className={'resize-zone resize-' + d} data-resize={d}
-      aria-label={'Redimensionar ' + title.title + ': ' + LABELS[d]} title={'Redimensionar pela ' + LABELS[d] + ' · use as setas'} {...interaction.handlers(p, d)} />)}
+      tabIndex={import.meta.env.DEV ? 0 : -1} aria-label={'Redimensionar ' + title.title + ': ' + LABELS[d]}
+      title={'Redimensionar pela ' + LABELS[d] + (import.meta.env.DEV ? ' · use as setas' : '')} {...interaction.handlers(p, d)} />)}
   </section>
 })

@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { DEFAULT_FREEFORM, FREEFORM_KEY, POLICY } from '../../../shared/freeform/policy.ts'
 import { parseFreeform } from '../../../shared/freeform/schema.ts'
+import { settleSnapshot } from '../../../shared/freeform/settlement.ts'
 import { convertHistorical, importFreeform } from '../../../shared/freeform/migration.ts'
 import { readFreeform, writeFreeform } from '../../../shared/freeform/storage.ts'
 import type { HistoricalChoice } from '../../../shared/freeform/storage.ts'
@@ -8,7 +9,8 @@ import type { Snapshot } from '../../../shared/freeform/types.ts'
 
 export function useTransaction() {
   const [initial] = useState(() => {
-    try { return readFreeform(localStorage) } catch { return readFreeform({ getItem() { throw new Error('Unavailable') }, setItem() {} }) }
+    try { const read = readFreeform(localStorage); return { ...read, snapshot: settleSnapshot(read.snapshot) } }
+    catch { return readFreeform({ getItem() { throw new Error('Unavailable') }, setItem() {} }) }
   })
   const committed = useRef(initial.snapshot), observed = useRef(initial.raw), epoch = useRef(0)
   const [snapshot, setSnapshot] = useState(initial.snapshot), live = useRef(snapshot)
@@ -16,7 +18,8 @@ export function useTransaction() {
   function put(next: Snapshot) { epoch.current++; live.current = next; setSnapshot(next) }
   function begin(next: Snapshot) {
     if (recovery && !editing) return
-    put(structuredClone(next)); setEditing(true); setMessage('Arraste pelo título ou use as setas (1px; Shift: 10px). Salve ou cancele a prévia.')
+    put(settleSnapshot(structuredClone(next))); setEditing(true)
+    setMessage(import.meta.env.DEV ? 'Arraste pelo título ou use as setas (1px; Shift: 10px). Salve ou cancele a prévia.' : 'Arraste pelo título ou pelas bordas. Salve ou cancele a prévia.')
   }
   function cancel() {
     put(structuredClone(committed.current)); setEditing(false); setRecovery(initial.recovery && observed.current === initial.raw)
@@ -24,7 +27,7 @@ export function useTransaction() {
   }
   async function save(next: Snapshot) {
     const ticket = ++epoch.current
-    try { next = parseFreeform(JSON.stringify(next)) } catch { setMessage('Layout inválido ou sem espaço. Os dados salvos foram preservados.'); return }
+    try { next = parseFreeform(JSON.stringify(settleSnapshot(next))) } catch { setMessage('Layout inválido ou sem espaço. Os dados salvos foram preservados.'); return }
     try {
       const result = await navigator.locks.request(FREEFORM_KEY, () => ticket === epoch.current
         ? writeFreeform(localStorage, next, observed.current) : { raw: observed.current, error: 'Gravação cancelada.' })
@@ -35,7 +38,7 @@ export function useTransaction() {
     } catch { if (ticket === epoch.current) setMessage('Não foi possível obter acesso seguro ao armazenamento. A prévia foi preservada.') }
   }
   function preview(next: Snapshot, text: string) {
-    put(next); setEditing(true); setMessage(text)
+    put(settleSnapshot(next)); setEditing(true); setMessage(text)
   }
   function resetPreview() { preview(structuredClone(DEFAULT_FREEFORM), 'Composição inicial somente na prévia. Salvar confirma; Cancelar preserva os dados anteriores.') }
   function historical(choice: HistoricalChoice) {

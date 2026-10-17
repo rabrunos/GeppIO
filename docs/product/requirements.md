@@ -40,9 +40,15 @@ Main supports two-dimensional rectangular compositions, not just equal columns. 
 **Active direction — Issue #29 / alpha.12.** The owner supersedes mandatory cell positioning.
 Widgets use continuous CSS-pixel coordinates and independent dimensions, with explicit pixel
 min/default/max constraints, preferred sizes, resize axes and region eligibility. Edit-only dragging,
-eight-direction Main resize, keyboard operation and explicit Save/Cancel remain. Preserve local push,
-compression, preferred-size restoration, bounded minimal rearrangement, intentional empty space,
-snapshot reversal and safe rejection. There is no snapping grid, square-cell or fixed row/column rule.
+eight-direction Main resize and explicit Save/Cancel remain. Experimental widget grip/resize Tab stops,
+arrow editing and focused outlines are Vite-development-only; production retains pointer editing and
+normal form/control/splitter keyboard navigation. Preserve local push, compression, bounded minimal
+rearrangement, intentional empty space, held-pointer snapshot reversal and safe rejection. Pointerup
+settles every affected actual rectangle and size preference as the next in-memory action baseline;
+later independent gestures cannot revive historical compression metadata. Discrete development keys
+settle independently. Gesture cancellation restores that gesture's source; global Cancel restores the
+persisted composition and only Save writes geometry. There is no snapping grid, square-cell or fixed
+row/column rule.
 
 Main is two-dimensional. Sidebar organizes widgets vertically with width following its inner region;
 Bottom organizes horizontally with height following its inner region. Keep navigation/toolbar structural;

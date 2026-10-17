@@ -9,7 +9,8 @@ const lex = (a: readonly number[], b: readonly number[]) => { for (let i = 0; i 
  * impacted-axis compression, preferred contact slots, bounded rearrangement. Continuous
  * contact edges replace integer slot enumeration. Empty space never attracts widgets.
  */
-export function reflow(snapshot: readonly Placement[], id: string, rect: Rect, surface: Surface, cs: Constraints, gesture: 'move' | Direction): Result {
+export function reflow(snapshot: readonly Placement[], id: string, rect: Rect, surface: Surface, cs: Constraints, gesture: 'move' | Direction,
+  budget = { probes: 8192, states: 2048 }): Result {
   const unchanged = () => structuredClone([...snapshot]), original = snapshot.find(p => p.id === id), c = cs[id]
   if (!original || !c || !validLayout(snapshot, surface, cs) || !validRect(rect, surface, c)
     || (gesture !== 'move' && !allowsResize(gesture, c))
@@ -30,7 +31,7 @@ export function reflow(snapshot: readonly Placement[], id: string, rect: Rect, s
   let states = 0, probes = 0, candidateCount = 0, exhausted = false
   // Contact pruning replaces repeatedly probing impossible Cartesian products. Keep a
   // deterministic operation budget, including failed probes, independent of world size.
-  const maxStates = 512, maxProbes = 8192
+  const maxStates = 512, maxProbes = Math.min(8192, budget.probes), totalStates = Math.min(2048, budget.states)
   function score(ps: Placement[]): number[] {
     let moved = 0, travel = 0, order = 0, size = 0
     ps.forEach((p, i) => {
@@ -157,7 +158,7 @@ export function reflow(snapshot: readonly Placement[], id: string, rect: Rect, s
       return ranked.sort((a, b) => lex(a.rank, b.rank)).map(option => option.next)
     }
     function visit(ps: Placement[], fixed: ReadonlySet<string>) {
-      if (states - phaseStart >= maxStates || probes >= maxProbes) { exhausted = true; return }
+      if (states >= totalStates || states - phaseStart >= maxStates || probes >= maxProbes) { exhausted = true; return }
       states++
       const key = ps.map(p => `${p.x},${p.y},${p.width},${p.height}`).join(';') + '|' + [...fixed].sort().join(',')
       if (seen.has(key)) return

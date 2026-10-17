@@ -19,12 +19,24 @@ conflicts. Retain the older grid/fractional tests unchanged as codec/migration/a
 tools/freeform-smoke.ts is called by the production/development/scale launchers. It measures actual
 DOM rectangles in both themes/restored/narrow/maximized windows; checks the single 15px inset and
 independent 15px status strip, pixel-exact arbitrary movement/resize/reload, eight handles, keyboard,
-live compression/reversal/preferred recovery, occupied scrolling/contraction, form identity and actual
+live compression/held reversal/settled independent actions, occupied scrolling/contraction, form identity and actual
 Sidebar/Bottom placement. Exercise region collapse/reopen, size restoration and impossible small
 Bottom/incompatible transfers. Validate no viewport-only writes, Save/Cancel, historical choices,
 corrupt/future/oversized data, quota, concurrent bytes and queued Save followed by Cancel. Plugin
 smoke retains real Counter/Pulse Worker identities/actions/background updates across offscreen
 scrolling and expansion; existing lifecycle/identity/negative-Electron tests remain mandatory.
+
+tools/freeform-correction-smoke.ts runs in all three desktop modes. It records every animation frame's
+logical rectangle, DOM edges, inline clipping, port origin/client size/scroll offsets and opt-in solver
+source/candidate/result/reference under .local/diagnostics. The documented tolerance is 0.06 CSS px
+(above Chromium's 1/64px layout quantization, independent of DPR); compare screen edges after explicit
+scroll translation. Tight Properties/Queue/default fixtures exercise every edge/corner, bounds, blocked
+last intentions, reversal, subsequent gestures, actual native scrollbar introduction and removal on
+release. Move/resize chains test settled neighbors, Escape/lost capture, no pointerup storage writes,
+Save/reload, old saved preferences and Sidebar/Bottom permitted axes. Production asserts no custom
+handle Tab stops/arrow behavior/outlines and uses real pointer equivalents; development keeps all eight
+keyboard resize paths, 1px/Shift actions and batched successive steps. Both test native form tabbing and
+region splitters. These automated DOM/forced-DPR observations do not replace owner visual acceptance.
 
 Corrective region assertions include Sidebar vertical content extent with a single navigation/widget
 scroll owner, no horizontal range, and Bottom zero ranges on both axes in normal/expanded/recovery

@@ -8,6 +8,7 @@ export function useSurfaces() {
   const root = useRef<HTMLDivElement>(null)
   const main = useRef<HTMLDivElement>(null), sidebar = useRef<HTMLDivElement>(null), bottom = useRef<HTMLDivElement>(null)
   const ports = { main, sidebar, bottom }
+  const scrollbarHeight = useRef(0)
   function scroller(region: Region) { return region === 'sidebar' ? ports.sidebar.current?.closest<HTMLElement>('[data-region="sidebar"]') ?? null : ports[region].current }
   const [measures, setMeasures] = useState<Record<Region, Measurement>>({ main: empty(), sidebar: empty(), bottom: empty() })
   function measure() {
@@ -28,6 +29,14 @@ export function useSurfaces() {
     setMeasures(old => JSON.stringify(old) === JSON.stringify(next) ? old : next)
   }
   useLayoutEffect(() => {
+    // Measure this renderer's actual thin native horizontal scrollbar reservation,
+    // including its DPR. The probe is transient, hidden, and has no scroll/storage state.
+    const probe = document.createElement('div')
+    probe.className = 'placement-port'
+    probe.style.cssText = 'position:absolute;left:-10000px;width:100px;height:100px;flex:none;overflow-x:scroll;overflow-y:hidden;visibility:hidden'
+    root.current?.append(probe)
+    scrollbarHeight.current = probe.getBoundingClientRect().height - probe.clientHeight
+    probe.remove()
     const observer = new ResizeObserver(measure)
     if (root.current) observer.observe(root.current)
     for (const region of REGIONS) if (ports[region].current) observer.observe(ports[region].current!)
@@ -35,6 +44,6 @@ export function useSurfaces() {
     measure()
     return () => observer.disconnect()
   }, [])
-  return { root, ports, measures, measure, scroller }
+  return { root, ports, measures, measure, scroller, scrollbarHeight }
 }
 export type Surfaces = ReturnType<typeof useSurfaces>

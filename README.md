@@ -61,14 +61,18 @@ navegação lateral, a barra inferior e um painel recolhível de demonstração.
 executam integrações: servem para testar espaço, leitura, rolagem e interação.
 
 **Editar layout** libera posições e dimensões livres em pixels CSS, sem células ou encaixe
-obrigatório. Arraste pelo título ou use setas (1px; Shift: 10px). Main permite movimento e oito
+obrigatório. Arraste pelo título e pelas bordas. Somente no renderer de desenvolvimento Vite,
+os handles também têm navegação por Tab e setas (1px; Shift: 10px). Na versão de produção,
+campos, botões e divisores mantêm sua navegação normal por teclado. Main permite movimento e oito
 direções de redimensionamento; Sidebar organiza verticalmente e acompanha sua largura interna;
 Bottom organiza horizontalmente e acompanha sua altura interna. Selecione um widget e use
 **Mover widget** no cabeçalho para transferi-lo a uma região compatível. A navegação e a toolbar
 continuam estruturais. Bottom precisa ser ampliada antes de receber os exemplos compatíveis.
 
-Vizinhos podem ser empurrados, comprimidos até seus mínimos em pixels e recuperar tamanhos
-preferidos. Rearranjos são limitados; tentativas impossíveis preservam a última prévia válida.
+Vizinhos podem ser empurrados e comprimidos até seus mínimos em pixels. Reverter o movimento
+antes de soltar restaura a geometria inicial do gesto; ao soltar, posições e tamanhos tornam-se
+a referência do próximo gesto, sem recuperação automática de tamanhos antigos. Escape cancela
+somente o gesto atual. Rearranjos são limitados; tentativas impossíveis preservam a última prévia válida.
 Não há gravidade nem compactação de espaços vazios. Cada região tem uma margem interna de 15px;
 o afastamento entre widgets é de aproximadamente 10px.
 

@@ -54,18 +54,34 @@ to reach that adjacent contact edge; all broad travel is capped at 1024px. Curre
 slots accompany preferred slots. There are at most 512 states per phase and 8192 probes per operation
 (including rejected probes). This is conservative bounded
 search, not a complete global packer. Failure keeps the last valid preview and reports the constraint.
-No gravity or compulsory compaction exists. Preferred recovery tries in-place then nearby valid contact
-positions without displacing unrelated widgets; remaining in-place slack can restore partially.
-Recovery never undoes newly required compression through an immediate lateral escape in the same gesture.
+No gravity or compulsory compaction exists. A pointer gesture solves every intention from its complete
+starting snapshot, so reversing while held restores the entire initial geometry. Pointerup accepts all
+actual positions and sizes in memory: settlement replaces compressed preferred dimensions with actual
+dimensions, preserving unchanged records. The next gesture cannot resurrect older geometry. Legacy v1
+preferences remain decodable; load/import/edit entry normalize them in memory without changing bytes.
+Widget defaults remain independent registry values. Explicit Save writes settled geometry and preferences.
 
 Pointer gestures coalesce intentions once per animation frame and flush the final intention on
 release; they derive every update from their original snapshot, include scrollLeft/scrollTop and
 keep real CSS-pixel deltas without rounding or snapping. Opposite resize edges stay anchored. Edge
 auto-scroll advances concrete active intention; only successful occupied rectangles grow the world.
 Escape, pointercancel, lost capture or changed region measurements restore the gesture source.
-Physical frame measurements distinguish a real region resize from native scrollbar reservation;
-the latter projects the original gesture source into current usable height without cancellation or drift.
-Keyboard steps are 1px, Shift 10px. Layout Cancel restores the previously committed canonical source.
+Physical frame measurements distinguish a real region resize from native scrollbar reservation.
+A transient hidden native probe measures the actual horizontal scrollbar reservation. If a solution
+would introduce that scrollbar, neighbor fitting and reflow use the future client height before commit,
+sharing the original 8192-probe/2048-state operation budget. Resize candidates retain the stable active
+rectangle's opposite edges, even when neighbors need responsive fitting. Direct previews bypass a second
+projection while ResizeObserver catches up. Releasing a held extent refreshes native scroll mapping
+before paint; removing a scrollbar rebases the reference without changing the accepted rectangles.
+Blocked intentions retain the last valid anchored preview. Cancellation restores only that gesture's
+source, including its reference. Layout Cancel restores the previously persisted composition.
+
+Experimental widget grip/resize keyboard controls exist only when Vite's build-time import.meta.env.DEV
+is true. Development retains handle Tab stops, focused outlines and 1px arrows (Shift:10px). Each key
+action settles independently from the synchronous live draft. Production removes these handle Tab stops,
+ignores their arrow shortcuts and suppresses their focus outlines, retaining all pointer handles. There
+is no production opt-in. Normal forms, buttons, Settings, dialogs, region splitters and Tab navigation
+retain their native keyboard behavior in both builds; no native security setting or bridge changes.
 
 ### Stable projection, expansion and recovery
 
@@ -87,7 +103,9 @@ Bounded presentation projects from one stable canonical/edit source and each reg
 reference size. Continuous interval fitting retains source separation DAGs in each axis, preserves
 edge affinity and intentional normalized gaps where feasible, and scales/compresses dimensions down
 to declared pixel minima. Binary fitting replaces integer steps. Equal source/reference/measurements
-produce equal results; A→B→A never accumulates drift. Empty spaces do not attract widgets. Sidebar
+produce equal results; A→B→A never accumulates drift. At an unchanged reference, validated direct geometry
+passes through exactly: two-dimensional diagonal clearance must not be replaced with stricter per-axis
+gap constraints that move anchored edges. Empty spaces do not attract widgets. Sidebar
 width/Bottom height track the measured cross axis. If the source relationships/minima cannot fit,
 retain source rectangles and warn rather than overlap/delete/shrink below minima. Main can use a
 finite recovery scroll area. Bottom retains its finite world, keeps infeasible content mounted but

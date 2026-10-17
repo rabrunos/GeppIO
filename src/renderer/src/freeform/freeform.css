@@ -19,7 +19,9 @@
 .widget-kind { font-size: 8px; color: var(--muted); white-space: nowrap; }
 .widget-content { flex: 1; min-height: 0; overflow: auto; scrollbar-width: thin; }
 .resize-zone { position: absolute; z-index: 2; padding: 0; background: transparent; touch-action: none; }
-.resize-zone:hover, .resize-zone:focus-visible { background: color-mix(in srgb,var(--accent) 25%,transparent); }.resize-zone:focus-visible { outline-offset: -2px; }
+.resize-zone:hover, [data-layout-keyboard="true"] .resize-zone:focus-visible { background: color-mix(in srgb,var(--accent) 25%,transparent); }
+[data-layout-keyboard="true"] .resize-zone:focus-visible { outline-offset: -2px; }
+[data-layout-keyboard="false"] :is(.widget-grip, .resize-zone):focus-visible { outline: none; }
 .resize-n, .resize-s { left: 14px; right: 14px; height: 7px; cursor: ns-resize; }.resize-n { top: 0; }.resize-s { bottom: 0; }
 .resize-e, .resize-w { top: 14px; bottom: 14px; width: 7px; cursor: ew-resize; }.resize-e { right: 0; }.resize-w { left: 0; }
 .resize-ne, .resize-nw, .resize-se, .resize-sw { width: 14px; height: 14px; z-index: 3; }.resize-ne { top: 0; right: 0; cursor: nesw-resize; }.resize-nw { top: 0; left: 0; cursor: nwse-resize; }.resize-se { bottom: 0; right: 0; cursor: nwse-resize; }.resize-sw { bottom: 0; left: 0; cursor: nesw-resize; }

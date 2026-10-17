@@ -4,6 +4,9 @@ Integrated source changes, not a publication ledger. Version comes from package.
 
 ## [0.1.0-alpha.12] — 2026-10-16
 
+- Settle actual widget geometry and size preferences after each completed pointer gesture and discrete development keyboard action. Keep held-pointer reversal, per-gesture cancellation, global Cancel and explicit-only persistence; accept existing freeform v1 files without reviving stale compression preferences.
+- Preserve exact active resize anchors through direct-preview projection, native scrollbar entry/removal and scroll clamping. Measure native scrollbar reservation, share the existing solver budget across transition passes, and add per-frame logical/DOM traces at DPR 1/1.25.
+- Restrict experimental widget-layout Tab stops, arrow shortcuts and focus outlines to the actual Vite development renderer. Preserve production pointer editing and native form/control/splitter navigation with mode-specific desktop regressions.
 - Correct live multi-widget reflow with contact pruning, deterministic constrained-first fallback, reduced finite search budgets and frame-coalesced pointer updates. Allow minimum-size narrow widgets to reach adjacent free space without distant-hole search.
 - Make horizontal expansion Main-only and content-dependent. Use one vertical Sidebar scroll owner; enforce finite, non-scrolling Bottom with explicit infeasibility recovery and compact eligible fixtures retaining all text.
 - Set provisional requested/minimum Sidebar width to 230px and Bottom height to 120px, preserving maximum caps, safe viewport clamps and collapse restoration. Distinguish the existing 15px status strip with a subtle border and tone.

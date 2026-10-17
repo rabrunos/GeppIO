@@ -4,6 +4,7 @@ import { candidate, collides, validLayout } from '../src/shared/freeform/geometr
 import { CONSTRAINTS, constraintsFor, DEFAULT_FREEFORM, POLICY } from '../src/shared/freeform/policy.ts'
 import { reflow } from '../src/shared/freeform/reflow.ts'
 import { transfer } from '../src/shared/freeform/transfer.ts'
+import { settlePlacements, settleSnapshot } from '../src/shared/freeform/settlement.ts'
 import { DIRECTIONS } from '../src/shared/freeform/types.ts'
 import type { Constraints, Placement, Surface } from '../src/shared/freeform/types.ts'
 
@@ -12,6 +13,60 @@ const p = (id: string, x: number, y: number, width = 200, height = 200): Placeme
 function constraints(ps: Placement[], fixed = false): Constraints {
   return Object.fromEntries(ps.map(p => [p.id, { ...CONSTRAINTS[p.id]!, min: { width: fixed ? p.width : 100, height: fixed ? p.height : 100 }, resizeX: !fixed, resizeY: !fixed }]))
 }
+
+test('eight resize boundaries: held reversal, settled B/C compression, exact anchors and three independent baselines', () => {
+  const surface = { ...main, width: 800, height: 800 }
+  for (const direction of DIRECTIONS) {
+    const horizontal = /[ew]/.test(direction), negative = horizontal ? /w/.test(direction) : /n/.test(direction)
+    const source = [p('summary', 100, 200, 200, 200), p('chart', 310, 200, 180, 200), p('notes', 500, 200, 300, 200)].map(p => {
+      let q = { ...p }
+      if (negative) q.x = 800 - q.x - q.width
+      if (!horizontal) q = { ...q, x: q.y, y: q.x, width: q.height, height: q.width }
+      return { ...q, preferred: { width: q.width, height: q.height } }
+    })
+    const cs = constraints(source), original = structuredClone(source), active = source[0]!
+    let preview = source
+    for (const delta of [1, 9.125, 37.375, 100]) {
+      const dx = /w/.test(direction) ? -delta : /e/.test(direction) ? delta : 0
+      const dy = /n/.test(direction) ? -delta : /s/.test(direction) ? delta : 0
+      const requested = candidate(active, dx, dy, direction, surface, cs[active.id]!)
+      const result = reflow(source, active.id, requested, surface, cs, direction)
+      assert.equal(result.status, 'valid', direction); assert.ok(validLayout(result.placements, surface, cs))
+      const next = result.placements[0]!
+      assert.equal(next.x, requested.x); assert.equal(next.y, requested.y)
+      assert.equal(next.width, requested.width); assert.equal(next.height, requested.height)
+      if (!/w/.test(direction)) assert.equal(next.x, active.x)
+      if (!/e/.test(direction)) assert.equal(next.x + next.width, active.x + active.width)
+      if (!/n/.test(direction)) assert.equal(next.y, active.y)
+      if (!/s/.test(direction)) assert.equal(next.y + next.height, active.y + active.height)
+      preview = result.placements
+    }
+    assert.notDeepEqual(preview.slice(1), source.slice(1), direction)
+    assert.deepEqual(reflow(source, active.id, active, surface, cs, direction).placements, original, 'Reversal uses original full snapshot')
+    const settled = settlePlacements(preview), beforeSecond = structuredClone(settled)
+    const second = reflow(settled, active.id, active, surface, cs, direction)
+    assert.equal(second.status, 'valid'); assert.deepEqual(second.placements.slice(1), settled.slice(1), direction)
+    const thirdSource = settlePlacements(second.placements)
+    const third = reflow(thirdSource, active.id, candidate(thirdSource[0]!, 0, -10, 'move', surface, cs[active.id]!), surface, cs, 'move')
+    assert.equal(third.status, 'valid'); assert.deepEqual(third.placements.slice(1), settled.slice(1), direction)
+    assert.deepEqual(source, original); assert.deepEqual(settled, beforeSecond)
+  }
+})
+
+test('move settlement retains both displaced and compressed neighbors; existing preferences settle without schema changes', () => {
+  const surface = { ...main, width: 800, height: 400 }
+  const source = [p('summary', 100, 100), p('chart', 310, 100, 180), p('notes', 500, 100, 300)], cs = constraints(source)
+  const first = reflow(source, 'summary', { ...source[0]!, x: 200 }, surface, cs, 'move')
+  assert.equal(first.status, 'valid'); assert.ok(first.placements[2]!.width < 300)
+  const settled = settlePlacements(first.placements)
+  const second = reflow(settled, 'summary', source[0]!, surface, cs, 'move')
+  assert.equal(second.status, 'valid'); assert.deepEqual(second.placements.slice(1), settled.slice(1))
+  const snapshot = { ...DEFAULT_FREEFORM, placements: first.placements }, old = structuredClone(snapshot)
+  const accepted = settleSnapshot(snapshot)
+  assert.deepEqual(snapshot, old); assert.equal(settleSnapshot(accepted), accepted)
+  assert.equal(accepted.placements[0], first.placements[0], 'Unchanged metadata keeps identity')
+  assert.deepEqual(accepted.placements[2]!.preferred, { width: accepted.placements[2]!.width, height: accepted.placements[2]!.height })
+})
 test('CSS pixels remain continuous; eight anchored directions, minima/maxima and region axes', () => {
   const original = p('summary', 137.25, 83.125, 327.75, 246.5)
   const cs = constraints([original])
@@ -107,6 +162,17 @@ test('bounded pruning preserves previously successful dense rearrangements', () 
     const result = reflow(DEFAULT_FREEFORM.placements, id, candidate(active, delta, delta, kind, s, cs[id]!), s, cs, kind)
     assert.equal(result.status, 'valid', `${id} ${kind} ${delta}`); assert.ok(validLayout(result.placements, s, cs))
     assert.ok(result.probes <= 8192)
+  }
+})
+
+test('scrollbar transition passes share finite remaining probe and state budgets', () => {
+  const s = { ...main, ...DEFAULT_FREEFORM.reference.main }, cs = constraintsFor(s), active = DEFAULT_FREEFORM.placements[1]!
+  const request = candidate(active, 300, 300, 'move', s, cs[active.id]!)
+  for (const budget of [{ probes: 0, states: 0 }, { probes: 12, states: 3 }, { probes: 200, states: 20 }]) {
+    const result = reflow(DEFAULT_FREEFORM.placements, active.id, request, s, cs, 'move', budget)
+    assert.ok(result.probes <= budget.probes && result.states <= budget.states)
+    assert.ok(validLayout(result.placements, s, cs))
+    if (!budget.probes) assert.equal(result.status, 'blocked')
   }
 })
 
