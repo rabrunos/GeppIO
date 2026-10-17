@@ -1,6 +1,124 @@
-# Bounded square-cell Main grid
+# Region-aware continuous widget geometry
 
-## Experimental horizontal engine — Issue #28
+## Active model — Issue #29 / alpha.12
+
+Mandatory cell placement is superseded. The only active renderer is App → freeform/; no grid
+metrics, cell rounding, square requirement, row count or column count participates in placement.
+The workbench still uses structural CSS grid to arrange peer regions, independently of widgets.
+Pure TypeScript in src/shared/freeform owns rectangles in CSS pixels (including fractional pixels),
+region ownership, constraints, collision, projection, transfers, codecs and storage adapters.
+
+### Coordinates, constraints and regions
+
+Each region owns one ordinary 15px content inset. Coordinates start at that inner content origin.
+Bounded mode retains all four insets; expanded Main/Bottom omit the right inset and use a native
+thin horizontal scrollbar. Its normal space reservation is included in measured available height.
+No overlay border/mask, duplicate 9px inset, range-input scrollbar or phantom world-end margin exists.
+The clearance predicate reuses the project's legacy continuous tooClose: 10px on a separating axis
+whose orthogonal interiors intersect, with the historical diagonal-only exception. Exterior margins
+are independent of widget clearance.
+
+Constraint records declare min/default/max CSS-pixel dimensions, resize axes, eligible regions,
+overflow and region-responsive behavior. constraintVersion:1 binds saved geometry to this bundled
+contract; imported JSON cannot grant permissions or override minima. Actual geometry and preferred
+dimensions are separate. Main supports both axes/eight handles. Sidebar fixes x=0 and follows inner
+width, editing y/height; Bottom fixes y=0 and follows inner height, editing x/width. Navigation and
+toolbar remain structural. Summary/chart are eligible in all regions; queue is Main-only; other
+fixtures support Main/Sidebar. A Bottom content height below 112px rejects Summary/chart, preserving
+the existing region caps. A collapsed or too-small region retains composition with a warning.
+
+The minimal transfer route uses the same solver, accepts only eligible feasible targets and rejects
+atomically. Pointer drops and the selected-widget region selector provide mouse/keyboard routes.
+All fixture frames have one stable React parent. Per-frame CSS clipping maps their region origin and
+scroll offsets into Work Area coordinates; moving between regions does not change component keys or
+portal roots. Offscreen frames remain mounted with content-visibility:auto and inert focus handling.
+There are three constant-size scroll worlds and seven actual fixtures, not empty cells. Plugin widgets
+remain in their separate tray; usePlugins remains App-owned and geometry never manages Workers.
+
+### Direct manipulation and bounded search
+
+The newer project-owned grid solver supplies the operational phases/ranking, adapted to continuous
+contact edges: forward local push; impacted-axis boundary compression; preferred-size nearby contact
+slots; bounded multi-widget rearrangement. Each complete solution ranks affected widget count,
+Manhattan travel, spatial-order changes and preference error. Contact combinations replace integer
+slot enumeration; local travel is capped at twice the affected widget's largest dimension plus gap.
+There are at most 4096 states per phase and 131072 probes per operation. This is conservative bounded
+search, not a complete global packer. Failure keeps the last valid preview and reports the constraint.
+No gravity or compulsory compaction exists. Preferred recovery tries in-place then nearby valid contact
+positions without displacing unrelated widgets; remaining in-place slack can restore partially.
+Recovery never undoes newly required compression through an immediate lateral escape in the same gesture.
+
+Pointer gestures derive every update from their original snapshot, include scrollLeft/scrollTop and
+keep real CSS-pixel deltas without rounding or snapping. Opposite resize edges stay anchored. Edge
+auto-scroll advances concrete active intention; only successful occupied rectangles grow the world.
+Escape, pointercancel, lost capture or changed region measurements restore the gesture source.
+Keyboard steps are 1px, Shift 10px. Layout Cancel restores the previously committed canonical source.
+
+### Stable projection, expansion and recovery
+
+Horizontal expansion defaults OFF, remembered independently under geppio:layout:expansion:v1.
+Both settings use the same rectangles/solver. Expanded Main/Bottom preserve horizontal coordinates
+and dimensions across width changes; world width is max(visible width, furthest occupied right edge),
+without trailing padding. Browser integer scrollWidth may round its final subpixel (under one CSS px).
+During pointer capture only, hold the starting occupied width so contraction-induced native scroll
+clamping cannot feed back into the gesture's delta. Release contracts immediately to current occupancy.
+Sidebar never acquires arbitrary horizontal placement. Coordinates/worlds are capped at 100000px,
+individual dimensions at 4096px, known documents at seven fixtures (engine cap 16), input at 64 KiB.
+No pixel/cell-count-dependent arrays are allocated.
+
+Bounded presentation projects from one stable canonical/edit source and each region's recorded inner
+reference size. Continuous interval fitting retains source separation DAGs in each axis, preserves
+edge affinity and intentional normalized gaps where feasible, and scales/compresses dimensions down
+to declared pixel minima. Binary fitting replaces integer steps. Equal source/reference/measurements
+produce equal results; A→B→A never accumulates drift. Empty spaces do not attract widgets. Sidebar
+width/Bottom height track the measured cross axis. If the source relationships/minima cannot fit,
+retain source rectangles in a finite recoverable scroll area and warn rather than overlap/delete/shrink
+below minima. Restore region space to recover. Save is blocked while an occupied region is infeasible.
+Scrolling, window/region resizing, collapse and preference toggles never write layout positions.
+
+### Persistence and historical data
+
+geppio:layout:freeform:v1 stores {schemaVersion:1,engine:'freeform',constraintVersion:1,reference,
+placements}. reference records CSS-pixel inner sizes for Main/Sidebar/Bottom; each placement records
+id, region, x/y/width/height and preferred width/height. Validation enforces exact registry membership,
+ownership/eligibility, finite coordinate/document limits, minima/maxima, cross-axis rules and clearance.
+Corrupt/unknown future schemas are withheld recoverably, with unchanged original bytes. Unknown or
+missing widgets reject the document rather than silently dropping content. Themes stay independent.
+
+Old fractional v1, responsive grid v2 and horizontal v1 keys are never written by the new engine.
+When no freeform source exists, Settings exposes separate historical choices rather than silently
+selecting among customizations. Conversion is a read-only preview; only explicit Save adopts it.
+v1 uses its documented 960×620 reference. Since grid/horizontal schemas never stored CSS viewport
+sizes, conversion visibly uses documented stable pitches (70px responsive, 62px horizontal), removes
+the historical 10px trailing cell gutter and never rounds to a grid. Current content minima/clearance
+are enforced; impossible conversions reject with originals intact. Import accepts freeform or one
+explicitly selected historical JSON copy; stored historical keys also have separate preview buttons.
+Cancel abandons adoption.
+
+Save validates then acquires a same-origin Web Lock and compares previously observed bytes before
+synchronous replacement. A generation token invalidates queued Save on Cancel/another preview. Quota,
+unavailable storage and external byte changes retain the draft for recovery. This coordinates normal
+same-origin writers, not hostile trusted plugins with shared origin authority or all OS failure modes.
+Full process restart uses the same validated freeform source; session-only region sizes may initially
+need reopening/enlargement. Installed plugin preferences and lifecycle boundaries are unchanged.
+
+### Workbench chrome
+
+Open Sidebar/Bottom keep the established pixel bounds (including 300px/20% and 180px/25% caps,
+Main reserve and safe relaxed minima in tiny viewports). Dragging 20px past the functional minimum
+collapses completely; header controls reopen the prior requested size, clamped for the viewport.
+Arrow steps, Shift, Home collapse and Escape/capture cancellation are supported. A separate empty
+15px status strip spans the window below Work Area and cannot enter widget collision/scroll geometry.
+Its contents are an extension point, not invented indicators. The test panel retains Overlay/Docked.
+
+## Historical alpha.7–alpha.11 engines (inactive placement)
+
+The following records describe superseded experiments and their retained codecs/tests. They are
+historical evidence, not active product requirements. Their old renderer modules are isolated from
+App/Settings and remain reference code; old UI smoke is not invoked against the freeform app.
+
+
+### Historical horizontal engine — Issue #28
 
 Alpha.11 starts each session with **Horizontal — 10 linhas**; Settings > Development selects
 **Responsivo atual** independently. Neither experiment has final owner acceptance. The responsive

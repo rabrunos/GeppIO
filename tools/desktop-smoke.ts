@@ -5,10 +5,8 @@ import { join, resolve } from 'node:path'
 import assert from 'node:assert/strict'
 import ts from 'typescript'
 import type { Page } from 'playwright'
-import { gridSmoke } from './grid-smoke.ts'
-import { GRID_KEY } from '../src/shared/grid/policy.ts'
-import { horizontalPluginSmoke, horizontalSmoke } from './horizontal-smoke.ts'
-import { selectLayoutMode } from './layout-mode-smoke.ts'
+import { freeformSmoke, freeformPluginSmoke } from './freeform-smoke.ts'
+import { FREEFORM_KEY } from '../src/shared/freeform/policy.ts'
 const temporary = await mkdtemp(join(tmpdir(), 'geppio-smoke-'))
 await mkdir('.local/diagnostics', { recursive: true })
 const env: Record<string, string> = {
@@ -92,14 +90,11 @@ try {
     await page.waitForFunction(({ content, viewport }) => Math.abs(innerWidth - content.after[0]! * viewport.width / content.before[0]!) <= 2
       && Math.abs(innerHeight - content.after[1]! * viewport.height / content.before[1]!) <= 2, { content, viewport })
     await page.waitForFunction(() => {
-      const main = document.querySelector<HTMLElement>('[data-testid="layout-canvas"]')!, r = main.getBoundingClientRect()
-      const inset = main.dataset.engine === 'horizontal' ? 30 : 18
-      return Math.abs(Number(main.dataset.usableWidth) - (r.width - inset)) < .1 && Math.abs(Number(main.dataset.usableHeight) - (r.height - inset)) < .1
+      const port = document.querySelector<HTMLElement>('[data-surface="main"]')!
+      return Math.abs(Number(port.dataset.usableWidth) - port.clientWidth) < .1 && Math.abs(Number(port.dataset.usableHeight) - port.clientHeight) < .1
     })
   }
-  await horizontalSmoke(page, resizeWindow)
-  await selectLayoutMode(page, 'responsive')
-  await gridSmoke(page, resizeWindow)
+  await freeformSmoke(page, resizeWindow)
   await page.getByTestId('edit-layout').click()
   const initial = await page.locator('[data-widget="chart"]').evaluate(element => { const style = (element as HTMLElement).style; return [style.left, style.top, style.width, style.height] })
   const grip = page.getByRole('button', { name: 'Mover Ritmo', exact: true }); await grip.focus(); await page.keyboard.press('ArrowRight')
@@ -111,7 +106,8 @@ try {
     return JSON.stringify([style.left, style.top, style.width, style.height]) === JSON.stringify(expected)
   }, initial)
   await page.getByTestId('edit-layout').click(); await page.getByTestId('save-layout').click()
-  const saved = await page.evaluate(key => localStorage.getItem(key), GRID_KEY)
+  await page.getByTestId('edit-layout').waitFor()
+  const saved = await page.evaluate(key => localStorage.getItem(key), FREEFORM_KEY)
   if (!saved) throw new Error('No saved layout')
   await settings(page)
   await page.getByRole('button', { name: 'Abrir painel', exact: true }).click()
@@ -140,7 +136,7 @@ try {
   await page.getByRole('button', { name: 'Fechar configurações', exact: true }).click()
   await page.getByRole('button', { name: 'Incrementar', exact: true }).click()
   await page.getByText('Cliques nesta ativação: 1', { exact: true }).waitFor()
-  await horizontalPluginSmoke(page)
+  await freeformPluginSmoke(page)
   for (let cycle = 0; cycle < 3; cycle++) {
     await settings(page)
     await counter().getByRole('button', { name: 'Desativar', exact: true }).click(); await status(page, 'local.counter', 'disabled')
@@ -227,6 +223,7 @@ try {
     const page = await application.firstWindow()
     await page.screenshot({ path: '.local/diagnostics/desktop-failure.png' })
     console.error('Plugin failure state:', await page.locator('[data-plugin]').allTextContents())
+    console.error('Renderer failures:', errors)
     await writeFile('.local/diagnostics/desktop-console-errors.json', JSON.stringify(consoleErrors, null, 2))
   }
   throw error

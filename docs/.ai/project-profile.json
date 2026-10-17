@@ -4,7 +4,7 @@
   "project": {
     "name": "geppio",
     "kind": "desktop-workbench-prototype",
-    "summary": "Windows-first local workbench prototype with peer regions, a responsive integer square-cell Main grid, trusted experimental local plugins and a future permissioned untrusted-plugin platform."
+    "summary": "Windows-first local workbench prototype with peer regions, region-aware continuous CSS-pixel widget placement, trusted experimental local plugins and a future permissioned untrusted-plugin platform."
   },
   "owner": {
     "repository_language": "en",
@@ -41,7 +41,7 @@
   "architecture_invariants": [
     "Fixed header outside widget arrangement.",
     "The prototype represents Sidebar, Main and Bottom as siblings; the owner discussion about the final abstraction remains open.",
-    "Responsive integer Main grid: columns and rows adapt from stable sources, square cells are permanently centered, no Main scrolling; viewport changes do not write saved layouts (Issue #24).",
+    "Continuous CSS-pixel geometry across Main/Sidebar/Bottom; bounded default, optional content-bounded horizontal expansion, stable-source reversible projection and no viewport-only layout writes (Issue #29). Historical grid data remains preserved.",
     "Editing layout requires an explicit mode.",
     "Presentation, anchor and collapsibility remain independent concepts.",
     "A plugin is not equivalent to a widget; trusted local packages run in disposable Web Workers with declarative widgets and lifecycle limits. This experimental runtime is not secure isolation for untrusted plugins.",

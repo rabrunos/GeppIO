@@ -2,6 +2,15 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.12] — 2026-10-16
+
+- Replace active cell-grid placement with one CSS-pixel freeform engine in Main, Sidebar and Bottom (Issue #29). Preserve continuous pointer input, local pushing, boundary compression, preferred-size recovery and bounded contact rearrangement; retain grid codecs/tests as historical recovery.
+- Add typed pixel minima/defaults/maxima, region eligibility and axis constraints. Main edits both axes, Sidebar follows inner width and Bottom follows inner height. Eligible fixture transfers retain mounted content; insufficient minima reject safely.
+- Default to bounded, reversible source-derived viewport projection. Persist optional horizontal expansion independently; occupied content owns its finite extent with no right-world padding. Use one 15px inset and 10px inter-widget clearance, ordinary accessible region scrolling and no stationary frame/overlay scrollbar.
+- Add complete Sidebar/Bottom collapse with accessible reopening, requested-size restoration and keyboard/capture cancellation; retain sizing caps and reserve an independent empty 15px status strip.
+- Introduce independently validated freeform v1 persistence, historical preview choices, explicit Save/Cancel, byte-conflict detection and same-origin Save serialization. Never rewrite historical keys or layout positions on viewport/region/configuration changes. Keep App-owned trusted Workers and stateful offscreen fixtures mounted.
+- Add continuous geometry/projection/negative-storage tests and disposable Windows interaction/region/migration/plugin smoke with DPR 1/1.25 coverage. Physical DPI and final owner visual acceptance remain separate.
+
 ## [0.1.0-alpha.11] — 2026-10-09
 
 - Add the default experimental Horizontal — 10 linhas engine beside the independently selectable alpha.10 responsive engine (Issue #28). Size square cells from complete Main height, with a single fixed 15px viewport frame and a non-reserving 4px scrollbar inside its bottom edge.

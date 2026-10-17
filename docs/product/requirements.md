@@ -37,31 +37,43 @@ Main supports two-dimensional rectangular compositions, not just equal columns. 
 
 ## Layout and interaction requirements
 
-**Intentional editing.** Normal use must not accidentally move or resize widgets. The user explicitly enters layout editing, enabling title movement and eight-direction resize with integer grid snapping. Core content remains usable in normal mode. Issue #24 retains explicit Save/Cancel and accessible keyboard controls.
+**Active direction — Issue #29 / alpha.12.** The owner supersedes mandatory cell positioning.
+Widgets use continuous CSS-pixel coordinates and independent dimensions, with explicit pixel
+min/default/max constraints, preferred sizes, resize axes and region eligibility. Edit-only dragging,
+eight-direction Main resize, keyboard operation and explicit Save/Cancel remain. Preserve local push,
+compression, preferred-size restoration, bounded minimal rearrangement, intentional empty space,
+snapshot reversal and safe rejection. There is no snapping grid, square-cell or fixed row/column rule.
 
-**Alpha.11 comparison ([Issue #28](https://github.com/rabrunos/GeppIO/issues/28)).** Each session starts
-with **Horizontal — 10 linhas**; Development also offers **Responsivo atual**. Horizontal uses the whole
-Main height for ten square-cell rows, one fixed 15px viewport frame, internal 10px gutters and a thin
-non-reserving scrollbar inside the bottom frame. Width changes only the visible horizontal range;
-occupied content expands/contracts the finite world. Coordinates survive window/region resizing.
-Each engine has independent validated persistence, with no automatic conversion or viewport writes.
-Only explicit Save commits horizontal data; drafts block mode switching. Mounted fixture/form state
-and plugin Worker functionality survive scrolling/switching. The alpha.10 rules below apply to the
-preserved responsive engine. Neither engine is the final accepted design; physical visual comparison
-and pathological-size policy remain owner decisions. See [layout](../architecture/layout.md) for bounds.
+Main is two-dimensional. Sidebar organizes widgets vertically with width following its inner region;
+Bottom organizes horizontally with height following its inner region. Keep navigation/toolbar fixed;
+eligible bundled fixtures can transfer between feasible regions without losing mounted form state.
+The small initial Bottom cannot fit the 112px content minimum; reject rather than relax minima/caps.
+Full third-party plugin-to-region integration is outside this increment.
 
-**Current Main grid ([Issue #24 composition contract](https://github.com/rabrunos/GeppIO/issues/24#issuecomment-6080536542)).** The owner superseded the alpha.1–alpha.6 continuous editor and fixed 12×8 viewport geometry with a GeppIO-owned responsive integer grid. Both columns and rows adapt to usable Main dimensions from one stable saved/edit source, with square cells and no Main scrolling. 12×8 remains a reference composition. Preserve sides/corners, meaningful separation/order, neighborhood, intentional gaps and no gravity. Adapt positions and actual spans together within declared constraints before displacing neighbours; viewport-only adaptation must never freely pack widgets across Main or reverse their spatial relationships. Continuous pixel density and coherent integer quantization take priority over unchanged preferred spans or marginal coverage. Preserve preferred-size intent separately. Viewport projections are reversible and never overwrite saved v1/v2 bytes; explicit Save commits the projected draft and its bounds, Cancel restores the prior source. Always center in both axes; there is no alignment preference or Development switch. Retain approved direct eight-direction resize/collision behavior separately. Constrained projections retain composition and warn about larger margins instead of lowering minima or hiding widgets.
+Placement is bounded by default. **Ativar expansão horizontal** is initially OFF and remembered
+independently of positions. Expanded Main/Bottom use only occupied horizontal extent, finite limits
+and ordinary scrolling; Sidebar preserves vertical organization. Every region owns one provisional
+15px inset (no right-world inset when expanded), independent of approximately 10px widget clearance.
+Remove the stationary frame, overlay mask and special bottom-frame scrollbar. Stateful offscreen
+fixtures and App-owned trusted Workers continue running.
 
-**Constraints and collisions.** Typed per-widget grid constraints separate min/default/max size and allowed axes from content and plugin authority. Under Issue #24, Main has no gravity or hidden row growth. Move/resize uses local push, boundary compression, original preferred-size relocation and bounded minimal rearrangement; impossible attempts keep the last valid snapshot. The symmetric provisional gutter and initial row policy remain subject to owner visual acceptance.
+Window/region resizing derives reversible presentation from stable canonical pixel references and
+must never write saved positions. When minima/source relationships cannot fit, preserve composition
+in an explicitly warned finite recoverable scroll area, without overlap, deletion or illegal shrinking.
+Save adopts a validated freeform source under its own versioned key; Cancel restores the prior source.
+Preserve fractional v1, responsive v2 and horizontal v1 bytes. Offer historical preview choices without
+silently selecting among customizations. Corrupt/future/unknown/missing-widget input is recoverable.
 
-**Window changes (Issue #24 composition refinement).** Derive responsive columns, rows, positions and dimensions from the current saved/edit composition, including recent deliberate edits; never accumulate automatic projections. Fit square pixel cells using both available dimensions, reducing symmetric gutters safely in extremely small viewports. Fine-step rendered geometry, order and cold/warm consistency matter in addition to A→B→A equality. Centering itself changes only pixel offsets, not logical units or saved bytes. Internal widget scrolling is allowed; Main scrolling and hidden row growth are not. Independently resize Sidebar width and Bottom height in pixels under Issue #26's unchanged provisional live bounds. Persisted input is validated/versioned and invalid data must not silently overwrite usable state. Integer-cell size steps and constrained-space legibility remain subject to owner visual evaluation; animation polish is deferred.
+Sidebar/Bottom retain existing live resize limits and Main reserve; collapsing beyond the minimum
+removes the whole region. Accessible header controls reopen its prior requested size and composition.
+Keep keyboard/capture cancellation. A separate empty provisional 15px status strip remains fixed at
+the window bottom, outside region placement/scroll/collision. Themes remain independent preferences.
+The [layout architecture](../architecture/layout.md) defines projection, limits and historical pitches.
+Physical Windows UX, provisional margins and final visual acceptance remain owner checks in Issue #29.
 
-The [alpha.10 margin correction](https://github.com/rabrunos/GeppIO/issues/24#issuecomment-6082287645)
-requires both topology axes to follow the actual feasible square-cell size. A constraint on one
-axis must not leave an avoidable band on the other. Retain intentional empty cells within the
-composition; distinguish unavoidable margins under declared limits from unused space that a
-valid, composition-preserving topology can recover. Identical source, edit reference and Main
-measurements must agree across maximize/restore, repeated Edit/Cancel and cold rendering.
+**Historical direction.** Issues #24/#28 and alpha.7–alpha.11 introduced integer responsive/horizontal
+experiments. Their codecs, stored bytes and focused tests remain recovery/reference context; cell-grid
+rules and alpha.11 mode selection no longer define the active product. Source history is preserved.
 
 **Presentation.** Normal widgets participate in their region. Docked panels consume region space. Overlays cover content without resizing it. Top/right/bottom/left anchors are separate from presentation. An overlay can be unanchored/floating. Collapsibility is separate from presentation and from resize capability; a permanent widget is possible. A collapsed widget must have an obvious way to reopen. Hiding UI must not be confused with stopping its future background activity.
 

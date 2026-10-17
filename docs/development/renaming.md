@@ -13,7 +13,7 @@ BootCrate attribution and historical `semnome`/Geptor evidence remain truthful.
 | Display / window / HTML title | GeppIO | No display alias |
 | Production origin | `geppio://app` | `semnome://app` only in a dedicated inert recovery session |
 | Narrow preload bridge | `window.geppio` | No old bridge alias or expanded operations |
-| Layout key | `geppio:layout:v1` | Read `semnome:layout:v1` only during migration |
+| Native identity recovery key | `geppio:layout:v1` | Read `semnome:layout:v1` only during identity migration; freeform uses its separate key |
 | Desktop data / session directory | OS appData + `geppio` | OS appData + `semnome` retained untouched |
 | Smoke override | `GEPPIO_TEST_USER_DATA` | Only regular OS-temp `geppio-smoke-*` fixture roots |
 | Plugin IDs, revisions and preferences | Existing IDs unchanged | `local.counter`, `local.pulse` remain independent |
@@ -51,6 +51,12 @@ Repeat launches keep the new profile and layout. Production/dev recovery occurs 
 each origin is first opened. Original/backup bytes remain available even when Chromium cannot read
 a corrupt database. A failed layout transfer warns; do not save a replacement before recovering
 the desired draft. Missing old drafts use the normal default. There is no automatic plugin merge.
+
+Issue #29 leaves this native identity migration unchanged. The renderer now offers separate read-only
+historical previews and adopts CSS-pixel geometry only on explicit Save to `geppio:layout:freeform:v1`.
+Importing one historical JSON copy remains a recovery preview; original v1/v2/horizontal keys are intact.
+The desktop identity smoke verifies this explicit choice/adoption and freeform restart in addition to
+the existing profile, backup, plugin and negative-protocol assertions.
 
 ## Backup, rollback and existing destinations
 

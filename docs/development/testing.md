@@ -1,6 +1,48 @@
 # Validation guide
 
-## Alpha.11 horizontal comparison / Issue #28
+## Active freeform acceptance — Issue #29 / alpha.12
+
+Run pnpm check, pnpm test:desktop, pnpm test:desktop:dev, the desktop launcher with --scale125,
+and git diff --check. On Windows with a blocked PowerShell script shim, pnpm.cmd invokes the same
+scripts without weakening ExecutionPolicy. All Electron runs allocate disposable profiles; never
+use owner userData. Actual outcomes/CI/Git evidence belong in Issue #29, not this guide.
+
+tests/freeform-geometry.test.ts exercises arbitrary fractional pixels, eight anchored directions,
+region axes, direct local push chains, far-edge compression, preferred recovery, bounded rearrangement,
+impossible rejection, stable reversal, solver budgets, representative fixture sweeps and transfers.
+tests/freeform-projection.test.ts sweeps one-pixel widths at several heights, checks minima/clearance,
+source immutability and A→B→A, finite warned fallback, occupied expanded extent and region cross axes.
+tests/freeform-storage.test.ts covers exact pixel serialization, ownership/eligibility/count/version/
+finite/minimum/document failures, all historical choices without original-key writes, quota and byte
+conflicts. Retain the older grid/fractional tests unchanged as codec/migration/algorithm regressions.
+
+tools/freeform-smoke.ts is called by the production/development/scale launchers. It measures actual
+DOM rectangles in both themes/restored/narrow/maximized windows; checks the single 15px inset and
+independent 15px status strip, pixel-exact arbitrary movement/resize/reload, eight handles, keyboard,
+live compression/reversal/preferred recovery, occupied scrolling/contraction, form identity and actual
+Sidebar/Bottom placement. Exercise region collapse/reopen, size restoration and impossible small
+Bottom/incompatible transfers. Validate no viewport-only writes, Save/Cancel, historical choices,
+corrupt/future/oversized data, quota, concurrent bytes and queued Save followed by Cancel. Plugin
+smoke retains real Counter/Pulse Worker identities/actions/background updates across offscreen
+scrolling and expansion; existing lifecycle/identity/negative-Electron tests remain mandatory.
+
+Representative before/after captures, numeric geometry and bounded DOM observations live in ignored
+.local/diagnostics. No empty cells or large synthetic world arrays are required. Observed resource
+samples do not certify arbitrary third-party plugin performance. Forced Chromium DPR 1.25 is automated
+CSS/device-scale coverage; it does not establish the owner's physical display DPI or subjective UX.
+
+Owner physical checks: both themes, normal/maximized/narrow windows and usual Windows DPI; smooth
+push/compression/no teleport/no gravity, all eight handles, cancellation/focus, normal content scrolling,
+Sidebar/Bottom cross-axis behavior and collapse/reopen, small Bottom rejection, reversible fallback,
+historical adoption/rollback and no form/Worker loss. Keep Issue #29 open pending owner visual acceptance.
+
+## Historical validation below
+
+The following describes retained earlier contracts/tests. Old grid/horizontal DOM smoke tools are
+reference material and are no longer called against the active freeform app. Their grid codecs and
+pure regression tests still run in pnpm test. Statements about the previous active UI are historical.
+
+## Historical alpha.11 horizontal comparison / Issue #28
 
 `tests/grid-horizontal.test.ts` covers height-only ten-row geometry, bounded extent, the independent
 codec, hostile/corrupt/oversized input, unchanged old keys, quota/concurrent-save rejection and reflow
@@ -36,7 +78,7 @@ The dependency-free test command may run in a constrained source-inspection envi
 
 ## Core cases
 
-### Current alpha.10 grid / Issue #24
+### Historical alpha.10 grid / Issue #24
 
 `tests/grid-geometry.test.ts`, `grid-projection.test.ts`, `grid-reflow.test.ts` and `grid-storage.test.ts` exercise square-cell
 fit in both dimensions (including tiny viewports), mandatory centered coordinates, eight anchored

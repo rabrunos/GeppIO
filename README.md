@@ -60,33 +60,36 @@ Cabeçalho fixo, Sidebar, Main e Bottom. Dez tipos de widgets fictícios: sete n
 navegação lateral, a barra inferior e um painel recolhível de demonstração. Os exemplos não
 executam integrações: servem para testar espaço, leitura, rolagem e interação.
 
-**Editar layout** libera movimento e redimensionamento dos sete widgets da Main.
-Configurações > Desenvolvimento permite comparar **Horizontal — 10 linhas** (inicial a cada
-sessão) e **Responsivo atual** (motor da alpha.10, preservado). O horizontal usa dez linhas,
-células quadradas calculadas pela altura da Main, uma única moldura fixa de 15px e rolagem
-horizontal limitada ao conteúdo. A barra discreta fica dentro dos 15px inferiores, sem reservar
-espaço. Alterar largura, altura ou divisores preserva as coordenadas lógicas. Cada modo carrega
-e salva sua própria composição; somente **Salvar layout** grava o horizontal. Salve ou cancele
-a edição antes de trocar de modo. Campos e plugins permanecem ativos fora da tela.
+**Editar layout** libera posições e dimensões livres em pixels CSS, sem células ou encaixe
+obrigatório. Arraste pelo título ou use setas (1px; Shift: 10px). Main permite movimento e oito
+direções de redimensionamento; Sidebar organiza verticalmente e acompanha sua largura interna;
+Bottom organiza horizontalmente e acompanha sua altura interna. Selecione um widget e use
+**Mover widget** no cabeçalho para transferi-lo a uma região compatível. A navegação e a toolbar
+continuam fixas. Bottom precisa ser ampliada antes de receber os exemplos compatíveis.
 
-No responsivo, a grade usa 12×8 como composição de referência. Colunas e linhas se adaptam
-à largura e à altura da Main, redistribuindo os widgets com células quadradas, centralização
-permanente e sem rolagem.
-Os tamanhos preferidos e a vizinhança são preservados quando há espaço; margens maiores em
-proporções extremas recebem um aviso. Redimensionar a janela ou os divisores gera uma projeção
-reversível, sem gravar nem acumular alterações no layout. Movimento e as oito bordas/cantos usam
-unidades inteiras; setas no controle em foco também movem/redimensionam. Vizinhos podem ser
-empurrados, comprimidos ou reorganizados dentro dos limites. Tentativas sem espaço mantêm a
-última prévia válida. **Editar layout** parte da projeção visível; **Salvar layout** confirma sua
-composição e seus limites atuais. **Cancelar** restaura a composição salva, projetada nesta janela.
-O layout fracionário v1 continua preservado; sua conversão vira uma grade salva somente após
-confirmação explícita. Falhas de recuperação oferecem importação ou prévia inicial nas Configurações.
+Vizinhos podem ser empurrados, comprimidos até seus mínimos em pixels e recuperar tamanhos
+preferidos. Rearranjos são limitados; tentativas impossíveis preservam a última prévia válida.
+Não há gravidade nem compactação de espaços vazios. Cada região tem uma margem interna de 15px;
+o afastamento entre widgets é de aproximadamente 10px.
 
-Configurações > Desenvolvimento reúne seleção experimental, importação e prévia inicial do
-modo ativo, além do painel de teste. O painel demonstra Overlay e Docked no responsivo;
-no horizontal ele aparece em Overlay para preservar a geometria da Main. Overlay também permite
-posição central. A barra inferior o reabre. Sidebar e Bottom têm divisores independentes em pixels,
-por mouse ou teclado. Temas claro/escuro demonstram tokens visuais, não um instalador de temas.
+**Ativar expansão horizontal**, em Configurações > Desenvolvimento, começa desligado e persiste
+independentemente da composição. Quando ativo, Main e Bottom expandem somente até os widgets
+ocupados, sem margem vazia permanente à direita. Sidebar mantém sua organização vertical.
+Campos e Workers continuam montados e ativos fora da tela. O plugin experimental ainda usa
+sua própria faixa; esta versão não adiciona integração geral de plugins às regiões.
+
+Janela e divisores geram projeções reversíveis a partir de uma referência estável, sem gravar
+posições. Quando os mínimos não cabem, uma área recuperável com rolagem conserva a composição
+e mostra um aviso. **Salvar layout** adota a prévia em uma nova representação livre; **Cancelar**
+restaura a composição anterior. Layouts fracionário v1, responsivo v2 e horizontal v1 permanecem
+intactos. Configurações oferece prévias históricas separadas, importação de cópias JSON e composição inicial;
+somente Salvar confirma a adoção. Conversões impossíveis informam o limite e preservam o original.
+
+Sidebar e Bottom mantêm os divisores em pixels e os limites anteriores. Arrastar além do mínimo
+recolhe a região completamente; **Reabrir Sidebar/Bottom** no cabeçalho restaura o tamanho pedido.
+Setas operam os divisores; Home recolhe e Escape cancela a sequência ou o gesto em andamento.
+Uma faixa estrutural vazia de 15px permanece fixa na base da janela, fora da disposição dos widgets.
+O painel de teste mantém Overlay/Docked e suas bordas. Temas claro/escuro demonstram tokens visuais.
 
 ## Plugins locais de teste
 

@@ -24,8 +24,9 @@ The compile-time experimental facade is [plugin.d.ts](../../sdk/plugin.d.ts).
 must match the manifest. `reportStatus(text)` exposes bounded lifecycle/background evidence in
 Settings. The host binds identity to the Worker callback, renders text literally and routes only
 published actions back to that Worker. No DOM, HTML, arbitrary CSS, FS/process/native API or
-inter-plugin API is supplied. Widgets appear in a separate strip inside Main; cross-region placement,
-freeform layout persistence and custom isolated surfaces are deferred. Widget surface descriptions
+inter-plugin API is supplied. Plugin widgets appear in a separate strip inside Main; plugin-to-region placement,
+plugin freeform persistence and custom isolated surfaces remain deferred. Issue #29 adds regional
+placement for bundled fixtures only; it does not change this runtime or its authority. Widget surface descriptions
 are separate from activate/dispose, allowing future UI adapters without replacing the logic runtime.
 
 Activation, actions and disposal have a 3-second timeout. Exceptions, invalid messages, undeclared

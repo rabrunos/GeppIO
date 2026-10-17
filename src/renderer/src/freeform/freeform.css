@@ -1,0 +1,46 @@
+/* Each region owns one ordinary inset. Scrollable content has no second padding,
+   stationary overlay frame, mask or decorative scrollbar housing. */
+.main-region { grid-area: main; position: relative; min-width: 0; min-height: 0; display: flex; flex-direction: column; padding: 15px; overflow: hidden; }
+.surface-region.expanded { padding-right: 0; }
+.placement-port { position: relative; flex: 1; min-width: 0; min-height: 0; overflow: hidden; scrollbar-width: thin; overscroll-behavior-x: contain; }
+.expanded .placement-port { overflow-x: scroll; }
+.placement-port.recovery-surface { overflow: auto; }
+/* Keep scrollbar reservation stable across feasible/recovery transitions. Otherwise a
+   near-minimum Bottom could alternate between auto/no bar and forced horizontal bar. */
+.expanded .placement-port.recovery-surface { overflow-x: scroll; overflow-y: auto; }
+.placement-world { pointer-events: none; }
+.freeform-layer { position: absolute; inset: 0; pointer-events: none; z-index: 10; overflow: hidden; }
+.freeform-layer .widget-frame { pointer-events: auto; content-visibility: auto; }
+.plugin-tray { position: absolute; right: 15px; top: 15px; width: min(300px,40%); max-height: 35%; overflow: auto; z-index: 45; }
+.widget-frame { position: absolute; overflow: hidden; border: 1px solid var(--line); background: var(--surface); border-radius: 10px; display: flex; flex-direction: column; container-type: inline-size; }
+.widget-frame[hidden] { display: none; }
+.widget-frame.selected { border-color: var(--accent); }.widget-frame.invalid { border-color: var(--warning); box-shadow: 0 0 0 1px var(--warning); }
+.widget-heading { display: flex; align-items: center; gap: 7px; min-height: 34px; flex-shrink: 0; border-bottom: 1px solid var(--line); padding-right: 10px; background: color-mix(in srgb,var(--surface) 75%,var(--raised)); }
+.widget-grip { display: flex; align-items: center; gap: 6px; text-align: left; padding: 9px 10px; min-width: 0; flex: 1; cursor: default; touch-action: none; }
+.widget-grip strong { font-size: 10px; font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }.grip-dots { font-size: 13px; color: var(--muted); opacity: .35; line-height: 1; }
+.editing .widget-grip { cursor: grab; }.editing .widget-grip:active { cursor: grabbing; }.editing .grip-dots { color: var(--accent); opacity: 1; }
+.widget-kind { font-size: 8px; color: var(--muted); white-space: nowrap; }
+.widget-content { flex: 1; min-height: 0; overflow: auto; scrollbar-width: thin; }
+.resize-zone { position: absolute; z-index: 2; padding: 0; background: transparent; touch-action: none; }
+.resize-zone:hover, .resize-zone:focus-visible { background: color-mix(in srgb,var(--accent) 25%,transparent); }.resize-zone:focus-visible { outline-offset: -2px; }
+.resize-n, .resize-s { left: 14px; right: 14px; height: 7px; cursor: ns-resize; }.resize-n { top: 0; }.resize-s { bottom: 0; }
+.resize-e, .resize-w { top: 14px; bottom: 14px; width: 7px; cursor: ew-resize; }.resize-e { right: 0; }.resize-w { left: 0; }
+.resize-ne, .resize-nw, .resize-se, .resize-sw { width: 14px; height: 14px; z-index: 3; }.resize-ne { top: 0; right: 0; cursor: nesw-resize; }.resize-nw { top: 0; left: 0; cursor: nwse-resize; }.resize-se { bottom: 0; right: 0; cursor: nwse-resize; }.resize-sw { bottom: 0; left: 0; cursor: nesw-resize; }
+@container (max-width: 220px) { .widget-kind { display: none; }.properties-fixture label:not(.check-fixture) { grid-template-columns: 1fr; gap: 4px; }.library-fixture { grid-template-columns: 1fr; }.prose-fixture { padding: 10px; } }
+.sidebar-region.surface-region { padding: 15px; border: 0; overflow: hidden; gap: 10px; }
+.sidebar-navigation { min-height: 0; overflow: auto; scrollbar-width: thin; flex: 0 1 300px; }
+.sidebar-navigation .sidebar-footer { padding-top: 10px; }
+.sidebar-region[hidden], .bottom-region[hidden] { display: none; }
+.bottom-region.surface-region { padding: 15px; border: 0; gap: 6px; overflow: hidden; }
+.bottom-tools { flex-shrink: 0; min-height: 18px; }
+.bottom-region.surface-region.expanded { padding-right: 0; }
+.fixed-status-bar { height: 15px; flex: 0 0 15px; width: 100%; background: var(--surface); }
+.work-area { position: relative; }
+.workspace-feedback { position: absolute; bottom: 16px; left: max(15px,var(--main-start)); right: 15px; z-index: 50; color: var(--muted); font-size: 10px; pointer-events: none; background: var(--surface); }
+.region-transfer { display: flex; align-items: center; gap: 5px; font-size: 10px; }
+.region-transfer select { background: var(--raised); color: var(--ink); border: 1px solid var(--line); border-radius: 5px; padding: 5px; }
+.layout-controls { display: flex; gap: 8px; }
+.test-panel.docked.edge-left, .test-panel.docked.edge-right { width: var(--dock-width); top: 15px; bottom: 15px; }
+.test-panel.docked.edge-left { left: 15px; }.test-panel.docked.edge-right { right: 15px; }
+.test-panel.docked.edge-top, .test-panel.docked.edge-bottom { height: var(--dock-height); left: 15px; right: 15px; }
+.test-panel.docked.edge-top { top: 15px; }.test-panel.docked.edge-bottom { bottom: 15px; }

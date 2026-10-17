@@ -6,8 +6,9 @@ Read only the rows needed for the active Issue. This is a route map, not task st
 | --- | --- |
 | What is the owner building? What remains provisional? | [Product requirements](../product/requirements.md) |
 | Which code owns a responsibility? | [Architecture](../architecture/overview.md) |
-| Integer grid policy, responsive projection, geometry, occupancy, reflow and persistence | [Layout](../architecture/layout.md), `src/shared/grid/`, `tests/grid-*.test.ts` |
-| Grid presentation, pointer/keyboard capture and edit transactions | `src/renderer/src/grid/`, `tools/grid-smoke.ts` |
+| Active continuous geometry, region constraints, stable projection, collision and persistence | [Layout](../architecture/layout.md), `src/shared/freeform/`, `tests/freeform-*.test.ts` |
+| Freeform presentation, stable mounted content, pointer/keyboard capture and transactions | `src/renderer/src/freeform/`, `tools/freeform-smoke.ts` |
+| Historical grid codecs, migration and algorithms (inactive placement) | `src/shared/grid/`, `tests/grid-*.test.ts`, `src/renderer/src/grid/` |
 | Workbench composition, pixel splitters and Development controls | `src/renderer/src/workbench/`, `src/renderer/src/settings/`, `src/renderer/src/App.tsx` |
 | Legacy fractional v1 validation and identity recovery | `src/shared/layout.ts`, `src/shared/layout-defaults.ts`, `src/shared/layout-migration.ts`, `src/main/layout-migration.ts` |
 | Future plugins, APIs, slots and scripts | [Plugin design boundaries](../architecture/plugins.md) |
