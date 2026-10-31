@@ -24,11 +24,15 @@ export interface Organization {
 export interface WorkbenchSnapshot extends Snapshot { organization: Organization }
 export interface FormatSlot { id: string; region: Region; x: number; y: number; width: number; height: number }
 export interface SessionSlot extends FormatSlot { reference: Size }
-export interface SessionDraft { snapshot: WorkbenchSnapshot; slots: SessionSlot[]; formatId: string | null; formatMode?: 'format' | 'widgets' | null; formatSource?: { placements: Placement[]; reference: Snapshot['reference'] } | null }
+export interface LocalSessionState {
+  projectName: string | null; theme: 'light' | 'dark'; snap: boolean;
+  properties: { name: string; density: 'compact' | 'comfortable'; details: boolean }
+}
+export interface SessionDraft { snapshot: WorkbenchSnapshot; slots: SessionSlot[]; formatId: string | null; formatMode?: 'format' | 'widgets' | null; formatSource?: { placements: Placement[]; reference: Snapshot['reference'] } | null; localState?: LocalSessionState }
 export const WORKBENCH_KEY = 'geppio:workbench:v1'
 export const HOME = 'home'
 export const BAR_ICONS = ['home', 'folder', 'star', 'code', 'notes', 'chart', 'library', 'widgets', 'calendar', 'chat', 'terminal', 'queue', 'clock', 'swatch', 'link', 'git'] as const
-export const LIMITS = Object.freeze({ activeBars: 20, savedBars: 100, compositions: 100, favorites: 9, history: 256 })
+export const LIMITS = Object.freeze({ activeBars: 14, legacyActiveBars: 20, savedBars: 100, compositions: 100, favorites: 9, history: 256 })
 const FIXTURES = [
   ['summary', 'Panorama', 'Indicadores'], ['queue', 'Fila de trabalho', 'Organização'],
   ['library', 'Biblioteca', 'Organização'], ['notes', 'Ideias em aberto', 'Anotações'],
@@ -41,7 +45,12 @@ const FIXTURES = [
 export function widgetRegistry(plugins: readonly InstalledPlugin[] = []): Registry {
   const entries: WidgetType[] = FIXTURES.map(([fixture, title, category]) => ({
     id: `host:${fixture}`, owner: 'host', fixture, title, category, description: 'Widget de demonstração do GeppIO.',
-    appearance: 'card', presence: fixture === 'notes' || fixture === 'library' ? 'multiple-areas' : 'single-view', constraint: CONSTRAINTS[fixture]!
+    appearance: 'card', presence: fixture === 'notes' || fixture === 'library' ? 'multiple-areas' : 'single-view', constraint: {
+      ...CONSTRAINTS[fixture]!, regionMin: {
+        sidebar: { width: 150, height: CONSTRAINTS[fixture]!.min.height },
+        ...(['summary', 'chart'].includes(fixture) ? { bottom: { width: CONSTRAINTS[fixture]!.min.width, height: 105 } } : {})
+      }
+    }
   }))
   for (const plugin of plugins) for (const widget of plugin.manifest.widgets) entries.push({
     id: `plugin:${plugin.manifest.id}:${widget.id}`, owner: `plugin:${plugin.manifest.id}`, pluginId: plugin.manifest.id, widgetId: widget.id,

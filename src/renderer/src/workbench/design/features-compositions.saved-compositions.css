@@ -273,7 +273,7 @@
   fill: currentColor;
 }
 
-.composition-markers > [data-composition-action="default"],
+.composition-markers > [data-composition-action="default"][aria-pressed="true"],
 #layout-saved-panel
   .composition-markers
   > [data-composition-action="favorite"][aria-pressed="true"],

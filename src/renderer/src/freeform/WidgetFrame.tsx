@@ -52,7 +52,7 @@ export const WidgetFrame = memo(function WidgetFrame({ placement: p, measurement
         if (!content || (e.deltaY > 0 ? content.scrollTop + content.clientHeight >= content.scrollHeight : content.scrollTop <= 0)) wheel(0, e.deltaY)
       }
     }}>
-    <header className="widget-heading"><strong>{title}</strong></header>
+    <header className="widget-heading" {...(editing ? { ...interaction.handlers(p, 'move'), onClick: undefined, onPointerDown(event) { if (!(event.target as HTMLElement).closest('button,input,textarea,select,a,summary,[contenteditable="true"]')) interaction.handlers(p, 'move').onPointerDown(event) } } : {})}><strong>{title}</strong></header>
     {editing && <><button className="ui-button ui-icon-button widget-grip layout-widget-grip" aria-label={t('Mover {0}', title)} tabIndex={import.meta.env.DEV ? 0 : -1} {...interaction.handlers(p, 'move')}><WorkbenchIcon name="move" /></button><button className="ui-button ui-icon-button layout-widget-remove" aria-label={t('Remover {0}', title)} onClick={remove}><XMarkIcon className="icon" /></button><button className="ui-button ui-icon-button widget-swap-control" hidden={!swapAvailable || !swapSelected} aria-label={t('Trocar widget de {0}', title)} title={t('Arraste sobre outro widget selecionado para trocar os espaços')} aria-pressed={swapSelected} onClick={swap} {...swapping.handlers(p.id)}><WorkbenchIcon name="move" /></button></>}
     <div className="widget-content">{children ?? <WidgetContent id={definition.fixture ?? ''} />}</div>
     {editing && DIRECTIONS.filter(d => allowsResize(d, constraint)).map(d => <button key={d} className={'resize-zone resize-' + d} data-resize={d}

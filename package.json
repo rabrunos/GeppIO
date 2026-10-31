@@ -23,7 +23,7 @@
     "check": "pnpm check:repo && pnpm typecheck && pnpm lint && pnpm test && pnpm plugins:build && pnpm build",
     "plugins:build": "node --experimental-strip-types tools/build-plugins.ts",
     "test:desktop": "node --experimental-strip-types tools/identity-smoke.ts && node --experimental-strip-types tools/desktop-smoke.ts && pnpm test:workbench",
-    "test:workbench": "node --experimental-strip-types tools/workbench-smoke.ts && node --experimental-strip-types tools/workbench-organization-smoke.ts && node --experimental-strip-types tools/workbench-plugins-smoke.ts",
+    "test:workbench": "node --experimental-strip-types tools/workbench-smoke.ts && node --experimental-strip-types tools/workbench-organization-smoke.ts && node --experimental-strip-types tools/workbench-plugins-smoke.ts && node --experimental-strip-types tools/workbench-corrections-smoke.ts",
     "test:desktop:dev": "node --experimental-strip-types tools/identity-smoke.ts --dev && node --experimental-strip-types tools/desktop-smoke.ts --dev",
     "github:prepare": "node --experimental-strip-types tools/github-prepare.ts"
   },

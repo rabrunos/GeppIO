@@ -1,5 +1,5 @@
 import { clamp, validLayout } from './geometry.ts'
-import { CONSTRAINTS, constraintsFor, POLICY, surfaceLimit } from './policy.ts'
+import { CONSTRAINTS, constraintsFor, constraintInRegion, POLICY, surfaceLimit } from './policy.ts'
 import { reflow } from './reflow.ts'
 import type { Constraints, Rect, Region, Snapshot, Surface } from './types.ts'
 
@@ -7,8 +7,9 @@ import type { Constraints, Rect, Region, Snapshot, Surface } from './types.ts'
  * The renderer keeps the same mounted frame/content identity across region changes.
  */
 export function transfer<T extends Snapshot>(snapshot: T, id: string, target: Surface, at?: Pick<Rect, 'x' | 'y'>, constraints: Constraints = CONSTRAINTS): T | null {
-  const p = snapshot.placements.find(p => p.id === id), c = constraints[id]
-  if (!p || !c?.regions.includes(target.region)) return null
+  const p = snapshot.placements.find(p => p.id === id), declaration = constraints[id]
+  if (!p || !declaration?.regions.includes(target.region)) return null
+  const c = constraintInRegion(declaration, target.region)
   const limit = surfaceLimit(target), cs = constraintsFor(target, constraints)
   if (target.width < c.min.width || (target.region !== 'sidebar' && target.height < c.min.height)) return null
   const width = target.region === 'sidebar' ? target.width : clamp(p.preferred.width, c.min.width, Math.min(c.max.width, limit.width))

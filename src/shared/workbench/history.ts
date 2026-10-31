@@ -1,5 +1,13 @@
 import type { SessionDraft } from './model.ts'
+import type { SessionSlot, WorkbenchSnapshot } from './model.ts'
 import { LIMITS } from './model.ts'
+
+/** Presentation navigation and library metadata do not edit a format. This
+ * consumes canonical intentions, never a viewport-projected DOM snapshot. */
+export function formatSignature(snapshot: WorkbenchSnapshot, slots: readonly SessionSlot[] = []) {
+  const { views, bars, chrome } = snapshot.organization
+  return JSON.stringify({ reference: snapshot.reference, placements: snapshot.placements, views, bars, chrome, slots })
+}
 
 /** A gesture owns one before/after pair; intermediate solver frames never enter history. */
 export class EditHistory {

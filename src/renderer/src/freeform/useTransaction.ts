@@ -5,16 +5,17 @@ import { convertHistorical, importFreeform } from '../../../shared/freeform/migr
 import type { HistoricalChoice } from '../../../shared/freeform/storage.ts'
 import type { Snapshot } from '../../../shared/freeform/types.ts'
 import { adoptLayout, initialWorkbench, widgetRegistry, WORKBENCH_KEY } from '../../../shared/workbench/model.ts'
-import type { Composition, Registry, SessionDraft, SessionSlot, WorkbenchSnapshot } from '../../../shared/workbench/model.ts'
+import type { Composition, LocalSessionState, Registry, SessionDraft, SessionSlot, WorkbenchSnapshot } from '../../../shared/workbench/model.ts'
 import { parseWorkbench, serializeWorkbench } from '../../../shared/workbench/codec.ts'
 import { readWorkbench, writeWorkbench } from '../../../shared/workbench/storage.ts'
-import { EditHistory } from '../../../shared/workbench/history.ts'
+import { EditHistory, formatSignature } from '../../../shared/workbench/history.ts'
 import { configureBar, resizePair } from '../../../shared/workbench/commands.ts'
 import type { ResizePair } from '../../../shared/workbench/commands.ts'
 import type { UserBar } from '../../../shared/workbench/model.ts'
 import type { Surface } from '../../../shared/freeform/types.ts'
 
-export function useTransaction(registry: Registry = widgetRegistry()) {
+export function useTransaction(registry: Registry = widgetRegistry(), localState?: { read(): LocalSessionState; apply(value: LocalSessionState): void }) {
+  const localOwner = useRef(localState); localOwner.current = localState
   const [initial] = useState(() => {
     try { const read = readWorkbench(localStorage, registry); return { ...read, snapshot: settleSnapshot(read.snapshot), normalizationPending: read.snapshot.placements.some(p => p.width !== p.preferred.width || p.height !== p.preferred.height) } }
     catch { return { ...readWorkbench({ getItem() { throw new Error('Unavailable') }, setItem() {} }, registry), normalizationPending: false } }
@@ -30,16 +31,16 @@ export function useTransaction(registry: Registry = widgetRegistry()) {
   const history = useRef(new EditHistory()), [, notify] = useState(0), saving = useRef(false)
   const motionRevision = useRef(0)
   const motion = useRef({ duration: 240, entering: false })
-  const normalizationPending = useRef(initial.normalizationPending)
-  function current(): SessionDraft { return { snapshot: live.current, slots: slotsRef.current, formatId: formatId.current, formatMode: formatMode.current, formatSource: formatSource.current } }
+  const normalizationPending = useRef(initial.normalizationPending), formatBaseline = useRef(formatSignature(initial.snapshot))
+  function current(): SessionDraft { return { snapshot: live.current, slots: slotsRef.current, formatId: formatId.current, formatMode: formatMode.current, formatSource: formatSource.current, ...(localOwner.current ? { localState: structuredClone(localOwner.current.read()) } : {}) } }
   function refresh() { notify(value => value + 1) }
   function put(next: Snapshot | WorkbenchSnapshot) {
     const value: WorkbenchSnapshot = 'organization' in next ? next as WorkbenchSnapshot : { ...next, organization: live.current.organization }
     epoch.current++; live.current = value; setSnapshot(value)
   }
-  function apply(draft: SessionDraft) { put(draft.snapshot); slotsRef.current = draft.slots; setSlotState(draft.slots); formatId.current = draft.formatId; formatMode.current = draft.formatMode ?? null; formatSource.current = draft.formatSource ?? null; refresh() }
+  function apply(draft: SessionDraft) { if (draft.localState) localOwner.current?.apply(structuredClone(draft.localState)); put(draft.snapshot); slotsRef.current = draft.slots; setSlotState(draft.slots); formatId.current = draft.formatId; formatMode.current = draft.formatMode ?? null; formatSource.current = draft.formatSource ?? null; refresh() }
   function action(next: WorkbenchSnapshot, nextSlots = slotsRef.current, nextFormat = formatId.current, nextSource = formatSource.current, animation = { duration: 240, entering: false }, nextMode = formatMode.current) {
-    const before = current(), after = { snapshot: next, slots: nextSlots, formatId: nextFormat, formatMode: nextMode, formatSource: nextSource }
+    const before = current(), after = { snapshot: next, slots: nextSlots, formatId: nextFormat, formatMode: nextMode, formatSource: nextSource, localState: before.localState }
     if (editingRef.current && !history.current.active) history.current.record(before, after)
     motionRevision.current++; motion.current = animation
     apply(after)
@@ -47,7 +48,8 @@ export function useTransaction(registry: Registry = widgetRegistry()) {
   function begin(next: Snapshot) {
     if (recovery && !editingRef.current) return
     if (!editingRef.current) {
-      history.current.clear(); checkpoint.current = { snapshot: structuredClone(committed.current), slots: [], formatId: null }
+      history.current.clear(); checkpoint.current = { ...current(), snapshot: structuredClone(committed.current), slots: [], formatId: null }
+      formatBaseline.current = formatSignature(settleSnapshot('organization' in next ? next as WorkbenchSnapshot : { ...next, organization: live.current.organization }))
       editingRef.current = true; setEditing(true)
     }
     put(settleSnapshot(structuredClone(next))); setMessage('Edite a composição. Salvar edição confirma um checkpoint; Concluir encerra a sessão.')
@@ -72,7 +74,8 @@ export function useTransaction(registry: Registry = widgetRegistry()) {
       if (result.error) { setMessage(result.error); return false }
       observed.current = result.raw; committed.current = structuredClone(validated)
       normalizationPending.current = false
-      checkpoint.current = { snapshot: structuredClone(validated), slots: structuredClone(slotsRef.current), formatId: formatId.current, formatMode: formatMode.current, formatSource: structuredClone(formatSource.current) }
+      checkpoint.current = { ...current(), snapshot: structuredClone(validated), slots: structuredClone(slotsRef.current), formatId: formatId.current, formatMode: formatMode.current, formatSource: structuredClone(formatSource.current) }
+      formatBaseline.current = formatSignature(validated, retainSlots ? slotsRef.current : [])
       put(validated); setRecovery(false)
       if (!retainSlots) { slotsRef.current = []; setSlotState([]); formatId.current = null; formatMode.current = null; formatSource.current = null }
       if (conclude) { editingRef.current = false; setEditing(false); history.current.clear() }
@@ -81,7 +84,8 @@ export function useTransaction(registry: Registry = widgetRegistry()) {
     finally { saving.current = false; refresh() }
   }
   function preview(next: Snapshot, text: string) {
-    history.current.clear(); checkpoint.current = { snapshot: structuredClone(committed.current), slots: [], formatId: null }
+    history.current.clear(); checkpoint.current = { ...current(), snapshot: structuredClone(committed.current), slots: [], formatId: null }
+    formatBaseline.current = formatSignature(committed.current)
     put(settleSnapshot('organization' in next ? next : adoptLayout(next))); editingRef.current = true; setEditing(true); setMessage(text)
   }
   async function importFile(file?: File) {
@@ -97,6 +101,12 @@ export function useTransaction(registry: Registry = widgetRegistry()) {
   }
   const withOrganization = (next: Snapshot): WorkbenchSnapshot => ({ ...next, organization: ('organization' in next ? next as WorkbenchSnapshot : live.current).organization })
   return { snapshot, live, editing, recovery, message, setMessage, put, begin, cancel, action, slots,
+    changeLocal(patch: Partial<LocalSessionState>) {
+      const before = current(); if (!before.localState) return
+      const after = { ...before, localState: { ...before.localState, ...patch } }
+      if (editingRef.current && !history.current.active) history.current.record(before, after)
+      apply(after)
+    },
     saving: saving.current, formatId: formatId.current, formatMode: formatMode.current, formatSource: formatSource.current, canUndo: history.current.canUndo, canRedo: history.current.canRedo, gestureActive: history.current.active, motionRevision: motionRevision.current, motion: motion.current,
     undo() { const next = history.current.undo(current()); if (next) { motionRevision.current++; motion.current = { duration: 240, entering: false }; apply(next) } },
     redo() { const next = history.current.redo(current()); if (next) { motionRevision.current++; motion.current = { duration: 240, entering: false }; apply(next) } },
@@ -106,10 +116,7 @@ export function useTransaction(registry: Registry = widgetRegistry()) {
     save: (next: Snapshot) => commit(withOrganization(next), true, false),
     saveEditing: (next: Snapshot = live.current) => commit(withOrganization(next), false, true),
     conclude: (next: Snapshot = live.current) => commit(withOrganization(next), true, false),
-    hasPending(next: WorkbenchSnapshot = live.current) {
-      const fingerprint = (value: WorkbenchSnapshot) => JSON.stringify({ reference: value.reference, placements: value.placements, organization: value.organization })
-      return fingerprint(next) !== fingerprint(committed.current)
-    },
+    hasPending() { return formatSignature(live.current, slotsRef.current) !== formatBaseline.current },
     async saveComposition(record: Composition) {
       if (!editingRef.current) return false
       const before = structuredClone(current()), next = { ...live.current, organization: { ...live.current.organization, compositions: [...live.current.organization.compositions, record] } }

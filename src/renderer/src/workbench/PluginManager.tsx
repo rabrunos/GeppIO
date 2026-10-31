@@ -3,6 +3,7 @@ import type { RefObject } from 'react'
 import { Squares2X2Icon, MagnifyingGlassIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
 import type { usePlugins } from '../Plugins.tsx'
 import { Dialog, Popover } from './Primitives.tsx'
+import { useScrollState } from './ScrollArea.tsx'
 import { useLocale } from './Locale.tsx'
 
 export const normalizeSearch = (value: string) => value.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLocaleLowerCase()
@@ -10,6 +11,7 @@ const statuses = { active: 'Ativo', disabled: 'Desativado', starting: 'Ativando'
 export function PluginManager({ plugins, open, close, anchor, edit }: { plugins: ReturnType<typeof usePlugins>; open: boolean; close(): void; anchor: RefObject<HTMLElement | null>; edit(): void }) {
   const { t, locale } = useLocale(), [search, setSearch] = useState(''), [filter, setFilter] = useState('all'), [sort, setSort] = useState('original')
   const [details, setDetails] = useState<string | null>(null), viewport = useRef<HTMLDivElement>(null)
+  useScrollState(viewport)
   const ordered = useMemo(() => sort === 'name' ? [...plugins.views].sort((a, b) => a.plugin.manifest.name.localeCompare(b.plugin.manifest.name, locale)) : plugins.views, [plugins.views, sort, locale])
   const active = plugins.views.filter(view => view.plugin.enabled).length
   const visible = (view: typeof ordered[number]) => (filter === 'all' || (filter === 'active' ? view.plugin.enabled : !view.plugin.enabled))

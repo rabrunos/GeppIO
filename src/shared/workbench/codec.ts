@@ -1,5 +1,5 @@
 import { parseGeometry } from '../freeform/schema.ts'
-import { POLICY } from '../freeform/policy.ts'
+import { POLICY, constraintInRegion } from '../freeform/policy.ts'
 import { REGIONS } from '../freeform/types.ts'
 import { collides } from '../freeform/geometry.ts'
 import { BAR_ICONS, HOME, LIMITS, activePlacements, constraintsForViews, modelId } from './model.ts'
@@ -50,7 +50,9 @@ function parseBars(value: unknown, registry: Registry): UserBar[] {
     }
     return { id: item.id, name: name(item.name), userNamed: item.userNamed, icon: String(item.icon), archived: item.archived, members, positions }
   }), bar => bar.id)
-  if (bars[0]?.id !== HOME || bars[0].archived || bars.filter(bar => !bar.archived && bar.id !== HOME).length > LIMITS.activeBars) throw new Error('Protected Home or bar cap')
+  // Previously valid 15–20-custom-bar documents remain readable and editable.
+  // The command boundary enforces the lower cap on new activations only.
+  if (bars[0]?.id !== HOME || bars[0].archived || bars.filter(bar => !bar.archived && bar.id !== HOME).length > LIMITS.legacyActiveBars) throw new Error('Protected Home or bar cap')
   return bars
 }
 function parseDocument(value: unknown, views: View[], registry: Registry, bars?: UserBar[]) {
@@ -114,7 +116,7 @@ export function serializeWorkbench(snapshot: WorkbenchSnapshot, registry: Regist
   // become an accidental extension of the versioned storage envelope.
   const { organization, schemaVersion, engine, constraintVersion, reference, placements } = snapshot
   const source = { schemaVersion, engine, constraintVersion, reference, placements }
-  const sidebarWidth = Math.max(source.reference.sidebar.width, ...source.placements.filter(p => p.region === 'sidebar').map(p => registry.get(organization.views.find(view => view.id === p.id)!.typeId)?.constraint.min.width ?? 0))
+  const sidebarWidth = Math.max(source.reference.sidebar.width, ...source.placements.filter(p => p.region === 'sidebar').map(p => constraintInRegion(registry.get(organization.views.find(view => view.id === p.id)!.typeId)!.constraint, 'sidebar').min.width))
   const sidebarHeight = Math.max(source.reference.sidebar.height, ...source.placements.filter(p => p.region === 'sidebar').map(p => p.y + p.height))
   const layout = { ...source, reference: { ...source.reference, sidebar: { width: sidebarWidth, height: sidebarHeight } },
     placements: source.placements.map(p => p.region === 'sidebar' ? { ...p, width: sidebarWidth } : p) }

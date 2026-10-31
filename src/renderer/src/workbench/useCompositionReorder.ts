@@ -69,7 +69,9 @@ export function useCompositionReorder(list: RefObject<HTMLDivElement | null>, en
       suppressed = false
       const button = (event.target as Element).closest<HTMLElement>('[data-composition-reorder]'), node = button?.closest<HTMLElement>('[data-composition-card]')
       if (!button || !node || event.button || gesture) return
-      const r = node.getBoundingClientRect(); root!.setPointerCapture(event.pointerId)
+      // Keep a short press targeted at its native button. Capture belongs to
+      // the actual reorder gesture, after crossing the movement threshold.
+      const r = node.getBoundingClientRect()
       gesture = { node, button, id: node.dataset.compositionCard!, pointer: event.pointerId, x: event.clientX, y: event.clientY, px: event.clientX, py: event.clientY, dx: event.clientX - r.left, dy: event.clientY - r.top, order: nodes(), preview: null }
     }
     const pointermove = (event: PointerEvent) => {
@@ -77,6 +79,7 @@ export function useCompositionReorder(list: RefObject<HTMLDivElement | null>, en
       g.px = event.clientX; g.py = event.clientY
       if (!g.preview) {
         if (Math.hypot(g.px - g.x, g.py - g.y) < 4) return
+        root!.setPointerCapture(g.pointer)
         owner.current.beginGesture()
         const preview = g.node.cloneNode(true) as HTMLElement, r = g.node.getBoundingClientRect()
         preview.removeAttribute('data-composition-card'); preview.removeAttribute('data-composition-id'); preview.classList.add('composition-drag-preview'); preview.inert = true

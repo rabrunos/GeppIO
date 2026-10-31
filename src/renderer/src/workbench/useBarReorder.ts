@@ -49,13 +49,20 @@ export function useBarReorder(list: RefObject<HTMLDivElement | null>, enabled: b
     }
     function finish(cancel = false) {
       const g = gesture; if (!g) return
+      if (!g.started) {
+        // Native click synthesis requires the pressed node to remain in place.
+        // A short press owns no provisional order or transaction to restore.
+        gesture = null
+        if (!g.node && document.body.hasPointerCapture(g.pointer)) document.body.releasePointerCapture(g.pointer)
+        g.ghost?.remove()
+        return
+      }
       const before = snapshot(), next = g.node ? g.node.nextElementSibling?.getAttribute('data-sidebar-custom') ?? null : nodes().find(node => g.py < node.getBoundingClientRect().top + node.offsetHeight / 2)?.dataset.sidebarCustom ?? null
       gesture = null; cancelAnimationFrame(frame); setZone(null); workbench.removeAttribute('data-sidebar-bar-dragging'); g.panel?.removeAttribute('data-bar-library-dragging')
       const capture = g.node ? root : document.body
       if (capture.hasPointerCapture(g.pointer)) capture.releasePointerCapture(g.pointer)
       if (g.node) { g.node.removeAttribute('data-rail-dragging'); if (g.style === null) g.node.removeAttribute('style'); else g.node.setAttribute('style', g.style); for (const node of g.order) root.append(node) }
       g.ghost?.remove(); workbench.querySelector('[data-layout-rail-zone]')?.removeAttribute('data-over')
-      if (!g.started) return
       suppressed = true
       if (!cancel && inside(g.px, g.py)) { command.current(g.id, next); owner.current.finishGesture() }
       else owner.current.cancelGesture()

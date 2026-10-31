@@ -1,5 +1,5 @@
 import { clamp, EPSILON } from './geometry.ts'
-import { CONSTRAINTS, POLICY } from './policy.ts'
+import { CONSTRAINTS, POLICY, constraintInRegion } from './policy.ts'
 import type { Constraints, Placement, Region, Size, Snapshot } from './types.ts'
 
 /** Continuous counterpart of the original interval projector. Stable source separations
@@ -58,6 +58,7 @@ function axisFit(ps: readonly Placement[], horizontal: boolean, reference: numbe
 }
 export interface Projection { placements: Placement[]; feasible: boolean; world: Size }
 export function projectRegion(source: Snapshot, region: Region, available: Size, expanded: boolean, constraints: Constraints = CONSTRAINTS): Projection {
+  constraints = Object.fromEntries(Object.entries(constraints).map(([id, constraint]) => [id, constraintInRegion(constraint, region)]))
   expanded = expanded && region === 'main'
   const ps = source.placements.filter(p => p.region === region), reference = source.reference[region]
   const width = clamp(available.width, 0, POLICY.maxCoordinate), height = clamp(available.height, 0, POLICY.maxCoordinate)

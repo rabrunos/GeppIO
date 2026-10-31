@@ -30,6 +30,22 @@ additional DOM-rectangle reads over ten animation frames. Sidebar edge scrolling
 only while its native scroll offset changes. Catalog admission shares the sixteen-view cap
 with commands and permits reuse of a compatible existing view at that cap.
 
+`workbench-corrections-smoke.ts` covers the approved correction packet with disposable built
+Windows Electron profiles: 180/125px chrome minima in both themes at 1920×1080,
+1912×907 DPR1, 1920×1025 and 1000×720; exact slot filling/reopening; short rail clicks,
+jitter, reorder/undo; fourteen-bar activation and editable legacy twenty-bar loading;
+nested library dismissal, empty filters/scroll reset; modal focus/backdrop, stable picker
+controls; local metadata/model history and checkpoint; format-pending scope; catalog
+origin distinctions and whole-card reduced-motion rejection. Incompatible association
+and post-toast outline observations are test/report evidence, not automatic acceptance.
+The plugin smoke additionally exercises real lifecycle notifications, the paused widget
+placeholder and its deliberate runtime reset. No fixture adds manifest-v1 capabilities.
+
+The host currently declares no seamless bundled widget, and manifest-v1 contributions
+normalize to card appearance. A seamless flight cannot be certified from those fixtures;
+keep that limitation distinct from a visual choice or approval. Native project folder
+state is likewise unavailable; the subtitle explicitly reports that absence.
+
 The approved V1.141 package is a separate design verifier; its passing npm verify does not
 validate React or Electron. Compare the built app at 1920×1080 in both themes and record
 intermediate animation states, actual timing/easing, narrow/maximized/normal windows and DPR1.25.

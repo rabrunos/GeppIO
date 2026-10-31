@@ -30,7 +30,16 @@ export const settle = (page: Page) => page.evaluate(async () => {
   const root = document.querySelector('.workbench')
   if (!root) throw new Error('Workbench unmounted while waiting for its own shell animations; inspect renderer errors')
   const targets = [root, ...[...document.querySelectorAll<HTMLElement>('.widget-frame:not([hidden]),.sidebar-rail [data-bar-id],.composition-tile,.catalog-slot-context,.catalog-slot-context > div,.widget-browser-grid,.host-format-slot,.layout-flight-context')].filter(node => !node.inert || node.classList.contains('layout-flight-context'))]
-  await Promise.all(targets.flatMap(node => node.getAnimations()).map(animation => animation.finished.catch(() => undefined)))
+  const animations = targets.flatMap(node => node.getAnimations())
+  let timeout: ReturnType<typeof setTimeout> | undefined
+  try {
+    await Promise.race([Promise.all(animations.map(animation => animation.finished.catch(() => undefined))), new Promise<never>((_, reject) => {
+      timeout = setTimeout(() => reject(new Error('Shell animation did not settle: ' + JSON.stringify(animations.filter(animation => animation.playState !== 'finished' && animation.playState !== 'idle').map(animation => ({
+        target: (animation.effect as KeyframeEffect | null)?.target instanceof Element ? ((animation.effect as KeyframeEffect).target as Element).outerHTML.slice(0, 160) : null,
+        state: animation.playState, time: animation.currentTime, timing: animation.effect?.getTiming()
+      }))))), 15000)
+    })])
+  } finally { clearTimeout(timeout) }
   await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
 })
 export async function beginEdit(page: Page) {
@@ -86,6 +95,7 @@ export async function drag(page: Page, id: string, direction: string, dx: number
     point: [x, y], hit: document.elementFromPoint(x, y)?.outerHTML.slice(0, 200), viewport: [innerWidth, innerHeight],
     scroll: [document.querySelector('.freeform-layer')?.scrollLeft, document.querySelector('.freeform-layer')?.scrollTop],
     feedback: document.querySelector('.workspace-feedback')?.textContent,
+    frames: [...document.querySelectorAll<HTMLElement>('.widget-frame[data-widget]')].map(node => ({ data: { ...node.dataset }, rect: node.getBoundingClientRect().toJSON(), inert: node.inert, clip: node.style.clipPath, opacity: getComputedStyle(node).opacity })),
     regions: [...document.querySelectorAll<HTMLElement>('[data-surface]')].map(e => ({ ...e.dataset }))
   }), { x, y })))
   await page.mouse.move(x + dx, y + dy, { steps }); await settle(page)
@@ -268,12 +278,22 @@ export async function freeformSmoke(page: Page, resizeWindow: (width: number, he
   stack.placements[0] = { ...stack.placements[0]!, x: 0, y: 210, width: 220, height: stackHeight - 210, preferred: { width: 220, height: stackHeight - 210 } }
   await preview(page, stack)
   const active = page.locator('[data-widget="chart"] [data-resize="s"]'), handle = await active.boundingBox(); assert.ok(handle)
+  await active.evaluate(node => {
+    const target = node as HTMLElement & { smokePointer?: { x: number; y: number } }
+    target.addEventListener('pointermove', event => { target.smokePointer = { x: event.clientX, y: event.clientY } })
+    performance.mark('geppio:anchors')
+  })
   const hx = handle.x + handle.width / 2, hy = handle.y + handle.height / 2
-  await page.mouse.move(hx, hy); await page.mouse.down(); await page.mouse.move(hx, hy + 37.375); await settle(page)
+  await page.mouse.move(hx, hy); await page.mouse.down()
+  assert.ok(await active.evaluate(node => node.hasPointerCapture(1)), 'Compression requires real pointer capture')
+  await page.mouse.move(hx, hy + 37.375); await settle(page)
   const compressed = await rect(page, 'summary')
   near(compressed.y, 247.375); near(compressed.y + compressed.height, stackHeight); near(compressed.width, 220)
   await page.mouse.move(hx, hy); await settle(page)
-  near((await rect(page, 'summary')).y, 210); near((await rect(page, 'summary')).height, stackHeight - 210)
+  const reversal = await active.evaluate(node => ({ capture: node.hasPointerCapture(1), pointer: (node as HTMLElement & { smokePointer?: { x: number; y: number } }).smokePointer,
+    solve: (performance.getEntriesByName('geppio:anchor-solve').at(-1) as PerformanceMeasure | undefined)?.detail }))
+  near((await rect(page, 'summary')).y, 210, JSON.stringify(reversal)); near((await rect(page, 'summary')).height, stackHeight - 210)
+  await page.evaluate(() => performance.clearMarks('geppio:anchors'))
   await page.mouse.move(hx, hy + 37.375); await page.keyboard.press('Escape'); await page.mouse.up(); await settle(page)
   near((await rect(page, 'summary')).y, 210)
   await drag(page, 'chart', 's', 0, 37.375)
@@ -325,8 +345,12 @@ export async function freeformSmoke(page: Page, resizeWindow: (width: number, he
   await drag(page, 'chart', 'move', 13.25, 11.5)
   let exact = await rect(page, 'chart'); near(exact.x, 150.5); near(exact.y, 94.625)
   if (dev) { await page.locator('[data-widget="chart"] .widget-grip').focus(); await page.keyboard.press('ArrowRight') }
-  else await drag(page, 'chart', 'move', 1, 0)
-  exact = await rect(page, 'chart'); near(exact.x, 151.5)
+  else {
+    await drag(page, 'chart', 'move', 1, 0)
+    near((await rect(page, 'chart')).x, 150.5, 'Short jitter opens the destination chooser without moving')
+    await drag(page, 'chart', 'move', 5.125, 0)
+  }
+  exact = await rect(page, 'chart'); near(exact.x, dev ? 151.5 : 155.625)
   await page.getByTestId('conclude-layout').click(); await page.getByTestId('edit-layout').waitFor()
   const saved = await page.evaluate(key => localStorage.getItem(key), FREEFORM_KEY); assert.ok(saved)
   await page.reload(); await page.getByTestId('edit-layout').waitFor(); await settle(page)
@@ -338,6 +362,7 @@ export async function freeformSmoke(page: Page, resizeWindow: (width: number, he
   await page.locator('[data-surface="main"]').evaluate(e => { e.scrollLeft = 600 }); await settle(page)
   await beginEdit(page)
   const form = page.getByRole('textbox', { name: 'Nome de exemplo', exact: true })
+  const modelCheckpoint = await form.inputValue()
   // Type into the real visible control, then move it offscreen. An inert field
   // cannot receive native input; directly assigning .value would bypass its model.
   await page.locator('[data-surface="main"]').evaluate((e, x) => { e.scrollLeft = x }, (await rect(page, 'properties')).x); await settle(page)
@@ -354,7 +379,7 @@ export async function freeformSmoke(page: Page, resizeWindow: (width: number, he
   await page.mouse.up(); await settle(page)
   near((await rect(page, 'queue')).x, queue.x)
   await page.getByTestId('cancel-layout').click()
-  await expansion(page, false); assert.equal(await form.inputValue(), 'estado não salvo')
+  await expansion(page, false); assert.equal(await form.inputValue(), modelCheckpoint, 'Cancel restores the approved local model checkpoint without remounting the field')
   await expansion(page, true); assert.equal(await form.getAttribute('data-mounted-proof'), 'same')
   assert.equal(await page.evaluate(key => localStorage.getItem(key), FREEFORM_KEY), saved)
   await page.locator('[data-surface="main"]').evaluate(e => { e.scrollLeft = e.scrollWidth }); await settle(page)
@@ -379,8 +404,8 @@ export async function freeformSmoke(page: Page, resizeWindow: (width: number, he
   await page.keyboard.press('Escape'); await page.mouse.up(); await settle(page)
   near((await rect(page, 'properties')).x, edgeOriginal.x, 'edge extension cancellation')
   await page.getByTestId('cancel-layout').click()
-  // Genuine placement in both peer regions, without lowering widget minima or
-  // the approved chrome bounds. Construct the too-small viewport explicitly.
+  // Genuine placement in both peer regions with host region-specific minima,
+  // unchanged solver invariants and the original chrome bounds.
   await expansion(page, false); await preview(page, DEFAULT_FREEFORM); await resizeWindow(1800, 980); await resizeRegion(page, 'sidebar', 290)
   await transferSelected(page, 'properties', 'sidebar')
   assert.equal((await rect(page, 'properties')).region, 'sidebar'); near((await rect(page, 'properties')).width, await page.locator('[data-surface="sidebar"]').evaluate(e => e.clientWidth))
@@ -400,7 +425,8 @@ export async function freeformSmoke(page: Page, resizeWindow: (width: number, he
   assert.equal(sidebarScroll.x, 0); assert.equal(sidebarScroll.width, sidebarScroll.world); assert.ok(sidebarScroll.y > 0)
   await resizeRegion(page, 'bottom', 125)
   await transferSelected(page, 'chart', 'bottom')
-  assert.equal((await rect(page, 'chart')).region, 'main', 'small Bottom rejects')
+  assert.equal((await rect(page, 'chart')).region, 'bottom', 'The responsive host widget fits 105 useful pixels at the approved 125px Bottom')
+  await transferSelected(page, 'queue', 'bottom'); assert.equal((await rect(page, 'queue')).region, 'main', 'Main-only widgets still reject Bottom')
   await resizeRegion(page, 'bottom', 180); await transferSelected(page, 'chart', 'bottom')
   assert.equal((await rect(page, 'chart')).region, 'bottom')
   const bottom = await rect(page, 'chart'), bottomPort = await page.locator('[data-surface="bottom"]').evaluate(e => e.clientHeight)
@@ -437,7 +463,7 @@ export async function freeformSmoke(page: Page, resizeWindow: (width: number, he
   await resizeRegion(page, 'sidebar', 0)
   assert.equal(await page.locator('.workbench').getAttribute('data-sidebar-mode'), 'docked', 'Edit keeps Sidebar forced visible')
   await resizeRegion(page, 'sidebar', 280)
-  assert.equal(await form.inputValue(), 'estado não salvo'); assert.equal((await rect(page, 'properties')).region, 'sidebar')
+  assert.equal(await form.inputValue(), modelCheckpoint); assert.equal((await rect(page, 'properties')).region, 'sidebar')
   await resizeRegion(page, 'bottom', 0)
   assert.equal(await page.locator('.workbench').getAttribute('data-bottom-mode'), 'docked', 'Edit keeps Bottom forced visible')
   await resizeRegion(page, 'bottom', 180)
@@ -447,17 +473,17 @@ export async function freeformSmoke(page: Page, resizeWindow: (width: number, he
   await page.getByTestId('conclude-layout').click(); await page.getByTestId('edit-layout').waitFor()
   await page.reload(); await page.getByTestId('edit-layout').waitFor(); await settle(page)
   assert.equal((await rect(page, 'properties')).region, 'sidebar'); assert.equal((await rect(page, 'chart')).region, 'bottom')
-  // Restart restores confirmed chrome. An explicit smaller Bottom still exposes
-  // genuine minimum infeasibility and recoverable enlargement without data loss.
+  // Host region-specific presentation now fits the approved 125px shell minimum;
+  // legacy/Main minima and invalid-placement recovery remain tested separately.
   assert.equal(await page.locator('[data-surface="bottom"]').getAttribute('data-feasible'), 'true')
   await resizeRegion(page, 'bottom', 125)
-  assert.equal(await page.locator('[data-surface="bottom"]').getAttribute('data-feasible'), 'false')
-  await page.getByTestId('bottom-recovery').waitFor(); await assertBottomNoScroll(page)
-  await expansion(page, true); await assertBottomNoScroll(page); await expansion(page, false)
-  const recoveryBytes = await page.evaluate(key => localStorage.getItem(key), FREEFORM_KEY)
-  await page.getByRole('button', { name: 'Ampliar Bottom', exact: true }).click(); await settle(page)
   assert.equal(await page.locator('[data-surface="bottom"]').getAttribute('data-feasible'), 'true')
-  assert.deepEqual(await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).layout, FREEFORM_KEY), JSON.parse(recoveryBytes!).layout)
+  assert.equal(await page.getByTestId('bottom-recovery').count(), 0); await assertBottomNoScroll(page)
+  await expansion(page, true); await assertBottomNoScroll(page); await expansion(page, false)
+  const beforeBottomResize = await page.evaluate(key => localStorage.getItem(key), FREEFORM_KEY)
+  await separator.press('End'); await separator.press('Tab'); await settle(page)
+  assert.equal(await page.locator('[data-surface="bottom"]').getAttribute('data-feasible'), 'true')
+  assert.deepEqual(await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).layout, FREEFORM_KEY), JSON.parse(beforeBottomResize!).layout)
   await resizeRegion(page, 'sidebar', 290); await resizeRegion(page, 'bottom', 180)
   assert.equal(await page.locator('[data-surface="bottom"]').getAttribute('data-feasible'), 'true')
   const farSidebar = structuredClone(DEFAULT_FREEFORM), sideWidth = await page.locator('[data-surface="sidebar"]').evaluate(e => e.clientWidth)

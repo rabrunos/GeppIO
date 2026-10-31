@@ -26,9 +26,12 @@ export const DEFAULT_FREEFORM: Snapshot = {
     { id: 'activity', x: 650, y: 240 }, { id: 'properties', x: 240, y: 310 }, { id: 'chart', x: 0, y: 460 }
   ].map(p => ({ ...p, ...CONSTRAINTS[p.id]!.default, region: 'main', preferred: { ...CONSTRAINTS[p.id]!.default } }))
 }
+export function constraintInRegion(constraint: Constraint, region: Region): Constraint {
+  return constraint.regionMin?.[region] ? { ...constraint, min: constraint.regionMin[region]! } : constraint
+}
 export function constraintsFor(surface: Surface, constraints: Constraints = CONSTRAINTS): Constraints {
   return Object.fromEntries(Object.keys(constraints).map(id => {
-    const c = constraints[id]!
+    const c = constraintInRegion(constraints[id]!, surface.region)
     return [id, { ...c,
       min: { width: surface.region === 'sidebar' ? Math.max(c.min.width, surface.width) : c.min.width,
         height: surface.region === 'bottom' ? Math.max(c.min.height, surface.height) : c.min.height },

@@ -8,6 +8,8 @@ export const DIRECTIONS: readonly Direction[] = ['n', 'e', 's', 'w', 'ne', 'nw',
 export interface Placement extends Rect { id: string; region: Region; preferred: Size }
 export interface Constraint {
   min: Size; default: Size; max: Size; resizeX: boolean; resizeY: boolean;
+  /** Bundled host responsive minima; never accepted from manifest v1. */
+  regionMin?: Partial<Record<Region, Size>>;
   regions: readonly Region[]; overflow: 'auto'; responsive: 'region'
 }
 export type Constraints = Readonly<Record<string, Constraint>>

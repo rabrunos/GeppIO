@@ -9,6 +9,9 @@ Integrated source changes, not a publication ledger. Version comes from package.
 - Add editing checkpoints, Conclude, whole-intention session history and a distinct bilateral resizePair command. Keep transient format slots outside persisted executable identities.
 - Fit released viewport space continuously without changing saved preferences; preserve fixed clearance and expose real geometric feasibility consistently in catalog destinations and drag targets.
 - Add only the owner-authorized fixed minimize/maximize/close bridge, guarded by the exact main-frame origin and argument validation, with no plugin SDK expansion.
+- Apply the owner-approved correction packet: responsive native content at 180px Sidebar/125px Bottom, fourteen custom active bars with preserved legacy twenty-bar documents, short-click rail selection, scoped icons, divider, shared scroll state, nested menus, dialogs and composition thumbnails/markers.
+- Fill reserved slots with exact validated geometry, distinguish catalog moves from new presences, preserve swap selection and include reversible host metadata/models in session history. Keep library-only actions outside format pending state and retain transaction/CAS failure recovery.
+- Supply bounded in-memory notifications from native plugin lifecycle events, with read/filter/dismiss/clear states, and extend disposable Windows Electron coverage. Project location stays explicitly unavailable until an authorized native project state exists.
 
 ## [0.1.0-alpha.12] — 2026-10-16
 

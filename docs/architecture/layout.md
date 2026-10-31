@@ -49,6 +49,32 @@ Sidebar's inner content uses 15px per side. `useSurfaces` measures origins, nati
 and actual chrome once; collapse clipping is separate from frozen logical width. The old
 15px-all-sides and 15px-status values below document the alpha.12 basis, not alpha.13 chrome.
 
+## Approved alpha.13 correction adapters
+
+Host declarations may specialize `regionMin` by region: Sidebar width 150px and
+eligible Bottom height 105px match the measured content at 180/125px chrome minima.
+Main and legacy constraints retain their original minima. Projection, codec, transfer,
+bar configuration and exact slot filling resolve the same declaration; the solver's
+move-size invariant and collision/clearance checks are unchanged. Responsive container
+styles adapt bundled content without scaling it or replacing it with recovery UI.
+
+New activations allow fourteen custom bars plus protected Home; the saved cap remains
+100. The codec still accepts up to twenty active legacy custom bars, preserving their
+order, identities and positions. Editing/reduction is allowed above fourteen, but any
+count-increasing activation is rejected. Incompatible historical Sidebar memberships
+still enter existing recovery without modifying original bytes; no silent repair is added.
+
+Format pending state compares canonical layout/views/bars/chrome/slots, excluding active
+bar visits and library metadata. Intention history additionally captures typed reversible
+host state (project display name, theme, snap and native Properties model); locale and
+external plugin actions/publications remain outside it. Those local preferences retain
+their existing separate keys, not a new atomic storage envelope. Cancel and checkpoint
+restore the host stores; preference write failure is reported while keeping session state.
+
+Scroll direction flags use coalesced local scroll/content/resize observation, never a global
+polling loop. Notification state is a bounded twenty-item in-memory reducer, initially empty,
+fed by real native inventory changes/errors; it does not create a backend or persisted news.
+
 ## Continuous solver basis — Issue #29 / alpha.12
 
 Mandatory cell placement is superseded. The only active renderer is App → freeform/; no grid

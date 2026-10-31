@@ -9,7 +9,7 @@ import { useLocale } from './Locale.tsx'
 const NAME_KEY = 'geppio:project-name:v1'
 export function useProjectName() {
   const [name, setName] = useState<string | null>(() => { try { const value = localStorage.getItem(NAME_KEY); return value?.trim() && value.length <= 60 ? value : null } catch { return null } })
-  return { name, rename(value: string) { const next = value.trim(); if (!next || next.length > 60) return false; try { localStorage.setItem(NAME_KEY, next); setName(next); return true } catch { return false } } }
+  return { name, restore(value: string | null) { setName(value); try { if (value === null) localStorage.removeItem(NAME_KEY); else localStorage.setItem(NAME_KEY, value); return true } catch { return false } }, rename(value: string) { const next = value.trim(); if (!next || next.length > 60) return false; try { localStorage.setItem(NAME_KEY, next); setName(next); return true } catch { return false } } }
 }
 /** Project display metadata and the existing layout document only. This menu
  * does not imply filesystem, Git, account or project execution capabilities. */

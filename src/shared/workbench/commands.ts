@@ -1,8 +1,8 @@
 import { validLayout, collides } from '../freeform/geometry.ts'
-import { constraintsFor, POLICY } from '../freeform/policy.ts'
+import { constraintInRegion, constraintsFor, POLICY } from '../freeform/policy.ts'
 import { projectRegion } from '../freeform/projection.ts'
 import { transfer } from '../freeform/transfer.ts'
-import type { Placement, Region, Surface } from '../freeform/types.ts'
+import type { Placement, Region, Size, Surface } from '../freeform/types.ts'
 import { HOME, LIMITS, activePlacements, constraintsForViews, evaluatePlacement, modelId } from './model.ts'
 import type { Registry, UserBar, WorkbenchSnapshot } from './model.ts'
 
@@ -27,9 +27,10 @@ export function reconcileBarHeights(source: WorkbenchSnapshot, preserve = source
 }
 
 export function addWidget(source: WorkbenchSnapshot, registry: Registry, typeId: string, surface: Surface,
-  at?: { x: number; y: number }, disabled?: ReadonlySet<string>): WorkbenchSnapshot | null {
+  at?: { x: number; y: number }, disabled?: ReadonlySet<string>, slotSize?: Size): WorkbenchSnapshot | null {
   if (!evaluatePlacement(source, registry, typeId, surface.region, 'catalog', [], disabled).allowed) return null
-  const next = structuredClone(source), type = registry.get(typeId)!
+  let next = structuredClone(source)
+  const type = registry.get(typeId)!
   let view = next.organization.views.find(view => view.typeId === typeId && (type.presence === 'single-view'
     || next.placements.some(p => p.id === view.id && p.region === surface.region)))
   if (!view) {
@@ -42,17 +43,23 @@ export function addWidget(source: WorkbenchSnapshot, registry: Registry, typeId:
     }
   }
   const existing = next.placements.find(p => p.id === view.id)
-  if (existing && existing.region !== surface.region && type.presence === 'single-view') return moveView(source, registry, existing.id, surface, at)
+  if (existing && existing.region !== surface.region && type.presence === 'single-view' && !slotSize) return moveView(source, registry, existing.id, surface, at)
+  if (existing && slotSize) next = removePresence(next, existing.id)
   if (surface.region === 'sidebar') {
     const bar = next.organization.bars.find(bar => bar.id === next.organization.activeBar)!
     const peers = activePlacements(next).filter(p => p.region === 'sidebar')
     bar.positions ??= {}
     bar.positions[typeId] ??= at?.y ?? Math.max(0, ...peers.map(p => p.y + p.height + POLICY.gap))
     bar.members.push(typeId)
-    if (existing?.region === 'sidebar') return next
+    if (existing?.region === 'sidebar' && !slotSize) return next
   }
-  if (!existing) next.placements.push({ id: view.id, region: surface.region, x: 0, y: 0,
-    ...type.constraint.default, preferred: { ...type.constraint.default } })
+  if (!existing || slotSize) next.placements.push({ id: view.id, region: surface.region, x: slotSize ? at?.x ?? 0 : 0, y: slotSize ? at?.y ?? 0 : 0,
+    ...(slotSize ?? type.constraint.default), preferred: { ...(slotSize ?? type.constraint.default) } })
+  if (slotSize) {
+    // A reserved rectangle is an explicit placement/size intention, not a move
+    // pretending to resize its default seed. The solver's move invariant stays intact.
+    return validLayout(activePlacements(next).filter(p => p.region === surface.region), surface, constraintsFor(surface, constraintsForViews(next, registry))) ? next : null
+  }
   return transferActive(next, registry, view.id, surface, at)
 }
 function transferActive(source: WorkbenchSnapshot, registry: Registry, id: string, target: Surface, at?: { x: number; y: number }) {
@@ -117,13 +124,14 @@ export function updateBar(source: WorkbenchSnapshot, bar: UserBar): WorkbenchSna
   if (bar.id === HOME && bar.archived) return null
   if (old) next.organization.bars[next.organization.bars.indexOf(old)] = structuredClone(bar)
   else next.organization.bars.push(structuredClone(bar))
-  if (next.organization.bars.length > LIMITS.savedBars + 1 || next.organization.bars.filter(bar => !bar.archived && bar.id !== HOME).length > LIMITS.activeBars) return null
+  const activeCount = (snapshot: WorkbenchSnapshot) => snapshot.organization.bars.filter(bar => !bar.archived && bar.id !== HOME).length
+  if (next.organization.bars.length > LIMITS.savedBars + 1 || (activeCount(next) > LIMITS.activeBars && activeCount(next) > activeCount(source))) return null
   if (next.organization.activeBar === bar.id && bar.archived) next.organization.activeBar = HOME
   return next
 }
 /** A complete bar edit is one intention. Build from the supplied baseline only. */
 export function configureBar(source: WorkbenchSnapshot, registry: Registry, bar: UserBar, surface: Surface, disabled?: ReadonlySet<string>): WorkbenchSnapshot | null {
-  if (bar.members.some(id => !registry.get(id) || registry.get(id)!.constraint.min.width > surface.width)) return null
+  if (bar.members.some(id => !registry.get(id) || constraintInRegion(registry.get(id)!.constraint, 'sidebar').min.width > surface.width)) return null
   const canonical = { ...surface, width: source.reference.sidebar.width }
   let next = updateBar(source, { ...bar, members: [] })
   if (!next) return null

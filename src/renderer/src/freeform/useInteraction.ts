@@ -18,24 +18,24 @@ import { useDragVisual } from '../workbench/DragLayer.tsx'
 
 interface Gesture {
   id: string; pointer: number; kind: 'move' | Direction; x: number; y: number; original: Placement; sourceBar: string;
-  snapshot: WorkbenchSnapshot; source: WorkbenchSnapshot; target: HTMLButtonElement; scrollX: number; scrollY: number;
+  snapshot: WorkbenchSnapshot; source: WorkbenchSnapshot; target: HTMLElement; scrollX: number; scrollY: number;
   clientX: number; clientY: number; time: number; last: string; extension: number; directionX: number; preview: WorkbenchSnapshot | null
 }
 export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surfaces: Surfaces, expanded: boolean, feasible: Record<Region, boolean>, registry: Registry = widgetRegistry(), catalog?: {
-  available(typeId: string, region: Region): boolean; commit(typeId: string, region: Region, at: { x: number; y: number }): boolean
+  select?(viewId: string): void; available(typeId: string, region: Region): boolean; commit(typeId: string, region: Region, at: { x: number; y: number }): boolean
 }) {
   const baseConstraints = constraintsForViews(tx.snapshot, registry)
   const visual = useDragVisual()
-  const gesture = useRef<Gesture | null>(null), animation = useRef(0)
+  const gesture = useRef<Gesture | null>(null), animation = useRef(0), shortClick = useRef<string | null>(null)
   const [selected, setSelected] = useState<string | null>(null), [blocked, setBlocked] = useState<string | null>(null)
   const [heldExtent, setHeldExtent] = useState<{ region: Region; width: number; height: number } | null>(null)
   const [catalogDrag, setCatalogDrag] = useState<{ typeId: string; targets: Region[]; over: Region | null } | null>(null)
   const [frameDrop, setFrameDrop] = useState<{ targets: Region[]; over: Region | null } | null>(null)
   const frameTargets = useRef<Region[]>([])
-  const catalogGesture = useRef<{ typeId: string; x: number; y: number; left: number; top: number; pointer: number; target: HTMLButtonElement; targets: Region[]; started: number; lifted: boolean; suppress: boolean } | null>(null)
+  const catalogGesture = useRef<{ typeId: string; x: number; y: number; left: number; top: number; pointer: number; target: HTMLElement; targets: Region[]; started: number; lifted: boolean; suppress: boolean } | null>(null)
   const catalogPointer = useRef({ x: 0, y: 0 }), suppressCatalogClick = useRef(false)
   const currentCatalog = useRef(catalog); currentCatalog.current = catalog
-  const dwell = useRef<{ id: string; element: HTMLElement; timer: ReturnType<typeof setTimeout> } | null>(null)
+  const dwell = useRef<{ id: string; element: HTMLElement; timer: ReturnType<typeof setTimeout> | null } | null>(null)
   const [gestureLabel, setGestureLabel] = useState<{ id: string; region: Region } | null>(null)
   const rejection = useRef<Animation | null>(null)
   const [released, setReleased] = useState<{ snapshot: WorkbenchSnapshot; region: Region } | null>(null)
@@ -44,13 +44,14 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
   function end(cancel: boolean, releaseVisual = true) {
     if (releaseVisual) visual.release(!cancel)
     rejection.current?.cancel(); rejection.current = null
-    if (dwell.current) { clearTimeout(dwell.current.timer); dwell.current.element.removeAttribute('data-drag-hover'); dwell.current = null }
+    if (dwell.current) { if (dwell.current.timer) clearTimeout(dwell.current.timer); dwell.current.element.removeAttribute('data-drag-hover'); dwell.current = null }
     setGestureLabel(null)
     setFrameDrop(null); frameTargets.current = []
     if (catalogGesture.current) {
       const entry = catalogGesture.current; catalogGesture.current = null; setCatalogDrag(null)
       suppressCatalogClick.current = entry.suppress
       if (entry.target.hasPointerCapture(entry.pointer)) entry.target.releasePointerCapture(entry.pointer)
+      if (entry.lifted) { if (cancel) tx.cancelGesture(); else tx.finishGesture() }
       return
     }
     const a = gesture.current
@@ -81,7 +82,7 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
   useLayoutEffect(() => {
     if (released && released.snapshot.reference[released.region].height === surfaces.measures[released.region].height) setReleased(null)
   }, [released, surfaces.measures.main.height])
-  useLayoutEffect(() => () => { cancelAnimationFrame(animation.current); rejection.current?.cancel(); if (dwell.current) { clearTimeout(dwell.current.timer); dwell.current.element.removeAttribute('data-drag-hover') } }, [])
+  useLayoutEffect(() => () => { cancelAnimationFrame(animation.current); rejection.current?.cancel(); if (dwell.current) { if (dwell.current.timer) clearTimeout(dwell.current.timer); dwell.current.element.removeAttribute('data-drag-hover') } }, [])
   useLayoutEffect(() => {
     const cancel = () => end(true)
     window.addEventListener('blur', cancel)
@@ -133,7 +134,7 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
   }
   function catalogHandlers(typeId: string) {
     return {
-      onPointerDown(event: PointerEvent<HTMLButtonElement>) {
+      onPointerDown(event: PointerEvent<HTMLElement>) {
         if (!tx.editing || event.button || gesture.current || catalogGesture.current || visual.active()) return
         const rect = event.currentTarget.getBoundingClientRect()
         event.currentTarget.setPointerCapture(event.pointerId)
@@ -141,7 +142,7 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
           targets: REGIONS.filter(region => catalog?.available(typeId, region)), started: 0, lifted: false, suppress: false }
         catalogPointer.current = { x: event.clientX, y: event.clientY }; suppressCatalogClick.current = false
       },
-      onPointerMove(event: PointerEvent<HTMLButtonElement>) {
+      onPointerMove(event: PointerEvent<HTMLElement>) {
         const a = catalogGesture.current; if (!a || a.pointer !== event.pointerId) return
         catalogPointer.current = { x: event.clientX, y: event.clientY }
         if (!a.lifted && Math.hypot(event.clientX - a.x, event.clientY - a.y) < 5) return
@@ -149,19 +150,21 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
           a.suppress = true
           if (!a.targets.length) {
             end(true)
-            if (!matchMedia('(prefers-reduced-motion: reduce)').matches) rejection.current = a.target.animate([
+            if (!matchMedia('(prefers-reduced-motion: reduce)').matches) rejection.current = (a.target.closest('.widget-browser-item') ?? a.target).animate([
               { translate: '0 0', offset: 0 }, { translate: '0 -4px', offset: .18 }, { translate: '-3px -4px', offset: .32 }, { translate: '3px -4px', offset: .48 }, { translate: '-2px -3px', offset: .64 }, { translate: '2px -2px', offset: .8 }, { translate: '0 0', offset: 1 }
             ], { duration: 280, easing: 'ease-out' })
             tx.setMessage('Não há área compatível com espaço disponível para este widget.'); return
           }
-          a.lifted = true; a.started = performance.now()
+          tx.beginGesture(); a.lifted = true; a.started = performance.now()
           const viewId = tx.live.current.organization.views.find(v => v.typeId === typeId && view.placements.some(p => p.id === v.id))?.id ?? null
           const source = viewId ? document.querySelector<HTMLElement>(`[data-widget-id="${CSS.escape(viewId)}"]`) : null
-          visual.begin(typeId, null, null, a.target, source, true, event.clientX, event.clientY)
+          const moving = !!viewId && registry.get(typeId)?.presence === 'single-view'
+          const origin = view.placements.find(p => p.id === viewId)
+          visual.begin(typeId, moving ? viewId : null, moving && origin?.region === 'sidebar' ? tx.live.current.organization.activeBar : null, a.target, moving ? source : null, !moving, event.clientX, event.clientY)
         }
         visual.move(event.clientX, event.clientY)
       },
-      onPointerUp(event: PointerEvent<HTMLButtonElement>) {
+      onPointerUp(event: PointerEvent<HTMLElement>) {
         const a = catalogGesture.current; if (!a || a.pointer !== event.pointerId) return
         const region = a.lifted ? targetRegion(event.clientX, event.clientY, REGIONS.filter(region => currentCatalog.current?.available(a.typeId, region))) : null
         let accepted = false
@@ -180,10 +183,10 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
   function hoverBar(x: number, y: number) {
     const element = document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-bar-id]'), id = element?.dataset.barId
     if (id === dwell.current?.id) return
-    if (dwell.current) { clearTimeout(dwell.current.timer); dwell.current.element.removeAttribute('data-drag-hover'); dwell.current = null }
-    if (!element || !id || id === tx.live.current.organization.activeBar || !tx.editing) return
+    if (dwell.current) { if (dwell.current.timer) clearTimeout(dwell.current.timer); dwell.current.element.removeAttribute('data-drag-hover'); dwell.current = null }
+    if (!element || !id || !tx.editing) return
     element.setAttribute('data-drag-hover', '')
-    dwell.current = { id, element, timer: setTimeout(() => {
+    dwell.current = { id, element, timer: id === tx.live.current.organization.activeBar ? null : setTimeout(() => {
       if (!gesture.current && !catalogGesture.current) return
       if (!tx.live.current.organization.bars.some(bar => bar.id === id && !bar.archived)) return
       tx.put({ ...tx.live.current, organization: { ...tx.live.current.organization, activeBar: id } })
@@ -251,6 +254,8 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
     setBlocked(null); tx.setMessage('Prévia válida. Ao soltar, posições e tamanhos serão mantidos para o próximo gesto. Salve ou cancele.')
   }
   function update(a: Gesture) {
+
+    if (a.kind === 'move' && !visual.active()) return
     const port = latest.current.surfaces.scroller(a.original.region)
     const dx = a.clientX - a.x + (port?.scrollLeft ?? 0) - a.scrollX + a.extension, dy = a.clientY - a.y + (port?.scrollTop ?? 0) - a.scrollY
     const m = latest.current.surfaces.measures[a.original.region]
@@ -262,6 +267,7 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
     animation.current = 0
     const a = gesture.current
     if (!a) return
+    if (a.kind === 'move' && !visual.active()) return
     const port = latest.current.surfaces.ports[a.original.region].current
     if (!port) return
     const r = port.getBoundingClientRect(), elapsed = a.time ? Math.min(32, time - a.time) / 16.67 : 1
@@ -301,9 +307,9 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
     })
     return true
   }
-  function start(e: PointerEvent<HTMLButtonElement>, p: Placement, kind: Gesture['kind']) {
+  function start(e: PointerEvent<HTMLElement>, p: Placement, kind: Gesture['kind']) {
     if (!tx.editing || gesture.current || visual.active() || e.button !== 0 || !feasible[p.region]) return
-    e.preventDefault(); setReleased(null); e.currentTarget.focus({ preventScroll: true }); e.currentTarget.setPointerCapture(e.pointerId)
+    e.preventDefault(); shortClick.current = null; setReleased(null); e.currentTarget.focus({ preventScroll: true }); e.currentTarget.setPointerCapture(e.pointerId)
     tx.beginGesture()
     const port = surfaces.scroller(p.region)!
     // Native scroll clamping caused by shrinking our own occupied extent must not feed
@@ -319,7 +325,7 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
     setSelected(p.id); animation.current = requestAnimationFrame(time => latest.current.tick(time))
     if (kind === 'move') setGestureLabel({ id: p.id, region: p.region })
   }
-  function move(e: PointerEvent<HTMLButtonElement>) {
+  function move(e: PointerEvent<HTMLElement>) {
     const a = gesture.current
     if (!a || a.pointer !== e.pointerId) return
     if (e.clientX !== a.clientX) a.directionX = Math.sign(e.clientX - a.clientX)
@@ -336,7 +342,7 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
     }
     if (!animation.current) animation.current = requestAnimationFrame(time => latest.current.tick(time))
   }
-  function finish(e: PointerEvent<HTMLButtonElement>, cancel = false) {
+  function finish(e: PointerEvent<HTMLElement>, cancel = false) {
     const a = gesture.current
     if (!a || a.pointer !== e.pointerId) return
     if (!cancel && a.kind === 'move' && a.original.region === 'sidebar' && a.sourceBar !== tx.live.current.organization.activeBar) {
@@ -367,10 +373,11 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
         return
       }
     }
+    if (!cancel && a.kind === 'move' && !visual.active() && Math.hypot(e.clientX - a.x, e.clientY - a.y) < 5) shortClick.current = a.id
     if (!cancel) { a.clientX = e.clientX; a.clientY = e.clientY; update(a) }
     end(cancel)
   }
-  function keyboard(e: KeyboardEvent<HTMLButtonElement>, p: Placement, kind: Gesture['kind']) {
+  function keyboard(e: KeyboardEvent<HTMLElement>, p: Placement, kind: Gesture['kind']) {
     if (!import.meta.env.DEV || !tx.editing || gesture.current || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return
     e.preventDefault(); const step = e.shiftKey ? 10 : 1
     // Several key events can arrive before React renders. Each discrete action uses
@@ -402,9 +409,9 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
     })
   }
   function handlers(p: Placement, kind: Gesture['kind']) {
-    return { onPointerDown: (e: PointerEvent<HTMLButtonElement>) => start(e, p, kind), onPointerMove: move,
-      onPointerUp: (e: PointerEvent<HTMLButtonElement>) => finish(e), onPointerCancel: (e: PointerEvent<HTMLButtonElement>) => finish(e, true),
-      onLostPointerCapture: (e: PointerEvent<HTMLButtonElement>) => finish(e, true), onKeyDown: (e: KeyboardEvent<HTMLButtonElement>) => keyboard(e, p, kind) }
+    return { onClick: () => { if (kind === 'move' && shortClick.current === p.id) { shortClick.current = null; currentCatalog.current?.select?.(p.id) } }, onPointerDown: (e: PointerEvent<HTMLElement>) => start(e, p, kind), onPointerMove: move,
+      onPointerUp: (e: PointerEvent<HTMLElement>) => finish(e), onPointerCancel: (e: PointerEvent<HTMLElement>) => finish(e, true),
+      onLostPointerCapture: (e: PointerEvent<HTMLElement>) => finish(e, true), onKeyDown: (e: KeyboardEvent<HTMLElement>) => keyboard(e, p, kind) }
   }
   return { selected, setSelected, blocked, heldExtent, handlers, catalogHandlers, catalogDrag, frameDrop, gestureLabel, visual,
     catalogSurfaceKey: REGIONS.map(region => `${surfaces.measures[region].width},${surfaces.measures[region].height}`).join(';') + expanded,

@@ -17,5 +17,5 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
 export const useLocale = () => useContext(Locale)
 export function LanguageChoice() {
   const { preference, setPreference, t } = useLocale()
-  return <select className="ui-input" aria-label={t('Idioma da interface')} value={preference} onChange={event => setPreference(event.target.value as Preference)}><option value="auto">{t('Idioma do navegador')}</option><option value="pt-BR">Português (Brasil)</option><option value="en">English</option></select>
+  return <select data-locale-select className="ui-input" aria-label={t('Idioma da interface')} value={preference} onChange={event => setPreference(event.target.value as Preference)}><option value="auto">{t('Idioma do navegador')}</option><option value="pt-BR">Português (Brasil)</option><option value="en">English</option></select>
 }

@@ -91,6 +91,10 @@ export async function freeformCorrectionSmoke(page: Page, dev: boolean, resizeWi
     try { anchored(frames, direction) } catch (error) { errors.push(String(error)) }
     const after = await rect(page, 'properties'); near(after.x, before.x, 'reversal x'); near(after.y, before.y, 'reversal y')
     near(after.width, before.width, 'reversal width'); near(after.height, before.height, 'reversal height')
+    assert.equal(await handle.evaluate(node => node.hasPointerCapture(1)), false, 'Release must end native capture before another gesture')
+    await page.mouse.move(5, 5); await settle(page)
+    const released = await rect(page, 'properties')
+    near(released.width, before.width, 'Hover after release cannot resize width'); near(released.height, before.height, 'Hover after release cannot resize height')
     // A released resize followed by a separate gesture must retain the anchored origin.
     await drag(page, 'properties', direction, /w/.test(direction) ? -4.25 : /e/.test(direction) ? 4.25 : 0, /n/.test(direction) ? -4.25 : /s/.test(direction) ? 4.25 : 0)
   }

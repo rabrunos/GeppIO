@@ -1,5 +1,5 @@
 import { collides, EPSILON } from './geometry.ts'
-import { CONSTRAINTS, IDS, POLICY } from './policy.ts'
+import { CONSTRAINTS, IDS, POLICY, constraintInRegion } from './policy.ts'
 import { REGIONS } from './types.ts'
 import type { Constraints, Placement, References, Size, Snapshot } from './types.ts'
 
@@ -28,7 +28,7 @@ export function parseGeometry(text: string, constraints: Constraints, requiredId
     if (!object(p) || typeof p.id !== 'string' || !Object.hasOwn(constraints, p.id) || (requiredIds && !requiredIds.includes(p.id)) || seen.has(p.id) || !REGIONS.includes(p.region as Placement['region'])
       || !number(p.x) || !number(p.y) || p.x < 0 || p.y < 0) throw new Error('Invalid widget identity/region/position')
     seen.add(p.id)
-    const c = constraints[p.id]!, region = p.region as Placement['region'], dimensions = size(p, POLICY.maxSize), preferred = size(p.preferred, POLICY.maxSize)
+    const region = p.region as Placement['region'], c = constraintInRegion(constraints[p.id]!, region), dimensions = size(p, POLICY.maxSize), preferred = size(p.preferred, POLICY.maxSize)
     if (!c.regions.includes(region) || dimensions.width < c.min.width || dimensions.height < c.min.height
       || preferred.width < c.min.width || preferred.height < c.min.height || dimensions.width > c.max.width || dimensions.height > c.max.height
       || p.x + dimensions.width > POLICY.maxCoordinate || p.y + dimensions.height > reference[region].height + EPSILON
