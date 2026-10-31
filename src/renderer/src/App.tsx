@@ -1,136 +1,209 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { MotionConfig } from 'motion/react'
-import { CommandLineIcon } from '@heroicons/react/24/outline'
-import { PluginWidgets, usePlugins } from './Plugins.tsx'
-import { CONSTRAINTS, constraintsFor, EXPANSION_KEY } from '../../shared/freeform/policy.ts'
+import { PlusIcon } from '@heroicons/react/24/outline'
+import { usePlugins } from './Plugins.tsx'
+import { constraintsFor, EXPANSION_KEY } from '../../shared/freeform/policy.ts'
 import { projectRegion } from '../../shared/freeform/projection.ts'
+import { reflow } from '../../shared/freeform/reflow.ts'
 import { REGIONS } from '../../shared/freeform/types.ts'
-import type { Region, Snapshot } from '../../shared/freeform/types.ts'
-import { REGION_LABELS } from '../../shared/freeform/transfer.ts'
+import type { Region } from '../../shared/freeform/types.ts'
+import { constraintsForViews, widgetRegistry, activePlacements } from '../../shared/workbench/model.ts'
+import type { SessionSlot, UserBar, WorkbenchSnapshot, WidgetType } from '../../shared/workbench/model.ts'
+import { projectSessionSlot } from '../../shared/workbench/compositions.ts'
+import { addWidget, configureBar, removePresence, swapViews } from '../../shared/workbench/commands.ts'
 import { useTransaction } from './freeform/useTransaction.ts'
 import { useSurfaces } from './freeform/useSurfaces.ts'
 import { useInteraction } from './freeform/useInteraction.ts'
 import { WidgetFrame } from './freeform/WidgetFrame.tsx'
-import { Header } from './workbench/Header.tsx'
+import { Header, ContextBar } from './workbench/Header.tsx'
 import { Sidebar } from './workbench/Sidebar.tsx'
+import { EditorPanel } from './workbench/EditorPanel.tsx'
+import { PairDividers } from './workbench/PairDividers.tsx'
+import { Confirm } from './workbench/Primitives.tsx'
+import { LocaleProvider, useLocale } from './workbench/Locale.tsx'
 import { useRegions } from './workbench/useRegions.ts'
+import { useSwap } from './workbench/useSwap.ts'
+import { HostModelsProvider } from './workbench/HostModels.tsx'
+import { EditOutline } from './workbench/EditOutline.tsx'
+import { DragLayer } from './workbench/DragLayer.tsx'
+import { ProjectMenu, useProjectName } from './workbench/ProjectMenu.tsx'
+import { StatusBar } from './workbench/StatusBar.tsx'
 import { TestPanel } from './workbench/TestPanel.tsx'
-import { WIDGETS } from './fixtures.ts'
 import type { PanelState } from './workbench/TestPanel.tsx'
 import { Settings } from './settings/Settings.tsx'
-import './workbench/workbench.css'
+import { WidgetContent } from './WidgetContent.tsx'
 import './settings/settings.css'
 import './fixtures.css'
 import './freeform/freeform.css'
+import './workbench/design/index.css'
+import './workbench/host.css'
 
-/** App owns plugin lifetimes. Visibility and region changes never activate/dispose Workers. */
+/** The runtime is mounted once. Inventory loading never remounts an existing workbench. */
 export function App() {
-  const plugins = usePlugins(), tx = useTransaction(), regions = useRegions(), surfaces = useSurfaces()
+  const plugins = usePlugins(), ready = useRef(false)
+  if (!plugins.busy) ready.current = true
+  return <LocaleProvider><HostModelsProvider><MotionConfig reducedMotion="user">{ready.current ? <Workbench plugins={plugins} /> : <div className="host-loading" role="status">GeppIO…</div>}</MotionConfig></HostModelsProvider></LocaleProvider>
+}
+function Workbench({ plugins }: { plugins: ReturnType<typeof usePlugins> }) {
+  const { t } = useLocale(), registry = useMemo(() => widgetRegistry(plugins.inventory.plugins), [plugins.inventory.plugins])
+  const tx = useTransaction(registry), regions = useRegions(tx.editing, tx.snapshot.organization.chrome, chrome => tx.commitOrganization({ ...tx.live.current, organization: { ...tx.live.current.organization, chrome } })), surfaces = useSurfaces()
+  const constraints = useMemo(() => constraintsForViews(tx.snapshot, registry), [tx.snapshot.organization.views, registry])
   const [expanded, setExpanded] = useState(() => { try { return localStorage.getItem(EXPANSION_KEY) === 'true' } catch { return false } })
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     try {
       const stored = localStorage.getItem('geppio:theme:v1')
-      if (stored === 'dark' || stored === 'light') return stored
+      if (stored === 'light' || stored === 'dark') return stored
       const old: unknown = JSON.parse(localStorage.getItem('geppio:layout:grid:v2') ?? localStorage.getItem('geppio:layout:v1') ?? 'null')
       return old && typeof old === 'object' && 'theme' in old && old.theme === 'light' ? 'light' : 'dark'
     } catch { return 'dark' }
   })
-  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false), [editorOpen, setEditorOpen] = useState(true), [slot, setSlot] = useState<SessionSlot | null>(null)
+  const [headerMenu, setHeaderMenu] = useState<string | null>(null)
+  const [widgetsRequest, setWidgetsRequest] = useState(0)
+  const [snap, setSnapState] = useState(() => { try { return localStorage.getItem('geppio:snap-center:v1') !== 'false' } catch { return true } })
+  function setSnap(value: boolean) { setSnapState(value); try { localStorage.setItem('geppio:snap-center:v1', String(value)) } catch { tx.setMessage(t('Preferência alterada somente nesta sessão.')) } }
+  const project = useProjectName(), projectAnchor = useRef<HTMLButtonElement>(null), [projectMenu, setProjectMenu] = useState(false)
+  const [removing, setRemoving] = useState<string | null>(null), [swapSelection, setSwapSelection] = useState<string | null>(null)
+  const [selectedViews, setSelectedViews] = useState<string[]>([])
+  const [pairPreview, setPairPreview] = useState<WorkbenchSnapshot | null>(null)
+  const [showFeedback, setShowFeedback] = useState(false), initialMessage = useRef(tx.message)
   const [panel, setPanel] = useState<PanelState>({ open: false, presentation: 'overlay', anchor: 'bottom' })
+  const frames = useRef(new Map<string, WorkbenchSnapshot['placements'][number]>())
   const surfaceSizes = REGIONS.map(r => `${surfaces.measures[r].width},${surfaces.measures[r].height}`).join(';')
-  const projected = useMemo(() => Object.fromEntries(REGIONS.map(r => [r, projectRegion(tx.snapshot, r, surfaces.measures[r], expanded && r === 'main')])) as Record<Region, ReturnType<typeof projectRegion>>, [tx.snapshot, surfaceSizes, expanded])
+  const sessionSlots = tx.slots.map(item => projectSessionSlot(item, surfaces.measures[item.region]))
+  const chosenSlot = sessionSlots.find(item => item.id === slot?.id) ?? null
+  const source = pairPreview ?? tx.snapshot
+  const visible = { ...source, placements: activePlacements(source).filter(p => constraints[p.id]) }
+  const projected = useMemo(() => Object.fromEntries(REGIONS.map(r => [r, projectRegion(visible, r, surfaces.measures[r], expanded && r === 'main', constraints)])) as Record<Region, ReturnType<typeof projectRegion>>, [source, surfaceSizes, expanded, registry])
   const feasible = Object.fromEntries(REGIONS.map(r => [r, projected[r].feasible])) as Record<Region, boolean>
-  const view: Snapshot = { ...tx.snapshot, reference: { ...tx.snapshot.reference }, placements: tx.snapshot.placements.map(p => projected[p.region].placements.find(q => q.id === p.id)!) }
+  const geometryWarning = REGIONS.some(region => !feasible[region] && visible.placements.some(p => p.region === region))
+  const view: WorkbenchSnapshot = { ...tx.snapshot, reference: { ...tx.snapshot.reference }, placements: tx.snapshot.placements.map(p => projected[p.region].placements.find(q => q.id === p.id) ?? p) }
   for (const r of REGIONS) {
     const m = surfaces.measures[r]
-    if (feasible[r] && m.width > 0 && m.height > 0) view.reference[r] = { width: m.width,
-      height: r === 'sidebar' ? Math.max(m.height, projected.sidebar.world.height) : m.height }
+    if (feasible[r] && m.width > 0 && m.height > 0) view.reference[r] = { width: m.width, height: r === 'sidebar' ? Math.max(m.height, projected.sidebar.world.height) : m.height }
   }
-  const interaction = useInteraction(tx, view, surfaces, expanded, feasible)
-  const displayed = { ...projected }
+  const interaction = useInteraction(tx, view, surfaces, expanded, feasible, registry, {
+    available(type, region) { return !!addWidget(view, registry, type, { ...surfaces.measures[region], region, expanded: expanded && region === 'main' }, undefined, disabledOwners()) },
+    commit(type, region, at) { return add(type, region, undefined, at) }
+  }), displayed = { ...projected }
   if (interaction.preview && interaction.activeRegion) {
     const region = interaction.activeRegion, preview = interaction.preview
-    // Direct previews already solved the usable bounds (including an entering native
-    // scrollbar). Do not project them again while ResizeObserver catches up.
-    view.placements = view.placements.map(p => p.region === region ? preview.placements.find(q => q.id === p.id)! : p)
-    const ps = view.placements.filter(p => p.region === region), m = surfaces.measures[region]
-    displayed[region] = { placements: ps, feasible: true, world: {
-      width: region === 'main' ? Math.max(m.width, ...ps.map(p => p.x + p.width)) : m.width,
-      height: region === 'sidebar' ? Math.max(0, ...ps.map(p => p.y + p.height)) : preview.reference[region].height } }
+    view.placements = view.placements.map(p => p.region === region ? preview.placements.find(q => q.id === p.id) ?? p : p)
+    const peers = view.placements.filter(p => p.region === region), m = surfaces.measures[region]
+    displayed[region] = { placements: peers, feasible: true, world: { width: region === 'main' ? Math.max(m.width, ...peers.map(p => p.x + p.width)) : m.width,
+      height: region === 'sidebar' ? Math.max(0, ...peers.map(p => p.y + p.height)) : preview.reference[region].height } }
   }
-  const selected = view.placements.find(p => p.id === interaction.selected)
-  function toggleExpansion(next: boolean) {
-    interaction.end(true); setExpanded(next)
-    try { localStorage.setItem(EXPANSION_KEY, String(next)) } catch { tx.setMessage('Expansão alterada nesta sessão; não foi possível salvar a preferência.') }
+  const disabled = useMemo(disabledOwners, [plugins.views, plugins.inventory.plugins])
+  const swapping = useSwap(tx, view, registry, selectedViews, () => { setSwapSelection(null); setSelectedViews([]) })
+  function disabledOwners() { return new Set(plugins.inventory.plugins.filter(plugin => !plugin.enabled || !plugins.views.some(view => view.plugin.manifest.id === plugin.manifest.id && view.status === 'active')).map(plugin => `plugin:${plugin.manifest.id}`)) }
+  useEffect(() => { document.documentElement.dataset.theme = theme }, [theme])
+  useEffect(() => {
+    if (tx.message === initialMessage.current) return
+    if (interaction.active()) return
+    setShowFeedback(true); const timer = setTimeout(() => setShowFeedback(false), 3200)
+    return () => clearTimeout(timer)
+  }, [tx.message])
+  useEffect(() => { if (tx.editing) setEditorOpen(true); else { setSlot(null); setSwapSelection(null); setSelectedViews([]); interaction.setSelected(null) } }, [tx.editing])
+  useEffect(() => { if (slot && !tx.slots.some(item => item.id === slot.id)) setSlot(null) }, [tx.slots, slot?.id])
+  useEffect(() => { surfaces.measure() }, [regions.sidebarMode, tx.editing, editorOpen])
+  function toggleExpansion(next: boolean) { interaction.end(true); setExpanded(next); try { localStorage.setItem(EXPANSION_KEY, String(next)) } catch { tx.setMessage(t('Preferência alterada somente nesta sessão.')) } }
+  function toggleTheme() { const next = theme === 'dark' ? 'light' : 'dark'; setTheme(next); try { localStorage.setItem('geppio:theme:v1', next) } catch { tx.setMessage(t('Preferência alterada somente nesta sessão.')) } }
+  function begin() { interaction.end(false); setWidgetsRequest(value => value + 1); if (tx.editing) { setEditorOpen(true); return }; tx.begin(view) }
+  function confirmLayout(conclude: boolean) {
+    interaction.end(false)
+    regions.commitKeyboard()
+    if (REGIONS.some(r => !feasible[r] && visible.placements.some(p => p.region === r))) { tx.setMessage(t('Espaço insuficiente. Amplie a região antes de salvar.')); return }
+    const next = { ...view, organization: tx.live.current.organization }
+    if (conclude) void tx.conclude(next); else void tx.saveEditing(next)
   }
-  function toggleTheme() {
-    const next = theme === 'dark' ? 'light' : 'dark'; setTheme(next)
-    try { localStorage.setItem('geppio:theme:v1', next) } catch { tx.setMessage('Tema alterado nesta sessão; não foi possível salvar a preferência.') }
+  function add(type: string, region: Region, target?: SessionSlot, at?: { x: number; y: number }) {
+    if (!tx.editing) return false
+    const surface = { ...surfaces.measures[region], region, expanded: expanded && region === 'main' }
+    let next = addWidget(view, registry, type, surface, target ?? at, disabled)
+    if (next && target) {
+      const added = next.placements.find(p => p.region === region && next!.organization.views.find(v => v.id === p.id)?.typeId === type)!
+      const result = reflow(next.placements.filter(p => p.region === region), added.id, { x: target.x, y: target.y, width: target.width, height: target.height }, surface, constraintsFor(surface, constraintsForViews(next, registry)), 'move')
+      next = result.status === 'valid' ? { ...next, placements: next.placements.map(p => result.placements.find(q => q.id === p.id) ?? p) } : null
+    }
+    if (!next) { tx.setMessage(t('Widget incompatível ou sem espaço nesta área.')); return false }
+    tx.action(next, target ? tx.slots.filter(item => item.id !== target.id) : tx.slots); return true
+  }
+  async function saveBar(bar: UserBar) {
+    const surface = { ...surfaces.measures.sidebar, region: 'sidebar' as const, expanded: false }
+    if (!tx.editing) return tx.saveBar(bar, surface, disabled)
+    const next = configureBar(view, registry, bar, surface, disabled)
+    if (!next) { tx.setMessage(t('Widget incompatível ou sem espaço nesta barra.')); return false }
+    tx.action(next); return true
   }
   function port(region: Region) {
-    const projection = displayed[region]
-    const height = Math.max(projection.world.height, region === 'sidebar' && interaction.heldExtent?.region === region ? interaction.heldExtent.height : 0)
-    return <div ref={surfaces.ports[region]} className={'placement-port ' + (!projection.feasible ? 'recovery-surface' : '')}
-      data-surface={region} data-feasible={projection.feasible} data-usable-width={surfaces.measures[region].width} data-usable-height={surfaces.measures[region].height}
-      role="region" tabIndex={region === 'main' && (expanded || !projection.feasible) ? 0 : -1} aria-label={'Área de widgets da ' + REGION_LABELS[region]} onScroll={surfaces.measure}
-      onKeyDown={e => {
-        if (e.target !== e.currentTarget || region !== 'main') return
-        const element = e.currentTarget, delta = e.key === 'ArrowRight' ? 30 : e.key === 'ArrowLeft' ? -30 : e.key === 'PageDown' ? element.clientWidth : e.key === 'PageUp' ? -element.clientWidth : 0
-        if (delta || e.key === 'Home' || e.key === 'End') { e.preventDefault(); element.scrollLeft = e.key === 'Home' ? 0 : e.key === 'End' ? element.scrollWidth : element.scrollLeft + delta }
-      }} style={region === 'sidebar' ? { height } : undefined}><div className="placement-world" style={{ width: Math.max(projection.world.width, region === 'main' && interaction.heldExtent?.region === region ? interaction.heldExtent.width : 0), height }} /></div>
+    const projection = displayed[region], empty = !visible.placements.some(p => p.region === region) && !sessionSlots.some(slot => slot.region === region)
+    const height = Math.max(projection.world.height, region === 'sidebar' && interaction.heldExtent?.region === region ? interaction.heldExtent.height : 0, region === 'sidebar' && empty ? surfaces.measures.sidebar.height : 0)
+    return <div ref={surfaces.ports[region]} className={'placement-port ' + (!projection.feasible ? 'recovery-surface' : '')} data-surface={region} data-feasible={projection.feasible}
+      data-usable-width={surfaces.measures[region].width} data-usable-height={surfaces.measures[region].height} role="region" aria-label={t('Área de widgets: {0}', region)} tabIndex={region === 'main' && (expanded || !projection.feasible) ? 0 : -1} onScroll={surfaces.measure}
+      style={region === 'sidebar' ? { height } : undefined}><div className="placement-world" style={{ width: Math.max(projection.world.width, region === 'main' && interaction.heldExtent?.region === region ? interaction.heldExtent.width : 0), height }} />{empty && <div className="workspace-region-empty host-region-empty" data-empty-region={region}><WorkbenchEmptyIcon /><strong>{t('Nenhum widget nesta área')}</strong><button className="ui-button workspace-text-action" onClick={begin} disabled={tx.recovery && !tx.editing}>{t('Escolher widgets')}</button></div>}</div>
   }
   const docked = panel.open && panel.presentation === 'docked'
-  const mainElement = surfaces.ports.main.current?.closest<HTMLElement>('[data-region="main"]')
-  const dockWidth = docked && ['left', 'right'].includes(panel.anchor) ? Math.min(270, Math.max(0, (mainElement?.clientWidth ?? 0) - (expanded ? 15 : 30)) / 3) : 0
-  const dockHeight = docked && ['top', 'bottom'].includes(panel.anchor) ? Math.min(180, Math.max(0, (mainElement?.clientHeight ?? 0) - 30) / 3) : 0
-  return <MotionConfig reducedMotion="user"><div className="workbench" data-theme={theme} style={{ '--main-start': regions.sidebar + (regions.collapsed.sidebar ? 0 : regions.splitter) + 15 + 'px' } as CSSProperties} onKeyDown={event => {
-    if (settingsOpen || event.key !== 'Escape') return
-    if (interaction.active()) interaction.end(true); else if (tx.editing) tx.cancel(); else if (panel.open) setPanel({ ...panel, open: false })
-  }}>
-    <Header editing={tx.editing} theme={theme} recovery={tx.recovery} openSettings={() => { interaction.end(true); setSettingsOpen(true) }}
-      toggleTheme={toggleTheme} begin={() => { interaction.end(false); tx.begin(view) }} cancel={() => { interaction.end(true); tx.cancel() }} save={() => {
-        interaction.end(false)
-        if (REGIONS.some(r => !feasible[r] && view.placements.some(p => p.region === r))) { tx.setMessage('Espaço insuficiente. Amplie ou reabra a região antes de salvar; a composição original foi preservada.'); return }
-        void tx.save(view)
-      }}><div className="layout-controls">
-        {regions.collapsed.sidebar && <button className="button subtle" onClick={() => regions.reopen('sidebar')}>Reabrir Sidebar</button>}
-        {regions.collapsed.bottom && <button className="button subtle" onClick={() => regions.reopen('bottom')}>Reabrir Bottom</button>}
-        {tx.editing && selected && <label className="region-transfer">Mover widget<select aria-label="Região do widget selecionado" value={selected.region} onChange={e => interaction.transferTo(selected.id, e.target.value as Region)}>{REGIONS.map(r => <option key={r} value={r}>{REGION_LABELS[r]}</option>)}</select></label>}
-      </div></Header>
-    <div ref={element => { regions.area.current = element; surfaces.root.current = element }} className="work-area" style={{ gridTemplateColumns: `${regions.sidebar}px ${regions.collapsed.sidebar ? 0 : regions.splitter}px minmax(0,1fr)`, gridTemplateRows: `minmax(0,1fr) ${regions.collapsed.bottom ? 0 : regions.splitter}px ${regions.bottom}px` }}>
-      <aside className={'sidebar-region surface-region ' + (view.placements.some(p => p.region === 'sidebar') ? 'has-widgets' : '')} data-region="sidebar" hidden={regions.collapsed.sidebar} onScroll={surfaces.measure} tabIndex={0} aria-label="Navegação e widgets da Sidebar">
-        <Sidebar selected={interaction.selected} select={interaction.setSelected} />{port('sidebar')}
-      </aside>
-      <div className="region-splitter sidebar-splitter" role="separator" aria-label="Largura da Sidebar" aria-orientation="vertical" tabIndex={regions.collapsed.sidebar ? -1 : 0}
-        aria-valuenow={regions.sidebar} aria-valuemin={regions.collapsed.sidebar ? 0 : regions.bounds.sidebar.min} aria-valuemax={regions.bounds.sidebar.max} {...regions.handlers('sidebar')} />
-      <main className={'main-region surface-region ' + (expanded ? 'expanded' : '')} data-region="main" data-testid="layout-canvas" data-engine="freeform" data-expanded={expanded}
-        style={{ '--dock-width': dockWidth + 'px', '--dock-height': dockHeight + 'px' } as CSSProperties}>
-        <div className="plugin-tray"><PluginWidgets plugins={plugins} /></div>
-        <div className="main-placement" style={{ display: 'flex', flex: 1, minHeight: 0, minWidth: 0,
-          marginLeft: docked && panel.anchor === 'left' ? dockWidth + 10 : 0, marginRight: docked && panel.anchor === 'right' ? dockWidth + 10 : 0,
-          marginTop: docked && panel.anchor === 'top' ? dockHeight + 10 : 0, marginBottom: docked && panel.anchor === 'bottom' ? dockHeight + 10 : 0 }}>{port('main')}</div>
-        <TestPanel state={panel} close={() => setPanel({ ...panel, open: false })} />
-      </main>
-      <div className="region-splitter bottom-splitter" role="separator" aria-label="Altura da Bottom" aria-orientation="horizontal" tabIndex={regions.collapsed.bottom ? -1 : 0}
-        aria-valuenow={regions.bottom} aria-valuemin={regions.collapsed.bottom ? 0 : regions.bounds.bottom.min} aria-valuemax={regions.bounds.bottom.max} {...regions.handlers('bottom')} />
-      <footer className="bottom-region surface-region" data-region="bottom" hidden={regions.collapsed.bottom}>
-        <div className="bottom-tools"><span className="region-label">BOTTOM</span><button className={'bottom-action ' + (panel.open ? 'active' : '')} onClick={() => setPanel({ ...panel, open: !panel.open })} disabled={tx.editing} aria-label="Abrir ou recolher painel de teste"><CommandLineIcon className="size-4" />Painel de teste</button><span className="bottom-spacer" /><span>{plugins.inventory.plugins.length} plugins locais</span><span className="status-dot" /></div>{port('bottom')}
-        {!feasible.bottom && view.placements.some(p => p.region === 'bottom') && <div className="bottom-recovery" role="alert" data-testid="bottom-recovery">
-          <span>Bottom sem espaço para os mínimos. Widgets e dados preservados; amplie a região ou a janela.</span>
-          <button className="button subtle" onClick={() => regions.expand('bottom')}>Ampliar Bottom</button>
-          {tx.editing && view.placements.filter(p => p.region === 'bottom').map(p => <button key={p.id} className="button subtle" onClick={() => interaction.transferTo(p.id, 'main')}>Mover {WIDGETS.find(w => w.id === p.id)!.title} para Main</button>)}
-        </div>}
-      </footer>
-      <div className="freeform-layer">{view.placements.map(p => <WidgetFrame key={p.id} placement={p} measurement={surfaces.measures[p.region]}
-        constraint={feasible[p.region] ? constraintsFor({ ...surfaces.measures[p.region], region: p.region, expanded })[p.id]! : CONSTRAINTS[p.id]!}
-        editing={tx.editing && feasible[p.region]} withheld={tx.recovery && !tx.editing} unavailable={p.region === 'bottom' && !feasible.bottom} interaction={interaction}
-        wheel={(dx, dy) => { const element = surfaces.scroller(p.region); if (!element) return
-          if (p.region === 'main' && expanded) element.scrollLeft += dx
-          if (p.region === 'sidebar') element.scrollTop += dy }} />)}</div>
-    </div>
-    <div className="workspace-feedback" role="status">{[REGIONS.some(r => !feasible[r] && view.placements.some(p => p.region === r)) ? 'Espaço insuficiente para os mínimos. Composição preservada; amplie ou reabra a região.' : '', tx.message].filter(Boolean).join(' ')}</div>
-    <div className="fixed-status-bar" aria-label="Barra de estado" />
-    {settingsOpen && <Settings plugins={plugins} close={() => setSettingsOpen(false)} tx={tx} panel={panel} setPanel={setPanel} expanded={expanded} setExpanded={toggleExpansion} />}
-  </div></MotionConfig>
+  const dockWidth = docked && ['left', 'right'].includes(panel.anchor) ? Math.min(270, (surfaces.measures.main.ownerWidth ?? 0) / 3) : 0
+  const dockHeight = docked && ['top', 'bottom'].includes(panel.anchor) ? Math.min(180, (surfaces.measures.main.ownerHeight ?? 0) / 3) : 0
+  const picture = interaction.visual.picture
+  const dropZones = interaction.catalogDrag ?? interaction.frameDrop
+  return <div className={'workbench ' + (regions.resizing ? 'is-resizing' : '')} data-theme={theme} data-sidebar-mode={regions.sidebarMode} data-active-bar={tx.snapshot.organization.activeBar} data-bottom-mode={regions.collapsed.bottom ? 'hidden' : 'docked'}
+    data-sidebar-presentation={regions.floating ? 'floating' : 'docked'} data-layout-editing={tx.editing ? '' : undefined} data-widget-catalog-open={tx.editing && editorOpen} data-resize-axis={regions.resizing === 'sidebar' ? 'x' : 'y'}
+    style={{ '--sidebar-width': regions.contentWidth + 'px', '--bottom-height': regions.contentHeight + 'px', '--sidebar-track': (48 + regions.sidebar) + 'px', '--bottom-track': regions.bottom + 'px' } as CSSProperties}
+    onClickCapture={event => {
+      if (!tx.editing || !(event.ctrlKey || event.metaKey) || (event.target as HTMLElement).closest('input,textarea,select,a,[contenteditable="true"]')) return
+      const id = (event.target as HTMLElement).closest<HTMLElement>('[data-widget]')?.dataset.widget
+      if (id) { event.preventDefault(); event.stopPropagation(); setSelectedViews(previous => previous.includes(id) ? previous.filter(item => item !== id) : [...previous, id]) }
+    }}
+    onKeyDown={event => {
+      if (settingsOpen || (event.target as HTMLElement).closest('dialog[open], [popover]:popover-open')) return
+      const textInput = (event.target as HTMLElement).closest('input, textarea, select, [contenteditable="true"]')
+      if (!textInput && tx.editing && (event.ctrlKey || event.metaKey) && ['z', 'y'].includes(event.key.toLowerCase())) { event.preventDefault(); if (tx.gestureActive || interaction.active() || regions.active() || swapping.active()) return; regions.commitKeyboard(); interaction.visual.after(event.shiftKey || event.key.toLowerCase() === 'y' ? tx.redo : tx.undo); setSwapSelection(null); setSelectedViews([]) }
+      if (event.key === 'Escape') { if (interaction.active()) interaction.end(true); else if (slot) setSlot(null); else if (selectedViews.length || swapSelection) { setSwapSelection(null); setSelectedViews([]) } else if (regions.sidebarMode === 'peek') regions.closePeek(); else if (tx.editing) tx.cancel() }
+    }}>
+    <Header projectName={project.name ?? t('Laboratório')} openProject={() => setProjectMenu(true)} menu={headerMenu} setMenu={setHeaderMenu} history={interaction.visual.after} plugins={plugins} tx={tx} theme={theme} toggleTheme={toggleTheme} openSettings={() => setSettingsOpen(true)} begin={begin} save={() => confirmLayout(false)} conclude={() => confirmLayout(true)} /><ContextBar projectName={project.name ?? t('Laboratório')} projectAnchor={projectAnchor} openProject={() => setProjectMenu(!projectMenu)} begin={() => tx.editing ? setEditorOpen(!editorOpen) : begin()} editing={tx.editing} recovery={tx.recovery} feedback={tx.setMessage} />
+    <ProjectMenu open={projectMenu} close={() => setProjectMenu(false)} anchor={projectAnchor} name={project.name ?? t('Laboratório')} rename={project.rename} snapshot={tx.snapshot} feedback={tx.setMessage} />
+    <div ref={element => { regions.area.current = element; surfaces.root.current = element }} className="work-area" onPointerDown={event => { if (regions.sidebarMode === 'peek' && !(event.target as HTMLElement).closest('.host-sidebar-content, .sidebar-rail')) regions.closePeek() }}>
+      <Sidebar tx={tx} registry={registry} regions={regions} sidebarWidth={surfaces.measures.sidebar.width} theme={theme} toggleTheme={toggleTheme} saveBar={saveBar}><aside className="sidebar-region" data-region="sidebar" onScroll={surfaces.measure} tabIndex={0} aria-label={t('Barra lateral')}>{port('sidebar')}</aside></Sidebar>
+      <main className={'main-region ' + (expanded ? 'expanded' : '')} data-region="main" data-testid="layout-canvas" data-engine="freeform" data-expanded={expanded} style={{ '--dock-width': dockWidth + 'px', '--dock-height': dockHeight + 'px' } as CSSProperties}><div className="main-placement" style={{ display: 'flex', flex: 1, minWidth: 0, minHeight: 0,
+        marginLeft: docked && panel.anchor === 'left' ? dockWidth + 11 : 0, marginRight: docked && panel.anchor === 'right' ? dockWidth + 11 : 0,
+        marginTop: docked && panel.anchor === 'top' ? dockHeight + 9 : 0, marginBottom: docked && panel.anchor === 'bottom' ? dockHeight + 9 : 0 }}>{port('main')}</div><TestPanel state={panel} close={() => setPanel({ ...panel, open: false })} /></main>
+      <footer className="bottom-region" data-region="bottom"><div className="bottom-surface">{port('bottom')}{!feasible.bottom && visible.placements.some(p => p.region === 'bottom') && <div className="bottom-recovery" data-testid="bottom-recovery" role="alert"><span>{t('Espaço insuficiente. Amplie a região antes de salvar.')}</span><button className="ui-button tool-button" onClick={() => regions.expand('bottom')}>{t('Ampliar Bottom')}</button></div>}</div></footer>
+      <div className="region-splitter sidebar-splitter" data-active={regions.resizing === 'sidebar' ? '' : undefined} role="separator" aria-label={t('Largura da Sidebar')} aria-orientation="vertical" tabIndex={regions.sidebarMode === 'docked' ? 0 : -1} aria-valuenow={regions.sidebar} aria-valuemin={regions.bounds.sidebar.min} aria-valuemax={regions.bounds.sidebar.max} {...regions.handlers('sidebar')} />
+      <div className="region-splitter bottom-splitter" data-active={regions.resizing === 'bottom' ? '' : undefined} role="separator" aria-label={t('Altura da Bottom')} aria-orientation="horizontal" tabIndex={0} aria-valuenow={regions.bottom} aria-valuemin={regions.collapsed.bottom || regions.bottomRevealing ? 0 : regions.bounds.bottom.min} aria-valuemax={regions.bounds.bottom.max} {...regions.handlers('bottom')} />
+      <div className="freeform-layer">{tx.snapshot.organization.views.map(record => {
+        const definition = registry.get(record.typeId), current = view.placements.find(p => p.id === record.id)
+        if (current) frames.current.set(record.id, current)
+        const placement = current ?? frames.current.get(record.id)
+        if (!definition || !placement) return null
+        const shown = visible.placements.some(p => p.id === record.id)
+        return <WidgetFrame key={record.id} placement={placement} definition={definition} measurement={surfaces.measures[placement.region]} constraint={constraintsFor({ ...surfaces.measures[placement.region], region: placement.region, expanded }, constraints)[record.id]!}
+          editing={tx.editing && feasible[placement.region]} inactive={(placement.region === 'sidebar' && regions.sidebarMode === 'hidden') || (placement.region === 'bottom' && regions.collapsed.bottom)} ghosted={!!picture && record.id === picture.viewId && (!picture.catalog || picture.released) && (!picture.sourceBar || picture.released || picture.sourceBar === tx.snapshot.organization.activeBar)} withheld={(tx.recovery && !tx.editing) || !current || (!shown && interaction.movingId !== record.id)} unavailable={placement.region === 'bottom' && !feasible.bottom}
+          interaction={interaction} swapping={swapping} motionRevision={tx.motionRevision} motion={tx.motion} remove={() => setRemoving(record.id)} swapSelected={selectedViews.includes(record.id)} swapAvailable={selectedViews.length >= 2} swap={() => { if (swapSelection && swapSelection !== record.id) { const next = swapViews(view, registry, swapSelection, record.id); if (next) tx.action(next); else tx.setMessage(t('Troca incompatível ou sem espaço.')); setSwapSelection(null); setSelectedViews([]) } else setSwapSelection(record.id) }}
+          wheel={(dx, dy) => { const element = surfaces.scroller(placement.region); if (!element) return; if (placement.region === 'main' && expanded) element.scrollLeft += dx; if (placement.region === 'sidebar') element.scrollTop += dy }}>
+          {definition.widgetId ? <PluginBody definition={definition} plugins={plugins} /> : undefined}
+        </WidgetFrame>
+      })}{sessionSlots.map(item => { const m = surfaces.measures[item.region]; return <button key={item.id} className="ui-button host-format-slot layout-empty-slot" data-owner-region={item.region} data-catalog-slot-target={chosenSlot?.id === item.id ? '' : undefined} aria-pressed={chosenSlot?.id === item.id} style={{ left: m.left + item.x - m.scrollLeft, top: m.top + item.y - m.scrollTop, width: item.width, height: item.height }} onClick={() => setSlot(chosenSlot?.id === item.id ? null : item)} aria-label={t('Escolher widget')}><PlusIcon className="icon" /><strong>{t('Adicionar widget')}</strong><small>{t('Espaço {0}', sessionSlots.filter(slot => slot.region === item.region).findIndex(slot => slot.id === item.id) + 1)}</small></button> })}</div>
+      <PairDividers tx={tx} registry={registry} view={view} surfaces={surfaces} preview={setPairPreview} snap={snap} />
+      {swapping.preview && <div className="widget-swap-preview" style={{ left: swapping.preview.x, top: swapping.preview.y, zIndex: 152 }} aria-hidden="true">{registry.get(tx.snapshot.organization.views.find(v => v.id === swapping.preview!.id)!.typeId)?.title}</div>}
+      {picture && !picture.catalog && !picture.released && (!picture.sourceBar || picture.sourceBar === tx.snapshot.organization.activeBar) && <div className="layout-drag-origin host-drag-origin" aria-hidden="true" inert style={{ left: picture.origin.left, top: picture.origin.top, width: picture.origin.width, height: picture.origin.height, clipPath: picture.originClip }} />}
+      <EditorPanel request={widgetsRequest} tx={tx} registry={registry} view={view} open={editorOpen} setOpen={setEditorOpen} slot={chosenSlot} chooseSlot={setSlot} add={add} remove={setRemoving} disabled={disabled} interaction={interaction} openPlugins={() => setHeaderMenu('plugins')} />
+      {picture && <DragLayer picture={picture} pointer={interaction.visual.pointer} controller={interaction.visual.controller} measure={interaction.visual.measure} complete={interaction.visual.complete} label={t(picture.catalog ? 'Adicionando widget' : picture.sourceBar ? 'Movendo da barra lateral' : interaction.gestureLabel?.region === 'bottom' ? 'Movendo da barra inferior' : 'Movendo da área principal')}><section className="widget drag-picture-content"><header className="widget-heading"><strong>{registry.get(picture.typeId)?.owner === 'host' ? t(registry.get(picture.typeId)!.title) : registry.get(picture.typeId)?.title}</strong></header><div className="widget-content">{registry.get(picture.typeId)?.fixture ? <WidgetContent id={registry.get(picture.typeId)!.fixture!} /> : <PluginBody definition={registry.get(picture.typeId)!} plugins={plugins} preview />}</div></section></DragLayer>}
+      {dropZones?.targets.map(region => { const m = surfaces.measures[region], width = m.width + 6, height = m.height + 6; return <div key={region} className="layout-edit-zone" data-over={dropZones.over === region ? '' : undefined} style={{ left: m.left - 3, top: m.top - 3, width, height }}><EditOutline width={width} height={height} /></div> })}
+    </div><StatusBar />
+    <div className={'workspace-feedback ' + (showFeedback || tx.recovery || geometryWarning ? 'workspace-toast' : 'sr-only')} role="status" aria-live="polite">{[geometryWarning ? t('Espaço insuficiente para os mínimos. Composição preservada; amplie ou reabra a região.') : '', t(tx.message)].filter(Boolean).join(' ')}</div>
+    {removing && <Confirm title="Remover widget?" text={t('Remover esta presença? Os dados e plugins continuam disponíveis.')} confirm={() => {
+      const typeId = view.organization.views.find(record => record.id === removing)?.typeId
+      tx.action(removePresence(view, removing)); setRemoving(null)
+      requestAnimationFrame(() => { const button = editorOpen && typeId ? document.querySelector<HTMLElement>(`[data-catalog-type="${CSS.escape(typeId)}"]`) : null
+        if (button?.getClientRects().length) button.focus(); else document.querySelector<HTMLElement>('.widget-catalog-toggle')?.focus() })
+    }} close={() => setRemoving(null)} />}
+    {settingsOpen && <Settings plugins={plugins} close={() => setSettingsOpen(false)} tx={tx} panel={panel} setPanel={setPanel} expanded={expanded} setExpanded={toggleExpansion} theme={theme} toggleTheme={toggleTheme} snap={snap} setSnap={setSnap} />}
+  </div>
+}
+function WorkbenchEmptyIcon() { return <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="3.75" y="3.75" width="6" height="6" rx="1.5" /><rect x="14.25" y="3.75" width="6" height="6" rx="1.5" /><rect x="3.75" y="14.25" width="6" height="6" rx="1.5" /><rect x="14.25" y="14.25" width="6" height="6" rx="1.5" /></svg> }
+function PluginBody({ definition, plugins, preview = false }: { definition: WidgetType; plugins: ReturnType<typeof usePlugins>; preview?: boolean }) {
+  const { t } = useLocale(), content = plugins.views.find(view => view.plugin.manifest.id === definition.pluginId)?.widgets[definition.widgetId!]
+  return <div className="host-plugin-content" data-plugin-widget={!preview && content ? `${definition.pluginId}:${definition.widgetId}` : undefined}><p>{content?.text ?? t('Plugin desativado ou aguardando publicação.')}</p>{content?.action && <button className="ui-button tool-button" onClick={preview ? undefined : () => plugins.action(definition.pluginId!, definition.widgetId!, content.action!.id)}>{content.action.label}</button>}</div>
 }

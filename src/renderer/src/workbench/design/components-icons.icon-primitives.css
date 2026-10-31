@@ -1,0 +1,26 @@
+/* @section icon-primitives */
+.symbols {
+  pointer-events: none;
+  width: 0;
+  height: 0;
+  position: absolute;
+  overflow: hidden;
+}
+
+.icon {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8px;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  display: block;
+}
+
+.icon-sm {
+  width: 18px;
+  height: 18px;
+}
+/* @endsection */

@@ -1,5 +1,46 @@
 # Validation guide
 
+## Workbench integration — Issue #2 / alpha.13
+
+Run the same complete checks listed below with Node24/pnpm11. `tests/workbench-model.test.ts`
+adds dynamic ownership/model validation, host-only v1 normalization, explicit legacy adoption,
+unchanged original bytes, CAS/quota failures, independent membership, atomic bilateral resizing
+and session-history branching. `tests/window-controls.test.ts` rejects subframes, wrong URLs
+and every argument-bearing host chrome request. A source test is not an Electron IPC test.
+
+`pnpm test:workbench` launches a disposable built Electron profile and checks native window
+controls, checkpoints/history, form DOM/value identity, presence removal/Cancel, temporary
+slots, a normal-mode pair, cross-region swap/undo and quota-failed Conclude preserving both slots and editing. It supplements the broader
+desktop suites; it cannot establish full A01–A12 parity or physical visual acceptance.
+
+It also checks slot retargeting/filter restoration and viewport A/B/A with unchanged saved
+bytes. `workbench-organization-smoke.ts` exercises independent bars, pointer reorder/invalid
+drop, hover-switch during a drag with whole-intention undo, same-ID archive/restore,
+delete/cancel returning to the filtered library, shared form/model identity, composition
+checkpoint/save/default/favorites, independent library orders and literal user names across PT/EN. Settings navigation uses the profile menu and
+its Development and recovery surface; these tests never edit owner profiles.
+`workbench-plugins-smoke.ts` exercises the actual header manager with native Counter/Pulse
+installation, inventory filters/sort, zero-widget catalog exclusion, presence removal without
+Worker disposal, intentional disable/reset, retry/removal errors and a narrow window. Its
+temporary 50-card DOM fixture checks only CSS scrolling/chrome; it is never native inventory
+and does not change the 32-installation service cap.
+
+The focused workbench smoke also observes a parked catalog drag after pickup and asserts no
+additional DOM-rectangle reads over ten animation frames. Sidebar edge scrolling wakes frames
+only while its native scroll offset changes. Catalog admission shares the sixteen-view cap
+with commands and permits reuse of a compatible existing view at that cap.
+
+The approved V1.141 package is a separate design verifier; its passing npm verify does not
+validate React or Electron. Compare the built app at 1920×1080 in both themes and record
+intermediate animation states, actual timing/easing, narrow/maximized/normal windows and DPR1.25.
+Keep A01–A12 evidence in Issue #2; screenshots do not replace desktop interaction, plugin
+lifecycle, storage failure, stable form/Worker identity or physical Windows acceptance.
+At a narrow window, an open editor can make Main infeasible for the native fixture minima.
+The desktop launcher checks Conclude rejection with unchanged bytes, closes the dock to
+restore usable space, then checks the successful atomic commit; it never lowers those minima.
+The alpha.12 geometry/security/lifecycle assertions below remain regression requirements;
+update only superseded chrome dimensions, labels and intentional storage-adoption paths.
+
 ## Active freeform acceptance — Issue #29 / alpha.12
 
 Run pnpm check, pnpm test:desktop, pnpm test:desktop:dev, the desktop launcher with --scale125,
@@ -17,8 +58,8 @@ finite/minimum/document failures, all historical choices without original-key wr
 conflicts. Retain the older grid/fractional tests unchanged as codec/migration/algorithm regressions.
 
 tools/freeform-smoke.ts is called by the production/development/scale launchers. It measures actual
-DOM rectangles in both themes/restored/narrow/maximized windows; checks the single 15px inset and
-independent 15px status strip, pixel-exact arbitrary movement/resize/reload, eight handles, keyboard,
+DOM rectangles in both themes/restored/narrow/maximized windows; checks the approved 11px/9px Main inset and
+independent 25px status strip, pixel-exact arbitrary movement/resize/reload, eight handles, keyboard,
 live compression/held reversal/settled independent actions, occupied scrolling/contraction, form identity and actual
 Sidebar/Bottom placement. Exercise region collapse/reopen, size restoration and impossible small
 Bottom/incompatible transfers. Validate no viewport-only writes, Save/Cancel, historical choices,
@@ -264,7 +305,7 @@ Settings keyboard/Escape/focus, scrolling and both themes at the usual Windows D
 test packages for duplicate IDs, malformed manifests and exceptions; never install unknown code.
 Record owner acceptance in #21; automated Windows smoke does not substitute that UX acceptance.
 
-## Owner Windows smoke
+## Historical owner Windows smoke contracts
 
 Use the actual Windows setup, including the usual display scaling. Confirm text is legible in both themes and the fixed header/Bottom remain correctly separated. In normal mode try dragging a widget header and using its form/scroll content: no accidental layout movement should occur.
 
@@ -303,4 +344,4 @@ processes. A fixture/sample result cannot certify future plugin costs or OS reso
 
 ## Completion standard
 
-Report pass/fail/blocked/not_run for each relevant layer. A missing package graph, failed compiler or unobserved Windows smoke is not a success. Do not use `--no-sandbox`, disabled webSecurity, removed type rules or skipped assertions as fixes. Continuations of the unaccepted baseline retain `0.1.0-alpha.1`; new accepted work receives a new Target Version.
+Report pass/fail/blocked/not_run for each relevant layer. A missing package graph, failed compiler or unobserved Windows smoke is not a success. Do not use `--no-sandbox`, disabled webSecurity, removed type rules or skipped assertions as fixes. Use the active owner-assigned Target Version under TASK_POLICY; alpha.13 does not accept or close alpha.12/#29.

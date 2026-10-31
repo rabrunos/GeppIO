@@ -2,33 +2,61 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import type { KeyboardEvent, PointerEvent } from 'react'
 import { candidate } from '../../../shared/freeform/geometry.ts'
 import { constraintsFor, POLICY } from '../../../shared/freeform/policy.ts'
+import { activePlacements, constraintsForViews, widgetRegistry } from '../../../shared/workbench/model.ts'
+import type { Registry, WorkbenchSnapshot } from '../../../shared/workbench/model.ts'
 import { reflow } from '../../../shared/freeform/reflow.ts'
 import type { Result } from '../../../shared/freeform/reflow.ts'
 import { settleSnapshot } from '../../../shared/freeform/settlement.ts'
 import { projectRegion } from '../../../shared/freeform/projection.ts'
-import { transfer, REGION_LABELS } from '../../../shared/freeform/transfer.ts'
+import { REGION_LABELS } from '../../../shared/freeform/transfer.ts'
+import { moveView, reconcileBarHeights } from '../../../shared/workbench/commands.ts'
 import { REGIONS } from '../../../shared/freeform/types.ts'
-import type { Direction, Placement, Region, Snapshot, Surface } from '../../../shared/freeform/types.ts'
+import type { Direction, Placement, Region, Surface } from '../../../shared/freeform/types.ts'
 import type { Transaction } from './useTransaction.ts'
 import type { Surfaces } from './useSurfaces.ts'
+import { useDragVisual } from '../workbench/DragLayer.tsx'
 
 interface Gesture {
-  id: string; pointer: number; kind: 'move' | Direction; x: number; y: number; original: Placement;
-  snapshot: Snapshot; source: Snapshot; target: HTMLButtonElement; scrollX: number; scrollY: number;
-  clientX: number; clientY: number; time: number; last: string; extension: number; directionX: number; preview: Snapshot | null
+  id: string; pointer: number; kind: 'move' | Direction; x: number; y: number; original: Placement; sourceBar: string;
+  snapshot: WorkbenchSnapshot; source: WorkbenchSnapshot; target: HTMLButtonElement; scrollX: number; scrollY: number;
+  clientX: number; clientY: number; time: number; last: string; extension: number; directionX: number; preview: WorkbenchSnapshot | null
 }
-export function useInteraction(tx: Transaction, view: Snapshot, surfaces: Surfaces, expanded: boolean, feasible: Record<Region, boolean>) {
+export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surfaces: Surfaces, expanded: boolean, feasible: Record<Region, boolean>, registry: Registry = widgetRegistry(), catalog?: {
+  available(typeId: string, region: Region): boolean; commit(typeId: string, region: Region, at: { x: number; y: number }): boolean
+}) {
+  const baseConstraints = constraintsForViews(tx.snapshot, registry)
+  const visual = useDragVisual()
   const gesture = useRef<Gesture | null>(null), animation = useRef(0)
   const [selected, setSelected] = useState<string | null>(null), [blocked, setBlocked] = useState<string | null>(null)
   const [heldExtent, setHeldExtent] = useState<{ region: Region; width: number; height: number } | null>(null)
-  const [released, setReleased] = useState<{ snapshot: Snapshot; region: Region } | null>(null)
+  const [catalogDrag, setCatalogDrag] = useState<{ typeId: string; targets: Region[]; over: Region | null } | null>(null)
+  const [frameDrop, setFrameDrop] = useState<{ targets: Region[]; over: Region | null } | null>(null)
+  const frameTargets = useRef<Region[]>([])
+  const catalogGesture = useRef<{ typeId: string; x: number; y: number; left: number; top: number; pointer: number; target: HTMLButtonElement; targets: Region[]; started: number; lifted: boolean; suppress: boolean } | null>(null)
+  const catalogPointer = useRef({ x: 0, y: 0 }), suppressCatalogClick = useRef(false)
+  const currentCatalog = useRef(catalog); currentCatalog.current = catalog
+  const dwell = useRef<{ id: string; element: HTMLElement; timer: ReturnType<typeof setTimeout> } | null>(null)
+  const [gestureLabel, setGestureLabel] = useState<{ id: string; region: Region } | null>(null)
+  const rejection = useRef<Animation | null>(null)
+  const [released, setReleased] = useState<{ snapshot: WorkbenchSnapshot; region: Region } | null>(null)
   const latest = useRef({ view, apply, tick, surfaces }); latest.current = { view, apply, tick, surfaces }
   function surface(region: Region): Surface { return { ...surfaces.measures[region], region, expanded: expanded && region === 'main' } }
-  function end(cancel: boolean) {
+  function end(cancel: boolean, releaseVisual = true) {
+    if (releaseVisual) visual.release(!cancel)
+    rejection.current?.cancel(); rejection.current = null
+    if (dwell.current) { clearTimeout(dwell.current.timer); dwell.current.element.removeAttribute('data-drag-hover'); dwell.current = null }
+    setGestureLabel(null)
+    setFrameDrop(null); frameTargets.current = []
+    if (catalogGesture.current) {
+      const entry = catalogGesture.current; catalogGesture.current = null; setCatalogDrag(null)
+      suppressCatalogClick.current = entry.suppress
+      if (entry.target.hasPointerCapture(entry.pointer)) entry.target.releasePointerCapture(entry.pointer)
+      return
+    }
     const a = gesture.current
     if (!a) return
     gesture.current = null; cancelAnimationFrame(animation.current); setBlocked(null); setHeldExtent(null)
-    if (cancel) { tx.put(a.source); tx.setMessage('Gesto cancelado. A prévia anterior foi restaurada.') }
+    if (cancel) { tx.cancelGesture(); tx.put(a.source); tx.setMessage('Gesto cancelado. A prévia anterior foi restaurada.') }
     else {
       let settled = settleSnapshot(tx.live.current)
       const port = surfaces.ports.main.current
@@ -41,6 +69,7 @@ export function useInteraction(tx: Transaction, view: Snapshot, surfaces: Surfac
         setReleased({ snapshot: settled, region: 'main' })
       }
       if (settled !== tx.live.current) tx.put(settled)
+      tx.finishGesture()
     }
     if (a.target.hasPointerCapture(a.pointer)) a.target.releasePointerCapture(a.pointer)
   }
@@ -52,18 +81,127 @@ export function useInteraction(tx: Transaction, view: Snapshot, surfaces: Surfac
   useLayoutEffect(() => {
     if (released && released.snapshot.reference[released.region].height === surfaces.measures[released.region].height) setReleased(null)
   }, [released, surfaces.measures.main.height])
-  useLayoutEffect(() => () => cancelAnimationFrame(animation.current), [])
-  function apply(snapshot: Snapshot, p: Placement, dx: number, dy: number, kind: Gesture['kind']) {
+  useLayoutEffect(() => () => { cancelAnimationFrame(animation.current); rejection.current?.cancel(); if (dwell.current) { clearTimeout(dwell.current.timer); dwell.current.element.removeAttribute('data-drag-hover') } }, [])
+  useLayoutEffect(() => {
+    const cancel = () => end(true)
+    window.addEventListener('blur', cancel)
+    return () => window.removeEventListener('blur', cancel)
+  }, [])
+  useLayoutEffect(() => {
+    const entry = catalogGesture.current
+    if (entry?.lifted) {
+      entry.targets = REGIONS.filter(region => currentCatalog.current?.available(entry.typeId, region))
+      setCatalogDrag(previous => previous ? { ...previous, targets: entry.targets, over: targetRegion(catalogPointer.current.x, catalogPointer.current.y, entry.targets) } : previous)
+    }
+    const a = gesture.current
+    if (a?.kind === 'move' && visual.active()) { frameTargets.current = movementTargets(a); setFrameDrop({ targets: frameTargets.current, over: targetRegion(a.clientX, a.clientY, frameTargets.current) }) }
+  }, [tx.snapshot.organization.activeBar])
+  function movementTargets(a: Gesture) {
+    const source = { ...a.snapshot, organization: { ...a.snapshot.organization, activeBar: tx.live.current.organization.activeBar } }
+    return REGIONS.filter(region => feasible[region] && (region === a.original.region && (region !== 'sidebar' || a.sourceBar === source.organization.activeBar)
+      || !!moveView(source, registry, a.id, surface(region), undefined, a.sourceBar)))
+  }
+  function targetRegion(x: number, y: number, targets: Region[]) {
+    return targets.find(region => {
+      const element = surfaces.ports[region].current, rect = element?.getBoundingClientRect()
+      const clip = region === 'sidebar' ? surfaces.scroller(region)?.getBoundingClientRect() : rect
+      return rect && clip && x >= rect.left && x <= rect.right && y >= Math.max(rect.top, clip.top) && y <= Math.min(rect.bottom, clip.bottom)
+    }) ?? null
+  }
+  // The picture's RAF reads target geometry before writing its transform. Pointer
+  // events only update the latest intention; labels are measured once per drag.
+  visual.measure.current = pointer => {
+    hoverBar(pointer.x, pointer.y)
+    const catalog = catalogGesture.current
+    let over: Region | null = null
+    if (catalog?.lifted) {
+      over = targetRegion(pointer.x, pointer.y, catalog.targets)
+      setCatalogDrag(previous => previous?.targets === catalog.targets && previous.over === over ? previous : { typeId: catalog.typeId, targets: catalog.targets, over })
+    } else if (gesture.current?.kind === 'move') {
+      const targets = frameTargets.current; over = targetRegion(pointer.x, pointer.y, targets)
+      setFrameDrop(previous => previous?.targets === targets && previous.over === over ? previous : { targets, over })
+    }
+    if (over !== 'sidebar') return false
+    const owner = latest.current.surfaces.scroller('sidebar'), box = owner?.getBoundingClientRect()
+    if (!owner || !box) return false
+    const previous = owner.scrollTop, delta = pointer.y < box.top + 28 ? -7 : pointer.y > box.bottom - 28 ? 7 : 0
+    if (!delta) return false
+    owner.scrollTop += delta
+    const scrolling = previous !== owner.scrollTop
+    if (scrolling && gesture.current?.original.region === 'sidebar' && !animation.current) animation.current = requestAnimationFrame(time => latest.current.tick(time))
+    return scrolling
+  }
+  function catalogHandlers(typeId: string) {
+    return {
+      onPointerDown(event: PointerEvent<HTMLButtonElement>) {
+        if (!tx.editing || event.button || gesture.current || catalogGesture.current || visual.active()) return
+        const rect = event.currentTarget.getBoundingClientRect()
+        event.currentTarget.setPointerCapture(event.pointerId)
+        catalogGesture.current = { typeId, x: event.clientX, y: event.clientY, left: rect.left, top: rect.top, pointer: event.pointerId, target: event.currentTarget,
+          targets: REGIONS.filter(region => catalog?.available(typeId, region)), started: 0, lifted: false, suppress: false }
+        catalogPointer.current = { x: event.clientX, y: event.clientY }; suppressCatalogClick.current = false
+      },
+      onPointerMove(event: PointerEvent<HTMLButtonElement>) {
+        const a = catalogGesture.current; if (!a || a.pointer !== event.pointerId) return
+        catalogPointer.current = { x: event.clientX, y: event.clientY }
+        if (!a.lifted && Math.hypot(event.clientX - a.x, event.clientY - a.y) < 5) return
+        if (!a.lifted) {
+          a.suppress = true
+          if (!a.targets.length) {
+            end(true)
+            if (!matchMedia('(prefers-reduced-motion: reduce)').matches) rejection.current = a.target.animate([
+              { translate: '0 0', offset: 0 }, { translate: '0 -4px', offset: .18 }, { translate: '-3px -4px', offset: .32 }, { translate: '3px -4px', offset: .48 }, { translate: '-2px -3px', offset: .64 }, { translate: '2px -2px', offset: .8 }, { translate: '0 0', offset: 1 }
+            ], { duration: 280, easing: 'ease-out' })
+            tx.setMessage('Não há área compatível com espaço disponível para este widget.'); return
+          }
+          a.lifted = true; a.started = performance.now()
+          const viewId = tx.live.current.organization.views.find(v => v.typeId === typeId && view.placements.some(p => p.id === v.id))?.id ?? null
+          const source = viewId ? document.querySelector<HTMLElement>(`[data-widget-id="${CSS.escape(viewId)}"]`) : null
+          visual.begin(typeId, null, null, a.target, source, true, event.clientX, event.clientY)
+        }
+        visual.move(event.clientX, event.clientY)
+      },
+      onPointerUp(event: PointerEvent<HTMLButtonElement>) {
+        const a = catalogGesture.current; if (!a || a.pointer !== event.pointerId) return
+        const region = a.lifted ? targetRegion(event.clientX, event.clientY, REGIONS.filter(region => currentCatalog.current?.available(a.typeId, region))) : null
+        let accepted = false
+        if (region) {
+          const rect = surfaces.ports[region].current!.getBoundingClientRect(), scroller = surfaces.scroller(region)
+          accepted = !!catalog?.commit(typeId, region, { x: event.clientX - rect.left + (scroller?.scrollLeft ?? 0), y: event.clientY - rect.top + (scroller?.scrollTop ?? 0) })
+        }
+        end(!accepted, false)
+        const destination = accepted ? tx.live.current.placements.find(p => p.region === region && tx.live.current.organization.views.find(v => v.id === p.id)?.typeId === typeId)?.id : undefined
+        visual.release(accepted, destination)
+      },
+      onPointerCancel() { end(true) }, onLostPointerCapture() { if (catalogGesture.current) end(true) },
+      onClickCapture(event: React.MouseEvent<HTMLButtonElement>) { if (suppressCatalogClick.current) { suppressCatalogClick.current = false; event.preventDefault(); event.stopPropagation() } }
+    }
+  }
+  function hoverBar(x: number, y: number) {
+    const element = document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-bar-id]'), id = element?.dataset.barId
+    if (id === dwell.current?.id) return
+    if (dwell.current) { clearTimeout(dwell.current.timer); dwell.current.element.removeAttribute('data-drag-hover'); dwell.current = null }
+    if (!element || !id || id === tx.live.current.organization.activeBar || !tx.editing) return
+    element.setAttribute('data-drag-hover', '')
+    dwell.current = { id, element, timer: setTimeout(() => {
+      if (!gesture.current && !catalogGesture.current) return
+      if (!tx.live.current.organization.bars.some(bar => bar.id === id && !bar.archived)) return
+      tx.put({ ...tx.live.current, organization: { ...tx.live.current.organization, activeBar: id } })
+      if (gesture.current) { gesture.current.snapshot.organization.activeBar = id; gesture.current.preview = null }
+    }, 250) }
+  }
+  function apply(snapshot: WorkbenchSnapshot, p: Placement, dx: number, dy: number, kind: Gesture['kind']) {
     if (!feasible[p.region]) return
+    if (p.region === 'sidebar' && gesture.current && gesture.current.sourceBar !== tx.live.current.organization.activeBar) return
     // Opt-in, bounded browser-only diagnostics. No bridge, storage or user telemetry.
     const profiling = performance.getEntriesByName('geppio:profile').length > 0, started = profiling ? performance.now() : 0
     const tracing = performance.getEntriesByName('geppio:anchors').length > 0
     const attempts: unknown[] = []
     let s = surface(p.region)
-    const peers = snapshot.placements.filter(q => q.region === p.region)
+    const peers = (p.region === 'sidebar' ? activePlacements(snapshot) : snapshot.placements).filter(q => q.region === p.region)
     function solve(at: Surface, budget?: { probes: number; states: number }): Result {
-      const cs = constraintsFor(at)
-      const adapted = p.region === 'main' && snapshot.reference.main.height !== at.height ? projectRegion(snapshot, 'main', at, at.expanded) : null
+      const cs = constraintsFor(at, baseConstraints)
+      const adapted = p.region === 'main' && snapshot.reference.main.height !== at.height ? projectRegion(snapshot, 'main', at, at.expanded, baseConstraints) : null
       if (adapted && !adapted.feasible) return { status: 'blocked', placements: peers, reason: 'space', probes: 0, states: 0, candidates: 0 }
       const source = adapted?.placements ?? peers
       // Responsive neighbor fitting cannot change a resize's stable opposite edges.
@@ -95,9 +233,19 @@ export function useInteraction(tx: Transaction, view: Snapshot, surfaces: Surfac
         measurement: surfaces.measures[p.region], attempts, probes: result.probes, states: result.states } })
     }
     if (result.status === 'blocked') { setBlocked(p.id); tx.setMessage('Sem espaço para os mínimos deste widget. A última prévia válida foi mantida.'); return }
-    const next = { ...snapshot, reference: { ...snapshot.reference, [p.region]: { width: s.width,
+    let next = { ...snapshot, organization: { ...tx.live.current.organization, bars: tx.live.current.organization.bars.map(bar => bar.id === tx.live.current.organization.activeBar ? { ...bar, members: [...bar.members], positions: { ...bar.positions } } : bar) }, reference: { ...snapshot.reference, [p.region]: { width: s.width,
       height: p.region === 'sidebar' ? Math.max(s.height, ...result.placements.map(q => q.y + q.height)) : s.height } },
       placements: snapshot.placements.map(q => result.placements.find(next => next.id === q.id) ?? q) }
+    if (p.region === 'sidebar') {
+      const bar = next.organization.bars.find(bar => bar.id === next.organization.activeBar)!
+      bar.positions ??= {}
+      for (const placement of result.placements) bar.positions[next.organization.views.find(view => view.id === placement.id)!.typeId] = placement.y
+      bar.members.sort((a, b) => (bar.positions![a] ?? 0) - (bar.positions![b] ?? 0))
+      const reconciled = reconcileBarHeights(next)
+      if (!reconciled) { setBlocked(p.id); return }
+      next = reconciled
+      next.reference.sidebar.height = Math.max(next.reference.sidebar.height, ...next.placements.filter(p => p.region === 'sidebar').map(p => p.y + p.height))
+    }
     if (gesture.current) gesture.current.preview = next
     tx.put(next)
     setBlocked(null); tx.setMessage('Prévia válida. Ao soltar, posições e tamanhos serão mantidos para o próximo gesto. Salve ou cancele.')
@@ -111,6 +259,7 @@ export function useInteraction(tx: Transaction, view: Snapshot, surfaces: Surfac
     a.last = key; latest.current.apply(a.snapshot, a.original, dx, dy, a.kind)
   }
   function tick(time: number) {
+    animation.current = 0
     const a = gesture.current
     if (!a) return
     const port = latest.current.surfaces.ports[a.original.region].current
@@ -119,6 +268,9 @@ export function useInteraction(tx: Transaction, view: Snapshot, surfaces: Surfac
     a.time = time
     // No speculative giant world: an intended active position determines temporary extent.
     // Existing occupied range is scrollable immediately; direct pointer movement grows it.
+    let scrolling = false
+    const before = tx.live.current.placements.find(p => p.id === a.id)
+    const oldExtension = a.extension
     if (expanded && a.original.region === 'main' && a.clientY >= r.top && a.clientY <= r.bottom) {
       const delta = a.clientX > r.right - 30 && a.clientX <= r.right + 30 ? Math.min(20, (a.clientX - r.right + 30) / 2)
         : a.clientX < r.left + 30 && a.clientX >= r.left - 30 ? -Math.min(20, (r.left + 30 - a.clientX) / 2) : 0
@@ -129,15 +281,19 @@ export function useInteraction(tx: Transaction, view: Snapshot, surfaces: Surfac
         // Keep real pointer coordinates intact. Only the successful active intention
         // extends occupancy; there is no allocated speculative world or pixel array.
         a.extension = Math.max(-POLICY.maxCoordinate, Math.min(POLICY.maxCoordinate, a.extension + unscrolled))
+        scrolling = port.scrollLeft !== before
       }
     }
-    update(a); animation.current = requestAnimationFrame(next => latest.current.tick(next))
+    update(a)
+    const after = tx.live.current.placements.find(p => p.id === a.id)
+    if (oldExtension !== a.extension && before && after && (before.x !== after.x || before.width !== after.width)) scrolling = true
+    if (scrolling) animation.current = requestAnimationFrame(next => latest.current.tick(next))
   }
   function transferTo(id: string, region: Region, at?: { x: number; y: number }) {
     if (!tx.editing || !feasible[region]) { tx.setMessage('Região sem espaço disponível. Reabra ou amplie a região antes de transferir.'); return false }
-    const result = transfer(settleSnapshot(latest.current.view), id, surface(region), at)
+    const result = moveView(settleSnapshot(latest.current.view), registry, id, surface(region), at)
     if (!result) { tx.setMessage(`Transferência para ${REGION_LABELS[region]} incompatível ou sem espaço para os mínimos. Composição preservada.`); setBlocked(id); return false }
-    tx.put(settleSnapshot(result)); setBlocked(null); tx.setMessage(`Widget transferido para ${REGION_LABELS[region]} na prévia. Salve ou cancele.`)
+    tx.action(settleSnapshot(result)); setBlocked(null); tx.setMessage(`Widget transferido para ${REGION_LABELS[region]} na prévia. Salve ou cancele.`)
     requestAnimationFrame(() => {
       const moved = result.placements.find(p => p.id === id)!, owner = surfaces.scroller(region)
       if (owner && region === 'sidebar') owner.scrollTop += moved.y - surfaces.measures.sidebar.scrollTop
@@ -146,8 +302,9 @@ export function useInteraction(tx: Transaction, view: Snapshot, surfaces: Surfac
     return true
   }
   function start(e: PointerEvent<HTMLButtonElement>, p: Placement, kind: Gesture['kind']) {
-    if (!tx.editing || gesture.current || e.button !== 0 || !feasible[p.region]) return
+    if (!tx.editing || gesture.current || visual.active() || e.button !== 0 || !feasible[p.region]) return
     e.preventDefault(); setReleased(null); e.currentTarget.focus({ preventScroll: true }); e.currentTarget.setPointerCapture(e.pointerId)
+    tx.beginGesture()
     const port = surfaces.scroller(p.region)!
     // Native scroll clamping caused by shrinking our own occupied extent must not feed
     // back into this gesture's pointer delta. Hold only its starting occupied width,
@@ -155,11 +312,12 @@ export function useInteraction(tx: Transaction, view: Snapshot, surfaces: Surfac
     const peers = view.placements.filter(q => q.region === p.region)
     setHeldExtent({ region: p.region, width: Math.max(surfaces.measures[p.region].width, ...peers.map(q => q.x + q.width)),
       height: p.region === 'sidebar' ? Math.max(0, ...peers.map(q => q.y + q.height)) : 0 })
-    gesture.current = { id: p.id, pointer: e.pointerId, kind, x: e.clientX, y: e.clientY, original: structuredClone(p),
+    gesture.current = { id: p.id, pointer: e.pointerId, kind, x: e.clientX, y: e.clientY, original: structuredClone(p), sourceBar: tx.live.current.organization.activeBar,
       snapshot: settleSnapshot(structuredClone(view)), source: structuredClone(tx.live.current), target: e.currentTarget,
       scrollX: port.scrollLeft, scrollY: port.scrollTop, clientX: e.clientX, clientY: e.clientY, time: 0,
       last: `0,0,${surfaces.measures[p.region].width},${surfaces.measures[p.region].height}`, extension: 0, directionX: 0, preview: null }
     setSelected(p.id); animation.current = requestAnimationFrame(time => latest.current.tick(time))
+    if (kind === 'move') setGestureLabel({ id: p.id, region: p.region })
   }
   function move(e: PointerEvent<HTMLButtonElement>) {
     const a = gesture.current
@@ -168,10 +326,30 @@ export function useInteraction(tx: Transaction, view: Snapshot, surfaces: Surfac
     // Keep only the newest intention. Solving in every pointer event can queue work
     // faster than the display commits it; the RAF remains live throughout the gesture.
     a.clientX = e.clientX; a.clientY = e.clientY
+    if (a.kind === 'move') {
+      if (!visual.active() && Math.hypot(e.clientX - a.x, e.clientY - a.y) >= 5) {
+        const source = document.querySelector<HTMLElement>(`[data-widget-id="${CSS.escape(a.id)}"]`), typeId = a.source.organization.views.find(v => v.id === a.id)!.typeId
+        visual.begin(typeId, a.id, a.original.region === 'sidebar' ? a.sourceBar : null, a.target, source, false, e.clientX, e.clientY)
+        frameTargets.current = movementTargets(a)
+      }
+      visual.move(e.clientX, e.clientY)
+    }
+    if (!animation.current) animation.current = requestAnimationFrame(time => latest.current.tick(time))
   }
   function finish(e: PointerEvent<HTMLButtonElement>, cancel = false) {
     const a = gesture.current
     if (!a || a.pointer !== e.pointerId) return
+    if (!cancel && a.kind === 'move' && a.original.region === 'sidebar' && a.sourceBar !== tx.live.current.organization.activeBar) {
+      const owner = surfaces.scroller('sidebar')!, box = owner.getBoundingClientRect(), bar = tx.live.current.organization.activeBar
+      const source = { ...a.snapshot, organization: { ...a.snapshot.organization, activeBar: bar } }
+      const inside = e.clientX >= box.left && e.clientX <= box.right && e.clientY >= box.top && e.clientY <= box.bottom
+      end(true, false)
+      const result = inside ? moveView(source, registry, a.id, surface('sidebar'), { x: 0, y: e.clientY - box.top + owner.scrollTop }, a.sourceBar) : null
+      if (result) tx.action(settleSnapshot(result))
+      else tx.put({ ...a.source, organization: { ...a.source.organization, activeBar: bar } })
+      visual.release(!!result)
+      return
+    }
     if (!cancel && a.kind === 'move') {
       for (const region of REGIONS) {
         if (region === a.original.region) continue
@@ -179,12 +357,13 @@ export function useInteraction(tx: Transaction, view: Snapshot, surfaces: Surfac
         if (!r || !regionRect || e.clientX < regionRect.left || e.clientX > regionRect.right || e.clientY < regionRect.top || e.clientY > regionRect.bottom) continue
         // Transfer uses the pre-gesture composition so failed drops cannot leave a
         // partly displaced origin. A rejected cross-region drop restores it atomically.
-        end(true)
-        const s = surface(region), result = feasible[region] ? transfer(a.snapshot, a.id, s, {
+        end(true, false)
+        const s = surface(region), result = feasible[region] ? moveView(a.snapshot, registry, a.id, s, {
           x: e.clientX - r.left + (surfaces.ports[region].current?.scrollLeft ?? 0),
-          y: e.clientY - r.top + (surfaces.ports[region].current?.scrollTop ?? 0) }) : null
-        if (result) { tx.put(settleSnapshot(result)); tx.setMessage(`Widget transferido para ${REGION_LABELS[region]}. Salve ou cancele.`) }
+          y: e.clientY - r.top + (surfaces.ports[region].current?.scrollTop ?? 0) }, a.sourceBar) : null
+        if (result) { tx.action(settleSnapshot(result)); tx.setMessage(`Widget transferido para ${REGION_LABELS[region]}. Salve ou cancele.`) }
         else { setBlocked(a.id); tx.setMessage('Transferência incompatível ou sem espaço. A composição anterior foi restaurada.') }
+        visual.release(!!result)
         return
       }
     }
@@ -196,16 +375,18 @@ export function useInteraction(tx: Transaction, view: Snapshot, surfaces: Surfac
     e.preventDefault(); const step = e.shiftKey ? 10 : 1
     // Several key events can arrive before React renders. Each discrete action uses
     // the synchronous live draft, never the preceding render's stale placement.
-    const live = tx.live.current, at = surface(p.region), projection = projectRegion(live, p.region, at, at.expanded)
+    const live = tx.live.current, at = surface(p.region), projection = projectRegion(live, p.region, at, at.expanded, baseConstraints)
     if (!projection.feasible) return
     const action = settleSnapshot({ ...live, reference: { ...live.reference, [p.region]: { width: at.width,
       height: p.region === 'sidebar' ? Math.max(at.height, projection.world.height) : at.height } },
       placements: live.placements.map(q => projection.placements.find(next => next.id === q.id) ?? q) })
     const active = action.placements.find(q => q.id === p.id)!
+    tx.beginGesture()
     setSelected(p.id); apply(action, active, e.key === 'ArrowRight' ? step : e.key === 'ArrowLeft' ? -step : 0,
       e.key === 'ArrowDown' ? step : e.key === 'ArrowUp' ? -step : 0, kind)
     const settled = settleSnapshot(tx.live.current)
     if (settled !== tx.live.current) tx.put(settled)
+    tx.finishGesture()
     requestAnimationFrame(() => {
       const port = surfaces.scroller(p.region), next = tx.live.current.placements.find(q => q.id === p.id)
       if (!port || !next) return
@@ -225,7 +406,12 @@ export function useInteraction(tx: Transaction, view: Snapshot, surfaces: Surfac
       onPointerUp: (e: PointerEvent<HTMLButtonElement>) => finish(e), onPointerCancel: (e: PointerEvent<HTMLButtonElement>) => finish(e, true),
       onLostPointerCapture: (e: PointerEvent<HTMLButtonElement>) => finish(e, true), onKeyDown: (e: KeyboardEvent<HTMLButtonElement>) => keyboard(e, p, kind) }
   }
-  return { selected, setSelected, blocked, heldExtent, handlers, end, active: () => !!gesture.current, transferTo,
+  return { selected, setSelected, blocked, heldExtent, handlers, catalogHandlers, catalogDrag, frameDrop, gestureLabel, visual,
+    catalogSurfaceKey: REGIONS.map(region => `${surfaces.measures[region].width},${surfaces.measures[region].height}`).join(';') + expanded,
+    canCatalogPlace: (typeId: string, region: Region) => !!currentCatalog.current?.available(typeId, region),
+    activeId: gesture.current?.id ?? null,
+    movingId: gesture.current?.kind === 'move' ? gesture.current.id : null, sourceBar: gesture.current?.sourceBar ?? null,
+    end, active: () => !!gesture.current || !!catalogGesture.current || rejection.current?.playState === 'running', transferTo,
     preview: gesture.current?.preview ?? released?.snapshot ?? null, activeRegion: gesture.current?.original.region ?? released?.region ?? null }
 }
 export type Interaction = ReturnType<typeof useInteraction>

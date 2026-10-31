@@ -9,24 +9,28 @@ const lex = (a: readonly number[], b: readonly number[]) => { for (let i = 0; i 
  * impacted-axis compression, preferred contact slots, bounded rearrangement. Continuous
  * contact edges replace integer slot enumeration. Empty space never attracts widgets.
  */
-export function reflow(snapshot: readonly Placement[], id: string, rect: Rect, surface: Surface, cs: Constraints, gesture: 'move' | Direction,
+export function reflow(snapshot: readonly Placement[], id: string, rect: Rect, surface: Surface, cs: Constraints, gesture: 'move' | 'insert' | Direction,
   budget = { probes: 8192, states: 2048 }): Result {
   const unchanged = () => structuredClone([...snapshot]), original = snapshot.find(p => p.id === id), c = cs[id]
-  if (!original || !c || !validLayout(snapshot, surface, cs) || !validRect(rect, surface, c)
-    || (gesture !== 'move' && !allowsResize(gesture, c))
-    || (gesture === 'move' && (rect.width !== original.width || rect.height !== original.height))
+  // An insertion has no previously occupied slot. Only the new active rectangle
+  // may overlap; every existing peer must already satisfy the same constraints.
+  // The ordinary bounded push/compression/rearrangement phases solve the final
+  // layout, and a blocked insertion never becomes an accepted snapshot.
+  if (!original || !c || (gesture === 'insert' && snapshot.filter(p => p.id === id).length !== 1) || !validLayout(gesture === 'insert' ? snapshot.filter(p => p.id !== id) : snapshot, surface, cs) || !validRect(rect, surface, c)
+    || (gesture !== 'move' && gesture !== 'insert' && !allowsResize(gesture, c))
+    || ((gesture === 'move' || gesture === 'insert') && (rect.width !== original.width || rect.height !== original.height))
     || (!c.resizeX && rect.width !== original.width) || (!c.resizeY && rect.height !== original.height)) {
     return { status: 'blocked', reason: 'invalid', placements: unchanged(), states: 0, probes: 0, candidates: 0 }
   }
-  if (same(original, rect)) return { status: 'valid', placements: unchanged(), states: 0, probes: 0, candidates: 0 }
-  const requested = { ...original, ...rect, preferred: gesture === 'move' ? { ...original.preferred } : {
+  if (gesture !== 'insert' && same(original, rect)) return { status: 'valid', placements: unchanged(), states: 0, probes: 0, candidates: 0 }
+  const requested = { ...original, ...rect, preferred: gesture === 'move' || gesture === 'insert' ? { ...original.preferred } : {
     width: /[ew]/.test(gesture) ? rect.width : original.preferred.width,
     height: /[ns]/.test(gesture) ? rect.height : original.preferred.height } }
   const start = snapshot.map(p => p.id === id ? requested : structuredClone(p))
   const limit = surfaceLimit(surface), gap = POLICY.gap
   const dx = rect.x - original.x || rect.width - original.width, dy = rect.y - original.y || rect.height - original.height
   const axes: ('x' | 'y')[] = surface.region === 'sidebar' ? ['y'] : surface.region === 'bottom' ? ['x']
-    : gesture === 'move' ? [Math.abs(dx) >= Math.abs(dy) ? 'x' : 'y']
+    : gesture === 'insert' ? ['x', 'y'] : gesture === 'move' ? [Math.abs(dx) >= Math.abs(dy) ? 'x' : 'y']
       : [...(/[ew]/.test(gesture) ? ['x' as const] : []), ...(/[ns]/.test(gesture) ? ['y' as const] : [])]
   let states = 0, probes = 0, candidateCount = 0, exhausted = false
   // Contact pruning replaces repeatedly probing impossible Cartesian products. Keep a
@@ -111,7 +115,7 @@ export function reflow(snapshot: readonly Placement[], id: string, rect: Rect, s
       if (phase < 2) {
         for (const axis of axes) {
           const dimension = axis === 'x' ? 'width' : 'height'
-          const sign = axis === 'x' ? (gesture.includes('w') ? -1 : Math.sign(dx) || 1) : (gesture.includes('n') ? -1 : Math.sign(dy) || 1)
+          const sign = axis === 'x' ? (gesture.includes('w') ? -1 : Math.sign(dx) || 1) : (gesture !== 'insert' && gesture.includes('n') ? -1 : Math.sign(dy) || 1)
           for (const obstacle of locked) {
             if (!collides(p, obstacle)) continue
             const position = sign > 0 ? obstacle[axis] + obstacle[dimension] + gap : obstacle[axis] - p[dimension] - gap

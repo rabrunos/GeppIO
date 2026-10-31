@@ -1,0 +1,36 @@
+/* @section unscaled-widget-flight */
+.layout-flight-context {
+  position: fixed !important;
+  inset: auto !important;
+  left: 0 !important;
+  top: 0 !important;
+  display: block !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-width: none !important;
+  max-height: none !important;
+  overflow: visible !important;
+  clip-path: none !important;
+  background: transparent !important;
+  pointer-events: none !important;
+  transform-origin: top left;
+}
+.layout-flight-node {
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  margin: 0 !important;
+  transform: none !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+  box-shadow: 0 18px 48px -14px rgb(0 0 0 / 0.32);
+}
+.layout-flight-context * {
+  pointer-events: none !important;
+}
+/* @endsection */

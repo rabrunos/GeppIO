@@ -1,0 +1,44 @@
+/* @section button-primitives */
+.ui-button:disabled {
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+.ui-button svg {
+  pointer-events: none;
+}
+
+.ui-button .icon {
+  transition:
+    scale 0.14s ease-out,
+    transform 0.14s;
+  scale: 1;
+}
+
+@media (hover: hover) {
+  .ui-button:is(:hover, [data-drag-hover]):not(:disabled) .icon {
+    scale: 1.1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-button .icon {
+    transition: none;
+  }
+}
+
+.ui-icon-button {
+  width: var(--icon-button-size, var(--icon-control-size));
+  height: var(--icon-button-size, var(--icon-control-size));
+  border-radius: var(--icon-control-radius);
+  flex: none;
+  place-items: center;
+  padding: 0;
+  display: grid;
+}
+
+.ui-icon-button:is(:hover, [data-drag-hover]):not(:disabled),
+.ui-icon-button:focus-visible {
+  background: var(--icon-button-hover, var(--control-hover));
+}
+/* @endsection */

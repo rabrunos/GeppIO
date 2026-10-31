@@ -5,9 +5,11 @@ secret vault. Issue #21 adds only explicitly trusted local development plugins. 
 asset URLs and build dependencies are relevant inputs. See the [control map](../architecture/security.md).
 
 Keep the Electron renderer sandboxed and context-isolated with Node integration and webview disabled.
-The preload exposes version/platform metadata and four fixed plugin-management operations, validated
+The preload exposes version/platform metadata, four fixed plugin-management operations and the
+owner-authorized minimize/maximize/close host chrome actions. All operations are validated
 in Main against the owning window and its main frame. Installation selects a directory in a native
-dialog; no path or generic channel argument is exposed. Plugin Workers have no preload/DOM bridge.
+dialog; no path or generic channel argument is exposed. Window actions accept no arguments and
+resolve only the sender's own native window. Plugin Workers have no preload/DOM bridge.
 No generic IPC executor, process runner,
 filesystem method, remote URL opener or arbitrary script evaluator is allowed in this foundation.
 Production loads a bounded custom protocol with a restrictive script CSP and blocks remote requests.

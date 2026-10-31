@@ -4,13 +4,14 @@ import { mkdtemp, mkdir, rm, writeFile, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import assert from 'node:assert/strict'
+import { settle, portugueseFixture } from './freeform-smoke.ts'
 import ts from 'typescript'
 import { PluginStore } from '../src/main/plugins.ts'
 import { snapshotTree, BACKUP_DIRECTORY } from '../src/main/profile-migration.ts'
 import { IDENTITY } from '../src/shared/identity.ts'
 import { DEFAULT_LAYOUT } from '../src/renderer/src/fixtures.ts'
 import { GRID_KEY } from '../src/shared/grid/policy.ts'
-import { FREEFORM_KEY } from '../src/shared/freeform/policy.ts'
+import { WORKBENCH_KEY as FREEFORM_KEY } from '../src/shared/workbench/model.ts'
 import { convertHistorical } from '../src/shared/freeform/migration.ts'
 import { projectRegion } from '../src/shared/freeform/projection.ts'
 
@@ -58,6 +59,7 @@ async function launch(root: string): Promise<Page> {
     if (!page) await new Promise(done => setTimeout(done, 50))
   }
   assert.ok(page); await page.getByTestId('edit-layout').waitFor()
+  await portugueseFixture(page)
   return page
 }
 async function close() { await application!.close(); application = undefined }
@@ -86,22 +88,25 @@ try {
   assert.equal(await page.locator('.workbench').getAttribute('data-theme'), 'light')
   assert.equal(await page.getByTestId('edit-layout').isDisabled(), true, 'historical adoption requires an explicit preview choice')
   assert.equal(await page.locator('[data-widget]').count(), 0)
-  await page.getByRole('button', { name: 'Abrir configurações', exact: true }).click()
+  await page.getByRole('button', { name: 'Abrir menu do perfil', exact: true }).click()
+  await page.getByRole('menuitem', { name: 'Abrir configurações', exact: true }).click()
+  await page.getByRole('button', { name: 'Desenvolvimento e recuperação', exact: true }).click()
   await page.getByRole('button', { name: 'Prévia: Fracionário v1', exact: true }).click()
   await page.getByTestId('cancel-layout').waitFor()
-  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+  await settle(page)
   const available = await page.locator('[data-surface="main"]').evaluate(e => ({ width: e.clientWidth, height: e.clientHeight }))
   const expected = projectRegion(convertHistorical(legacyLayout, 'fractional'), 'main', available, false).placements.find(p => p.id === 'summary')!.x
   assert.ok(Math.abs(Number(await page.locator('[data-widget="summary"]').getAttribute('data-x')) - expected) < .001)
   assert.equal(await page.evaluate(key => localStorage.getItem(key), GRID_KEY), null)
   const inventory = await page.evaluate(() => window.geppio!.plugins.list())
   assert.ok(inventory.ok); assert.deepEqual(inventory.value, oldInventory)
-  await page.locator('[data-plugin-widget="local.counter:counter"]').waitFor()
+  await page.locator('[data-catalog-type="plugin:local.counter:counter"]').waitFor()
+  assert.equal(page.workers().length, 1, 'Enabled legacy plugin still owns one Worker; the catalog does not execute another')
   assert.equal(await page.evaluate(async () => { try { await fetch('semnome://app/index.html'); return false } catch { return true } }), true)
   assert.equal(await page.evaluate(async () => { try { await fetch('geppio://app/identity-recovery.html'); return false } catch { return true } }), true)
   await page.getByRole('button', { name: 'Alternar tema', exact: true }).click()
   assert.equal(await page.evaluate(key => localStorage.getItem(key), GRID_KEY), null)
-  await page.getByTestId('save-layout').click(); await page.getByTestId('edit-layout').waitFor()
+  await page.getByTestId('conclude-layout').click(); await page.getByTestId('edit-layout').waitFor()
   const freeformChanged = await page.evaluate(key => localStorage.getItem(key), FREEFORM_KEY)
   assert.ok(freeformChanged)
   assert.equal(await page.evaluate(key => localStorage.getItem(key), GRID_KEY), null)
@@ -134,7 +139,9 @@ try {
   page = await launch(corrupt)
   assert.equal(await page.evaluate(key => localStorage.getItem(key), IDENTITY.layoutStorageKey), '{corrupt layout')
   assert.equal(await page.getByTestId('edit-layout').isDisabled(), true)
-  await page.getByRole('button', { name: 'Abrir configurações', exact: true }).click()
+  await page.getByRole('button', { name: 'Abrir menu do perfil', exact: true }).click()
+  await page.getByRole('menuitem', { name: 'Abrir configurações', exact: true }).click()
+  await page.getByRole('button', { name: 'Desenvolvimento e recuperação', exact: true }).click()
   await page.getByRole('button', { name: 'Prévia: Fracionário v1', exact: true }).click()
   await page.locator('.workspace-feedback').filter({ hasText: 'Não foi possível converter este layout' }).waitFor()
   assert.equal(await page.locator('[data-widget]').count(), 0)

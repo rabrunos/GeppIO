@@ -1,5 +1,5 @@
 import { tooClose } from '../layout.ts'
-import { CONSTRAINTS, POLICY, surfaceLimit } from './policy.ts'
+import { POLICY, surfaceLimit } from './policy.ts'
 import { DIRECTIONS } from './types.ts'
 import type { Constraint, Constraints, Direction, Placement, Rect, Surface } from './types.ts'
 
@@ -20,7 +20,7 @@ export function validRect(p: Rect, s: Surface, c: Constraint): boolean {
 }
 export function validLayout(ps: readonly Placement[], s: Surface, cs: Constraints): boolean {
   return ps.length <= POLICY.maxWidgets && new Set(ps.map(p => p.id)).size === ps.length
-    && ps.every((p, i) => !!cs[p.id] && CONSTRAINTS[p.id]!.regions.includes(s.region) && p.region === s.region
+    && ps.every((p, i) => !!cs[p.id] && cs[p.id]!.regions.includes(s.region) && p.region === s.region
       && validRect(p, s, cs[p.id]!) && ps.slice(i + 1).every(q => !collides(p, q)))
 }
 /** Opposite edges remain anchored. Pointer deltas stay in CSS pixels, without rounding. */

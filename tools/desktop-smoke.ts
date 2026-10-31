@@ -5,9 +5,9 @@ import { join, resolve } from 'node:path'
 import assert from 'node:assert/strict'
 import ts from 'typescript'
 import type { Page } from 'playwright'
-import { freeformSmoke, freeformPluginSmoke } from './freeform-smoke.ts'
+import { freeformSmoke, freeformPluginSmoke, placeContribution, beginEdit, settle, portugueseFixture } from './freeform-smoke.ts'
 import { freeformCorrectionSmoke } from './freeform-correction-smoke.ts'
-import { FREEFORM_KEY } from '../src/shared/freeform/policy.ts'
+import { WORKBENCH_KEY as FREEFORM_KEY } from '../src/shared/workbench/model.ts'
 const temporary = await mkdtemp(join(tmpdir(), 'geppio-smoke-'))
 await mkdir('.local/diagnostics', { recursive: true })
 const env: Record<string, string> = {
@@ -26,13 +26,18 @@ async function launch(): Promise<Page> {
   page.on('pageerror', error => errors.push(error.message))
   page.on('console', message => { if (message.type() === 'error' && consoleErrors.length < 30) consoleErrors.push(message.text().slice(0, 1024)) })
   await page.getByTestId('edit-layout').waitFor()
+  await portugueseFixture(page)
+  await application!.evaluate(({ BrowserWindow }) => { const window = BrowserWindow.getAllWindows()[0]!; window.show(); window.focus() })
+  await page.bringToFront()
   const listings = await page.evaluate(() => Promise.all([window.geppio!.plugins.list(), window.geppio!.plugins.list()]))
   assert.ok(listings.every(result => result.ok), 'Concurrent startup inventory reads must succeed')
   return page
 }
 async function settings(page: Page) {
-  await page.getByRole('button', { name: 'Abrir configurações', exact: true }).click()
+  await page.getByRole('button', { name: 'Abrir menu do perfil', exact: true }).click()
+  await page.getByRole('menuitem', { name: 'Abrir configurações', exact: true }).click()
   await page.getByTestId('plugin-settings').waitFor()
+  await page.getByRole('button', { name: 'Desenvolvimento e recuperação', exact: true }).click()
   await page.getByRole('button', { name: 'Instalar pasta local', exact: true }).waitFor({ state: 'visible' })
 }
 async function install(page: Page, path: string) {
@@ -66,8 +71,9 @@ try {
   if (await page.locator('[data-widget]').count() !== 7) throw new Error('Expected seven main fixtures')
   for (const region of ['sidebar', 'main', 'bottom']) if (await page.locator(`[data-region="${region}"]`).count() !== 1) throw new Error('Missing region: ' + region)
   const privileged = await page.evaluate(() => ({ require: 'require' in window, process: 'process' in window, bridge: Object.keys(window.geppio ?? {}) }))
-  if (privileged.require || privileged.process || privileged.bridge.some(key => !['name', 'version', 'platform', 'plugins'].includes(key))) throw new Error('Unexpected privileged renderer surface')
+  if (privileged.require || privileged.process || privileged.bridge.some(key => !['name', 'version', 'platform', 'plugins', 'windowControls'].includes(key))) throw new Error('Unexpected privileged renderer surface')
   assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.plugins).sort()), ['install', 'list', 'remove', 'setEnabled'])
+  assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.windowControls).sort()), ['close', 'maximize', 'minimize'], 'Only the three owner-authorized host chrome actions are exposed')
   const nativeBoundary = await application!.evaluate(({ BrowserWindow }) => {
     const contents = BrowserWindow.getAllWindows()[0]!.webContents
     // Electron exposes this diagnostic at runtime but does not include it in public typings.
@@ -80,11 +86,15 @@ try {
   assert.deepEqual(nativeBoundary, { sandbox: true, contextIsolation: true, nodeIntegration: false, nodeIntegrationInWorker: false, webviewTag: false, webSecurity: true })
   const resizeWindow = async (width: number, height: number) => {
     const viewport = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }))
-    const content = await application!.evaluate(({ BrowserWindow }, size) => {
+    const content = await application!.evaluate(async ({ BrowserWindow }, size) => {
       const window = BrowserWindow.getAllWindows()[0]!
       const before = window.getContentSize()
-      if (size.width === 0) window.maximize()
-      else { window.unmaximize(); window.setSize(size.width, size.height) }
+      if (size.width === 0) {
+        if (!window.isMaximized()) await new Promise<void>((resolve, reject) => { const timer = setTimeout(() => reject(new Error('Native maximize event timed out')), 5000); window.once('maximize', () => { clearTimeout(timer); resolve() }); window.maximize() })
+      } else {
+        if (window.isMaximized()) await new Promise<void>((resolve, reject) => { const timer = setTimeout(() => reject(new Error('Native unmaximize event timed out')), 5000); window.once('unmaximize', () => { clearTimeout(timer); resolve() }); window.unmaximize() })
+        window.setSize(size.width, size.height)
+      }
       return { before, after: window.getContentSize() }
     }, { width, height })
     // Forced Chromium DPR can differ from Windows DIP coordinates; retain the observed conversion.
@@ -97,14 +107,14 @@ try {
   }
   await freeformCorrectionSmoke(page, process.argv.includes('--dev'), resizeWindow)
   await freeformSmoke(page, resizeWindow, process.argv.includes('--dev'))
-  await page.getByTestId('edit-layout').click()
+  await beginEdit(page)
   const initial = await page.locator('[data-widget="chart"]').evaluate(element => { const style = (element as HTMLElement).style; return [style.left, style.top, style.width, style.height] })
   const grip = page.getByRole('button', { name: 'Mover Ritmo', exact: true })
   if (process.argv.includes('--dev')) { await grip.focus(); await page.keyboard.press('ArrowRight') }
   else {
     const box = await grip.boundingBox(); assert.ok(box)
-    await page.mouse.move(box.x + 40, box.y + 16); await page.mouse.down()
-    await page.mouse.move(box.x + 41, box.y + 16); await page.mouse.up()
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await page.mouse.down()
+    await page.mouse.move(box.x + box.width / 2 + 1, box.y + box.height / 2); await page.mouse.up()
   }
   await page.getByTestId('cancel-layout').click()
   await page.waitForFunction(expected => {
@@ -113,7 +123,20 @@ try {
     const style = element.style
     return JSON.stringify([style.left, style.top, style.width, style.height]) === JSON.stringify(expected)
   }, initial)
-  await page.getByTestId('edit-layout').click(); await page.getByTestId('save-layout').click()
+  const beforeConclude = await page.evaluate(key => localStorage.getItem(key), FREEFORM_KEY)
+  await page.getByTestId('edit-layout').click(); await settle(page)
+  if (await page.locator('[data-surface="main"]').getAttribute('data-feasible') === 'false') {
+    const notes = page.locator('[data-catalog-type="host:notes"]')
+    assert.equal(await notes.locator('..').getAttribute('data-saturated'), 'true', 'Catalog saturation includes the same geometric feasibility as drop commands')
+    assert.match(await notes.getAttribute('title') ?? '', /espaço disponível/)
+    await page.getByTestId('conclude-layout').click()
+    await page.locator('.workspace-feedback').filter({ hasText: 'Espaço insuficiente.' }).waitFor()
+    assert.equal(await page.getByTestId('conclude-layout').count(), 1, 'Narrow Main retains editing until its real minima fit')
+    assert.equal(await page.evaluate(key => localStorage.getItem(key), FREEFORM_KEY), beforeConclude)
+  }
+  await page.locator('.widget-catalog-toggle').click(); await settle(page)
+  assert.equal(await page.locator('[data-surface="main"]').getAttribute('data-feasible'), 'true')
+  await page.getByTestId('conclude-layout').click()
   await page.getByTestId('edit-layout').waitFor()
   const saved = await page.evaluate(key => localStorage.getItem(key), FREEFORM_KEY)
   if (!saved) throw new Error('No saved layout')
@@ -131,17 +154,19 @@ try {
   assert.equal(await page.locator('[data-plugin-widget]').count(), 0)
   await install(page, resolve('.local/plugin-packages/pulse')); await status(page, 'local.pulse', 'disabled')
   await install(page, resolve('.local/plugin-packages/counter'))
-  await page.getByText('Já existe um plugin com esse ID.', { exact: true }).waitFor()
+  await page.getByTestId('plugin-settings').getByText('Já existe um plugin com esse ID.', { exact: true }).waitFor()
   assert.equal(await page.locator('[data-plugin]').count(), 2)
   const counter = () => page.locator('[data-plugin="local.counter"]')
   const pulse = () => page.locator('[data-plugin="local.pulse"]')
   await counter().getByRole('button', { name: 'Ativar', exact: true }).click(); await status(page, 'local.counter', 'active')
   await pulse().getByRole('button', { name: 'Ativar', exact: true }).click(); await status(page, 'local.pulse', 'active')
   await pulse().locator('p[role="status"]').filter({ hasText: /^Pulso \d+/ }).waitFor()
-  assert.equal(await page.locator('[data-plugin-widget]').count(), 1)
+  assert.equal(await page.locator('[data-plugin-widget]').count(), 0, 'Activation does not choose a widget presence')
   const workerBoundary = await page.workers()[0]!.evaluate(() => ({ require: typeof require, process: typeof process, document: typeof document, bridge: 'geppio' in globalThis }))
   assert.deepEqual(workerBoundary, { require: 'undefined', process: 'undefined', document: 'undefined', bridge: false })
   await page.getByRole('button', { name: 'Fechar configurações', exact: true }).click()
+  await placeContribution(page, 'plugin:local.counter:counter')
+  assert.equal(await page.locator('[data-plugin-widget]').count(), 1)
   await page.getByRole('button', { name: 'Incrementar', exact: true }).click()
   await page.getByText('Cliques nesta ativação: 1', { exact: true }).waitFor()
   await freeformPluginSmoke(page)
@@ -187,6 +212,7 @@ try {
   await install(page, actionFault); await status(page, 'test.action', 'disabled')
   await page.locator('[data-plugin="test.action"]').getByRole('button', { name: 'Ativar', exact: true }).click(); await status(page, 'test.action', 'active')
   await page.getByRole('button', { name: 'Fechar configurações', exact: true }).click()
+  await placeContribution(page, 'plugin:test.action:action')
   await page.getByRole('button', { name: 'Falhar ação', exact: true }).click(); await settings(page); await status(page, 'test.action', 'error')
   assert.equal(await page.locator('[data-plugin-widget="test.action:action"]').count(), 0)
   await status(page, 'local.pulse', 'active')
@@ -195,7 +221,7 @@ try {
   await install(page, disposal); await status(page, 'test.dispose', 'disabled')
   await page.locator('[data-plugin="test.dispose"]').getByRole('button', { name: 'Ativar', exact: true }).click(); await status(page, 'test.dispose', 'active')
   await page.locator('[data-plugin="test.dispose"]').getByRole('button', { name: 'Desativar', exact: true }).click(); await status(page, 'test.dispose', 'disabled')
-  await page.getByText('Falha: dispose fault', { exact: true }).first().waitFor()
+  await page.getByTestId('plugin-settings').locator('[data-plugin="test.dispose"]').getByRole('status').filter({ hasText: /^Falha: dispose fault$/ }).waitFor()
   await page.locator('[data-plugin="test.dispose"]').getByRole('button', { name: 'Remover', exact: true }).click(); await page.locator('[data-plugin="test.dispose"]').waitFor({ state: 'detached' })
   await pulse().getByRole('button', { name: 'Desativar', exact: true }).click(); await status(page, 'local.pulse', 'disabled')
   await pulse().getByText('Eventos desta sessão', { exact: true }).click()
@@ -220,8 +246,12 @@ try {
   const badIPC = await page.evaluate(() => window.geppio!.plugins.setEnabled('../escape', true))
   assert.equal(badIPC.ok, false)
   await page.keyboard.press('Escape'); await page.getByTestId('plugin-settings').waitFor({ state: 'detached' })
-  await page.getByTestId('edit-layout').click(); await settings(page); await page.keyboard.press('Escape')
+  const missingPluginBytes = await page.evaluate(key => localStorage.getItem(key), FREEFORM_KEY)
+  assert.equal(await page.getByTestId('edit-layout').isDisabled(), true, 'Uninstalled saved references require explicit recovery')
+  await settings(page); await page.getByRole('button', { name: 'Prévia da composição inicial', exact: true }).click()
+  await page.getByTestId('cancel-layout').waitFor(); await settings(page); await page.keyboard.press('Escape')
   await page.getByTestId('plugin-settings').waitFor({ state: 'detached' }); await page.getByTestId('cancel-layout').click()
+  assert.equal(await page.evaluate(key => localStorage.getItem(key), FREEFORM_KEY), missingPluginBytes, 'Recovery and Cancel preserve the exact saved references')
   if (errors.length) throw new Error(errors.join('\n'))
   console.log(JSON.stringify({ result: 'passed', mode: devServer ? 'development renderer / built Main' : 'built production preview', platform: process.platform, checks: ['regions', 'fixtures', 'renderer and Worker boundary', 'concurrent inventory reads', 'cancel edit', 'save', 'panel', 'theme', 'reload', 'independent package installation', 'duplicate ID', 'widget actions', 'zero-widget pulse', 'repeated lifecycle', 'full process restart', 'enabled/disabled persistence', 'bad manifest and missing entry', 'activation/import/contribution/instance/action/disposal/background/rejection failures', 'infinite-loop timeout', 'removal persistence', 'invalid IPC ID', 'Settings Escape preserves layout edit'] }, null, 2))
   console.log('Process metrics after plugin removal (observed sample, not a plugin performance budget):')
@@ -232,6 +262,7 @@ try {
     await page.screenshot({ path: '.local/diagnostics/desktop-failure.png' })
     console.error('Plugin failure state:', await page.locator('[data-plugin]').allTextContents())
     console.error('Renderer failures:', errors)
+    console.error('Workbench feedback:', await page.locator('.workspace-feedback').textContent())
     await writeFile('.local/diagnostics/desktop-console-errors.json', JSON.stringify(consoleErrors, null, 2))
   }
   throw error

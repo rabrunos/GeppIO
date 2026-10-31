@@ -8,6 +8,7 @@ import { pluginId } from '../shared/plugins.ts'
 import type { PluginResult } from '../shared/plugins.ts'
 import { LEGACY_IDENTITY, prepareProfile, validatedTestProfile } from './profile-migration.ts'
 import { recoverLayout } from './layout-migration.ts'
+import { validWindowControlRequest } from '../shared/window-controls.ts'
 
 protocol.registerSchemesAsPrivileged([
   { scheme: IDENTITY.protocol, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
@@ -37,7 +38,7 @@ let startupComplete = false
 async function createWindow(): Promise<void> {
   const win = new BrowserWindow({
     title: IDENTITY.name, width: 1480, height: 980, minWidth: 1000, minHeight: 720,
-    show: false, backgroundColor: '#101317', autoHideMenuBar: true,
+    show: false, frame: false, thickFrame: true, backgroundColor: '#141922', autoHideMenuBar: true,
     webPreferences: { preload: join(__dirname, '../preload/index.cjs'),
       sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true,
       nodeIntegrationInWorker: false, webviewTag: false, devTools: development }
@@ -59,6 +60,16 @@ app.whenReady().then(async () => {
     await dialog.showMessageBox({ type: 'warning', title: IDENTITY.name, message: 'Não foi possível migrar o layout anterior. Os dados foram preservados.', detail: 'Feche a versão anterior e consulte o procedimento de recuperação em docs/development/renaming.md. Não salve um layout substituto antes de recuperar o rascunho desejado.' })
   }
   // Explicit operations only; no IPC channel name or filesystem path comes from the renderer.
+  for (const operation of ['minimize', 'maximize', 'close'] as const) {
+    ipcMain.handle('window:' + operation, (event, ...args: unknown[]): boolean => {
+      const win = BrowserWindow.fromWebContents(event.sender)
+      if (!win || !validWindowControlRequest(event.senderFrame?.url ?? '', devURL ?? `${IDENTITY.protocol}://${IDENTITY.host}/index.html`, event.senderFrame === event.sender.mainFrame, args)) return false
+      if (operation === 'minimize') win.minimize()
+      else if (operation === 'maximize') { if (win.isMaximized()) win.unmaximize(); else win.maximize() }
+      else win.close()
+      return true
+    })
+  }
   for (const operation of ['list', 'install', 'set-enabled', 'remove'] as const) {
     ipcMain.handle('plugins:' + operation, async (event, ...args: unknown[]): Promise<PluginResult<unknown>> => {
       const win = BrowserWindow.fromWebContents(event.sender)

@@ -1,0 +1,20 @@
+/* @section confirmation-and-context */
+.ui-context-menu {
+  width: 190px;
+  padding: 5px;
+}
+.ui-context-menu .workspace-command {
+  min-height: 34px;
+}
+.is-destructive {
+  color: var(--destructive);
+}
+.workspace-primary.is-destructive {
+  background: var(--destructive);
+  border-color: var(--destructive);
+  color: white;
+}
+.workspace-primary.is-destructive:hover {
+  filter: brightness(0.94);
+}
+/* @endsection */

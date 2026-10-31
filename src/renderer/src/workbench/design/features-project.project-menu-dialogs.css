@@ -1,0 +1,103 @@
+/* @section project-menu-dialogs */
+.workspace-project-menu {
+  width: 260px;
+  padding: 9px 11px;
+}
+
+.workspace-project-heading {
+  border-bottom: 1px solid var(--color-border);
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 9px;
+  padding: 9px 11px 13px;
+  display: flex;
+}
+
+.workspace-project-heading strong {
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  overflow: hidden;
+}
+
+.workspace-project-heading span {
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.project-field {
+  flex-direction: column;
+  gap: 9px;
+  margin-top: 22px;
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+}
+
+.project-field input {
+  border: 1px solid var(--color-input-border);
+  background: var(--color-input);
+  border-radius: 8px;
+  width: 100%;
+  min-height: 38px;
+  padding: 9px 11px;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.workspace-dialog-actions {
+  justify-content: flex-end;
+  align-items: center;
+  gap: 9px;
+  margin-top: 22px;
+  display: flex;
+}
+
+.workspace-secondary,
+.workspace-primary {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  min-height: 36px;
+  padding: 8px 13px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.workspace-secondary:hover {
+  background: var(--control-hover);
+}
+
+.workspace-primary {
+  color: var(--primary-foreground);
+  border-color: var(--color-accent-border);
+  background: var(--color-accent);
+}
+
+.workspace-primary:hover {
+  background: var(--primary-hover);
+}
+
+.project-details {
+  margin: 20px 0 0;
+}
+
+.project-details > div {
+  border-top: 1px solid var(--color-border);
+  grid-template-columns: 90px minmax(0, 1fr);
+  gap: 11px;
+  padding: 11px 0;
+  font-size: 12px;
+  line-height: 18px;
+  display: grid;
+}
+
+.project-details dt {
+  color: var(--color-text-muted);
+}
+
+.project-details dd {
+  overflow-wrap: anywhere;
+  min-width: 0;
+  margin: 0;
+}
+/* @endsection */

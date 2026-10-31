@@ -1,0 +1,79 @@
+/* @section workbench-shell */
+@property --sidebar-track {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 331px;
+}
+
+@property --bottom-track {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 167px;
+}
+
+@property --catalog-track {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+
+.workbench {
+  --catalog-width: 480px;
+  --catalog-track: 0px;
+  --catalog-track-motion: var(--region-motion);
+  --sidebar-track: calc(var(--sidebar-rail-width) + var(--sidebar-width));
+  --bottom-track: var(--bottom-height);
+  --region-motion: 0.34s;
+  --sidebar-track-motion: var(--region-motion);
+  --bottom-track-motion: var(--region-motion);
+  --sidebar-hide-motion: 0.12s;
+  --sidebar-hide-fade: 0.1s;
+  --region-easing: cubic-bezier(0.22, 0.8, 0.24, 1);
+  transition:
+    --sidebar-track var(--sidebar-track-motion) var(--region-easing),
+    --bottom-track var(--bottom-track-motion) var(--region-easing),
+    --catalog-track var(--catalog-track-motion) var(--region-easing);
+  grid-template-rows: var(--global-header-height) var(
+      --context-bar-height
+    ) minmax(0, 1fr) var(--status-bar-height);
+  background: var(--color-region);
+  width: 100%;
+  min-width: 900px;
+  height: 100dvh;
+  min-height: 620px;
+  display: grid;
+  position: relative;
+  overflow: hidden;
+}
+
+.workbench[data-layout-editing][data-widget-catalog-open="true"] {
+  --catalog-track: var(--catalog-width);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workbench { --catalog-track-motion: 0s; }
+}
+
+.workbench:before {
+  content: "";
+  inset: var(--global-header-height) 0 var(--status-bar-height)
+    var(--sidebar-track);
+  z-index: 0;
+  background: var(--color-workspace-surface);
+  border-top-left-radius: var(--workspace-corner-radius);
+  pointer-events: none;
+  position: absolute;
+}
+
+.work-area:after {
+  content: "";
+  border: 0 solid var(--color-border);
+  opacity: 0.7;
+  pointer-events: none;
+  inset: calc(-1 * var(--context-bar-height)) 0 0 var(--sidebar-track);
+  z-index: 38;
+  border-top-left-radius: var(--workspace-corner-radius);
+  border-width: 1px 0 0 1px;
+  position: absolute;
+}
+/* @endsection */

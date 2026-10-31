@@ -4,7 +4,7 @@ This is a selected control map, not a security certification or a list of claime
 
 | Exposure | Control / implementation | Check and limitation |
 | --- | --- | --- |
-| Renderer reaches native authority | `nodeIntegration: false`, `nodeIntegrationInWorker: false`, `contextIsolation: true`, sandbox enabled; four fixed plugin-management operations | Source assertions and desktop renderer/Worker absence of `require`/`process`; Workers have no management bridge |
+| Renderer reaches native authority | `nodeIntegration: false`, `nodeIntegrationInWorker: false`, `contextIsolation: true`, sandbox enabled; four fixed plugin-management operations and three fixed host window-chrome actions | Exact owning-window/main-frame URL checks, zero window-action arguments, source assertions and desktop renderer/Worker absence of `require`/`process`; Workers have no bridge |
 | Trusted local plugin package input | Native directory picker, bounded manifest/files, no links/traversal, managed copies and inspected JS snapshots, main-frame IPC validation | `tests/plugins.test.ts` and desktop installation/failure cases; not safe for hostile third-party packages or same-user disk attacks |
 | Plugin lifecycle/contributions | Worker-bound identity, literal declarative UI, timeout/terminate, bounded events/message rate | `tests/plugin-runtime.test.ts` and real desktop activation/actions/disposal/restart; no OS resource/storage/session isolation |
 | External page/new window/navigation | Reject window-open, navigation away and attached webviews; production web requests restricted; permissions and downloads denied | Source controls plus actual desktop smoke; a future remote surface requires separate tests |
@@ -18,6 +18,11 @@ This is a selected control map, not a security certification or a list of claime
 | Dependency / source secret leakage | Exact pins, approved install-script list, ignored credentials/local output; read-only CI secret scan | First install/lock review and CI scanner; ignore rules are not access control |
 
 No arbitrary content injection, safe-storage credential service, PTY, general local file browser or unrestricted IPC handler exists. Advanced future controls described in [Plugin boundaries](plugins.md) are requirements, not implemented protections.
+
+The owner explicitly authorized minimize/maximize/close for the alpha.13 frameless header.
+`window-controls.ts` validates the fixed host request; Main resolves the sender's own window.
+No window identifier, channel, path, script or arbitrary argument comes from the renderer.
+This host-only bridge is not part of `sdk/plugin.d.ts` and is absent in plugin Workers.
 
 ## Production versus development
 

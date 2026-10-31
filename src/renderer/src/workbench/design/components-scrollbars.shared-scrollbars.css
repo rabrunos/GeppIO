@@ -1,0 +1,137 @@
+/* @section shared-scrollbars */
+:where(.ui-scrollbar, textarea) {
+  --scroll-thumb: var(--color-text);
+}
+
+@supports (color: color-mix(in lab, red, red)) {
+  :where(.ui-scrollbar, textarea) {
+    --scroll-thumb: color-mix(in srgb, var(--color-text) 18%, transparent);
+  }
+}
+
+:where(.ui-scrollbar, textarea) {
+  --scroll-thumb-hover: var(--color-text);
+}
+
+@supports (color: color-mix(in lab, red, red)) {
+  :where(.ui-scrollbar, textarea) {
+    --scroll-thumb-hover: color-mix(
+      in srgb,
+      var(--color-text) 36%,
+      transparent
+    );
+  }
+}
+
+:where(.ui-scrollbar, textarea) {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scroll-thumb) transparent;
+}
+
+@supports selector(::-webkit-scrollbar) {
+  :where(.ui-scrollbar, textarea) {
+    scrollbar-width: auto;
+    scrollbar-color: auto;
+  }
+  :where(.ui-scrollbar, textarea)::-webkit-scrollbar {
+    width: var(--scrollbar-size, 11px);
+    height: var(--scrollbar-size, 11px);
+  }
+  :where(.ui-scrollbar, textarea)::-webkit-scrollbar-track {
+    background: 0 0;
+    margin: 0;
+  }
+  :where(.ui-scrollbar, textarea)::-webkit-scrollbar-thumb {
+    background-color: var(--scroll-thumb);
+    border: var(--scrollbar-inset, 3px) solid transparent;
+    background-clip: padding-box;
+    border-radius: 999px;
+    min-height: 28px;
+  }
+  :where(.ui-scrollbar, textarea)::-webkit-scrollbar-thumb:hover {
+    background-color: var(--scroll-thumb-hover);
+  }
+  :where(.ui-scrollbar, textarea)::-webkit-scrollbar-thumb:active {
+    background-color: var(--scroll-thumb-hover);
+  }
+  :where(.ui-scrollbar, textarea)::-webkit-scrollbar-button {
+    --scroll-arrow-color: color-mix(
+      in srgb,
+      var(--color-text) 14%,
+      transparent
+    );
+    display: none;
+  }
+  :where(
+      .ui-scrollbar,
+      textarea
+    )::-webkit-scrollbar-button:vertical:decrement:start,
+  :where(
+      .ui-scrollbar,
+      textarea
+    )::-webkit-scrollbar-button:vertical:increment:end,
+  :where(
+      .ui-scrollbar,
+      textarea
+    )::-webkit-scrollbar-button:horizontal:decrement:start,
+  :where(
+      .ui-scrollbar,
+      textarea
+    )::-webkit-scrollbar-button:horizontal:increment:end {
+    display: block;
+    background-color: transparent;
+    background-image: conic-gradient(
+      from var(--scroll-arrow-angle, 140deg) at
+        var(--scroll-arrow-point, 50% 0%),
+      var(--scroll-arrow-color) 0deg 80deg,
+      transparent 80deg 360deg
+    );
+    background-position: center;
+    background-repeat: no-repeat;
+  }
+  :where(.ui-scrollbar, textarea)::-webkit-scrollbar-button:vertical {
+    width: var(--scrollbar-size, 11px);
+    height: 9px;
+    background-size: 5px 3px;
+  }
+  :where(.ui-scrollbar, textarea)::-webkit-scrollbar-button:vertical:increment {
+    --scroll-arrow-angle: 320deg;
+    --scroll-arrow-point: 50% 100%;
+  }
+  :where(.ui-scrollbar, textarea)::-webkit-scrollbar-button:horizontal {
+    width: 9px;
+    height: var(--scrollbar-size, 11px);
+    background-size: 3px 5px;
+    --scroll-arrow-angle: 50deg;
+    --scroll-arrow-point: 0% 50%;
+  }
+  :where(
+      .ui-scrollbar,
+      textarea
+    )::-webkit-scrollbar-button:horizontal:increment {
+    --scroll-arrow-angle: 230deg;
+    --scroll-arrow-point: 100% 50%;
+  }
+  :where(.ui-scrollbar, textarea)::-webkit-scrollbar-button:enabled:hover,
+  :where(.ui-scrollbar, textarea)::-webkit-scrollbar-button:enabled:active {
+    --scroll-arrow-color: var(--scroll-thumb-hover);
+  }
+  :where(.ui-scrollbar, textarea)::-webkit-scrollbar-button:disabled {
+    --scroll-arrow-color: color-mix(in srgb, var(--color-text) 8%, transparent);
+  }
+  :where(.ui-scrollbar, textarea):not(
+      [data-scroll-can-up]
+    )::-webkit-scrollbar-button:vertical:decrement,
+  :where(.ui-scrollbar, textarea):not(
+      [data-scroll-can-down]
+    )::-webkit-scrollbar-button:vertical:increment,
+  :where(.ui-scrollbar, textarea):not(
+      [data-scroll-can-left]
+    )::-webkit-scrollbar-button:horizontal:decrement,
+  :where(.ui-scrollbar, textarea):not(
+      [data-scroll-can-right]
+    )::-webkit-scrollbar-button:horizontal:increment {
+    --scroll-arrow-color: color-mix(in srgb, var(--color-text) 8%, transparent);
+  }
+}
+/* @endsection */

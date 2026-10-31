@@ -2,15 +2,15 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { REGION_POLICY, regionBounds, regionSize } from '../src/renderer/src/workbench/region-policy.ts'
 
-test('trial region caps use live CSS extents, absolute caps and existing Main reserve', () => {
-  assert.equal(REGION_POLICY.sidebar.initial, 230); assert.equal(REGION_POLICY.bottom.initial, 120)
+test('approved chrome keeps the 48px rail separate, content caps and a usable Main reserve', () => {
+  assert.equal(REGION_POLICY.sidebar.initial, 283); assert.equal(REGION_POLICY.bottom.initial, 167)
   for (const [width, height] of [[1000, 610], [1280, 630], [1480, 870], [2000, 1400]]) {
-    assert.deepEqual(regionBounds('sidebar', width!), { min: Math.min(230, width! * .2), max: Math.min(300, width! * .2, width! - 165) })
-    assert.deepEqual(regionBounds('bottom', height!), { min: 120, max: Math.min(180, height! * .25, height! - 165) })
+    assert.deepEqual(regionBounds('sidebar', width!), { min: 180, max: Math.min(430, width! - 208) })
+    assert.deepEqual(regionBounds('bottom', height!), { min: 125, max: Math.min(250, height!) })
   }
-  assert.deepEqual(regionBounds('sidebar', 600), { min: 120, max: 120 })
-  assert.deepEqual(regionBounds('bottom', 200), { min: 35, max: 35 })
-  assert.deepEqual(regionBounds('sidebar', 170), { min: 5, max: 5 })
+  assert.deepEqual(regionBounds('sidebar', 600), { min: 180, max: 392 })
+  assert.deepEqual(regionBounds('bottom', 100), { min: 100, max: 100 })
+  assert.deepEqual(regionBounds('sidebar', 170), { min: 0, max: 0 })
 })
 
 test('tiny, fractional and invalid measurements never invert bounds or produce nonfinite sizes', () => {
@@ -29,8 +29,8 @@ test('clamping is presentation-only and repeated viewport A to B to A retains se
   for (let i = 0; i < 20; i++) {
     assert.equal(regionSize(requested.sidebar, regionBounds('sidebar', 1800)), 290)
     assert.equal(regionSize(requested.bottom, regionBounds('bottom', 1000)), 170)
-    assert.equal(regionSize(requested.sidebar, regionBounds('sidebar', 600)), 120)
-    assert.equal(regionSize(requested.bottom, regionBounds('bottom', 200)), 35)
+    assert.equal(regionSize(requested.sidebar, regionBounds('sidebar', 400)), 192)
+    assert.equal(regionSize(requested.bottom, regionBounds('bottom', 100)), 100)
     assert.equal(regionSize(requested.sidebar, regionBounds('sidebar', 1800)), 290)
     assert.equal(regionSize(requested.bottom, regionBounds('bottom', 1000)), 170)
   }

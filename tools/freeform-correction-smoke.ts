@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict'
 import { writeFile } from 'node:fs/promises'
 import type { Page } from 'playwright'
-import { CONSTRAINTS, DEFAULT_FREEFORM, FREEFORM_KEY } from '../src/shared/freeform/policy.ts'
+import { CONSTRAINTS, DEFAULT_FREEFORM } from '../src/shared/freeform/policy.ts'
+import { adoptLayout, widgetRegistry, WORKBENCH_KEY as FREEFORM_KEY } from '../src/shared/workbench/model.ts'
+import { serializeWorkbench } from '../src/shared/workbench/codec.ts'
 import { DIRECTIONS } from '../src/shared/freeform/types.ts'
 import { validLayout } from '../src/shared/freeform/geometry.ts'
 import { constraintsFor } from '../src/shared/freeform/policy.ts'
@@ -20,7 +22,7 @@ async function trace(page: Page, id: string) {
       const e = document.querySelector<HTMLElement>(`[data-widget="${id}"]`)!, r = e.getBoundingClientRect()
       const port = document.querySelector<HTMLElement>(`[data-surface="${e.dataset.ownerRegion}"]`)!, p = port.getBoundingClientRect()
       const region = e.dataset.ownerRegion as Placement['region']
-      const peers = [...document.querySelectorAll<HTMLElement>(`[data-owner-region="${region}"]`)].map(e => ({
+      const peers = [...document.querySelectorAll<HTMLElement>(`.widget-frame[data-widget][data-owner-region="${region}"]`)].map(e => ({
         id: e.dataset.widget!, region, x: Number(e.dataset.x), y: Number(e.dataset.y), width: Number(e.dataset.w), height: Number(e.dataset.h),
         preferred: { width: Number(e.dataset.preferredW), height: Number(e.dataset.preferredH) } }))
       state.frames.push({ time, logical: [Number(e.dataset.x), Number(e.dataset.y), Number(e.dataset.w), Number(e.dataset.h)],
@@ -171,7 +173,7 @@ export async function freeformCorrectionSmoke(page: Page, dev: boolean, resizeWi
     await page.mouse.up(); await settle(page); assert.deepEqual(await layouts(page), second, 'Pointercancel retains completed gestures')
     assert.notDeepEqual(completed, original)
     assert.equal(await page.evaluate(key => localStorage.getItem(key), FREEFORM_KEY), bytes, 'Pointer release never persists')
-    await page.getByTestId('save-layout').click(); await page.getByTestId('edit-layout').waitFor()
+    await page.getByTestId('conclude-layout').click(); await page.getByTestId('edit-layout').waitFor()
     await page.reload(); await page.getByTestId('edit-layout').waitFor(); await settle(page)
     near((await rect(page, 'summary')).height, compressed.height, 'Save/reload keeps settled size')
   }
@@ -179,11 +181,22 @@ export async function freeformCorrectionSmoke(page: Page, dev: boolean, resizeWi
   const legacy = structuredClone(stack); legacy.reference.main = await dimensions(page)
   legacy.placements[0]!.height = legacy.reference.main.height - 250; legacy.placements[0]!.y = 250
   await page.getByTestId('edit-layout').waitFor()
-  await page.evaluate(({ key, source }) => localStorage.setItem(key, JSON.stringify(source)), { key: FREEFORM_KEY, source: legacy })
-  await page.reload(); await page.getByTestId('edit-layout').waitFor(); await page.getByTestId('edit-layout').click()
+  await page.evaluate(({ key, raw }) => localStorage.setItem(key, raw), { key: FREEFORM_KEY, raw: serializeWorkbench(adoptLayout(legacy), widgetRegistry()) })
+  await page.reload(); await page.getByTestId('edit-layout').waitFor()
+  await page.waitForFunction(() => {
+    const port = document.querySelector<HTMLElement>('[data-surface="main"]')!
+    return port.scrollWidth > port.clientWidth && Number(port.dataset.usableHeight) === port.clientHeight
+  })
+  await settle(page); await page.getByTestId('edit-layout').click()
+  // Keep this solver regression at one usable viewport; opening the new editor
+  // is a separate responsive projection, not a settled-resize intention.
+  await page.locator('.widget-catalog-toggle').click()
+  await page.waitForFunction(() => parseFloat(getComputedStyle(document.querySelector('.workbench')!).getPropertyValue('--catalog-track')) < .01)
+  await settle(page)
   const legacyBaseline = await layouts(page), oldSize = await rect(page, 'summary'); await drag(page, 'chart', 'move', 30, 0)
   near((await rect(page, 'summary')).height, oldSize.height, 'Legacy preference cannot revive')
   await page.getByTestId('cancel-layout').click()
+  await settle(page)
   assert.deepEqual(await layouts(page), legacyBaseline, 'Global Cancel restores persisted composition after independent actions')
 
   await preview(page, stack)
@@ -230,6 +243,8 @@ export async function freeformCorrectionSmoke(page: Page, dev: boolean, resizeWi
   await preview(page, source)
   const input = page.getByRole('textbox', { name: 'Nome de exemplo', exact: true })
   await input.focus(); await page.keyboard.type('normal'); await page.keyboard.press('Shift+Tab')
+  assert.equal(await page.evaluate(() => document.activeElement?.matches('.layout-widget-remove')), true, 'The approved removal control remains keyboard reachable in both builds')
+  await page.keyboard.press('Shift+Tab')
   assert.equal(await page.evaluate(() => document.activeElement?.matches('.widget-grip, .resize-zone')), dev)
   await input.focus(); await page.keyboard.press('Tab')
   assert.equal(await page.evaluate(() => document.activeElement?.tagName), 'SELECT')
@@ -277,7 +292,7 @@ export async function freeformCorrectionSmoke(page: Page, dev: boolean, resizeWi
     near(vertical ? active.width : active.height, vertical ? old.width : old.height, `${region} cross axis`)
   }
   await page.getByTestId('cancel-layout').click(); await expansion(page, false)
-  await preview(page, DEFAULT_FREEFORM); await page.getByTestId('save-layout').click(); await page.getByTestId('edit-layout').waitFor()
+  await preview(page, DEFAULT_FREEFORM); await page.getByTestId('conclude-layout').click(); await page.getByTestId('edit-layout').waitFor()
   await resizeRegion(page, 'sidebar', 230); await resizeRegion(page, 'bottom', 120)
   console.log(`PASS correction: per-RAF eight anchors, gesture settlement/cancellation/reload, ${dev ? 'development keyboard' : 'production pointer/native focus'}`)
 }

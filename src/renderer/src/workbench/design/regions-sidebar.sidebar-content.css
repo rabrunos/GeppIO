@@ -1,0 +1,17 @@
+/* @section sidebar-content */
+.sidebar-region {
+  scrollbar-gutter: stable;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: var(--space-y) var(--space-x);
+  clip-path: inset(var(--space-y) 0);
+  gap: var(--space-y);
+  background: var(--color-region);
+  border-right: 0;
+  flex-direction: column;
+  flex: 1;
+  display: flex;
+  overflow: hidden auto;
+}
+/* @endsection */

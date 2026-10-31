@@ -1,0 +1,22 @@
+/* @section early-region-constraints */
+.main-region {
+  grid-auto-rows: minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.main-region > .widget {
+  min-height: 0;
+}
+
+.sidebar-rail-tools {
+  --scrollbar-size: 5px;
+  --scrollbar-inset: 0px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden auto;
+}
+
+.sidebar-rail-button {
+  flex-shrink: 0;
+}
+/* @endsection */

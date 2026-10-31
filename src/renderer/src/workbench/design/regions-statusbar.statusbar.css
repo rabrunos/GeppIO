@@ -1,0 +1,68 @@
+/* @section statusbar */
+.status-bar {
+  z-index: 4;
+  min-width: 0;
+  padding: 0 var(--space-x);
+  background: var(--color-status-surface);
+  border-top: 1px solid var(--color-border);
+  color: var(--status-foreground);
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  display: flex;
+  position: relative;
+  overflow: hidden;
+}
+
+.status-left,
+.status-right,
+.status-item {
+  align-items: center;
+  display: flex;
+}
+
+.status-left,
+.status-right {
+  gap: var(--space-x);
+}
+
+.status-item {
+  gap: var(--space-x);
+  white-space: nowrap;
+}
+
+.status-item .icon {
+  color: var(--status-icon);
+  width: 16px;
+  height: 16px;
+}
+
+.status-item .status-dot {
+  width: 8px;
+  height: 8px;
+}
+
+.status-divider {
+  background: var(--status-divider);
+  flex: none;
+  width: 1px;
+  height: 13px;
+}
+
+.typescript {
+  align-items: center;
+  gap: var(--space-x);
+  display: inline-flex;
+}
+
+.ts-badge {
+  color: #fff;
+  background: var(--typescript-background);
+  border-radius: 3px;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  font-size: 9px;
+  display: grid;
+}
+/* @endsection */

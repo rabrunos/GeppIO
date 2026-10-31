@@ -1,0 +1,10 @@
+/* @section editor-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .layout-edit-zone,
+  .layout-edit-zone > svg,
+  .layout-widget-grip,
+  .widget-catalog-toggle {
+    transition: none;
+  }
+}
+/* @endsection */

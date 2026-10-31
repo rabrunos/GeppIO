@@ -1,0 +1,27 @@
+/* @section editor-sidebar-gutter */
+@supports selector(::-webkit-scrollbar) {
+  .sidebar-region {
+    /* The reserved 15px native gutter replaces right padding, as before. */
+    --scrollbar-size: 15px;
+    padding-right: 0;
+    /* Keep the widget viewport inset while exposing the native arrow buttons. */
+    clip-path: polygon(
+      0 var(--space-y),
+      calc(100% - var(--scrollbar-size)) var(--space-y),
+      calc(100% - var(--scrollbar-size)) 0,
+      100% 0,
+      100% 100%,
+      calc(100% - var(--scrollbar-size)) 100%,
+      calc(100% - var(--scrollbar-size)) calc(100% - var(--space-y)),
+      0 calc(100% - var(--space-y))
+    );
+  }
+  .sidebar-region::-webkit-scrollbar {
+    width: var(--scrollbar-size);
+  }
+  .sidebar-region::-webkit-scrollbar-thumb {
+    /* Keep the approved 5px thumb, now centered in the larger gutter. */
+    border-width: 5px;
+  }
+}
+/* @endsection */

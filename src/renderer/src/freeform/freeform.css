@@ -47,7 +47,6 @@
 .bottom-tools { flex-shrink: 0; min-height: 18px; }
 .fixed-status-bar { height: 15px; flex: 0 0 15px; width: 100%; border-top: 1px solid var(--line); background: var(--raised); }
 .work-area { position: relative; }
-.workspace-feedback { position: absolute; bottom: 16px; left: max(15px,var(--main-start)); right: 15px; z-index: 50; color: var(--muted); font-size: 10px; pointer-events: none; background: var(--surface); }
 .region-transfer { display: flex; align-items: center; gap: 5px; font-size: 10px; }
 .region-transfer select { background: var(--raised); color: var(--ink); border: 1px solid var(--line); border-radius: 5px; padding: 5px; }
 .layout-controls { display: flex; gap: 8px; }

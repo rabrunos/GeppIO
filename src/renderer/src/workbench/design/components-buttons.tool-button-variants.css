@@ -1,0 +1,42 @@
+/* @section tool-button-variants */
+.tool-button {
+  justify-content: center;
+  align-items: center;
+  gap: var(--space-x);
+  border: 1px solid var(--color-input-border);
+  height: 36px;
+  padding: 0 var(--space-x);
+  background: var(--color-surface);
+  white-space: nowrap;
+  border-radius: 10px;
+  display: flex;
+}
+
+.tool-button.square {
+  width: 36px;
+  padding: 0;
+}
+
+.tool-button.explorer {
+  width: 152px;
+}
+
+.tool-button.square + .tool-button.square {
+  margin-left: -5px;
+}
+
+.tool-button:hover {
+  background: var(--control-hover);
+}
+
+/* Color-only primary variant; dimensions remain owned by the button context. */
+.ui-button-primary {
+  color: var(--primary-foreground);
+  background: var(--color-accent);
+  border-color: var(--primary-border);
+}
+
+.ui-button-primary:hover {
+  background: var(--primary-hover);
+}
+/* @endsection */

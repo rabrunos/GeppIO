@@ -1,0 +1,45 @@
+/* @section bottom-column-resizing */
+.workbench:has(.bottom-surface[data-editor-columns])
+  :is(
+    .widget-width-splitter[data-widget-width="bottom"],
+    .widget-width-edge[data-widget-edge^="bottom-"]
+  ) {
+  display: none !important;
+}
+
+.workbench:has(
+    .bottom-surface[data-layout-columns]:not([data-layout-columns="2"])
+  )
+  :is(
+    .widget-width-splitter[data-widget-width="bottom"],
+    .widget-width-edge[data-widget-edge^="bottom-"]
+  ) {
+  display: none !important;
+}
+
+.layout-column-splitter {
+  position: absolute;
+  z-index: 56;
+  width: 11px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.layout-column-splitter::before {
+  content: "";
+  position: absolute;
+  inset: 9px auto 9px 50%;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--color-accent);
+  transform: translateX(-50%);
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+
+.layout-column-splitter:hover::before,
+.layout-column-splitter:focus-visible::before,
+.layout-column-splitter[data-active]::before {
+  opacity: 1;
+}
+/* @endsection */

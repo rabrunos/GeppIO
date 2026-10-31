@@ -1,0 +1,63 @@
+/* @section viewport-corners-insets */
+/* Sidebar content has its own spacing; widget interiors and Main/Bottom keep 11px. */
+
+.sidebar-viewport {
+  --sidebar-content-inset: 15px;
+}
+
+.sidebar-region {
+  padding-inline: var(--sidebar-content-inset);
+}
+
+.sidebar-viewport::before,
+.sidebar-viewport::after {
+  inset-inline: var(--sidebar-content-inset);
+}
+
+/* Vector corner covers share one circular radius, without a gradient seam. */
+
+.sidebar-viewport::before,
+.sidebar-viewport::after {
+  background: var(--color-region);
+  mask-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M0 0A12 12 0 0 0 12 12H0Z'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M0 12A12 12 0 0 0 12 0V12Z'/%3E%3C/svg%3E");
+  mask-size: var(--card-radius) var(--card-radius);
+  mask-position:
+    left bottom,
+    right bottom;
+  mask-repeat: no-repeat;
+  mask-mode: alpha;
+}
+
+/* The floating panel's own border clips its children; no second offset cut. */
+
+.sidebar-floating {
+  --sidebar-floating-header-height: calc(
+    var(--context-bar-height) - var(--sidebar-floating-inset-top) - 1px
+  );
+}
+
+.sidebar-floating > .sidebar-viewport {
+  width: 100%;
+  margin: 0;
+  clip-path: none;
+  overflow: hidden;
+}
+
+.sidebar-floating .sidebar-header {
+  height: var(--sidebar-floating-header-height);
+  flex-basis: var(--sidebar-floating-header-height);
+  padding-bottom: calc(var(--space-y) / 2 + 1px);
+}
+
+.sidebar-floating .sidebar-pin {
+  top: calc(
+    (var(--sidebar-floating-header-height) - var(--sidebar-pin-size) - 1px) / 2
+  );
+}
+
+.sidebar-floating > .sidebar-viewport::before {
+  top: calc(var(--sidebar-floating-header-height) + var(--space-y));
+}
+/* @endsection */

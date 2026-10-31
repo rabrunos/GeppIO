@@ -8,7 +8,7 @@ export function settlePlacements(placements: readonly Placement[]): Placement[] 
   return placements.map(p => p.preferred.width === p.width && p.preferred.height === p.height ? p
     : { ...p, preferred: { width: p.width, height: p.height } })
 }
-export function settleSnapshot(snapshot: Snapshot): Snapshot {
+export function settleSnapshot<T extends Snapshot>(snapshot: T): T {
   const placements = settlePlacements(snapshot.placements)
   return placements.every((p, i) => p === snapshot.placements[i]) ? snapshot : { ...snapshot, placements }
 }

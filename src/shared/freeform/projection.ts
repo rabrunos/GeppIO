@@ -1,25 +1,32 @@
 import { clamp, EPSILON } from './geometry.ts'
 import { CONSTRAINTS, POLICY } from './policy.ts'
-import type { Placement, Region, Size, Snapshot } from './types.ts'
+import type { Constraints, Placement, Region, Size, Snapshot } from './types.ts'
 
 /** Continuous counterpart of the original interval projector. Stable source separations
  * become a DAG, never a packing order. Binary fitting replaces integer decrement loops.
  * There is no viewport history, gravity, coordinate rounding or implicit persistence.
  */
-function axisFit(ps: readonly Placement[], horizontal: boolean, reference: number, limit: number) {
+function axisFit(ps: readonly Placement[], horizontal: boolean, reference: number, limit: number, constraints: Constraints) {
   const position = horizontal ? 'x' : 'y', dimension = horizontal ? 'width' : 'height'
   const intervals = [...ps].sort((a, b) => a[position] - b[position] || a.id.localeCompare(b.id))
   const predecessors = intervals.map(b => intervals.map((a, index) => a.id !== b.id && a[position] + a[dimension] <= b[position] + EPSILON ? index : -1).filter(i => i >= 0))
-  if (reference === limit && intervals.every(p => p[dimension] >= CONSTRAINTS[p.id]!.min[dimension]
+  if (reference === limit && intervals.every(p => p[dimension] >= constraints[p.id]!.min[dimension]
     && p[position] + p[dimension] <= limit + EPSILON)) {
     // A validated direct composition already satisfies two-dimensional clearance.
     // Disjoint orthogonal interiors may have sub-gap axis separation (the diagonal
     // exception). Re-imposing the projection DAG here would move anchored previews.
     return new Map(intervals.map(p => [p.id, { start: p[position], size: p[dimension] }]))
   }
-  const resizable = intervals.map(p => horizontal ? CONSTRAINTS[p.id]!.resizeX : CONSTRAINTS[p.id]!.resizeY)
-  const minima = intervals.map((p, i) => resizable[i] ? CONSTRAINTS[p.id]!.min[dimension] : p[dimension])
-  const ideals = intervals.map((p, i) => resizable[i] ? clamp(p[dimension] * limit / reference, minima[i]!, Math.max(p.preferred[dimension], p[dimension])) : p[dimension])
+  const resizable = intervals.map(p => horizontal ? constraints[p.id]!.resizeX : constraints[p.id]!.resizeY)
+  const minima = intervals.map((p, i) => resizable[i] ? constraints[p.id]!.min[dimension] : p[dimension])
+  const depth = intervals.map(() => 0)
+  for (let i = 0; i < intervals.length; i++) for (const predecessor of predecessors[i]!) depth[i] = Math.max(depth[i]!, depth[predecessor]! + 1)
+  const fixedGaps = Math.max(0, ...depth) * POLICY.gap
+  const ratio = reference > fixedGaps ? Math.max(0, limit - fixedGaps) / (reference - fixedGaps) : limit / reference
+  // Viewport fitting may grow beyond a gesture's saved preference. Keeping that
+  // preference as a ceiling left empty bands when approved chrome released space.
+  // Only this source-derived presentation changes; stored/preferred rectangles do not.
+  const ideals = intervals.map((p, i) => resizable[i] ? clamp(p[dimension] * ratio, minima[i]!, constraints[p.id]!.max[dimension]) : p[dimension])
   function earliest(sizes: number[]) {
     const starts = intervals.map(() => 0)
     for (let j = 0; j < intervals.length; j++) for (const i of predecessors[j]!) starts[j] = Math.max(starts[j]!, starts[i]! + sizes[i]! + POLICY.gap)
@@ -50,14 +57,14 @@ function axisFit(ps: readonly Placement[], horizontal: boolean, reference: numbe
   return new Map(intervals.map((p, i) => [p.id, { start: Math.max(0, starts[i]!), size: sizes[i]! }]))
 }
 export interface Projection { placements: Placement[]; feasible: boolean; world: Size }
-export function projectRegion(source: Snapshot, region: Region, available: Size, expanded: boolean): Projection {
+export function projectRegion(source: Snapshot, region: Region, available: Size, expanded: boolean, constraints: Constraints = CONSTRAINTS): Projection {
   expanded = expanded && region === 'main'
   const ps = source.placements.filter(p => p.region === region), reference = source.reference[region]
   const width = clamp(available.width, 0, POLICY.maxCoordinate), height = clamp(available.height, 0, POLICY.maxCoordinate)
-  const x = region === 'sidebar' || expanded ? null : axisFit(ps, true, reference.width, width)
-  const y = region !== 'main' ? null : axisFit(ps, false, reference.height, height)
-  const feasible = (region === 'sidebar' ? ps.every(p => width >= CONSTRAINTS[p.id]!.min.width && width <= CONSTRAINTS[p.id]!.max.width) : expanded || !!x)
-    && (region === 'bottom' ? ps.every(p => height >= CONSTRAINTS[p.id]!.min.height && height <= CONSTRAINTS[p.id]!.max.height) : region === 'sidebar' || !!y)
+  const x = region === 'sidebar' || expanded ? null : axisFit(ps, true, reference.width, width, constraints)
+  const y = region !== 'main' ? null : axisFit(ps, false, reference.height, height, constraints)
+  const feasible = (region === 'sidebar' ? ps.every(p => width >= constraints[p.id]!.min.width && width <= constraints[p.id]!.max.width) : expanded || !!x)
+    && (region === 'bottom' ? ps.every(p => height >= constraints[p.id]!.min.height && height <= constraints[p.id]!.max.height) : region === 'sidebar' || !!y)
   if (!feasible) return { placements: structuredClone(ps), feasible: false,
     world: region === 'main' ? { width: Math.max(width, reference.width, ...ps.map(p => p.x + p.width)), height: Math.max(height, reference.height) }
       : { width, height: region === 'sidebar' ? Math.max(0, ...ps.map(p => p.y + p.height)) : height } }

@@ -10,6 +10,8 @@ Read only the rows needed for the active Issue. This is a route map, not task st
 | Freeform presentation, stable mounted content, pointer/keyboard capture and transactions | `src/renderer/src/freeform/`, `tools/freeform-smoke.ts` |
 | Historical grid codecs, migration and algorithms (inactive placement) | `src/shared/grid/`, `tests/grid-*.test.ts`, `src/renderer/src/grid/` |
 | Workbench composition, pixel splitters and Development controls | `src/renderer/src/workbench/`, `src/renderer/src/settings/`, `src/renderer/src/App.tsx` |
+| Host widget identities, bars, compositions, workbench codec and intention history | `src/shared/workbench/`, `tests/workbench-model.test.ts`, `src/renderer/src/workbench/` |
+| Fixed native window chrome (not plugin SDK) | `src/shared/window-controls.ts`, `src/main/index.ts`, `src/preload/index.ts`, `tests/window-controls.test.ts` |
 | Legacy fractional v1 validation and identity recovery | `src/shared/layout.ts`, `src/shared/layout-defaults.ts`, `src/shared/layout-migration.ts`, `src/main/layout-migration.ts` |
 | Future plugins, APIs, slots and scripts | [Plugin design boundaries](../architecture/plugins.md) |
 | Native boundary or untrusted input | [Security baseline](SECURITY_BASELINE.md), [control map](../architecture/security.md) |

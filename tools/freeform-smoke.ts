@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict'
 import { writeFile } from 'node:fs/promises'
 import type { Page } from 'playwright'
-import { CONSTRAINTS, constraintsFor, DEFAULT_FREEFORM, EXPANSION_KEY, FREEFORM_KEY } from '../src/shared/freeform/policy.ts'
+import { CONSTRAINTS, constraintsFor, DEFAULT_FREEFORM, EXPANSION_KEY } from '../src/shared/freeform/policy.ts'
+import { WORKBENCH_KEY as FREEFORM_KEY, widgetRegistry, adoptLayout } from '../src/shared/workbench/model.ts'
+import type { WorkbenchSnapshot } from '../src/shared/workbench/model.ts'
+import { serializeWorkbench, parseWorkbench } from '../src/shared/workbench/codec.ts'
 import { validLayout } from '../src/shared/freeform/geometry.ts'
 import { DEFAULT_LAYOUT } from '../src/shared/layout-defaults.ts'
 import { DEFAULT_GRID, GRID_KEY } from '../src/shared/grid/policy.ts'
@@ -10,10 +13,38 @@ import { DIRECTIONS } from '../src/shared/freeform/types.ts'
 import { projectRegion } from '../src/shared/freeform/projection.ts'
 import type { Snapshot } from '../src/shared/freeform/types.ts'
 
-const settle = (page: Page) => page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+/** Label-based smoke is deterministic on English CI hosts as well as owner Windows. */
+export async function portugueseFixture(page: Page) {
+  const reload = await page.evaluate(() => {
+    localStorage.setItem('geppio.locale', 'pt-BR')
+    return document.documentElement.lang !== 'pt-BR'
+  })
+  if (reload) { await page.reload(); await page.getByTestId('edit-layout').waitFor() }
+}
+
+export const settle = (page: Page) => page.evaluate(async () => {
+  // Wait for shell tracks and mounted frame translations, never arbitrary
+  // content animations in a skipped subtree. Pointer tests must hit the final
+  // 24px overlay grip rather than a stale position in an accepted flight.
+  await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+  const root = document.querySelector('.workbench')
+  if (!root) throw new Error('Workbench unmounted while waiting for its own shell animations; inspect renderer errors')
+  const targets = [root, ...[...document.querySelectorAll<HTMLElement>('.widget-frame:not([hidden]),.sidebar-rail [data-bar-id],.composition-tile,.catalog-slot-context,.catalog-slot-context > div,.widget-browser-grid,.host-format-slot,.layout-flight-context')].filter(node => !node.inert || node.classList.contains('layout-flight-context'))]
+  await Promise.all(targets.flatMap(node => node.getAnimations()).map(animation => animation.finished.catch(() => undefined)))
+  await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+})
+export async function beginEdit(page: Page) {
+  await page.getByTestId('edit-layout').click()
+  await settle(page)
+  if (await page.locator('.widget-catalog-toggle').getAttribute('aria-expanded') === 'true') await page.locator('.widget-catalog-toggle').click()
+  await page.waitForFunction(() => parseFloat(getComputedStyle(document.querySelector('.workbench')!).getPropertyValue('--catalog-track')) < .01)
+  await settle(page)
+}
 async function settings(page: Page) {
-  await page.getByRole('button', { name: 'Abrir configurações', exact: true }).click()
+  await page.getByRole('button', { name: 'Abrir menu do perfil', exact: true }).click()
+  await page.getByRole('menuitem', { name: 'Abrir configurações', exact: true }).click()
   await page.getByTestId('plugin-settings').waitFor()
+  await page.getByRole('button', { name: 'Desenvolvimento e recuperação', exact: true }).click()
 }
 export async function expansion(page: Page, enabled: boolean) {
   await settings(page)
@@ -21,10 +52,16 @@ export async function expansion(page: Page, enabled: boolean) {
   await page.getByRole('button', { name: 'Fechar configurações', exact: true }).click(); await settle(page)
 }
 export async function preview(page: Page, snapshot: Snapshot) {
+  await page.bringToFront()
   if (await page.getByTestId('cancel-layout').count()) await page.getByTestId('cancel-layout').click()
   await settings(page)
-  await page.locator('input[type="file"]').setInputFiles({ name: 'freeform.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(snapshot)) })
+  const inventory = await page.evaluate(() => window.geppio!.plugins.list())
+  assert.ok(inventory.ok)
+  const raw = 'organization' in snapshot ? serializeWorkbench(snapshot as WorkbenchSnapshot, widgetRegistry(inventory.value.plugins)) : JSON.stringify(snapshot)
+  await page.locator('input[type="file"]').setInputFiles({ name: 'freeform.json', mimeType: 'application/json', buffer: Buffer.from(raw) })
   await page.getByTestId('cancel-layout').waitFor(); await settle(page)
+  if (await page.locator('.widget-catalog-toggle').getAttribute('aria-expanded') === 'true') await page.locator('.widget-catalog-toggle').click()
+  await page.waitForFunction(() => parseFloat(getComputedStyle(document.querySelector('.workbench')!).getPropertyValue('--catalog-track')) < .01)
 }
 export async function rect(page: Page, id: string) {
   return page.locator(`[data-widget="${id}"]`).evaluate(e => {
@@ -34,10 +71,17 @@ export async function rect(page: Page, id: string) {
 }
 const near = (actual: number, expected: number, label = '') => assert.ok(Math.abs(actual - expected) < .06, `${label}: ${actual} ≠ ${expected}`)
 export async function drag(page: Page, id: string, direction: string, dx: number, dy: number, cancel = false, steps = 3) {
+  await page.bringToFront()
+  await settle(page)
   const element = page.locator(`[data-widget="${id}"] ${direction === 'move' ? '.widget-grip' : `[data-resize="${direction}"]`}`)
   const r = await element.boundingBox(); assert.ok(r)
   const x = r.x + r.width / 2, y = r.y + r.height / 2
-  await page.mouse.move(x, y); await page.mouse.down()
+  await page.mouse.move(x, y)
+  if (direction === 'move') await page.waitForFunction(id => {
+    const grip = document.querySelector<HTMLElement>(`[data-widget="${id}"] .widget-grip`)
+    return grip && getComputedStyle(grip).pointerEvents === 'auto'
+  }, id)
+  await page.mouse.down()
   assert.ok(await element.evaluate(e => e.hasPointerCapture(1)), `${id} ${direction}: real pointer capture required: ` + JSON.stringify(await page.evaluate(({ x, y }) => ({
     point: [x, y], hit: document.elementFromPoint(x, y)?.outerHTML.slice(0, 200), viewport: [innerWidth, innerHeight],
     scroll: [document.querySelector('.freeform-layer')?.scrollLeft, document.querySelector('.freeform-layer')?.scrollTop],
@@ -59,12 +103,24 @@ export async function resizeRegion(page: Page, kind: 'sidebar' | 'bottom', value
   await page.mouse.up(); await settle(page)
 }
 async function transferSelected(page: Page, id: string, region: string) {
-  await page.locator(`[data-widget="${id}"] .widget-grip`).click()
-  await page.getByRole('combobox', { name: 'Região do widget selecionado', exact: true }).selectOption(region)
+  await settle(page)
+  const grip = await page.locator(`[data-widget="${id}"] .widget-grip`).boundingBox(), destination = await page.locator(`[data-surface="${region}"]`).boundingBox()
+  assert.ok(grip && destination)
+  await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2); await page.mouse.down()
+  assert.ok(await page.locator(`[data-widget="${id}"] .widget-grip`).evaluate(node => node.hasPointerCapture(1)), 'A region transfer requires real pointer capture')
+  await page.mouse.move(destination.x + Math.min(25, destination.width / 2), destination.y + Math.min(25, destination.height / 2), { steps: 5 }); await page.mouse.up()
   await settle(page)
 }
 export async function dimensions(page: Page) {
   return page.locator('[data-surface="main"]').evaluate(e => ({ width: (e as HTMLElement).clientWidth, height: (e as HTMLElement).clientHeight }))
+}
+/** Activation publishes data; placement is now an explicit catalog intention. */
+export async function placeContribution(page: Page, type: string) {
+  await expansion(page, true)
+  await page.getByTestId('edit-layout').click(); await settle(page)
+  await page.locator(`[data-catalog-type="${type}"]`).click()
+  await page.locator('.widget-browser-destination [data-widget-place="main"]').click()
+  await page.getByTestId('conclude-layout').click(); await page.getByTestId('edit-layout').waitFor(); await settle(page)
 }
 async function assertBottomNoScroll(page: Page) {
   const result = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>('[data-region="bottom"], [data-surface="bottom"], [data-owner-region="bottom"] .widget-content')].map(e => {
@@ -91,11 +147,11 @@ async function assertGeometry(page: Page) {
         background: getComputedStyle(document.querySelector('.fixed-status-bar')!).backgroundColor, bottomBackground: getComputedStyle(document.querySelector('[data-region="bottom"]')!).backgroundColor },
       widgets: [...document.querySelectorAll<HTMLElement>('[data-widget]')].map(e => ({ id: e.dataset.widget!, x: Number(e.dataset.x), y: Number(e.dataset.y), width: Number(e.dataset.w), height: Number(e.dataset.h) })) }
   })
-  evidence.inset.forEach(n => near(n, 15, 'single region inset'))
-  near(evidence.status.height as number, 15); near(evidence.status.bottom as number, evidence.viewportBottom)
+  evidence.inset.forEach((n, i) => near(n, i % 2 ? 9 : 11, 'approved single chrome inset'))
+  near(evidence.status.height as number, 25); near(evidence.status.bottom as number, evidence.viewportBottom)
   assert.ok(Number.parseFloat(evidence.statusStyle.border) > 0 && Number.parseFloat(evidence.statusStyle.border) <= 1)
   assert.notEqual(evidence.statusStyle.background, evidence.statusStyle.bottomBackground)
-  for (const r of evidence.regions) { near(r.kind === 'sidebar' ? r.width : r.height, r.now); near(r.min, Math.min(r.kind === 'sidebar' ? 230 : 120, r.max)); assert.ok(r.now >= r.min && r.now <= r.max) }
+  for (const r of evidence.regions) { near(r.kind === 'sidebar' ? r.width : r.height, r.now); near(r.min, Math.min(r.kind === 'sidebar' ? 180 : 125, r.max)); assert.ok(r.now >= r.min && r.now <= r.max) }
   assert.ok(Math.abs(evidence.viewportBottom - evidence.innerHeight) < 1, 'integer innerHeight can round a fractional CSS viewport at DPR 1.25')
   assert.equal(evidence.scrollWidth, evidence.width); assert.equal(evidence.scrollHeight, evidence.height)
   await assertBottomNoScroll(page)
@@ -120,7 +176,7 @@ export async function freeformSmoke(page: Page, resizeWindow: (width: number, he
   await page.evaluate(() => {
     const test = window as unknown as { layoutWrites: string[]; originalSet: typeof Storage.prototype.setItem }
     test.layoutWrites = []; test.originalSet = Storage.prototype.setItem
-    Storage.prototype.setItem = function(key, value) { if (/layout:(freeform|grid|horizontal):|layout:v1/.test(key)) test.layoutWrites.push(key); test.originalSet.call(this, key, value) }
+    Storage.prototype.setItem = function(key, value) { if (key === 'geppio:workbench:v1' || /layout:(freeform|grid|horizontal):|layout:v1/.test(key)) test.layoutWrites.push(key); test.originalSet.call(this, key, value) }
   })
   for (const theme of ['dark', 'light']) {
     if (await page.locator('.workbench').getAttribute('data-theme') !== theme) await page.getByRole('button', { name: 'Alternar tema' }).click()
@@ -143,41 +199,43 @@ export async function freeformSmoke(page: Page, resizeWindow: (width: number, he
     await page.getByRole('button', { name: 'Recolher painel', exact: true }).click(); await settle(page)
     assert.deepEqual(await dimensions(page), undocked)
   }
+  assert.deepEqual(await page.evaluate(() => (window as unknown as { layoutWrites: string[] }).layoutWrites), [], 'Theme, viewport and panel projection never persist')
+  const beforeChrome = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).layout, FREEFORM_KEY)
   const initial = await rect(page, 'chart')
-  await page.getByTestId('edit-layout').click(); await drag(page, 'chart', 'move', 13.25, -7.125, true)
+  await beginEdit(page); await drag(page, 'chart', 'move', 13.25, -7.125, true)
   const cancelled = await rect(page, 'chart'); near(cancelled.x, initial.x); near(cancelled.y, initial.y)
   await page.getByTestId('cancel-layout').click()
   // Splitter mouse collapse/reopen restores requested size; keyboard Escape restores a series.
   await resizeRegion(page, 'sidebar', 0)
-  await page.getByRole('button', { name: 'Reabrir Sidebar', exact: true }).waitFor()
-  assert.equal(await page.locator('[data-region="sidebar"]').isVisible(), false)
-  await page.getByRole('button', { name: 'Reabrir Sidebar', exact: true }).click(); await settle(page)
-  near(Number(await page.getByRole('separator', { name: 'Largura da Sidebar' }).getAttribute('aria-valuenow')), 230)
+  await page.locator('.workbench[data-sidebar-mode="hidden"]').waitFor()
+  await page.waitForFunction(() => document.querySelector('.host-sidebar-content')!.getBoundingClientRect().width < .1)
+  await page.locator('[data-bar-id="home"]').click(); await settle(page)
+  near(Number(await page.getByRole('separator', { name: 'Largura da Sidebar' }).getAttribute('aria-valuenow')), 180)
   const separator = page.getByRole('separator', { name: 'Altura da Bottom' })
   await separator.focus(); await page.keyboard.press('ArrowUp'); await page.keyboard.press('ArrowUp'); await page.keyboard.press('Escape')
-  near(Number(await separator.getAttribute('aria-valuenow')), 120)
+  near(Number(await separator.getAttribute('aria-valuenow')), 125)
   const cancelDivider = await separator.boundingBox(); assert.ok(cancelDivider)
   await page.mouse.move(cancelDivider.x + cancelDivider.width / 2, cancelDivider.y + cancelDivider.height / 2); await page.mouse.down()
   await page.mouse.move(cancelDivider.x + cancelDivider.width / 2, cancelDivider.y + cancelDivider.height / 2 - 20); await settle(page)
   await separator.evaluate(e => { if (!e.hasPointerCapture(1)) throw new Error('Expected divider capture'); e.releasePointerCapture(1) })
-  await page.mouse.up(); await settle(page); near(Number(await separator.getAttribute('aria-valuenow')), 120, 'lost divider capture restores size')
+  await page.mouse.up(); await settle(page); near(Number(await separator.getAttribute('aria-valuenow')), 125, 'lost divider capture restores size')
   const beforeViewportGesture = await rect(page, 'chart')
-  await page.getByTestId('edit-layout').click()
+  await beginEdit(page)
   const viewportGrip = await page.locator('[data-widget="chart"] .widget-grip').boundingBox(); assert.ok(viewportGrip)
-  await page.mouse.move(viewportGrip.x + 40, viewportGrip.y + 16); await page.mouse.down()
-  await page.mouse.move(viewportGrip.x + 53.25, viewportGrip.y + 16)
+  await page.mouse.move(viewportGrip.x + viewportGrip.width / 2, viewportGrip.y + viewportGrip.height / 2); await page.mouse.down()
+  await page.mouse.move(viewportGrip.x + viewportGrip.width / 2 + 13.25, viewportGrip.y + viewportGrip.height / 2)
   await resizeWindow(1300, 900); await page.mouse.up(); await resizeWindow(1280, 900); await settle(page)
   near((await rect(page, 'chart')).x, beforeViewportGesture.x, 'viewport cancels capture')
   await page.getByTestId('cancel-layout').click()
   await resizeRegion(page, 'bottom', 0)
-  near(await page.locator('.fixed-status-bar').evaluate(e => e.getBoundingClientRect().height), 15)
+  near(await page.locator('.fixed-status-bar').evaluate(e => e.getBoundingClientRect().height), 25)
   assert.equal(await page.locator('.fixed-status-bar').evaluate(e => { const r = e.getBoundingClientRect(); return document.elementFromPoint(r.width / 2, r.top + 7) === e }), true)
-  await page.getByRole('button', { name: 'Reabrir Bottom', exact: true }).click(); await settle(page)
-  near(Number(await separator.getAttribute('aria-valuenow')), 120)
-  assert.deepEqual(await page.evaluate(() => (window as unknown as { layoutWrites: string[] }).layoutWrites), [])
+  await separator.click(); await settle(page)
+  near(Number(await separator.getAttribute('aria-valuenow')), 125)
+  assert.deepEqual(await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).layout, FREEFORM_KEY), beforeChrome, 'Explicit chrome intentions never rewrite widget geometry')
   await page.evaluate(() => { const t = window as unknown as { originalSet: typeof Storage.prototype.setItem }; Storage.prototype.setItem = t.originalSet })
   await expansion(page, true)
-  await page.getByTestId('edit-layout').click()
+  await beginEdit(page)
   const beforeFirstOverflow = await rect(page, 'chart')
   await drag(page, 'chart', 'move', 1100, 0)
   assert.ok((await rect(page, 'chart')).x >= beforeFirstOverflow.x + 1099, 'Adding the first Main scrollbar must not cancel a live gesture')
@@ -243,7 +301,7 @@ export async function freeformSmoke(page: Page, resizeWindow: (width: number, he
   // A burst faster than one display frame is coalesced, and pointer-up flushes exactly
   // one final solution synchronously. No delayed jump may follow the release.
   const burst = await page.locator('[data-widget="chart"] .widget-grip').boundingBox(); assert.ok(burst)
-  const bx = burst.x + 40, by = burst.y + 16
+  const bx = burst.x + burst.width / 2, by = burst.y + burst.height / 2
   await page.mouse.move(bx, by); await page.mouse.down()
   assert.ok(await page.locator('[data-widget="chart"] .widget-grip').evaluate(e => e.hasPointerCapture(1)), 'Burst requires actual pointer capture')
   const invocations = await page.evaluate(({ x, y }) => new Promise<{ delivered: number; pending: number }>(resolve => {
@@ -269,7 +327,7 @@ export async function freeformSmoke(page: Page, resizeWindow: (width: number, he
   if (dev) { await page.locator('[data-widget="chart"] .widget-grip').focus(); await page.keyboard.press('ArrowRight') }
   else await drag(page, 'chart', 'move', 1, 0)
   exact = await rect(page, 'chart'); near(exact.x, 151.5)
-  await page.getByTestId('save-layout').click(); await page.getByTestId('edit-layout').waitFor()
+  await page.getByTestId('conclude-layout').click(); await page.getByTestId('edit-layout').waitFor()
   const saved = await page.evaluate(key => localStorage.getItem(key), FREEFORM_KEY); assert.ok(saved)
   await page.reload(); await page.getByTestId('edit-layout').waitFor(); await settle(page)
   const restored = await rect(page, 'chart'); near(restored.x, exact.x); near(restored.y, exact.y); near(restored.width, exact.width); near(restored.height, exact.height)
@@ -278,15 +336,19 @@ export async function freeformSmoke(page: Page, resizeWindow: (width: number, he
   const world = await page.locator('[data-surface="main"] .placement-world').evaluate(e => (e as HTMLElement).style.width)
   near(Number.parseFloat(world), Math.max(...sparse.placements.map(p => p.id === 'chart' ? exact.x + exact.width : p.x + p.width)))
   await page.locator('[data-surface="main"]').evaluate(e => { e.scrollLeft = 600 }); await settle(page)
-  await page.getByTestId('edit-layout').click()
+  await beginEdit(page)
   const form = page.getByRole('textbox', { name: 'Nome de exemplo', exact: true })
-  // Form can be offscreen; set the existing DOM field and retain its identity through region/visibility changes.
-  await form.evaluate(e => { (e as HTMLInputElement).value = 'estado não salvo'; e.setAttribute('data-mounted-proof', 'same') })
+  // Type into the real visible control, then move it offscreen. An inert field
+  // cannot receive native input; directly assigning .value would bypass its model.
+  await page.locator('[data-surface="main"]').evaluate((e, x) => { e.scrollLeft = x }, (await rect(page, 'properties')).x); await settle(page)
+  await form.fill('estado não salvo'); assert.equal(await form.inputValue(), 'estado não salvo')
+  await form.evaluate(e => e.setAttribute('data-mounted-proof', 'same'))
+  await page.locator('[data-surface="main"]').evaluate(e => { e.scrollLeft = 600 }); await settle(page)
   const queue = await rect(page, 'queue')
   const scrollGrip = page.locator('[data-widget="queue"] .widget-grip'), scrollBox = await scrollGrip.boundingBox(); assert.ok(scrollBox)
-  await page.mouse.move(scrollBox.x + 50, scrollBox.y + 16); await page.mouse.down()
+  await page.mouse.move(scrollBox.x + scrollBox.width / 2, scrollBox.y + scrollBox.height / 2); await page.mouse.down()
   await page.locator('[data-surface="main"]').evaluate(e => { e.scrollLeft += 20 })
-  await page.mouse.move(scrollBox.x + 67.25, scrollBox.y + 16); await settle(page)
+  await page.mouse.move(scrollBox.x + scrollBox.width / 2 + 17.25, scrollBox.y + scrollBox.height / 2); await settle(page)
   near((await rect(page, 'queue')).x, queue.x + 37.25, 'scrollLeft participates in pointer delta')
   await scrollGrip.evaluate(e => { assertCapture(e); function assertCapture(element: Element) { if (!element.hasPointerCapture(1)) throw new Error('Expected mouse capture'); element.releasePointerCapture(1) } })
   await page.mouse.up(); await settle(page)
@@ -296,7 +358,7 @@ export async function freeformSmoke(page: Page, resizeWindow: (width: number, he
   await expansion(page, true); assert.equal(await form.getAttribute('data-mounted-proof'), 'same')
   assert.equal(await page.evaluate(key => localStorage.getItem(key), FREEFORM_KEY), saved)
   await page.locator('[data-surface="main"]').evaluate(e => { e.scrollLeft = e.scrollWidth }); await settle(page)
-  await page.getByTestId('edit-layout').click()
+  await beginEdit(page)
   const extentBefore = Number.parseFloat(await page.locator('[data-surface="main"] .placement-world').evaluate(e => (e as HTMLElement).style.width))
   await drag(page, 'properties', 'move', -57.25, 0)
   const extentAfter = Number.parseFloat(await page.locator('[data-surface="main"] .placement-world').evaluate(e => (e as HTMLElement).style.width))
@@ -305,7 +367,7 @@ export async function freeformSmoke(page: Page, resizeWindow: (width: number, he
   assert.ok(range.x <= range.max)
   await page.getByTestId('cancel-layout').click()
   await page.locator('[data-surface="main"]').evaluate(e => { e.scrollLeft = e.scrollWidth }); await settle(page)
-  await page.getByTestId('edit-layout').click()
+  await beginEdit(page)
   const edgeGrip = page.locator('[data-widget="properties"] .widget-grip'), edgeBox = await edgeGrip.boundingBox(), edgePort = await page.locator('[data-surface="main"]').boundingBox()
   assert.ok(edgeBox && edgePort)
   const edgeOriginal = await rect(page, 'properties')
@@ -317,20 +379,26 @@ export async function freeformSmoke(page: Page, resizeWindow: (width: number, he
   await page.keyboard.press('Escape'); await page.mouse.up(); await settle(page)
   near((await rect(page, 'properties')).x, edgeOriginal.x, 'edge extension cancellation')
   await page.getByTestId('cancel-layout').click()
-  // Genuine placement in both peer regions, without lowering Bottom minima or its 180px cap.
+  // Genuine placement in both peer regions, without lowering widget minima or
+  // the approved chrome bounds. Construct the too-small viewport explicitly.
   await expansion(page, false); await preview(page, DEFAULT_FREEFORM); await resizeWindow(1800, 980); await resizeRegion(page, 'sidebar', 290)
   await transferSelected(page, 'properties', 'sidebar')
   assert.equal((await rect(page, 'properties')).region, 'sidebar'); near((await rect(page, 'properties')).width, await page.locator('[data-surface="sidebar"]').evaluate(e => e.clientWidth))
   assert.equal(await form.getAttribute('data-mounted-proof'), 'same')
   const sideBefore = await rect(page, 'properties')
+  near(sideBefore.y, 25, 'Empty Sidebar keeps its real usable area; transfer uses the requested CSS-pixel destination')
   await drag(page, 'properties', 's', 0, 13.25); near((await rect(page, 'properties')).height, sideBefore.height + 13.25)
   await drag(page, 'properties', 'move', 50, 13.125)
-  near((await rect(page, 'properties')).x, 0); near((await rect(page, 'properties')).y, 13.125)
+  near((await rect(page, 'properties')).x, 0); near((await rect(page, 'properties')).y, sideBefore.y + 13.125)
   await resizeRegion(page, 'sidebar', 280); near((await rect(page, 'properties')).width, await page.locator('[data-surface="sidebar"]').evaluate(e => e.clientWidth))
-  // One Sidebar scroll owner includes navigation and content; no horizontal range.
+  // One Sidebar scroll owner, with explicit overflowing widget content. The new
+  // rail does not manufacture overflow from the superseded navigation fixture.
+  const sidebarHeight = await page.locator('[data-region="sidebar"]').evaluate(e => e.clientHeight)
+  await drag(page, 'properties', 's', 0, sidebarHeight + 200 - (await rect(page, 'properties')).height)
   await page.locator('[data-region="sidebar"]').evaluate(e => { e.scrollTop = e.scrollHeight; e.scrollLeft = 10000 }); await settle(page)
   const sidebarScroll = await page.locator('[data-region="sidebar"]').evaluate(e => ({ x: e.scrollLeft, y: e.scrollTop, width: e.clientWidth, world: e.scrollWidth }))
   assert.equal(sidebarScroll.x, 0); assert.equal(sidebarScroll.width, sidebarScroll.world); assert.ok(sidebarScroll.y > 0)
+  await resizeRegion(page, 'bottom', 125)
   await transferSelected(page, 'chart', 'bottom')
   assert.equal((await rect(page, 'chart')).region, 'main', 'small Bottom rejects')
   await resizeRegion(page, 'bottom', 180); await transferSelected(page, 'chart', 'bottom')
@@ -361,28 +429,35 @@ export async function freeformSmoke(page: Page, resizeWindow: (width: number, he
   // A real pointer transfer uses the target content origin and preserves content identity.
   const dropFrom = await page.locator('[data-widget="chart"] .widget-grip').boundingBox(), dropTo = await page.locator('[data-surface="main"]').boundingBox()
   assert.ok(dropFrom && dropTo)
-  await page.mouse.move(dropFrom.x + 40, dropFrom.y + 16); await page.mouse.down()
+  await page.mouse.move(dropFrom.x + dropFrom.width / 2, dropFrom.y + dropFrom.height / 2); await page.mouse.down()
   await page.mouse.move(dropTo.x + dropTo.width * .5, dropTo.y + dropTo.height * .7, { steps: 4 }); await page.mouse.up(); await settle(page)
   assert.equal((await rect(page, 'chart')).region, 'main')
   await transferSelected(page, 'chart', 'bottom'); assert.equal((await rect(page, 'chart')).region, 'bottom')
   await transferSelected(page, 'queue', 'sidebar'); assert.equal((await rect(page, 'queue')).region, 'main')
-  await resizeRegion(page, 'sidebar', 0); await page.getByRole('button', { name: 'Reabrir Sidebar' }).click(); await settle(page)
+  await resizeRegion(page, 'sidebar', 0)
+  assert.equal(await page.locator('.workbench').getAttribute('data-sidebar-mode'), 'docked', 'Edit keeps Sidebar forced visible')
+  await resizeRegion(page, 'sidebar', 280)
   assert.equal(await form.inputValue(), 'estado não salvo'); assert.equal((await rect(page, 'properties')).region, 'sidebar')
-  await resizeRegion(page, 'bottom', 0); await page.getByRole('button', { name: 'Reabrir Bottom' }).click(); await settle(page)
+  await resizeRegion(page, 'bottom', 0)
+  assert.equal(await page.locator('.workbench').getAttribute('data-bottom-mode'), 'docked', 'Edit keeps Bottom forced visible')
+  await resizeRegion(page, 'bottom', 180)
   near(Number(await separator.getAttribute('aria-valuenow')), 180)
   await page.screenshot({ path: `.local/diagnostics/freeform-regions-${await page.evaluate(() => devicePixelRatio)}.png` })
   assert.equal(await page.evaluate(key => localStorage.getItem(key), FREEFORM_KEY), saved, 'viewport/region/toggle/scroll and unsaved edits do not adopt a composition')
-  await page.getByTestId('save-layout').click(); await page.getByTestId('edit-layout').waitFor()
+  await page.getByTestId('conclude-layout').click(); await page.getByTestId('edit-layout').waitFor()
   await page.reload(); await page.getByTestId('edit-layout').waitFor(); await settle(page)
   assert.equal((await rect(page, 'properties')).region, 'sidebar'); assert.equal((await rect(page, 'chart')).region, 'bottom')
-  // Restart restores composition even if session-only region sizes initially cannot fit it.
+  // Restart restores confirmed chrome. An explicit smaller Bottom still exposes
+  // genuine minimum infeasibility and recoverable enlargement without data loss.
+  assert.equal(await page.locator('[data-surface="bottom"]').getAttribute('data-feasible'), 'true')
+  await resizeRegion(page, 'bottom', 125)
   assert.equal(await page.locator('[data-surface="bottom"]').getAttribute('data-feasible'), 'false')
   await page.getByTestId('bottom-recovery').waitFor(); await assertBottomNoScroll(page)
   await expansion(page, true); await assertBottomNoScroll(page); await expansion(page, false)
   const recoveryBytes = await page.evaluate(key => localStorage.getItem(key), FREEFORM_KEY)
   await page.getByRole('button', { name: 'Ampliar Bottom', exact: true }).click(); await settle(page)
   assert.equal(await page.locator('[data-surface="bottom"]').getAttribute('data-feasible'), 'true')
-  assert.equal(await page.evaluate(key => localStorage.getItem(key), FREEFORM_KEY), recoveryBytes)
+  assert.deepEqual(await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).layout, FREEFORM_KEY), JSON.parse(recoveryBytes!).layout)
   await resizeRegion(page, 'sidebar', 290); await resizeRegion(page, 'bottom', 180)
   assert.equal(await page.locator('[data-surface="bottom"]').getAttribute('data-feasible'), 'true')
   const farSidebar = structuredClone(DEFAULT_FREEFORM), sideWidth = await page.locator('[data-surface="sidebar"]').evaluate(e => e.clientWidth)
@@ -392,10 +467,10 @@ export async function freeformSmoke(page: Page, resizeWindow: (width: number, he
   await page.locator('[data-region="sidebar"]').evaluate(e => { e.scrollTop = e.scrollHeight }); await settle(page)
   await drag(page, 'properties', 'move', 0, -57.25)
   near((await rect(page, 'properties')).y, 842.875, 'Sidebar contraction cannot feed scroll clamping back into pointer delta')
-  await preview(page, DEFAULT_FREEFORM); await page.getByTestId('save-layout').click(); await page.getByTestId('edit-layout').waitFor()
+  await preview(page, DEFAULT_FREEFORM); await page.getByTestId('conclude-layout').click(); await page.getByTestId('edit-layout').waitFor()
   // Cooperative Save queue + Cancel, quota failure and byte-CAS conflicts.
   const stable = await page.evaluate(key => localStorage.getItem(key), FREEFORM_KEY)
-  await page.getByTestId('edit-layout').click()
+  await beginEdit(page)
   await page.evaluate(key => {
     const test = window as unknown as { releaseLayoutLock: () => void; layoutLockAcquired: boolean; layoutLockFinished: boolean }
     void navigator.locks.request(key, async () => { test.layoutLockAcquired = true; await new Promise<void>(resolve => { test.releaseLayoutLock = resolve }) }).then(() => { test.layoutLockFinished = true })
@@ -405,12 +480,12 @@ export async function freeformSmoke(page: Page, resizeWindow: (width: number, he
   await page.evaluate(() => (window as unknown as { releaseLayoutLock: () => void }).releaseLayoutLock())
   await page.waitForFunction(() => (window as unknown as { layoutLockFinished: boolean }).layoutLockFinished); await settle(page)
   assert.equal(await page.evaluate(key => localStorage.getItem(key), FREEFORM_KEY), stable)
-  await page.getByTestId('edit-layout').click()
+  await beginEdit(page)
   await page.evaluate(() => { const test = window as unknown as { quotaSet: typeof Storage.prototype.setItem }; test.quotaSet = Storage.prototype.setItem; Storage.prototype.setItem = () => { throw new DOMException('Quota', 'QuotaExceededError') } })
   await page.getByTestId('save-layout').click(); await page.locator('.workspace-feedback').filter({ hasText: 'Não foi possível salvar.' }).waitFor()
   assert.equal(await page.evaluate(key => localStorage.getItem(key), FREEFORM_KEY), stable)
   await page.evaluate(() => { Storage.prototype.setItem = (window as unknown as { quotaSet: typeof Storage.prototype.setItem }).quotaSet })
-  await page.getByTestId('cancel-layout').click(); await page.getByTestId('edit-layout').click()
+  await page.getByTestId('cancel-layout').click(); await beginEdit(page)
   await page.evaluate(key => localStorage.setItem(key, 'external update'), FREEFORM_KEY)
   await page.getByTestId('save-layout').click(); await page.locator('.workspace-feedback').filter({ hasText: 'mudou em outra sessão' }).waitFor()
   assert.equal(await page.evaluate(key => localStorage.getItem(key), FREEFORM_KEY), 'external update')
@@ -444,9 +519,16 @@ export async function freeformPluginSmoke(page: Page) {
   const source = structuredClone(DEFAULT_FREEFORM); source.reference.main = await dimensions(page)
   source.placements = projectRegion(DEFAULT_FREEFORM, 'main', source.reference.main, false).placements
   source.placements = source.placements.map(p => p.id === 'properties' ? { ...p, x: 14000.125 } : p)
-  await preview(page, source)
+  const inventory = await page.evaluate(() => window.geppio!.plugins.list()); assert.ok(inventory.ok)
+  const current = parseWorkbench((await page.evaluate(key => localStorage.getItem(key), FREEFORM_KEY))!, widgetRegistry(inventory.value.plugins))
+  const contributions = current.placements.filter(p => current.organization.views.find(v => v.id === p.id)?.typeId.startsWith('plugin:'))
+  // This workload deliberately puts all host fixtures in Main. Its disposable
+  // bar metadata must describe that layout instead of retaining Sidebar members.
+  const fixtureOrganization = { ...current.organization, bars: adoptLayout(source).organization.bars, activeBar: 'home' }
+  await preview(page, { ...source, organization: fixtureOrganization, placements: [...source.placements, ...contributions.map((p, i) => ({ ...p, x: 14500 + i * 400, y: 0 }))] } as WorkbenchSnapshot)
   const form = page.getByRole('textbox', { name: 'Nome de exemplo', exact: true })
-  await form.evaluate(e => { (e as HTMLInputElement).value = 'formulário fora da tela' })
+  await page.locator('[data-surface="main"]').evaluate(e => { e.scrollLeft = e.scrollWidth }); await settle(page)
+  await form.fill('formulário fora da tela')
   await page.locator('[data-surface="main"]').evaluate(e => { e.scrollLeft = e.scrollWidth }); await settle(page)
   await expansion(page, false); await expansion(page, true)
   assert.equal(await form.inputValue(), 'formulário fora da tela'); assert.deepEqual(page.workers(), workers)

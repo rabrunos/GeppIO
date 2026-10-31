@@ -1,0 +1,125 @@
+/* @section theme-palettes */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-canvas: #12161e;
+  --color-region: #1a1f29;
+  --color-workspace-surface: #141922;
+  --color-surface: #232a35;
+  --color-elevated: #2a323f;
+  --color-status-surface: #181d26;
+  --color-text: #f8f8f2;
+  --editor-banner-background: #2b3d56;
+  --editor-banner-foreground: #f8f8f2;
+  --editor-banner-muted: #c1cede;
+  --editor-banner-control: #354d6a;
+  --editor-banner-hover: #425e7e;
+  --composition-sidebar: #546173;
+  --composition-bottom: #7e8b9e;
+  --composition-main: #aab6c7;
+  --color-text-muted: #acb7c9;
+  --color-border: #3c485b;
+  --color-input: #1a202b;
+  --color-input-border: #5c6e89;
+  --color-accent: #f49a56;
+  --color-accent-soft: #382c27;
+  --color-accent-border: #775841;
+  --color-success: #65cba1;
+  --primary-foreground: #161b23;
+  --primary-border: #d48750;
+  --primary-hover: #ffad6c;
+  --breadcrumb-muted: #8997ae;
+  --notification-background: #f49a56;
+  --destructive: #f38a96;
+  --input-shadow-tint: #0000;
+  --typescript-background: #335b89;
+  --ring: #a4bff0;
+  --chrome-hover: #303947;
+  --brand-soft-hover: #46332c;
+  --control-hover: #313c4d;
+  --menu-hover: #354153;
+  --placeholder: #9aa8bd;
+  --notes-background: #222d40;
+  --notes-border: #3b4c68;
+  --notes-decoration: #2b3c59;
+  --notes-decoration-soft: #31486e99;
+  --icon-background: #2c3b56;
+  --calendar-background: #203432;
+  --calendar-border: #36544d;
+  --calendar-decoration: #294a42;
+  --calendar-decoration-soft: #365b4e80;
+  --calendar-icon-background: #2c4b40;
+  --calendar-icon-foreground: #78d4ac;
+  --calendar-muted: #a5bdba;
+  --compact-border: #3c485b;
+  --compact-background: #1a202b;
+  --compact-foreground: #afbdd0;
+  --terminal-icon-background: #303c54;
+  --terminal-icon-ring: #232a35;
+  --status-foreground: #aab6c9;
+  --status-icon: #9eb9e9;
+  --status-divider: #3c485b;
+  --shadow-panel-side: 10px 2px 30px -8px #0009;
+  --shadow-panel-up: 0 -12px 28px -9px #00000080;
+  --art-blob-start: #293344;
+  --art-blob-end: #273040;
+  --art-chat-start: #3c5276;
+  --art-chat-end: #354969;
+  --art-warm-start: #74513b;
+  --art-warm-end: #694933;
+  --art-line-start: #a4bff0;
+  --art-line-end: #91b0e4;
+  --art-accent-start: #ffb174;
+  --art-accent-end: #f49a56;
+  --art-frame-start: #3b4c66;
+  --art-frame-end: #34445e;
+  --art-dot: #35445d;
+  --art-dot-soft: #2f3d53;
+  --art-blue: #8baeea;
+  --art-highlight: #9ab8eb;
+  --art-paper: #263143;
+  --art-gutter: #526789;
+}
+
+:root[data-theme="dark"]
+  :is(.profile-menu, .workspace-popover, .editor-panel, .profile-dialog) {
+  --color-surface: var(--color-elevated);
+  box-shadow: 0 16px 44px -12px #000000a6;
+}
+
+:root[data-theme="dark"] .send-button,
+:root[data-theme="dark"] .notification-badge {
+  color: var(--primary-foreground);
+}
+
+:root[data-theme="dark"] :is(button, input):focus-visible {
+  outline-color: var(--ring);
+}
+
+:root[data-theme="dark"] .profile-dialog::backdrop {
+  background: #06090f7a;
+}
+
+:root {
+  --breadcrumb-muted: #a5afbd;
+  --notification-background: #ee8c33;
+  --destructive: #e81123;
+  --destructive-fill: #d72c42;
+  --destructive-foreground: #fff;
+  --input-shadow-tint: #bfd0f005;
+  --primary-border: #e68435;
+  --primary-hover: #e67720;
+  --typescript-background: #2c68b8;
+  --background: var(--color-workspace-surface);
+  --foreground: var(--color-text);
+  --card: var(--color-surface);
+  --card-foreground: var(--color-text);
+  --primary: var(--color-accent);
+  --primary-foreground: #fff;
+  --muted: var(--color-input);
+  --muted-foreground: var(--color-text-muted);
+  --ring: var(--color-text);
+  --shadow-panel-side: 10px 0 24px -9px #132b4e3d;
+  --shadow-panel-up: 0 -10px 24px -9px #132b4e33;
+  --floating-radius: 14px;
+}
+/* @endsection */

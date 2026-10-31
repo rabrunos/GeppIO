@@ -12,3 +12,4 @@ input[type="checkbox"] { accent-color: var(--accent); }
 .development-settings .import-layout { display: inline-block; margin: 12px; }
 .presentation-options { margin-top: 16px; flex-wrap: wrap; }
 .plugin-widgets { padding: 0 0 9px; }.plugin-widget { min-width: min(240px,100%); }
+.host-development-settings { width: min(680px, calc(100vw - 22px)); }

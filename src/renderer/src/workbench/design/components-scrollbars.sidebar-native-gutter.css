@@ -1,0 +1,7 @@
+/* @section sidebar-native-gutter */
+@supports selector(::-webkit-scrollbar) {
+  .sidebar-region {
+    padding-right: 0;
+  }
+}
+/* @endsection */

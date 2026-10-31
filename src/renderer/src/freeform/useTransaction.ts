@@ -1,60 +1,151 @@
 import { useRef, useState } from 'react'
-import { DEFAULT_FREEFORM, FREEFORM_KEY, POLICY } from '../../../shared/freeform/policy.ts'
-import { parseFreeform } from '../../../shared/freeform/schema.ts'
+import { POLICY } from '../../../shared/freeform/policy.ts'
 import { settleSnapshot } from '../../../shared/freeform/settlement.ts'
 import { convertHistorical, importFreeform } from '../../../shared/freeform/migration.ts'
-import { readFreeform, writeFreeform } from '../../../shared/freeform/storage.ts'
 import type { HistoricalChoice } from '../../../shared/freeform/storage.ts'
 import type { Snapshot } from '../../../shared/freeform/types.ts'
+import { adoptLayout, initialWorkbench, widgetRegistry, WORKBENCH_KEY } from '../../../shared/workbench/model.ts'
+import type { Composition, Registry, SessionDraft, SessionSlot, WorkbenchSnapshot } from '../../../shared/workbench/model.ts'
+import { parseWorkbench, serializeWorkbench } from '../../../shared/workbench/codec.ts'
+import { readWorkbench, writeWorkbench } from '../../../shared/workbench/storage.ts'
+import { EditHistory } from '../../../shared/workbench/history.ts'
+import { configureBar, resizePair } from '../../../shared/workbench/commands.ts'
+import type { ResizePair } from '../../../shared/workbench/commands.ts'
+import type { UserBar } from '../../../shared/workbench/model.ts'
+import type { Surface } from '../../../shared/freeform/types.ts'
 
-export function useTransaction() {
+export function useTransaction(registry: Registry = widgetRegistry()) {
   const [initial] = useState(() => {
-    try { const read = readFreeform(localStorage); return { ...read, snapshot: settleSnapshot(read.snapshot) } }
-    catch { return readFreeform({ getItem() { throw new Error('Unavailable') }, setItem() {} }) }
+    try { const read = readWorkbench(localStorage, registry); return { ...read, snapshot: settleSnapshot(read.snapshot), normalizationPending: read.snapshot.placements.some(p => p.width !== p.preferred.width || p.height !== p.preferred.height) } }
+    catch { return { ...readWorkbench({ getItem() { throw new Error('Unavailable') }, setItem() {} }, registry), normalizationPending: false } }
   })
   const committed = useRef(initial.snapshot), observed = useRef(initial.raw), epoch = useRef(0)
   const [snapshot, setSnapshot] = useState(initial.snapshot), live = useRef(snapshot)
-  const [editing, setEditing] = useState(false), [recovery, setRecovery] = useState(initial.recovery), [message, setMessage] = useState(initial.message)
-  function put(next: Snapshot) { epoch.current++; live.current = next; setSnapshot(next) }
+  const [editing, setEditing] = useState(false), editingRef = useRef(false)
+  const [recovery, setRecovery] = useState(initial.recovery), [message, setMessage] = useState(initial.message)
+  const [slots, setSlotState] = useState<SessionSlot[]>([]), slotsRef = useRef(slots), formatId = useRef<string | null>(null)
+  const formatSource = useRef<SessionDraft['formatSource']>(null)
+  const formatMode = useRef<SessionDraft['formatMode']>(null)
+  const checkpoint = useRef<SessionDraft>({ snapshot: initial.snapshot, slots: [], formatId: null })
+  const history = useRef(new EditHistory()), [, notify] = useState(0), saving = useRef(false)
+  const motionRevision = useRef(0)
+  const motion = useRef({ duration: 240, entering: false })
+  const normalizationPending = useRef(initial.normalizationPending)
+  function current(): SessionDraft { return { snapshot: live.current, slots: slotsRef.current, formatId: formatId.current, formatMode: formatMode.current, formatSource: formatSource.current } }
+  function refresh() { notify(value => value + 1) }
+  function put(next: Snapshot | WorkbenchSnapshot) {
+    const value: WorkbenchSnapshot = 'organization' in next ? next as WorkbenchSnapshot : { ...next, organization: live.current.organization }
+    epoch.current++; live.current = value; setSnapshot(value)
+  }
+  function apply(draft: SessionDraft) { put(draft.snapshot); slotsRef.current = draft.slots; setSlotState(draft.slots); formatId.current = draft.formatId; formatMode.current = draft.formatMode ?? null; formatSource.current = draft.formatSource ?? null; refresh() }
+  function action(next: WorkbenchSnapshot, nextSlots = slotsRef.current, nextFormat = formatId.current, nextSource = formatSource.current, animation = { duration: 240, entering: false }, nextMode = formatMode.current) {
+    const before = current(), after = { snapshot: next, slots: nextSlots, formatId: nextFormat, formatMode: nextMode, formatSource: nextSource }
+    if (editingRef.current && !history.current.active) history.current.record(before, after)
+    motionRevision.current++; motion.current = animation
+    apply(after)
+  }
   function begin(next: Snapshot) {
-    if (recovery && !editing) return
-    put(settleSnapshot(structuredClone(next))); setEditing(true)
-    setMessage(import.meta.env.DEV ? 'Arraste pelo título ou use as setas (1px; Shift: 10px). Salve ou cancele a prévia.' : 'Arraste pelo título ou pelas bordas. Salve ou cancele a prévia.')
+    if (recovery && !editingRef.current) return
+    if (!editingRef.current) {
+      history.current.clear(); checkpoint.current = { snapshot: structuredClone(committed.current), slots: [], formatId: null }
+      editingRef.current = true; setEditing(true)
+    }
+    put(settleSnapshot(structuredClone(next))); setMessage('Edite a composição. Salvar edição confirma um checkpoint; Concluir encerra a sessão.')
   }
   function cancel() {
-    put(structuredClone(committed.current)); setEditing(false); setRecovery(initial.recovery && observed.current === initial.raw)
-    setMessage(initial.recovery && observed.current === initial.raw ? initial.message : 'Edição cancelada. A composição salva foi mantida.')
+    epoch.current++; history.current.clear(); apply({ ...structuredClone(checkpoint.current), slots: [], formatId: null, formatSource: null })
+    editingRef.current = false; setEditing(false); setRecovery(initial.recovery && observed.current === initial.raw)
+    setMessage(initial.recovery && observed.current === initial.raw ? initial.message : 'Edição cancelada. Último checkpoint confirmado restaurado.')
   }
-  async function save(next: Snapshot) {
+  async function commit(next: WorkbenchSnapshot, conclude: boolean, retainSlots: boolean, successMessage?: string) {
+    if (saving.current || history.current.active) return false
     const ticket = ++epoch.current
-    try { next = parseFreeform(JSON.stringify(settleSnapshot(next))) } catch { setMessage('Layout inválido ou sem espaço. Os dados salvos foram preservados.'); return }
+    let validated: WorkbenchSnapshot
+    try { validated = parseWorkbench(serializeWorkbench({ ...next, ...settleSnapshot(next) }, registry), registry) }
+    catch { setMessage('Composição inválida ou sem espaço. A prévia e os dados salvos foram preservados.'); return false }
+    saving.current = true; refresh()
     try {
-      const result = await navigator.locks.request(FREEFORM_KEY, () => ticket === epoch.current
-        ? writeFreeform(localStorage, next, observed.current) : { raw: observed.current, error: 'Gravação cancelada.' })
-      if (ticket !== epoch.current) return
-      if (result.error) { setMessage(result.error); return }
-      observed.current = result.raw; committed.current = structuredClone(next); put(next)
-      setRecovery(false); setEditing(false); setMessage('Layout livre salvo. Todos os layouts anteriores continuam preservados.')
-    } catch { if (ticket === epoch.current) setMessage('Não foi possível obter acesso seguro ao armazenamento. A prévia foi preservada.') }
+      const result = await navigator.locks.request(WORKBENCH_KEY, () => ticket === epoch.current
+        ? writeWorkbench(localStorage, validated, registry, observed.current, observed.current === null ? initial.previous : undefined)
+        : { raw: observed.current, error: 'Gravação cancelada.' })
+      if (ticket !== epoch.current) return false
+      if (result.error) { setMessage(result.error); return false }
+      observed.current = result.raw; committed.current = structuredClone(validated)
+      normalizationPending.current = false
+      checkpoint.current = { snapshot: structuredClone(validated), slots: structuredClone(slotsRef.current), formatId: formatId.current, formatMode: formatMode.current, formatSource: structuredClone(formatSource.current) }
+      put(validated); setRecovery(false)
+      if (!retainSlots) { slotsRef.current = []; setSlotState([]); formatId.current = null; formatMode.current = null; formatSource.current = null }
+      if (conclude) { editingRef.current = false; setEditing(false); history.current.clear() }
+      setMessage(successMessage ?? (conclude ? 'Composição salva. Edição concluída.' : 'Edição salva. O checkpoint de Cancelar foi atualizado.')); return true
+    } catch { if (ticket === epoch.current) setMessage('Não foi possível obter acesso seguro ao armazenamento. Sua prévia foi preservada.'); return false }
+    finally { saving.current = false; refresh() }
   }
   function preview(next: Snapshot, text: string) {
-    put(settleSnapshot(next)); setEditing(true); setMessage(text)
-  }
-  function resetPreview() { preview(structuredClone(DEFAULT_FREEFORM), 'Composição inicial somente na prévia. Salvar confirma; Cancelar preserva os dados anteriores.') }
-  function historical(choice: HistoricalChoice) {
-    try { preview(convertHistorical(choice.raw, choice.kind), 'Conversão somente na prévia. Confira posições e mínimos em pixels; Salvar adota sem alterar o original.') }
-    catch { setMessage('Não foi possível converter este layout com os mínimos atuais. Original preservado; importe uma cópia livre válida ou use outra prévia.') }
+    history.current.clear(); checkpoint.current = { snapshot: structuredClone(committed.current), slots: [], formatId: null }
+    put(settleSnapshot('organization' in next ? next : adoptLayout(next))); editingRef.current = true; setEditing(true); setMessage(text)
   }
   async function importFile(file?: File) {
-    if (!file || editing) return
+    if (!file || editingRef.current) return
     const ticket = ++epoch.current
-    if (file.size > POLICY.maxBytes) { setMessage('O layout deve ter até 64 KiB.'); return }
+    if (file.size > POLICY.maxBytes) { setMessage('A composição deve ter até 64 KiB.'); return }
     try {
-      const text = await file.text()
-      if (ticket !== epoch.current) return
-      preview(importFreeform(text), 'Layout importado somente na prévia. Salve para confirmar ou cancele; os dados anteriores continuam preservados.')
-    } catch { if (ticket === epoch.current) setMessage('Arquivo inválido ou incompatível. Sua composição e os dados antigos foram preservados.') }
+      const text = await file.text(); if (ticket !== epoch.current) return
+      let next: WorkbenchSnapshot
+      try { next = parseWorkbench(text, registry) } catch { next = adoptLayout(importFreeform(text)) }
+      preview(next, 'Composição importada na prévia. Salvar adota sem alterar originais.')
+    } catch { if (ticket === epoch.current) setMessage('Arquivo incompatível. Dados anteriores preservados.') }
   }
-  return { snapshot, live, editing, recovery, message, setMessage, put, begin, cancel, save, resetPreview, importFile, historical, choices: initial.choices }
+  const withOrganization = (next: Snapshot): WorkbenchSnapshot => ({ ...next, organization: ('organization' in next ? next as WorkbenchSnapshot : live.current).organization })
+  return { snapshot, live, editing, recovery, message, setMessage, put, begin, cancel, action, slots,
+    saving: saving.current, formatId: formatId.current, formatMode: formatMode.current, formatSource: formatSource.current, canUndo: history.current.canUndo, canRedo: history.current.canRedo, gestureActive: history.current.active, motionRevision: motionRevision.current, motion: motion.current,
+    undo() { const next = history.current.undo(current()); if (next) { motionRevision.current++; motion.current = { duration: 240, entering: false }; apply(next) } },
+    redo() { const next = history.current.redo(current()); if (next) { motionRevision.current++; motion.current = { duration: 240, entering: false }; apply(next) } },
+    beginGesture() { epoch.current++; history.current.begin(current()); refresh() },
+    finishGesture() { history.current.finish(current()); refresh() },
+    cancelGesture() { const before = history.current.abort(); if (before) apply(before); refresh() },
+    save: (next: Snapshot) => commit(withOrganization(next), true, false),
+    saveEditing: (next: Snapshot = live.current) => commit(withOrganization(next), false, true),
+    conclude: (next: Snapshot = live.current) => commit(withOrganization(next), true, false),
+    hasPending(next: WorkbenchSnapshot = live.current) {
+      const fingerprint = (value: WorkbenchSnapshot) => JSON.stringify({ reference: value.reference, placements: value.placements, organization: value.organization })
+      return fingerprint(next) !== fingerprint(committed.current)
+    },
+    async saveComposition(record: Composition) {
+      if (!editingRef.current) return false
+      const before = structuredClone(current()), next = { ...live.current, organization: { ...live.current.organization, compositions: [...live.current.organization.compositions, record] } }
+      const ok = await commit(next, false, true, 'Composição salva.')
+      if (ok) { history.current.record(before, current()); refresh() }
+      return ok
+    },
+    async commitOrganization(next: WorkbenchSnapshot) {
+      if (editingRef.current) { action(next); return true }
+      if (normalizationPending.current) { setMessage('Confirme a composição em Editar antes de alterar as barras. Os dados anteriores foram preservados.'); return false }
+      if (recovery) { setMessage('Escolha e confirme uma prévia explícita antes de alterar as barras.'); return false }
+      if (JSON.stringify(next.placements) !== JSON.stringify(committed.current.placements)) return false
+      return commit(next, false, true, 'Preferência salva.')
+    },
+    async commitPair(intent: ResizePair) {
+      if (editingRef.current || intent.delta === 0) return false
+      if (normalizationPending.current) { setMessage('Confirme a composição em Editar antes de redimensionar pares. Os dados anteriores foram preservados.'); return false }
+      if (recovery || JSON.stringify(live.current) !== JSON.stringify(committed.current)) return false
+      const next = resizePair(committed.current, registry, intent)
+      if (!next) return false
+      return commit(next, false, true, 'Redimensionamento salvo.')
+    },
+    async saveBar(bar: UserBar, surface: Surface, disabled?: ReadonlySet<string>) {
+      if (normalizationPending.current) { setMessage('Confirme a composição em Editar antes de alterar as barras. Os dados anteriores foram preservados.'); return false }
+      if (editingRef.current || recovery || JSON.stringify(live.current) !== JSON.stringify(committed.current)) return false
+      const next = configureBar(committed.current, registry, bar, surface, disabled)
+      if (!next) { setMessage('Barra incompatível ou sem espaço. Os dados anteriores foram preservados.'); return false }
+      return commit(next, false, true, 'Barra salva.')
+    },
+    resetPreview() { preview(initialWorkbench(), 'Composição inicial na prévia. Salvar confirma; Cancelar preserva os dados anteriores.') },
+    adoptPrevious() { try { preview(adoptLayout(importFreeform(initial.previous!)), 'Composição livre anterior na prévia; Salvar adota sem alterar o original.') } catch { setMessage('Composição anterior inválida; bytes preservados.') } },
+    previous: initial.previous, importFile,
+    historical(choice: HistoricalChoice) {
+      try { preview(adoptLayout(convertHistorical(choice.raw, choice.kind)), 'Conversão somente na prévia. Salvar adota sem alterar o original.') }
+      catch { setMessage('Não foi possível converter este layout com os mínimos atuais. Original preservado; importe uma cópia livre válida ou use outra prévia.') }
+    }, choices: initial.choices
+  }
 }
 export type Transaction = ReturnType<typeof useTransaction>

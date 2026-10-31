@@ -2,6 +2,14 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.13] — 2026-10-30
+
+- Replace the old shell with React workbench presentation sourced from the approved V1.141 design packet, retaining the continuous placement engine and App-owned plugin runtime. Add the context bar, user rail, editor dock, real plugin inventory manager and host composition/catalog surfaces.
+- Introduce a separate bounded host workbench envelope with qualified type/model/view identities, independent bar memberships/positions, saved compositions and explicit legacy adoption. Keep historical layout bytes read-only and retain Web Locks, byte CAS and epoch cancellation.
+- Add editing checkpoints, Conclude, whole-intention session history and a distinct bilateral resizePair command. Keep transient format slots outside persisted executable identities.
+- Fit released viewport space continuously without changing saved preferences; preserve fixed clearance and expose real geometric feasibility consistently in catalog destinations and drag targets.
+- Add only the owner-authorized fixed minimize/maximize/close bridge, guarded by the exact main-frame origin and argument validation, with no plugin SDK expansion.
+
 ## [0.1.0-alpha.12] — 2026-10-16
 
 - Settle actual widget geometry and size preferences after each completed pointer gesture and discrete development keyboard action. Keep held-pointer reversal, per-gesture cancellation, global Cancel and explicit-only persistence; accept existing freeform v1 files without reviving stale compression preferences.

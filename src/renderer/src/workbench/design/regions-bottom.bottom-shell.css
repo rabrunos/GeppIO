@@ -1,0 +1,33 @@
+/* @section bottom-shell */
+.bottom-region {
+  height: var(--bottom-track);
+  z-index: 35;
+  max-height: 100%;
+  inset: auto var(--catalog-track) 0 var(--sidebar-track);
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  padding-inline: var(--bottom-inset-start) var(--bottom-inset-end);
+  background: 0 0;
+  grid-area: auto;
+  align-self: end;
+  position: absolute;
+  overflow: hidden;
+}
+
+.bottom-surface {
+  height: var(--bottom-height);
+  border: 1px solid var(--color-border);
+  padding: var(--space-y) var(--space-x);
+  grid-template-columns: minmax(0, var(--widget-start-size, 639fr)) minmax(
+      0,
+      var(--widget-end-size, 689fr)
+    );
+  gap: var(--space-y) var(--space-x);
+  background: var(--color-region);
+  border-bottom-color: #0000;
+  border-radius: 17px 17px 0 0;
+  display: grid;
+  overflow: hidden;
+}
+/* @endsection */

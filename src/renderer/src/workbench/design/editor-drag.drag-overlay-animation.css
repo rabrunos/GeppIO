@@ -1,0 +1,105 @@
+/* @section drag-overlay-animation */
+.layout-drag-layer[popover] {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow: visible;
+  background: transparent;
+  pointer-events: none;
+  color: var(--color-text);
+}
+
+.layout-drag-layer::backdrop {
+  background: transparent;
+  pointer-events: none;
+}
+
+.layout-drag-label {
+  position: fixed;
+  z-index: 1;
+  max-width: calc(100vw - 16px);
+  padding: 6px 10px;
+  border: 1px solid var(--color-accent-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-panel-side);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.layout-drag-label[hidden], .layout-drag-origin[hidden] {
+  display: none !important;
+}
+.layout-drag-origin {
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 0;
+  flex-grow: 0;
+  flex-shrink: 0;
+  border: 1px dashed color-mix(in srgb, var(--color-accent) 35%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 2%, transparent);
+  pointer-events: none;
+}
+:is(.sidebar-region, .main-region, .bottom-surface):has(> .layout-drag-origin:not([hidden])) > [data-empty-region] {
+  display: none !important;
+}
+
+.layout-settle-slot {
+  min-width: 0;
+  min-height: 0;
+  flex: 0 0 var(--layout-slot-height);
+  pointer-events: none;
+}
+
+.layout-drag-node {
+  will-change: transform;
+  position: fixed !important;
+  inset: auto !important;
+  left: 0 !important;
+  top: 0 !important;
+  width: var(--layout-drag-width) !important;
+  height: var(--layout-drag-height) !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  transform: translate3d(var(--layout-drag-x), var(--layout-drag-y), 0);
+  transform-origin: top left;
+  box-shadow: 0 18px 48px -14px rgb(0 0 0 / 0.32);
+  outline: 1px solid var(--color-accent-border);
+  pointer-events: none !important;
+  user-select: none;
+}
+
+.layout-drag-node * {
+  pointer-events: none !important;
+}
+
+[data-layout-dragging],
+[data-layout-dragging] * {
+  cursor: grabbing !important;
+  user-select: none !important;
+}
+
+[data-layout-dragging]
+  :is(
+    .widget-width-splitter,
+    .widget-width-edge,
+    .widget-height-splitter,
+    .widget-height-edge,
+    .widget-row-affordance,
+    .widget-row-edge
+  ) {
+  visibility: hidden;
+}
+/* @endsection */

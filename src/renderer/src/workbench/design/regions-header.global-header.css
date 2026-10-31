@@ -1,0 +1,149 @@
+/* @section global-header */
+.global-header {
+  z-index: 4;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-app-region: drag;
+  app-region: drag;
+  background: var(--color-region);
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  display: grid;
+  position: relative;
+}
+
+.source-art {
+  flex: none;
+  display: block;
+}
+
+.avatar-img {
+  object-fit: cover;
+  border-radius: 50%;
+  width: 30px;
+  height: 31px;
+  display: block;
+}
+
+.chatgpt-img {
+  object-fit: contain;
+  border-radius: 11px;
+  width: 55px;
+  height: 55px;
+  display: block;
+}
+
+.breadcrumbs {
+  justify-self: start;
+  align-items: center;
+  gap: var(--space-x);
+  max-width: 100%;
+  padding-left: var(--space-x);
+  min-width: 0;
+  font-size: var(--type-ui);
+  white-space: nowrap;
+  display: flex;
+}
+
+.breadcrumbs .breadcrumb-root {
+  width: 23px;
+  height: 23px;
+  display: block;
+}
+
+.breadcrumbs .chevron {
+  color: var(--breadcrumb-muted);
+  width: 14px;
+  height: 14px;
+}
+
+.breadcrumb-current {
+  gap: var(--space-x);
+  align-items: center;
+  min-width: 0;
+  font-weight: 700;
+  display: flex;
+}
+
+.breadcrumb-current span {
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.top-actions {
+  align-items: center;
+  gap: var(--space-x);
+  padding-right: var(--space-x);
+  height: 100%;
+  display: flex;
+}
+
+.top-icon {
+  --icon-button-hover: var(--chrome-hover);
+  position: relative;
+}
+
+.top-separator {
+  background: var(--color-border);
+  flex: none;
+  width: 1px;
+  height: 18px;
+}
+
+.notification-badge {
+  color: #fff;
+  background: var(--notification-background);
+  border-radius: 50%;
+  place-items: center;
+  width: 13px;
+  height: 13px;
+  font-size: 8px;
+  display: grid;
+  position: absolute;
+  top: 3px;
+  right: 3px;
+}
+
+.profile {
+  align-items: center;
+  gap: var(--space-x);
+  font-size: var(--type-meta);
+  white-space: nowrap;
+  display: flex;
+}
+
+.avatar {
+  border-radius: 50%;
+  width: 30px;
+  height: 31px;
+  overflow: hidden;
+}
+
+.profile .icon {
+  width: 15px;
+  height: 15px;
+}
+
+.window-controls {
+  align-items: center;
+  gap: 1px;
+  height: 100%;
+  margin-left: -9px;
+  display: flex;
+}
+
+.window-control {
+  --icon-button-hover: var(--chrome-hover);
+}
+
+.window-control .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.window-control.close:hover,
+.window-control.close:focus-visible {
+  background: var(--destructive);
+  color: #fff;
+}
+/* @endsection */

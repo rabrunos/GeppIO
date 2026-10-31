@@ -1,9 +1,12 @@
 import { _electron as electron } from 'playwright'
+import { settle as settleShell, portugueseFixture } from './freeform-smoke.ts'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import assert from 'node:assert/strict'
-import { DEFAULT_FREEFORM, FREEFORM_KEY } from '../src/shared/freeform/policy.ts'
+import { DEFAULT_FREEFORM } from '../src/shared/freeform/policy.ts'
+import { adoptLayout, widgetRegistry, WORKBENCH_KEY } from '../src/shared/workbench/model.ts'
+import { serializeWorkbench } from '../src/shared/workbench/codec.ts'
 
 /** Disposable, built Windows renderer; opt-in diagnostics never extend the native bridge. */
 const temporary = await mkdtemp(join(tmpdir(), 'geppio-smoke-performance-'))
@@ -21,6 +24,7 @@ function distribution(values: number[]) {
 try {
   application = await electron.launch({ args: ['.', ...(process.argv.includes('--scale125') ? ['--force-device-scale-factor=1.25'] : [])], env, timeout: 30000 })
   const page = await application.firstWindow(); await page.getByTestId('edit-layout').waitFor()
+  await portugueseFixture(page)
   await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setContentSize(1600, 1100))
   await page.waitForFunction(() => document.querySelector<HTMLElement>('[data-surface="main"]')!.clientHeight >= 620)
   const settle = () => page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))))
@@ -37,10 +41,14 @@ try {
   const size = await page.locator('[data-surface="main"]').evaluate(e => ({ width: (e as HTMLElement).clientWidth, height: (e as HTMLElement).clientHeight }))
   assert.ok(Math.abs(size.width - 960) <= 1 && Math.abs(size.height - 620) <= 1, JSON.stringify(size))
   const fixture = structuredClone(DEFAULT_FREEFORM); fixture.reference.main = size
-  await page.evaluate(({ key, fixture }) => localStorage.setItem(key, JSON.stringify(fixture)), { key: FREEFORM_KEY, fixture })
+  await page.evaluate(({ key, raw }) => localStorage.setItem(key, raw), { key: WORKBENCH_KEY, raw: serializeWorkbench(adoptLayout(fixture), widgetRegistry()) })
   await page.reload(); await page.getByTestId('edit-layout').waitFor()
   await page.waitForFunction(() => Number(document.querySelector('[aria-label="Largura da Sidebar"]')!.getAttribute('aria-valuenow')) > 0)
   await settle(); await page.getByTestId('edit-layout').click(); await settle()
+  await page.locator('.widget-catalog-toggle').click()
+  await page.waitForFunction(() => parseFloat(getComputedStyle(document.querySelector('.workbench')!).getPropertyValue('--catalog-track')) < .01)
+  const workload = await page.locator('[data-surface="main"]').evaluate(e => ({ width: (e as HTMLElement).clientWidth, height: (e as HTMLElement).clientHeight }))
+  assert.deepEqual(workload, size, 'The timed workload must retain the same usable geometry')
   await page.evaluate(() => {
     performance.mark('geppio:profile')
     const profile: Profile = { samples: [], frames: [], pointers: [], commits: [], nextFrames: [], running: true, last: 0 }
@@ -72,9 +80,12 @@ try {
       await page.mouse.move(x + dx, y + dy, { steps: 40 }); await page.mouse.move(x, y, { steps: 40 })
     }
     await page.keyboard.press('Escape'); await page.mouse.up()
+    await settleShell(page)
   }
   const profile = await page.evaluate(() => { const p = (window as unknown as ProfileWindow).freeformProfile; p.running = false; return p })
-  const evidence = { label: process.argv.includes('--baseline') ? 'baseline' : 'corrected', dpr: await page.evaluate(() => devicePixelRatio), viewport: size,
+  const evidence = { label: process.argv.includes('--baseline') ? 'baseline' : 'alpha13', dpr: await page.evaluate(() => devicePixelRatio), viewport: size,
+    environment: { platform: process.platform, runnerNode: process.versions.node,
+      runtime: await application.evaluate(() => ({ electron: process.versions.electron, chromium: process.versions.chrome, node: process.versions.node })) },
     solver: distribution(profile.samples.map(p => p.ms)), frames: distribution(profile.frames),
     solveToDOMCommit: distribution(profile.commits), solveToNextFrame: distribution(profile.nextFrames),
     pointerIntervals: distribution(profile.pointers.slice(1).map((p, i) => p - profile.pointers[i]!)),

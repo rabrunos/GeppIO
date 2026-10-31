@@ -1,31 +1,9 @@
 @import "tailwindcss";
 
-@theme inline {
-  --color-app: var(--bg);
-  --color-surface: var(--surface);
-  --color-ink: var(--ink);
-  --color-muted: var(--muted);
-  --color-accent: var(--accent);
-  --color-line: var(--line);
-  --font-sans: "Segoe UI", system-ui, sans-serif;
-}
-:root { color-scheme: dark; font-family: var(--font-sans, "Segoe UI", system-ui, sans-serif); }
+@theme inline { --font-sans: "Segoe UI", Arial, sans-serif; }
 * { box-sizing: border-box; }
 body { margin: 0; }
-button, select, input { font: inherit; }
-button, select { cursor: pointer; }
-button:disabled, input:disabled, select:disabled { cursor: default; opacity: .45; }
-button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-button { border: 0; background: none; color: inherit; }
-.workbench {
-  --bg: #101317; --surface: #171b20; --raised: #1e232a; --ink: #e4e9ef; --muted: #88929e;
-  --line: #2b323b; --accent: #9cd6b3; --accent-ink: #12281b; --warning: #e5b374;
-  color: var(--ink); background: var(--bg); height: 100dvh; display: flex; flex-direction: column;
-  font-size: 13px; overflow: hidden;
-}
-.workbench[data-theme="light"] {
-  color-scheme: light; --bg: #edf0f2; --surface: #fff; --raised: #f5f7f9; --ink: #273440;
-  --muted: #687682; --line: #d8dfe4; --accent: #28744d; --accent-ink: #fff; --warning: #a56523;
-}
-
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+button, input, select, textarea { font: inherit; }
+button { color: inherit; cursor: pointer; }
+button:disabled { cursor: default; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }

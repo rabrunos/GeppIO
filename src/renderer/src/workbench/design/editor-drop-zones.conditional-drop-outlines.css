@@ -1,0 +1,40 @@
+/* @section conditional-drop-outlines */
+.layout-edit-zone {
+  position: absolute;
+  z-index: 60;
+  pointer-events: none;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-accent) 3%, transparent);
+  transition: background-color 140ms ease;
+}
+
+.layout-edit-zone > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  stroke: color-mix(in srgb, var(--color-accent) 50%, transparent);
+  shape-rendering: geometricPrecision;
+  transition: stroke 140ms ease;
+}
+
+.layout-edit-zone[data-over] {
+  background: color-mix(in srgb, var(--color-accent) 7%, transparent);
+}
+
+.layout-edit-zone[data-over] > svg {
+  stroke: color-mix(in srgb, var(--color-accent) 65%, transparent);
+}
+
+.layout-edit-zone[hidden] {
+  display: none !important;
+}
+
+.layout-rail-zone {
+  border-radius: 12px;
+}
+
+.workbench:not([data-sidebar-bar-dragging]) .layout-rail-zone {
+  display: none !important;
+}
+/* @endsection */

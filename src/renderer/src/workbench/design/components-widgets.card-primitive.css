@@ -1,0 +1,67 @@
+/* @section card-primitive */
+.ui-card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--card-radius);
+  background: var(--card);
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+}
+
+/* Author-owned visual chrome only; independent of region, presence or lifecycle.
+ * Keep the transparent 1px box so editing geometry does not jump. */
+.widget[data-widget-appearance="seamless"] {
+  background: transparent;
+  border-color: transparent;
+  border-radius: 0;
+}
+.widget[data-widget-appearance="seamless"]:not([data-swap-selected]) {
+  box-shadow: none;
+}
+/* Editing always reveals the frame, without changing its box or background. */
+[data-layout-editing] .widget[data-widget-appearance="seamless"] {
+  border-color: var(--color-border);
+  border-radius: var(--card-radius);
+}
+/* Demo content uses the common widget frame and button/scroll primitives. */
+.widget.seamless-control-widget {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.seamless-control-widget > .demo-widget-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.seamless-actions { display: grid; gap: var(--space-y); }
+.seamless-action {
+  display: flex;
+  align-items: center;
+  gap: var(--space-x);
+  width: 100%;
+  min-height: 40px;
+  padding: var(--space-y) var(--space-x);
+  background: var(--color-input);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  text-align: left;
+  font-size: 12px;
+  line-height: 18px;
+}
+.seamless-action:hover { background: var(--control-hover); }
+.seamless-action > .icon { width: 18px; height: 18px; flex: none; color: var(--color-text-muted); }
+.seamless-action > span:not(.demo-chip) { min-width: 0; overflow-wrap: anywhere; }
+.seamless-action kbd { margin-left: auto; font: inherit; color: var(--color-text-muted); font-size: 10px; white-space: nowrap; }
+.seamless-control-widget .demo-branches { gap: var(--space-y); }
+.seamless-control-widget .demo-branches label {
+  min-height: 40px;
+  padding: var(--space-y) var(--space-x);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-input);
+}
+.seamless-control-widget .demo-branches label:hover { background: var(--control-hover); }
+.seamless-control-widget .demo-branches label:has(input:checked) { background: var(--color-accent-soft); border-color: var(--color-accent-border); }
+.seamless-control-widget .demo-branches label:has(input:focus-visible) { outline: 2px solid var(--ring); outline-offset: -2px; }
+/* @endsection */

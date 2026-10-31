@@ -24,9 +24,11 @@ The compile-time experimental facade is [plugin.d.ts](../../sdk/plugin.d.ts).
 must match the manifest. `reportStatus(text)` exposes bounded lifecycle/background evidence in
 Settings. The host binds identity to the Worker callback, renders text literally and routes only
 published actions back to that Worker. No DOM, HTML, arbitrary CSS, FS/process/native API or
-inter-plugin API is supplied. Plugin widgets appear in a separate strip inside Main; plugin-to-region placement,
-plugin freeform persistence and custom isolated surfaces remain deferred. Issue #29 adds regional
-placement for bundled fixtures only; it does not change this runtime or its authority. Widget surface descriptions
+inter-plugin API is supplied. The alpha.13 host catalog normalizes legacy contributions to
+qualified Main-only, single-view cards using the existing publication/action route. View presence
+and bar membership never activate another Worker. Sidebar/Bottom permissions, appearance and
+custom surface declarations are not added to manifest v1. Issue #29 originally added regional
+placement for bundled fixtures only; the host adapter does not change runtime authority. Widget surface descriptions
 are separate from activate/dispose, allowing future UI adapters without replacing the logic runtime.
 
 Activation, actions and disposal have a 3-second timeout. Exceptions, invalid messages, undeclared

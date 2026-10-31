@@ -1,0 +1,117 @@
+/* @section responsive-shell-widgets */
+@container (max-height:490px) {
+  .assistant-header .icon-tile {
+    width: 52px;
+    height: 52px;
+  }
+  .chatgpt-mark {
+    transform-origin: 0 0;
+    width: 64px;
+    height: 63px;
+    margin-bottom: -11px;
+    margin-right: -12px;
+    transform: scale(0.825);
+  }
+  .assistant-header h2 {
+    font-size: 19px;
+    line-height: 25px;
+  }
+  .assistant-header p {
+    font-size: 12px;
+    line-height: 17px;
+  }
+  .empty-state {
+    top: 85px;
+    bottom: 100px;
+  }
+  .hero-illustration {
+    flex-basis: 170px;
+    width: 272px;
+    height: 170px;
+  }
+  .empty-state h3 {
+    margin-top: var(--space-y);
+    font-size: 17px;
+    line-height: 22px;
+  }
+  .empty-state p {
+    font-size: 13px;
+    line-height: 19px;
+  }
+  .composer {
+    --composer-height: 46px;
+  }
+  .composer input {
+    font-size: 13px;
+  }
+}
+
+@container (max-height:370px) {
+  .hero-illustration {
+    flex-basis: 90px;
+    width: 144px;
+    height: 90px;
+  }
+  .empty-state {
+    top: 87px;
+    bottom: 83px;
+  }
+  .empty-state h3 {
+    font-size: 15px;
+    line-height: 20px;
+  }
+  .empty-state p {
+    margin-top: var(--space-y);
+    font-size: 12px;
+    line-height: 17px;
+  }
+}
+
+@media (max-width: 1350px) {
+  .profile span:not(.avatar),
+  .project-actions .explorer span {
+    display: none;
+  }
+  .tool-button.explorer {
+    width: 36px;
+    padding: 0;
+  }
+  .side-card p {
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 1100px) {
+  .branch,
+  .clean {
+    display: none;
+  }
+  .breadcrumbs,
+  .assistant-header p {
+    font-size: 12px;
+  }
+  .empty-state h3 {
+    font-size: 17px;
+    line-height: 22px;
+  }
+  .empty-state p,
+  .composer input {
+    font-size: 13px;
+  }
+  .compact-header p {
+    font-size: 11px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    scroll-behavior: auto !important;
+  }
+}
+
+@media (max-width: 1020px) {
+  .status-bar .status-clock {
+    display: none;
+  }
+}
+/* @endsection */

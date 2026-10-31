@@ -1,0 +1,36 @@
+/* @section floating-backdrop */
+:root {
+  --peek-backdrop-blur: 2px;
+  --peek-backdrop-tint: #0000000a;
+}
+
+.work-area:before {
+  content: "";
+  inset: calc(-1 * var(--context-bar-height) + 1px) 0 0
+    calc(var(--sidebar-track) + 1px);
+  border-top-left-radius: calc(var(--workspace-corner-radius) - 1px);
+  z-index: 37;
+  pointer-events: none;
+  background: var(--peek-backdrop-tint);
+  -webkit-backdrop-filter: blur(var(--peek-backdrop-blur));
+  backdrop-filter: blur(var(--peek-backdrop-blur));
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.18s,
+    visibility 0s linear 0.18s;
+  position: absolute;
+}
+
+.workbench[data-sidebar-mode="peek"] .work-area:before {
+  opacity: 1;
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .work-area:before {
+    transition-duration: 1ms;
+  }
+}
+/* @endsection */

@@ -1,0 +1,134 @@
+/* @section assistant-variants */
+.assistant-card {
+  overflow: hidden;
+  container-type: size;
+}
+
+.assistant-header {
+  align-items: flex-start;
+  gap: var(--space-x);
+  padding: var(--space-y) var(--space-x) 0;
+  display: flex;
+}
+
+.assistant-header .icon-tile {
+  width: 55px;
+  height: 55px;
+}
+
+.chatgpt-mark {
+  border-radius: 12px;
+  width: 55px;
+  height: 55px;
+  overflow: hidden;
+}
+
+.assistant-header .heading-copy {
+  min-width: 0;
+  padding-top: 1px;
+  padding-right: 26px;
+}
+
+.assistant-header h2 {
+  font-size: var(--type-primary-title);
+  letter-spacing: -0.2px;
+  margin: 0;
+  font-weight: 700;
+  line-height: 27px;
+}
+
+.assistant-header p {
+  font-size: var(--type-ui);
+  margin: 0;
+  line-height: 18px;
+}
+
+.codex .icon-tile {
+  background: var(--icon-background);
+}
+
+.codex .icon-tile .icon {
+  width: 36px;
+  height: 36px;
+}
+
+.empty-state {
+  top: 95px;
+  bottom: 95px;
+  left: var(--space-x);
+  right: var(--space-x);
+  text-align: center;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  display: flex;
+  position: absolute;
+}
+
+.hero-illustration {
+  flex: 0 250px;
+  width: min(400px, 100%);
+  height: 250px;
+  min-height: 60px;
+  display: block;
+  transform: translateY(3px);
+}
+
+.empty-state h3 {
+  margin: var(--space-y) 0 0;
+  font-size: var(--type-empty-title);
+  letter-spacing: -0.55px;
+  flex: none;
+  font-weight: 700;
+  line-height: 24px;
+}
+
+.empty-state p {
+  margin: var(--space-y) 0 0;
+  flex: none;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.composer {
+  align-items: stretch;
+  gap: var(--space-x);
+  left: var(--space-x);
+  right: var(--space-x);
+  bottom: var(--space-y);
+  height: var(--composer-height);
+  margin: 0;
+  display: flex;
+  position: absolute;
+}
+
+.composer input {
+  background: var(--color-input);
+  border: 1px solid var(--color-input-border);
+  width: 0;
+  padding: 0 var(--space-x);
+  box-shadow: inset 0 1px 1px var(--input-shadow-tint);
+  border-radius: 10px;
+  flex: 1;
+  font-size: 14px;
+}
+
+.composer input::placeholder {
+  color: var(--placeholder);
+  opacity: 1;
+}
+
+.send-button {
+  --icon-button-size: var(--composer-height);
+  --icon-button-hover: var(--primary-hover);
+  color: var(--primary-foreground);
+  background: var(--color-accent);
+  border: 1px solid var(--primary-border);
+  border-radius: 12px;
+}
+
+.send-button .icon {
+  width: 23px;
+  height: 23px;
+}
+/* @endsection */

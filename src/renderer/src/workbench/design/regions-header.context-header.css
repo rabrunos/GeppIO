@@ -1,0 +1,143 @@
+/* @section context-header */
+.context-bar {
+  z-index: 2;
+  grid-template-columns: var(--sidebar-track) minmax(0, 1fr);
+  background: 0 0;
+  display: grid;
+  position: relative;
+}
+
+.sidebar-header {
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-x);
+  height: var(--context-bar-height);
+  flex: 0 0 var(--context-bar-height);
+  padding: var(--space-y) var(--sidebar-rail-width) 0 var(--space-x);
+  background: var(--color-region);
+  display: flex;
+}
+
+.sidebar-heading {
+  min-width: 0;
+  color: var(--color-text-muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  margin: 0;
+  padding-left: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 22px;
+  overflow: hidden;
+}
+
+.sidebar-toggle {
+  --icon-button-hover: var(--chrome-hover);
+  color: var(--color-text-muted);
+  touch-action: manipulation;
+}
+
+.sidebar-toggle .icon {
+  width: 18px;
+  height: 18px;
+}
+
+.sidebar-toggle:hover,
+.sidebar-toggle:focus-visible {
+  color: var(--color-text);
+}
+
+.plugins-button {
+  align-items: center;
+  gap: var(--space-x);
+  height: 30px;
+  margin-left: var(--space-x);
+  padding: 0 var(--control-inline-padding);
+  border: 1px solid var(--color-accent-border);
+  background: var(--color-accent-soft);
+  border-radius: 8px;
+  flex: none;
+  font-size: 13px;
+  font-weight: 650;
+  display: flex;
+}
+
+.plugins-button .icon {
+  color: var(--color-accent);
+  width: 16px;
+  height: 16px;
+}
+
+.plugins-button:hover {
+  background: var(--brand-soft-hover);
+}
+
+.project-context {
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-x);
+  min-width: 0;
+  padding: var(--space-y) var(--space-x) 0 25px;
+  background: 0 0;
+  grid-column: 2;
+  display: flex;
+  position: relative;
+}
+
+.project-text {
+  min-width: 0;
+}
+
+.project-text h1 {
+  letter-spacing: -0.25px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 22px;
+  overflow: hidden;
+}
+
+.project-text p {
+  color: var(--color-text-muted);
+  font-size: var(--type-meta);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  margin: 0;
+  line-height: 16px;
+  overflow: hidden;
+}
+
+.project-actions {
+  align-items: center;
+  gap: var(--space-x);
+  font-size: var(--type-ui);
+  flex: none;
+  display: flex;
+}
+
+.branch,
+.clean {
+  align-items: center;
+  gap: var(--space-x);
+  white-space: nowrap;
+  display: flex;
+}
+
+.branch .icon {
+  width: 18px;
+  height: 18px;
+}
+
+.status-dot {
+  background: var(--color-success);
+  border-radius: 50%;
+  flex: none;
+  width: 10px;
+  height: 10px;
+  display: inline-block;
+}
+/* @endsection */

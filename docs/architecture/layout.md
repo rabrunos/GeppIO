@@ -1,6 +1,55 @@
 # Region-aware continuous widget geometry
 
-## Active model — Issue #29 / alpha.12
+## Host workbench — Issue #2 / alpha.13
+
+The host keeps the continuous solver below. `shared/workbench/model.ts` separates immutable
+widget types, owner-qualified models, mounted views, placements and user bars. Manifest-v1
+contributions normalize in the host to Main-only, single-view cards. Registry metadata comes
+from bundled declarations and validated native inventory, never imported layout declarations.
+
+`geppio:workbench:v1` stores one bounded validated envelope independently of all legacy keys.
+Bar membership and vertical positions are independent; a shared Sidebar view can belong to
+multiple bars without another model or Worker. Empty format slots and selection/filter/dock
+state belong to the editing session. Save editing advances its Cancel checkpoint; Conclude
+validates and writes the slot-free document before clearing transient UI. History records one
+gesture/action, not solver frames. The normal-mode paired-divider command validates two adjacent
+rectangles against the confirmed baseline without adopting another draft or migration.
+Every bar member must resolve to its actual shared Sidebar view. A single-view type still
+used by another bar cannot move/swap out of Sidebar and leave that bar dangling; multiple-area
+types retain the shared Sidebar view and use an eligible view of the same model elsewhere.
+
+Viewport projection follows continuous source proportions up to each declared maximum,
+including growth when chrome releases space. Gesture preferences remain solver recovery
+metadata, not a viewport-growth ceiling. This presentation rule replaces the alpha.12
+ceiling without changing source bytes, gesture settlement, clearance or A/B/A reversibility.
+The interval DAG reserves its functional gaps before fitting the remaining continuous extent,
+so releasing chrome does not enlarge a coupled divider's clearance.
+
+Confirmed chrome sizes/visibility are validated organization state. Held/keyboard previews,
+peek and temporary Edit visibility remain separate until an accepted user intention. A normal
+chrome update does not save projected widget geometry. Session slots carry their own reference
+size and project directly to the current viewport; neither resizing nor a checkpoint serializes
+them. Both the codec and serializer explicitly exclude session state.
+
+`DragLayer` holds only an inert, identity-stripped visual picture in the native top layer.
+Actual frames/inputs stay mounted in the shared geometry layer. Pickup follows the live pointer
+for 220ms; return uses uniform scale for 220ms, and accepted flight interpolates translation and
+dimensions for 240ms without nonuniform scaling. History uses 240ms and composition changes
+380ms, with the approved easing. No animation owns layout storage or plugin execution. A parked
+pointer sleeps after pickup. Coupled horizontal dividers optionally snap at center with the
+approved 7px entry/14px exit hysteresis; individual solver gestures remain fractional.
+
+`useCatalogAvailability` caches real command feasibility for visible catalog cards and inline
+destinations. Geometry probes pause during a held gesture; bar, runtime and surface changes
+still refresh eligibility. Drop uses the same command again against its current destination.
+
+The approved chrome uses 11px horizontal/9px vertical spacing, a separate 48px rail,
+180–430px Sidebar content, a 238px peek, 125–250px Bottom, 480px editor and 25px status bar.
+Sidebar's inner content uses 15px per side. `useSurfaces` measures origins, native scrollbars
+and actual chrome once; collapse clipping is separate from frozen logical width. The old
+15px-all-sides and 15px-status values below document the alpha.12 basis, not alpha.13 chrome.
+
+## Continuous solver basis — Issue #29 / alpha.12
 
 Mandatory cell placement is superseded. The only active renderer is App → freeform/; no grid
 metrics, cell rounding, square requirement, row count or column count participates in placement.
@@ -60,6 +109,12 @@ actual positions and sizes in memory: settlement replaces compressed preferred d
 dimensions, preserving unchanged records. The next gesture cannot resurrect older geometry. Legacy v1
 preferences remain decodable; load/import/edit entry normalize them in memory without changing bytes.
 Widget defaults remain independent registry values. Explicit Save writes settled geometry and preferences.
+
+Catalog/transfer insertion first reuses a vacant seed. When none exists, a distinct `insert`
+intention validates every existing peer, adds only the new active rectangle and runs the same
+bounded push/compression/rearrangement phases. The complete result must satisfy ordinary
+geometry validation; failure never enters the transaction. Seed attempts and fallback share
+the 8192-probe/2048-state budget. This is continuous insertion, not prototype row/column math.
 
 Pointer gestures coalesce intentions once per animation frame and flush the final intention on
 release; they derive every update from their original snapshot, include scrollLeft/scrollTop and

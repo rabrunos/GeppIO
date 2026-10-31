@@ -1,0 +1,106 @@
+/* @section sidebar-card-variants */
+.side-card {
+  border: 1px solid var(--notes-border);
+  background: var(--notes-background);
+  min-height: 177px;
+  padding: var(--space-y) var(--space-x);
+  flex: none;
+  overflow: hidden;
+}
+
+.side-card.calendar {
+  border-color: var(--calendar-border);
+  background: var(--calendar-background);
+  min-height: 190px;
+}
+
+.side-card:before,
+.side-card:after {
+  content: "";
+  background: var(--notes-decoration);
+  z-index: 0;
+  pointer-events: none;
+  border-radius: 50%;
+  width: 96px;
+  height: 96px;
+  position: absolute;
+}
+
+.side-card:before {
+  bottom: 0;
+  right: -50px;
+}
+
+.side-card:after {
+  background: var(--notes-decoration-soft);
+  width: 84px;
+  height: 84px;
+  bottom: -35px;
+  right: -1px;
+}
+
+.side-card.calendar:before {
+  background: var(--calendar-decoration);
+}
+
+.side-card.calendar:after {
+  background: var(--calendar-decoration-soft);
+}
+
+.side-content {
+  z-index: 1;
+  position: relative;
+}
+
+.icon-tile {
+  background: var(--icon-background);
+  border-radius: 12px;
+  flex: none;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  display: grid;
+}
+
+.icon-tile .icon {
+  width: 33px;
+  height: 33px;
+}
+
+.calendar .icon-tile {
+  background: var(--calendar-icon-background);
+  color: var(--calendar-icon-foreground);
+}
+
+.side-card h2 {
+  margin: var(--space-y) 0 1px;
+  font-size: var(--type-widget-title);
+  letter-spacing: 0;
+  font-weight: 700;
+  line-height: 22px;
+}
+
+.side-card p {
+  font-size: var(--type-ui);
+  max-width: 190px;
+  margin: 0;
+  line-height: 19px;
+}
+
+.calendar p {
+  color: var(--calendar-muted);
+}
+
+.more-button {
+  --icon-button-hover: var(--menu-hover);
+  top: calc(var(--space-y) - 1px);
+  right: var(--space-x);
+  z-index: 2;
+  position: absolute;
+}
+
+.more-button .icon {
+  width: 20px;
+  height: 20px;
+}
+/* @endsection */

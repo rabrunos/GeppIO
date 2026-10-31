@@ -1,0 +1,99 @@
+/* @section region-splitters */
+.region-splitter {
+  z-index: 50;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-app-region: no-drag;
+  outline-offset: -2px;
+  position: absolute;
+}
+
+.region-splitter:before {
+  content: "";
+  background: var(--color-accent);
+  opacity: 0;
+  border-radius: 3px;
+  transition: opacity 0.15s;
+  position: absolute;
+}
+
+.region-splitter:hover:before,
+.region-splitter:focus-visible:before,
+.region-splitter[data-active]:before {
+  opacity: 0.75;
+}
+
+.sidebar-splitter {
+  inset: calc(-1 * var(--context-bar-height)) auto 0 var(--sidebar-track);
+  cursor: col-resize;
+  width: 10px;
+}
+
+.sidebar-splitter:before {
+  inset: calc(var(--space-y) + 5px) auto calc(var(--space-y) + 5px) 2px;
+  pointer-events: none;
+  width: 2px;
+}
+
+.bottom-splitter {
+  z-index: 36;
+  inset: auto calc(var(--bottom-inset-end) + var(--catalog-track)) var(--bottom-track)
+    calc(var(--sidebar-track) + var(--bottom-inset-start));
+  height: var(--space-y);
+  cursor: row-resize;
+}
+
+.bottom-splitter:before {
+  inset: auto var(--space-x);
+  height: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.workbench:not([data-sidebar-mode="docked"]) .sidebar-splitter {
+  display: none;
+}
+
+.workbench[data-sidebar-mode="hidden"] .sidebar-splitter[data-active] {
+  opacity: 0;
+  display: block;
+}
+
+.workbench.is-resizing[data-resize-axis="x"][data-sidebar-mode="docked"] {
+  --sidebar-track-motion: 0s;
+}
+
+.workbench.is-resizing[data-resize-axis="y"][data-bottom-mode="docked"] {
+  --bottom-track-motion: 0s;
+}
+
+.workbench.is-resizing,
+.workbench.is-resizing * {
+  -webkit-user-select: none !important;
+  user-select: none !important;
+}
+
+.workbench.is-resizing[data-resize-axis="x"],
+.workbench.is-resizing[data-resize-axis="x"] * {
+  cursor: col-resize !important;
+}
+
+.workbench.is-resizing[data-resize-axis="y"],
+.workbench.is-resizing[data-resize-axis="y"] * {
+  cursor: row-resize !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workbench {
+    --region-motion: 1ms;
+    --sidebar-hide-motion: 1ms;
+    --sidebar-hide-fade: 1ms;
+  }
+  .sidebar-floating,
+  .sidebar-viewport,
+  .region-splitter:before {
+    transition-duration: 1ms;
+  }
+}
+/* @endsection */

@@ -2,17 +2,48 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import type { KeyboardEvent, PointerEvent } from 'react'
 import { REGION_POLICY, regionBounds, regionSize } from './region-policy.ts'
 import type { RegionKind } from './region-policy.ts'
+import { CHROME_LIMITS, defaultChrome } from '../../../shared/workbench/chrome.ts'
+import type { WorkbenchChrome } from '../../../shared/workbench/chrome.ts'
 
-/** Peer dimensions are CSS pixels and session-only, independent of widget geometry. */
-export function useRegions() {
-  const area = useRef<HTMLDivElement>(null), [size, setSize] = useState({ width: 0, height: 0 })
-  const [requested, setRequested] = useState<{ sidebar: number; bottom: number }>({ sidebar: REGION_POLICY.sidebar.initial, bottom: REGION_POLICY.bottom.initial })
-  const [collapsed, setCollapsed] = useState({ sidebar: false, bottom: false })
+/** Confirmed chrome is independent of widget geometry. Held previews and forced
+ * edit visibility stay local until an accepted user intention is recorded.
+ */
+export function useRegions(forced = false, confirmed: WorkbenchChrome = defaultChrome(), commit?: (chrome: WorkbenchChrome) => Promise<boolean>) {
+  // The native window minimum can contain the approved initial chrome. Avoid a
+  // fictitious zero-size first frame starting collapse/reopen animations.
+  const area = useRef<HTMLDivElement>(null), [size, setSize] = useState({ width: 1024, height: 768 })
+  const [requested, setRequested] = useState(() => ({ sidebar: confirmed.sidebar.size, bottom: confirmed.bottom.size }))
+  const [collapsed, setCollapsed] = useState(() => ({ sidebar: !confirmed.sidebar.visible, bottom: !confirmed.bottom.visible }))
+  const canonical = useRef(confirmed); canonical.current = confirmed
+  const changeEpoch = useRef(0)
+  const [peek, setPeek] = useState(false), [floating, setFloating] = useState(false), [resizing, setResizing] = useState<RegionKind | null>(null)
+  const [bottomReveal, setBottomReveal] = useState<number | null>(null)
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null), blockPeek = useRef(false)
   const keyboard = useRef<{ kind: RegionKind; requested: number; collapsed: boolean } | null>(null)
-  const active = useRef<{ kind: RegionKind; pointer: number; x: number; y: number; original: number; requested: number; collapsed: boolean; target: HTMLDivElement } | null>(null)
+  const active = useRef<{ kind: RegionKind; pointer: number; x: number; y: number; original: number; requested: number; collapsed: boolean; gestureCollapsed: boolean; target: HTMLDivElement } | null>(null)
+  function synchronize() {
+    setRequested({ sidebar: canonical.current.sidebar.size, bottom: canonical.current.bottom.size })
+    setCollapsed({ sidebar: !canonical.current.sidebar.visible, bottom: !canonical.current.bottom.visible })
+  }
+  function publish(kind: RegionKind, value: number, visible: boolean) {
+    if (!commit) return
+    const ticket = ++changeEpoch.current, policy = CHROME_LIMITS[kind]
+    const chrome = { ...canonical.current, [kind]: { size: Math.max(policy.min, Math.min(policy.max, value)), visible: forced ? canonical.current[kind].visible : visible } }
+    if (JSON.stringify(chrome) === JSON.stringify(canonical.current)) return
+    void commit(chrome).then(ok => { if (!ok && ticket === changeEpoch.current) synchronize() })
+  }
+  function commitKeyboard() {
+    const previous = keyboard.current; keyboard.current = null
+    if (previous) publish(previous.kind, requested[previous.kind], !collapsed[previous.kind])
+  }
+  useLayoutEffect(() => { if (!active.current && !keyboard.current) synchronize() }, [confirmed.sidebar.size, confirmed.sidebar.visible, confirmed.bottom.size, confirmed.bottom.visible])
+  useLayoutEffect(() => { cancel(); keyboard.current = null; synchronize() }, [forced])
   function cancel() {
     const a = active.current; if (!a) return
     active.current = null
+    changeEpoch.current++
+    setResizing(null)
+    setBottomReveal(null)
     // Restore the request, even when the current viewport can only render a smaller size.
     setRequested(prev => ({ ...prev, [a.kind]: a.requested }))
     setCollapsed(prev => ({ ...prev, [a.kind]: a.collapsed }))
@@ -27,8 +58,19 @@ export function useRegions() {
     })
     observer.observe(element); return () => observer.disconnect()
   }, [])
+  useLayoutEffect(() => () => { if (hoverTimer.current) clearTimeout(hoverTimer.current) }, [])
+  useLayoutEffect(() => {
+    const blur = () => {
+      cancel()
+      const previous = keyboard.current; keyboard.current = null
+      if (previous) { setRequested(value => ({ ...value, [previous.kind]: previous.requested })); setCollapsed(value => ({ ...value, [previous.kind]: previous.collapsed })) }
+    }
+    window.addEventListener('blur', blur)
+    return () => window.removeEventListener('blur', blur)
+  }, [])
   const bounds = { sidebar: regionBounds('sidebar', size.width), bottom: regionBounds('bottom', size.height) }
-  const sidebar = collapsed.sidebar ? 0 : regionSize(requested.sidebar, bounds.sidebar), bottom = collapsed.bottom ? 0 : regionSize(requested.bottom, bounds.bottom)
+  const sidebar = collapsed.sidebar && !forced ? 0 : regionSize(requested.sidebar, bounds.sidebar)
+  const bottom = bottomReveal ?? (collapsed.bottom && !forced ? 0 : regionSize(requested.bottom, bounds.bottom))
   function set(kind: RegionKind, value: number) {
     const next = regionSize(value, bounds[kind])
     setRequested(prev => regionSize(prev[kind], bounds[kind]) === next ? prev : { ...prev, [kind]: next })
@@ -39,18 +81,41 @@ export function useRegions() {
         if (event.button !== 0 || active.current) return
         event.preventDefault(); event.currentTarget.focus(); event.currentTarget.setPointerCapture(event.pointerId)
         keyboard.current = null
-        active.current = { kind, pointer: event.pointerId, x: event.clientX, y: event.clientY, original: kind === 'sidebar' ? sidebar : bottom, requested: requested[kind], collapsed: collapsed[kind], target: event.currentTarget }
+        active.current = { kind, pointer: event.pointerId, x: event.clientX, y: event.clientY, original: kind === 'sidebar' ? sidebar : bottom, requested: requested[kind], collapsed: collapsed[kind], gestureCollapsed: false, target: event.currentTarget }
       },
       onPointerMove(event: PointerEvent<HTMLDivElement>) {
         const a = active.current; if (!a || a.kind !== kind || a.pointer !== event.pointerId) return
         const value = a.original + (kind === 'sidebar' ? event.clientX - a.x : a.y - event.clientY)
-        if (value < bounds[kind].min - 20) {
-          setCollapsed(prev => ({ ...prev, [kind]: true })); setRequested(prev => ({ ...prev, [kind]: a.requested }))
-        } else { setCollapsed(prev => ({ ...prev, [kind]: false })); set(kind, value) }
+        if (!resizing && Math.abs(value - a.original) < 4) return
+        setResizing(kind)
+        if (kind === 'bottom' && a.collapsed && !forced) {
+          const reveal = Math.max(0, Math.min(bounds.bottom.max, value))
+          setBottomReveal(reveal); setCollapsed(prev => ({ ...prev, bottom: reveal === 0 })); return
+        }
+        if (a.gestureCollapsed && value < bounds[kind].min) return
+        if (!forced && value < bounds[kind].min - REGION_POLICY.collapseDistance) {
+          a.gestureCollapsed = true
+          if (kind === 'sidebar') setFloating(false)
+          setCollapsed(prev => ({ ...prev, [kind]: true })); set(kind, value)
+        } else { a.gestureCollapsed = false; setCollapsed(prev => ({ ...prev, [kind]: false })); set(kind, value) }
       },
       onPointerUp(event: PointerEvent<HTMLDivElement>) {
         if (active.current?.kind !== kind || active.current.pointer !== event.pointerId) return
-        active.current = null; if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
+        const a = active.current
+        active.current = null; setResizing(null)
+        if (kind === 'bottom' && bottomReveal !== null) {
+          if (bottomReveal > 0) set('bottom', bottomReveal)
+          setCollapsed(prev => ({ ...prev, bottom: bottomReveal <= 0 })); setBottomReveal(null)
+        }
+        if (Math.abs(event.clientX - a.x) + Math.abs(event.clientY - a.y) < 4 && !forced) {
+          if (kind === 'bottom' && a.collapsed) set('bottom', bounds.bottom.min)
+          setCollapsed(prev => ({ ...prev, [kind]: !a.collapsed }))
+          publish(kind, kind === 'bottom' && a.collapsed ? bounds.bottom.min : requested[kind], a.collapsed)
+        } else {
+          const value = kind === 'bottom' && bottomReveal !== null ? bottomReveal > 0 ? Math.max(bounds.bottom.min, bottomReveal) : a.requested : requested[kind]
+          publish(kind, value, kind === 'bottom' && bottomReveal !== null ? bottomReveal > 0 : !collapsed[kind])
+        }
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
       },
       onPointerCancel(event: PointerEvent<HTMLDivElement>) { if (active.current?.kind === kind && active.current.pointer === event.pointerId) cancel() },
       onLostPointerCapture(event: PointerEvent<HTMLDivElement>) { if (active.current?.kind === kind && active.current.pointer === event.pointerId) cancel() },
@@ -65,22 +130,40 @@ export function useRegions() {
           const previous = keyboard.current; keyboard.current = null
           setRequested(prev => ({ ...prev, [kind]: previous.requested })); setCollapsed(prev => ({ ...prev, [kind]: previous.collapsed })); return
         }
-        if (event.key === 'Home') {
+        if (['Enter', ' '].includes(event.key)) {
+          event.preventDefault()
+          if (!forced) { keyboard.current = null; if (kind === 'bottom' && collapsed.bottom) set('bottom', bounds.bottom.min); setCollapsed(prev => ({ ...prev, [kind]: !prev[kind] })); publish(kind, kind === 'bottom' && collapsed.bottom ? bounds.bottom.min : requested[kind], collapsed[kind]) }
+          return
+        }
+        if (['Home', 'End'].includes(event.key)) {
           event.preventDefault(); keyboard.current ??= { kind, requested: requested[kind], collapsed: collapsed[kind] }
-          setCollapsed(prev => ({ ...prev, [kind]: true })); return
+          set(kind, event.key === 'Home' ? bounds[kind].min : bounds[kind].max); setCollapsed(prev => ({ ...prev, [kind]: false })); return
         }
         if (!arrows.includes(event.key)) return
         event.preventDefault(); if (active.current) return
         keyboard.current ??= { kind, requested: requested[kind], collapsed: collapsed[kind] }
         const delta = (event.key === arrows[0] ? -1 : 1) * (event.shiftKey ? REGION_POLICY.shiftStep : REGION_POLICY.step)
+        if (collapsed[kind] && delta > 0) { setCollapsed(prev => ({ ...prev, [kind]: false })); return }
         const value = (kind === 'sidebar' ? sidebar : bottom) + delta
-        if (value < bounds[kind].min - 5) setCollapsed(prev => ({ ...prev, [kind]: true }))
+        if (!forced && value < bounds[kind].min - 5) setCollapsed(prev => ({ ...prev, [kind]: true }))
         else { setCollapsed(prev => ({ ...prev, [kind]: false })); set(kind, value) }
       },
-      onBlur() { keyboard.current = null }
+      onBlur: commitKeyboard
     }
   }
-  return { area, sidebar, bottom, bounds, collapsed, splitter: REGION_POLICY.splitter, handlers,
-    expand(kind: RegionKind) { set(kind, bounds[kind].max); setCollapsed(prev => ({ ...prev, [kind]: false })) },
-    reopen(kind: RegionKind) { setCollapsed(prev => ({ ...prev, [kind]: false })) } }
+  return { area, sidebar, bottom, bounds, collapsed: forced ? { sidebar: false, bottom: false } : collapsed, splitter: REGION_POLICY.splitter, handlers,
+    resizing, floating: !forced && collapsed.sidebar && floating, bottomRevealing: bottomReveal !== null, sidebarMode: forced || !collapsed.sidebar ? 'docked' : peek ? 'peek' : 'hidden',
+    contentWidth: regionSize(requested.sidebar, bounds.sidebar),
+    contentHeight: regionSize(requested.bottom, bounds.bottom),
+    toggle(kind: RegionKind) { if (forced) return; blockPeek.current = true; setPeek(false); if (kind === 'sidebar') setFloating(false); setCollapsed(prev => ({ ...prev, [kind]: !prev[kind] })); publish(kind, requested[kind], collapsed[kind]) },
+    closePeek() { setPeek(false) },
+    hover(inside: boolean) {
+      if (hoverTimer.current) clearTimeout(hoverTimer.current)
+      if (forced || !collapsed.sidebar) return
+      if (inside && !blockPeek.current) hoverTimer.current = setTimeout(() => { setFloating(true); setPeek(true) }, 100)
+      else if (!inside) { blockPeek.current = false; hoverTimer.current = setTimeout(() => { if (!area.current?.querySelector('.host-sidebar-content:focus-within')) setPeek(false) }, 280) }
+    },
+    cancel, commitKeyboard, active: () => !!active.current,
+    expand(kind: RegionKind) { set(kind, bounds[kind].max); setCollapsed(prev => ({ ...prev, [kind]: false })); publish(kind, bounds[kind].max, true) },
+    reopen(kind: RegionKind) { setCollapsed(prev => ({ ...prev, [kind]: false })); publish(kind, requested[kind], true) } }
 }

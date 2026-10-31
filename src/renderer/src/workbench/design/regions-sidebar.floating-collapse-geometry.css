@@ -1,0 +1,113 @@
+/* @section floating-collapse-geometry */
+.global-header,
+.context-bar {
+  overflow: hidden;
+}
+
+.side-card h2,
+.side-card p {
+  white-space: nowrap;
+}
+
+.sidebar-pin {
+  z-index: 2;
+  top: calc(
+    (var(--context-bar-height) + var(--space-y) - var(--sidebar-pin-size)) / 2
+  );
+  left: max(
+    calc((var(--sidebar-rail-width) - var(--sidebar-pin-size)) / 2),
+    calc(100% - (var(--sidebar-rail-width) + var(--sidebar-pin-size)) / 2)
+  );
+  position: absolute;
+}
+
+.sidebar-floating .sidebar-pin {
+  top: calc(
+    (
+        var(--context-bar-height) - var(--sidebar-floating-inset-top) -
+          var(--sidebar-pin-size)
+      ) /
+      2
+  );
+}
+
+.sidebar-floating .sidebar-header {
+  height: calc(var(--context-bar-height) - var(--sidebar-floating-inset-top));
+  flex-basis: calc(
+    var(--context-bar-height) - var(--sidebar-floating-inset-top)
+  );
+  padding-block: calc(var(--space-y) / 2);
+}
+
+.workbench[data-sidebar-mode="hidden"],
+.workbench[data-sidebar-mode="peek"] {
+  --sidebar-track: var(--sidebar-rail-width);
+}
+
+.workbench[data-bottom-mode="hidden"] {
+  --bottom-track: 0px;
+}
+
+.sidebar-floating {
+  z-index: 40;
+  inset: calc(
+      -1 * var(--context-bar-height) + var(--sidebar-floating-inset-top)
+    )
+    auto var(--sidebar-floating-inset-bottom)
+    calc(var(--sidebar-rail-width) + var(--sidebar-floating-gap));
+  width: var(--sidebar-floating-width);
+  max-width: calc(
+    100% - var(--sidebar-rail-width) - var(--sidebar-floating-gap)
+  );
+  background: var(--color-region);
+  box-shadow: var(--shadow-panel-side);
+  border: 1px solid var(--color-border);
+  flex-direction: column;
+  display: flex;
+  position: absolute;
+  overflow: hidden;
+}
+
+@supports (color: color-mix(in lab, red, red)) {
+  .sidebar-floating {
+    border: 1px solid
+      color-mix(in srgb, var(--color-border) 70%, var(--color-region));
+  }
+}
+
+.sidebar-floating {
+  border-radius: var(--floating-radius);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    transform var(--sidebar-hide-motion) var(--region-easing),
+    opacity var(--sidebar-hide-fade) ease,
+    visibility 0s linear var(--sidebar-hide-motion);
+  background-clip: padding-box;
+  transform: translate(-4px);
+}
+
+.sidebar-floating > .sidebar-viewport {
+  width: calc(100% + 2px);
+  clip-path: inset(1px round calc(var(--floating-radius) - 1px));
+  margin: -1px;
+}
+
+.workbench[data-sidebar-mode="peek"] .sidebar-floating {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition-duration: var(--region-motion), 0.2s, 0s;
+  transition-delay: 0s;
+  transform: none;
+}
+
+.workbench[data-sidebar-mode="docked"] .sidebar-floating {
+  display: none;
+}
+
+.workbench[data-bottom-mode="hidden"] .bottom-region {
+  pointer-events: none;
+}
+/* @endsection */

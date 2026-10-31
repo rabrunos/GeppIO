@@ -1,0 +1,13 @@
+/* @section theme-control-icons */
+[data-action="appearance\.open"] .theme-moon {
+  display: none;
+}
+
+:root[data-theme="dark"] [data-action="appearance\.open"] .theme-moon {
+  display: block;
+}
+
+:root[data-theme="dark"] [data-action="appearance\.open"] .theme-sun {
+  display: none;
+}
+/* @endsection */

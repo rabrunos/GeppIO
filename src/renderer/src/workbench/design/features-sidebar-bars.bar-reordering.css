@@ -1,0 +1,24 @@
+/* @section bar-reordering */
+.custom-bar-widget:has(input:disabled) {
+  opacity: 0.45;
+  cursor: default;
+}
+
+[data-layout-editing] [data-sidebar-custom] {
+  cursor: grab;
+  touch-action: none;
+}
+
+.sidebar-custom-bars {
+  position: relative;
+}
+
+[data-sidebar-custom][data-rail-dragging] {
+  position: relative;
+  z-index: 2;
+  cursor: grabbing;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  box-shadow: 0 3px 10px rgb(0 0 0 / 0.15);
+}
+/* @endsection */

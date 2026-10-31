@@ -50,6 +50,30 @@ test('infeasible minima retain source geometry in a finite recoverable scroll ar
   assert.equal(view.feasible, false); assert.deepEqual(view.placements, DEFAULT_FREEFORM.placements)
   assert.equal(view.world.width, 960); assert.equal(view.world.height, 620)
 })
+
+test('released chrome space grows continuous presentation within maxima without changing preferences or source', () => {
+  const source = structuredClone(DEFAULT_FREEFORM), before = structuredClone(source)
+  const original = projectRegion(source, 'main', source.reference.main, false)
+  const wider = projectRegion(source, 'main', { width: 1500, height: 880 }, false)
+  assert.ok(wider.feasible)
+  for (const p of wider.placements) {
+    const old = source.placements.find(q => q.id === p.id)!
+    assert.ok(p.width > old.width && p.height > old.height)
+    assert.ok(p.width <= CONSTRAINTS[p.id]!.max.width && p.height <= CONSTRAINTS[p.id]!.max.height)
+    assert.deepEqual(p.preferred, old.preferred)
+  }
+  assert.deepEqual(source, before)
+  assert.deepEqual(projectRegion(source, 'main', source.reference.main, false), original)
+  const pair = structuredClone(source)
+  pair.placements = pair.placements.filter(p => ['summary', 'properties'].includes(p.id)).map((p, i) => ({ ...p, x: i * 485, y: 0, width: 475, height: 620, preferred: { width: 475, height: 620 } }))
+  for (const width of [650, 960, 1500]) {
+    const fitted = projectRegion(pair, 'main', { width, height: 620 }, false)
+    assert.ok(fitted.feasible)
+    const [a, b] = fitted.placements
+    assert.ok(Math.abs(b!.x - a!.x - a!.width - 10) < .00001, 'Viewport growth retains the functional coupled-divider gap')
+    assert.ok(Math.abs(b!.x + b!.width - width) < .00001)
+  }
+})
 test('expanded horizontal range follows occupied edges without right padding or width projection', () => {
   const source = structuredClone(DEFAULT_FREEFORM); source.placements[0]!.x = 12345.125
   for (const width of [760, 1100, 1600]) {

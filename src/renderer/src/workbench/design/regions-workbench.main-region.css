@@ -1,0 +1,17 @@
+/* @section main-region */
+.main-region {
+  grid-area: main;
+  grid-template-rows: var(--widget-row-sizes, none);
+  grid-template-columns: minmax(0, var(--widget-start-size, 649fr)) minmax(
+      0,
+      var(--widget-end-size, 696fr)
+    );
+  gap: var(--space-y) var(--space-x);
+  min-width: 0;
+  min-height: 0;
+  padding: var(--space-y) var(--space-x);
+  isolation: isolate;
+  background: 0 0;
+  display: grid;
+}
+/* @endsection */

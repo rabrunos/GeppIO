@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { PluginInventory, PluginResult } from '../../shared/plugins.ts'
 import { PluginRuntime } from './plugin-runtime.ts'
 import type { RuntimePlugin } from './plugin-runtime.ts'
+import { useLocale } from './workbench/Locale.tsx'
 
 export function usePlugins() {
   const [inventory, setInventory] = useState<PluginInventory>({ plugins: [], errors: [] })
@@ -54,21 +55,22 @@ export function usePlugins() {
 type Plugins = ReturnType<typeof usePlugins>
 const STATUS = { starting: 'Ativando', active: 'Ativo', stopping: 'Desativando', disabled: 'Desativado', error: 'Falha' }
 export function PluginSettings({ plugins }: { plugins: Plugins }) {
+  const { t } = useLocale()
   return <section aria-label="Plugins">
     <h3>Plugins</h3>
-    <p>Instale somente pacotes locais de desenvolvimento confiáveis. Esta versão não oferece isolamento para plugins de terceiros.</p>
-    <button className="button primary" disabled={plugins.busy || !plugins.available} onClick={plugins.install}>Instalar pasta local</button>
-    <p role="status">{plugins.busy ? 'Processando plugins…' : plugins.message}</p>
-    {plugins.inventory.errors.map(error => <div className="plugin-error" key={error}><p>{error}</p>{/^[a-z][a-z0-9.-]*:/.test(error) && <button className="button" disabled={plugins.busy} onClick={() => plugins.removeInvalid(error.split(':')[0]!)}>Remover instalação inválida</button>}</div>)}
-    {!plugins.views.length && <p>Nenhum plugin instalado.</p>}
+    <p>{t('Instale somente pacotes locais de desenvolvimento confiáveis. Esta versão não oferece isolamento para plugins de terceiros.')}</p>
+    <button className="ui-button tool-button ui-button-primary" disabled={plugins.busy || !plugins.available} onClick={plugins.install}>{t('Instalar pasta local')}</button>
+    <p role="status">{plugins.busy ? t('Processando plugins…') : t(plugins.message)}</p>
+    {plugins.inventory.errors.map(error => <div className="plugin-error" key={error}><p>{error}</p>{/^[a-z][a-z0-9.-]*:/.test(error) && <button className="ui-button tool-button" disabled={plugins.busy} onClick={() => plugins.removeInvalid(error.split(':')[0]!)}>{t('Remover instalação inválida')}</button>}</div>)}
+    {!plugins.views.length && <p>{t('Nenhum plugin instalado.')}</p>}
     <ul className="plugin-list">{plugins.views.map(view => <li key={view.plugin.manifest.id} data-plugin={view.plugin.manifest.id} data-status={view.status}>
       <div><strong>{view.plugin.manifest.name}</strong><small>{view.plugin.manifest.id} · {view.plugin.manifest.version} · {view.plugin.manifest.widgets.length} widget(s)</small></div>
-      <span className="badge">{STATUS[view.status]}</span>
-      <p role="status">{view.detail}</p>
-      <details><summary>Eventos desta sessão</summary><ul>{view.events.map((event, index) => <li key={index}>{event}</li>)}</ul></details>
-      <div className="plugin-actions"><button className="button" disabled={plugins.busy} onClick={() => plugins.toggle(view)}>{view.status === 'error' ? 'Tentar novamente' : view.plugin.enabled ? 'Desativar' : 'Ativar'}</button>
-        {view.status === 'error' && view.plugin.enabled && <button className="button" disabled={plugins.busy} onClick={() => plugins.toggle({ ...view, status: 'active' })}>Desativar</button>}
-        <button className="button" disabled={plugins.busy} onClick={() => plugins.remove(view.plugin.manifest.id)}>Remover</button></div>
+      <span className="badge">{t(STATUS[view.status])}</span>
+      <p role="status">{t(view.detail)}</p>
+      <details><summary>{t('Eventos desta sessão')}</summary><ul>{view.events.map((event, index) => <li key={index}>{event}</li>)}</ul></details>
+      <div className="plugin-actions"><button className="ui-button tool-button" disabled={plugins.busy} onClick={() => plugins.toggle(view)}>{t(view.status === 'error' ? 'Tentar novamente' : view.plugin.enabled ? 'Desativar' : 'Ativar')}</button>
+        {view.status === 'error' && view.plugin.enabled && <button className="ui-button tool-button" disabled={plugins.busy} onClick={() => plugins.toggle({ ...view, status: 'active' })}>{t('Desativar')}</button>}
+        <button className="ui-button tool-button" disabled={plugins.busy} onClick={() => plugins.remove(view.plugin.manifest.id)}>{t('Remover')}</button></div>
     </li>)}</ul>
   </section>
 }

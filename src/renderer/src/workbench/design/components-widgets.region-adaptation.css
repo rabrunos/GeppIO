@@ -1,0 +1,40 @@
+/* @section region-adaptation */
+.main-region[data-layout-rows] > .widget { min-height: 0; height: auto; }
+:is(.main-region, .bottom-surface) > .widget {
+  min-width: 0;
+  min-height: 0;
+  max-height: 100%;
+}
+
+:is(.main-region, .bottom-surface) > .side-card {
+  height: auto;
+}
+
+:is(.main-region, .bottom-surface) > .demo-sidebar-widget {
+  flex-direction: column;
+  display: flex;
+}
+
+:is(.main-region, .bottom-surface) > .demo-sidebar-widget .demo-widget-body {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.sidebar-region > :is(.assistant-card, .compact-card, .demo-main-widget) {
+  height: var(--demo-widget-height, 240px);
+  flex: none;
+  min-height: 100px;
+}
+
+.sidebar-region > .compact-card {
+  height: var(--demo-widget-height, 150px);
+}
+
+.bottom-surface {
+  grid-auto-rows: minmax(0, 1fr);
+}
+
+:is(.main-region, .bottom-surface)[data-single-widget="true"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+/* @endsection */
