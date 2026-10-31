@@ -106,6 +106,19 @@ try {
   assert.equal(await page.evaluate(async () => { try { await fetch('geppio://app/identity-recovery.html'); return false } catch { return true } }), true)
   await page.getByRole('button', { name: 'Alternar tema', exact: true }).click()
   assert.equal(await page.evaluate(key => localStorage.getItem(key), GRID_KEY), null)
+  // Hosted Windows may expose a narrower desktop than the requested window.
+  // Exercise the actual minimum-space rejection before releasing the dock.
+  await application!.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(win => win.webContents.getURL().endsWith('/index.html') || win.webContents.getURL() === 'http://127.0.0.1:5173/')!.setContentSize(1280, 980))
+  await settle(page)
+  const beforeConclude = await page.evaluate(key => localStorage.getItem(key), FREEFORM_KEY)
+  if (await page.locator('[data-surface="main"]').getAttribute('data-feasible') === 'false') {
+    await page.getByTestId('conclude-layout').click()
+    await page.locator('.workspace-feedback').filter({ hasText: 'Espaço insuficiente.' }).waitFor()
+    assert.equal(await page.getByTestId('conclude-layout').count(), 1, 'Infeasible legacy preview must keep editing')
+    assert.equal(await page.evaluate(key => localStorage.getItem(key), FREEFORM_KEY), beforeConclude, 'A rejected legacy adoption must preserve exact destination bytes')
+  }
+  await page.locator('.widget-catalog-toggle').click(); await settle(page)
+  assert.equal(await page.locator('[data-surface="main"]').getAttribute('data-feasible'), 'true', 'Legacy adoption requires a feasible Main after releasing the editor dock')
   await page.getByTestId('conclude-layout').click(); await page.getByTestId('edit-layout').waitFor()
   const freeformChanged = await page.evaluate(key => localStorage.getItem(key), FREEFORM_KEY)
   assert.ok(freeformChanged)
