@@ -129,8 +129,13 @@ try {
   await library.locator('.workspace-popover-heading h2').click(); assert.ok(await library.isVisible())
   assert.equal(await page.getByRole('menu', { name: 'Opções da barra', exact: true }).isVisible(), false)
   await library.getByRole('button', { name: 'Opções de Literal 0', exact: true }).click(); await page.getByRole('menuitem', { name: 'Arquivar barra', exact: true }).click()
+  // The menu closes immediately; outside Edit the rail changes only after the
+  // Web Lock/CAS commit succeeds. Wait for that confirmation before counting.
+  await rail('bar:cap0').waitFor({ state: 'detached' })
   assert.ok(await library.isVisible(), 'Archiving updates only the child menu and cards')
   assert.equal((await order()).length, 14)
+  const archivedBytes = await page.evaluate(key => localStorage.getItem(key), WORKBENCH_KEY)
+  assert.equal(parseWorkbench(archivedBytes!, widgetRegistry()).organization.bars.find(bar => bar.id === 'bar:cap0')!.archived, true)
   await library.getByRole('searchbox').fill('Nenhum resultado Ω'); await library.getByRole('button', { name: 'Limpar filtros', exact: true }).click()
   const scroll = library.locator('.bar-library-viewport')
   await scroll.evaluate(node => { node.scrollTop = node.scrollHeight }); await page.waitForFunction(() => document.querySelector('.bar-library-viewport')!.hasAttribute('data-scroll-can-up'))
@@ -139,7 +144,8 @@ try {
   assert.notEqual(await scroll.getAttribute('data-scroll-can-up'), null)
   await library.getByRole('combobox', { name: 'Ordenar barras', exact: true }).selectOption('name')
   await page.waitForFunction(() => document.querySelector('.bar-library-viewport')!.scrollTop === 0 && !document.querySelector('.bar-library-viewport')!.hasAttribute('data-scroll-can-up'))
-  await archivedCard.getByRole('button', { name: 'Restaurar', exact: true }).click(); await library.waitFor({ state: 'hidden' }); await settle(page)
+  await archivedCard.getByRole('button', { name: 'Restaurar', exact: true }).click(); await library.waitFor({ state: 'hidden' })
+  await rail('bar:restore').waitFor(); await settle(page)
   assert.equal(await page.locator('.workbench').getAttribute('data-active-bar'), 'bar:restore'); assert.equal((await order()).length, 15)
   // Legacy twenty active custom records remain editable/reducible after reload.
   const legacy = initialWorkbench(); legacy.organization.bars.push(...Array.from({ length: 20 }, (_, i) => ({ id: `bar:old${i}`, name: `Old ${i}`, userNamed: true, icon: 'widgets', archived: false, members: [] })))
@@ -147,7 +153,8 @@ try {
   await rail('bar:old0').click({ button: 'right' }); await page.getByRole('menuitem', { name: 'Editar', exact: true }).click()
   const legacyForm = page.getByRole('dialog', { name: 'Editar barra', exact: true }); await legacyForm.getByRole('textbox', { name: 'Nome', exact: true }).fill('Old Ω edited')
   await legacyForm.getByRole('button', { name: 'Salvar alterações', exact: true }).click(); await legacyForm.waitFor({ state: 'detached' })
-  await rail('bar:old1').click({ button: 'right' }); await page.getByRole('menuitem', { name: 'Arquivar', exact: true }).click(); await page.reload(); await page.getByTestId('edit-layout').waitFor()
+  await rail('bar:old1').click({ button: 'right' }); await page.getByRole('menuitem', { name: 'Arquivar', exact: true }).click()
+  await rail('bar:old1').waitFor({ state: 'detached' }); await page.reload(); await page.getByTestId('edit-layout').waitFor()
   assert.equal((await order()).length, 20); assert.equal(await rail('bar:old0').getAttribute('aria-label'), 'Old Ω edited')
   assert.ok(await page.getByRole('button', { name: 'Nova barra', exact: true }).isDisabled())
   await reset(bars)
