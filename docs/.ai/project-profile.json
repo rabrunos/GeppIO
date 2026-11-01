@@ -100,7 +100,7 @@
     "target_version_in_prompt_h1": true,
     "target_version_in_commit": true,
     "target_version_in_report_h1": true,
-    "continuations_reuse_target": true
+    "source_delivery_requires_new_target": true
   },
   "security": {
     "exposure": "local",

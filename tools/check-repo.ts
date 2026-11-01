@@ -10,7 +10,7 @@ function check(condition: boolean, message: string) { if (!condition) errors.pus
 interface Profile {
   schema: string; project: { name: string }; validation: { required_files: string[]; canonical_capabilities: string[] }
   workflow: { tracking: string; primary_orchestrator: string; implementation_harnesses: string[] }
-  versioning: { canonical_source: string; value_path: string; history_source: string }
+  versioning: { canonical_source: string; value_path: string; history_source: string; source_delivery_requires_new_target: boolean }
   execution_permissions: { safe_default: string }; console: { enabled: boolean }
   distribution: { mode: string; targets: unknown[] }; services: unknown[]; skills: string[]
 }
@@ -21,6 +21,7 @@ check(profile.schema === 'project-profile/v3', 'Unexpected normalized profile sc
 check(profile.project.name === pkg.name, 'Profile and package identity differ')
 check(/^\d+\.\d+\.\d+(?:-[\da-z.-]+)?$/.test(pkg.version), 'Expected semver project version')
 check(profile.versioning.canonical_source === 'package.json' && profile.versioning.value_path === '/version', 'Version must have one package.json source')
+check(profile.versioning.source_delivery_requires_new_target === true, 'Each delivered application-source batch must advance its target')
 check(text(profile.versioning.history_source).includes('## [' + pkg.version + ']'), 'Canonical changelog needs the integrated version')
 check(profile.workflow.tracking === 'github_issues' && profile.workflow.primary_orchestrator === 'chatgpt', 'Selected work tracking/orchestration missing')
 check(profile.workflow.implementation_harnesses.length === 1 && profile.workflow.implementation_harnesses[0] === 'codex', 'Only the selected Codex harness belongs in this project')
@@ -38,14 +39,23 @@ for (const path of ['PROJECT_GUIDE.md', 'AGENTS.md', 'README.md', 'docs/.ai/TASK
   }
 }
 const taskPolicy = text('docs/.ai/TASK_POLICY.md')
+check(taskPolicy.includes('must advance the app version monotonically') && taskPolicy.includes('local repairs and test iterations within the same delivery share'),
+  'Task policy must distinguish new source deliveries from local iterations')
+for (const path of ['AGENTS.md', 'PROJECT_GUIDE.md', 'docs/.ai/orchestration.md', 'docs/.ai/prompts/EXECUTION.md']) {
+  const source = text(path)
+  check(source.includes('application-source batch') && !/repairs keep their unaccepted target|continuations\s+of an unaccepted target keep it|retain an unaccepted target for its repairs/.test(source),
+    'Current execution guidance must advance delivered source repairs: ' + path)
+}
 check(taskPolicy.includes('## Standing Git authorization — `' + canonicalRepository + '` only')
   && taskPolicy.includes('approved `' + canonicalRepository + '` Issue')
   && taskPolicy.includes('both origin fetch and push URLs identify `' + canonicalRepository + '`')
   && taskPolicy.includes('GitHub repository ID `1409287329`'), 'Standing Git gate must name only the canonical repository and stable ID')
 check(text('AGENTS.md').includes('For approved Issues in `' + canonicalRepository + '`'), 'Agent Git gate must name the canonical repository')
 const profileSchema = JSON.parse(text('docs/.ai/schemas/project-profile.schema.json')) as {
-  properties: { execution_permissions: { properties: { safe_default: { const: string } } } }
+  properties: { execution_permissions: { properties: { safe_default: { const: string } } }; versioning: { properties: { source_delivery_requires_new_target: { const: boolean } } } }
 }
+check(profileSchema.properties.versioning.properties.source_delivery_requires_new_target.const === profile.versioning.source_delivery_requires_new_target,
+  'Profile schema and source-delivery version policy differ')
 check(profileSchema.properties.execution_permissions.properties.safe_default.const === profile.execution_permissions.safe_default,
   'Profile schema and execution default differ')
 check(!profile.console.enabled, 'No project console was requested')

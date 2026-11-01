@@ -223,7 +223,7 @@
         "target_version_in_report_h1": {
           "const": true
         },
-        "continuations_reuse_target": {
+        "source_delivery_requires_new_target": {
           "const": true
         }
       },
@@ -239,7 +239,7 @@
         "target_version_in_prompt_h1",
         "target_version_in_commit",
         "target_version_in_report_h1",
-        "continuations_reuse_target"
+        "source_delivery_requires_new_target"
       ]
     },
     "security": {

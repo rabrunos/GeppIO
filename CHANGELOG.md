@@ -2,6 +2,13 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.14] — 2026-11-01
+
+- Save new compositions as format plus widget associations, with explicit Main/Bottom scope and optional Sidebar width only. Allow opting into logically collapsed panels using their remembered or checkpointed dimensions; retain legacy format-only records and checkpoint/storage safeguards.
+- Restrict restoration and preset chrome patches to included components, preserve omitted regions and Sidebar visibility/navigation, and restore included Bottom height and visibility atomically.
+- Report accepted reserved-slot moves as successful instead of retaining the internal gesture rollback message. Extend shared Bottom reservation and native pointer regressions while preserving the approved landing motion and regional highlight.
+- Advance the app version for each newly delivered application-source batch, including corrections pending acceptance, while keeping local iterations within one target and historical versions unchanged.
+
 ## [0.1.0-alpha.13] — 2026-10-30
 
 - Replace the old shell with React workbench presentation sourced from the approved V1.141 design packet, retaining the continuous placement engine and App-owned plugin runtime. Add the context bar, user rail, editor dock, real plugin inventory manager and host composition/catalog surfaces.

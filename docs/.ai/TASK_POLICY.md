@@ -8,10 +8,16 @@ Issue for every command or a parallel task/status database. The seed file is a o
 recipe, not a status record. Leave the Issue open while required acceptance evidence is missing.
 
 Every independent root mutation of tracked files receives an orchestrator-assigned target version.
-Read package.json and actual HEAD first. Use `# [0.1.0-alpha.1] Title` for the initial unaccepted
-foundation; prompt, implementation commit and report preserve that token. Corrective continuations
-keep it. Later accepted changes receive a new SemVer target assigned by the orchestrator. Never
-reuse an abandoned target for unrelated work or silently replace accepted/published bytes.
+Read package.json and actual HEAD first. Every newly delivered batch changing application source
+must advance the app version monotonically, including bug fixes and corrective continuations of
+an unaccepted delivery. Files, local repairs and test iterations within the same delivery share
+its target; do not bump per edit or test attempt. A later delivered source correction must not
+reuse an already delivered version merely because acceptance is pending. Prompt, implementation
+commit and report preserve the assigned `[TARGET_VERSION]` token. The earlier corrective-target
+exception applied through alpha.13; keep that historical evidence unchanged. Documentation-only
+work retains the existing independent-root target policy; this source-delivery rule adds no new
+documentation-only release requirement. Never reuse an abandoned target for unrelated work or
+silently replace accepted/published bytes.
 Read-only analysis, machine setup and Issue-only actions do not bump the version.
 
 One canonical version source: package.json. The lockfile carries dependency resolution and required

@@ -29,6 +29,20 @@ async function launch(): Promise<Page> {
   await portugueseFixture(page)
   await application!.evaluate(({ BrowserWindow }) => { const window = BrowserWindow.getAllWindows()[0]!; window.show(); window.focus() })
   await page.bringToFront()
+  await page.evaluate(() => {
+    const events: unknown[] = []
+    ;(window as Window & { smokePointerEvents?: unknown[] }).smokePointerEvents = events
+    function record(event: Event) {
+      const target = event.target instanceof Element ? event.target : null, pointer = event instanceof PointerEvent ? event : null
+      events.push({ time: performance.now(), event: event.type, focused: document.hasFocus(),
+        widget: target?.closest<HTMLElement>('[data-widget]')?.dataset.widget, resize: target?.getAttribute('data-resize'),
+        point: pointer ? [pointer.clientX, pointer.clientY] : null, buttons: pointer?.buttons })
+      if (events.length > 200) events.shift()
+    }
+    // Test-only bounded event evidence, no polling or product-state writes.
+    for (const type of ['pointerdown', 'pointerup', 'pointercancel', 'gotpointercapture', 'lostpointercapture']) document.addEventListener(type, record, true)
+    window.addEventListener('blur', record); window.addEventListener('focus', record)
+  })
   const listings = await page.evaluate(() => Promise.all([window.geppio!.plugins.list(), window.geppio!.plugins.list()]))
   assert.ok(listings.every(result => result.ok), 'Concurrent startup inventory reads must succeed')
   return page
@@ -264,6 +278,7 @@ try {
     console.error('Renderer failures:', errors)
     console.error('Workbench feedback:', await page.locator('.workspace-feedback').textContent())
     await writeFile('.local/diagnostics/desktop-console-errors.json', JSON.stringify(consoleErrors, null, 2))
+    await writeFile('.local/diagnostics/desktop-pointer-events.json', JSON.stringify(await page.evaluate(() => (window as Window & { smokePointerEvents?: unknown[] }).smokePointerEvents), null, 2))
   }
   throw error
 } finally { if (application) await application.close(); if (devServer) await devServer.close(); await rm(temporary, { recursive: true, force: true }) }

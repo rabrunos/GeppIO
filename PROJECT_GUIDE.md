@@ -35,8 +35,9 @@ not explicitly closed by the owner remain labelled provisional in the specificat
 
 `package.json` is the canonical version source; `CHANGELOG.md` is integrated product history.
 The initial source baseline is `0.1.0-alpha.1`; its owner acceptance remains in Issue #1.
-Issue #21 assigns the independent plugin increment `0.1.0-alpha.2`. Repairs retain their active
-unaccepted target; machine setup does not itself justify a new release.
+Issue #21 assigns the independent plugin increment `0.1.0-alpha.2`. Every newly delivered
+application-source batch advances the app version, including corrections pending acceptance.
+Local repair/test iterations share the batch target; machine setup does not itself justify a new release.
 
 ## Remote identity and one-time packaging exception
 

@@ -61,11 +61,17 @@ test('repository gate preserves protected defaults and the canonical Git authori
   assert.equal(gate(original).status, 0)
   // The profile and its schema must agree with the owner-selected project defaults.
   const profilePath = join(root, 'docs/.ai/project-profile.json')
-  const profile = JSON.parse(readFileSync(profilePath, 'utf8')) as { execution_permissions: { safe_default: string } }
+  const profile = JSON.parse(readFileSync(profilePath, 'utf8')) as { execution_permissions: { safe_default: string }; versioning: { source_delivery_requires_new_target: boolean } }
   const schema = JSON.parse(readFileSync(join(root, 'docs/.ai/schemas/project-profile.schema.json'), 'utf8')) as {
     properties: { execution_permissions: { properties: { safe_default: { const: string } } } }
   }
   assert.equal(profile.execution_permissions.safe_default, schema.properties.execution_permissions.properties.safe_default.const)
+  profile.versioning.source_delivery_requires_new_target = false
+  writeFileSync(profilePath, JSON.stringify(profile))
+  const reused = gate(original)
+  assert.equal(reused.status, 1)
+  assert(reused.stderr.includes('Each delivered application-source batch must advance its target'))
+  profile.versioning.source_delivery_requires_new_target = true
   profile.execution_permissions.safe_default = 'protected_manual'
   writeFileSync(profilePath, JSON.stringify(profile))
   const result = gate(original)

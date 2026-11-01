@@ -22,7 +22,8 @@ choices and unresolved product questions. Route only relevant context. Do not re
 4. Populate the template with task-specific facts, actions, acceptance, validation and authority.
    Use one independently identifiable root contract per Target Version, with the exact version in
    its H1 and its Issue/basis. Separate independent versions into distinct contracts and state their
-   order/dependencies; repairs keep their unaccepted target. Do not blend versions into one root.
+   order/dependencies. Each newly delivered application-source batch advances its version, including
+   repairs pending acceptance; local iterations share the batch target. Do not blend versions into one root.
 5. Perform the template's pre-delivery completeness review. Keep detail proportional to the task:
    a narrow documentation change needs less detail than a trust-boundary change. Inherit canonical
    policies by repository path instead of copying the policy library. Missing required evidence or
@@ -52,7 +53,8 @@ prove real ChatGPT behavior, physical Windows UX or effective Codex model effort
 
 ## Executor and integration boundaries
 
-Assign a target to a new tracked mutation; retain an unaccepted target for its repairs. Select
+Assign a target to a new tracked mutation; advance it for each newly delivered application-source
+batch, including repairs of unaccepted deliveries. Local repair/test iterations share that target. Select
 effort, risk and local discovery independently using TASK_POLICY. Add negative tests whenever
 untrusted inputs, native access, plugin authority or persistence boundaries change.
 

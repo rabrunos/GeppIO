@@ -9,7 +9,7 @@ Use one root contract per Target Version, including for separately sequenced wor
 # [TARGET_VERSION] Bounded task title
 
 Repository: canonical owner/name and stable ID.
-Issue: real Issue URL. Target Version: assigned version; identify an unaccepted continuation if applicable.
+Issue: real Issue URL. Target Version: assigned version, advancing for each newly delivered application-source batch even when correcting an unaccepted delivery; local iterations share this target.
 Observed basis: package version and repository-basis SHA, or explicitly unavailable evidence.
 Execution: E-class / requested Main effort, risk, discovery and consumption; report effective client settings separately.
 

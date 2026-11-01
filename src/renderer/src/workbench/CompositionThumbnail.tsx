@@ -7,8 +7,8 @@ function cells(composition: Composition) {
   const key = JSON.stringify([composition.reference, composition.format, composition.scopes, composition.chrome])
   const cached = cache.get(key); if (cached) return cached
   const sideSize = composition.chrome?.sidebar?.size ?? composition.reference.sidebar.width + 30, bottomSize = composition.chrome?.bottom?.size ?? composition.reference.bottom.height + 20
-  const side = !composition.chrome?.sidebar || composition.chrome.sidebar.visible === false ? 0 : sideSize <= 250 ? 22 : sideSize <= 340 ? 28 : 38
-  const bottom = !composition.scopes.includes('bottom') || composition.chrome?.bottom?.visible === false ? 0 : bottomSize <= 160 ? 14 : 21, left = 3 + side + (side ? 3 : 0), width = 157 - left
+  const side = composition.chrome?.sidebar?.size === undefined ? 0 : sideSize <= 250 ? 22 : sideSize <= 340 ? 28 : 38
+  const bottom = !composition.scopes.includes('bottom') ? 0 : bottomSize <= 160 ? 14 : 21, left = 3 + side + (side ? 3 : 0), width = 157 - left
   const result: Cell[] = side ? [{ x: 3, y: 3, width: side, height: 74, role: 'sidebar' }] : []
   for (const region of ['main', 'bottom'] as const) {
     if (region === 'bottom' && !bottom) continue

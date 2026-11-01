@@ -9,6 +9,7 @@ import type { Composition, LocalSessionState, Registry, SessionDraft, SessionSlo
 import { parseWorkbench, serializeWorkbench } from '../../../shared/workbench/codec.ts'
 import { readWorkbench, writeWorkbench } from '../../../shared/workbench/storage.ts'
 import { EditHistory, formatSignature } from '../../../shared/workbench/history.ts'
+import { compositionScene, systemCompositions } from '../../../shared/workbench/compositions.ts'
 import { configureBar, resizePair } from '../../../shared/workbench/commands.ts'
 import type { ResizePair } from '../../../shared/workbench/commands.ts'
 import type { UserBar } from '../../../shared/workbench/model.ts'
@@ -99,7 +100,11 @@ export function useTransaction(registry: Registry = widgetRegistry(), localState
       preview(next, 'Composição importada na prévia. Salvar adota sem alterar originais.')
     } catch { if (ticket === epoch.current) setMessage('Arquivo incompatível. Dados anteriores preservados.') }
   }
-  const withOrganization = (next: Snapshot): WorkbenchSnapshot => ({ ...next, organization: ('organization' in next ? next as WorkbenchSnapshot : live.current).organization })
+  function withOrganization(next: Snapshot): WorkbenchSnapshot {
+    const value = { ...next, organization: ('organization' in next ? next as WorkbenchSnapshot : live.current).organization }
+    const composition = [...systemCompositions(), ...live.current.organization.compositions].find(item => item.id === formatId.current)
+    return composition ? compositionScene({ ...live.current, organization: value.organization }, value, composition.scopes) : value
+  }
   return { snapshot, live, editing, recovery, message, setMessage, put, begin, cancel, action, slots, currentSlots: () => slotsRef.current,
     changeLocal(patch: Partial<LocalSessionState>) {
       const before = current(); if (!before.localState) return

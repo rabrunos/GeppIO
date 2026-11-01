@@ -2,6 +2,16 @@
 
 ## Workbench integration — Issue #2 / alpha.13
 
+Alpha.14 extends the same corrections controller with `workbench-composition-smoke.ts`.
+Use `workbench-corrections-smoke.ts --compositions-only` (also `--scale125`) for the focused
+native suite: all four logical visibility defaults, enabled collapsed-panel opt-in, checkpointed
+dimensions, one save mode, literal names/PT/EN, scoped restore/checkpoint/Conclude and Bottom
+multi-slot catalog/existing drops at 125/250px in both themes. It reuses the Main pointer/landing
+sampler, including position and dimensions throughout the flight, normal/drag hover, cancellation,
+invalid Bottom interception and ordinary free-space placement. Source tests additionally cover
+paused admission; current manifest-v1 plugins cannot contribute a native Bottom widget. These
+sequences do not certify an unobserved owner-specific scene or physical visual acceptance.
+
 Run the same complete checks listed below with Node24/pnpm11. `tests/workbench-model.test.ts`
 adds dynamic ownership/model validation, host-only v1 normalization, explicit legacy adoption,
 unchanged original bytes, CAS/quota failures, independent membership, atomic bilateral resizing

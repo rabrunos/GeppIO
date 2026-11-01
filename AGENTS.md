@@ -46,8 +46,9 @@ plugin capabilities require their own approved task and safety controls.
 
 ## Version and Git
 
-Use TASK_POLICY. Each independent tracked mutation needs an assigned Target Version; continuations
-of an unaccepted target keep it. Canonical source: package.json; history: CHANGELOG.md.
+Use TASK_POLICY. Each independent tracked mutation needs an assigned Target Version. Every newly
+delivered application-source batch advances the app version, including repairs of unaccepted deliveries;
+local edits/tests within one batch share its target. Canonical source: package.json; history: CHANGELOG.md.
 Main commit subject and final report preserve `[<TARGET_VERSION>]` exactly. Read-only work and
 machine setup do not bump version. A future name is an explicit migration, not branding cleanup.
 

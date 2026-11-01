@@ -148,7 +148,7 @@ function Workbench({ plugins }: { plugins: ReturnType<typeof usePlugins> }) {
     if (!tx.editing || !stored) return false
     const region = stored.region, surface = { ...surfaces.measures[region], region, expanded: expanded && region === 'main' }
     const result = fillReservation(baseline, registry, tx.currentSlots(), id, surface, intention, disabledOwners())
-    if (result && commit) tx.action(result.snapshot, result.slots)
+    if (result && commit) { tx.action(result.snapshot, result.slots); tx.setMessage('Espaço preenchido. Salve ou cancele.') }
     return !!result
   }
   async function saveBar(bar: UserBar) {

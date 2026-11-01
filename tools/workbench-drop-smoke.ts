@@ -10,11 +10,10 @@ type Box = { x: number; y: number; width: number; height: number }
 type Sample = { time: number; image: Box | null; live: Box | null; opacity: string; animations: number; scale: number[]; target: Box | null; duration: number | string | null; easing: string | null; clip: string | null }
 type Probe = Window & { dropSamples?: Sample[]; dropSampling?: boolean }
 const keys = ['x', 'y', 'width', 'height'] as const
-function near(actual: Box, expected: Box, tolerance = .15) { for (const key of keys) assert.ok(Math.abs(actual[key] - expected[key]) < tolerance, `${key}: ${JSON.stringify({ actual, expected })}`) }
+export function near(actual: Box, expected: Box, tolerance = .15) { for (const key of keys) assert.ok(Math.abs(actual[key] - expected[key]) < tolerance, `${key}: ${JSON.stringify({ actual, expected })}`) }
 
 /** Uses the existing corrections launch/reset controller and disposable profile. */
-export async function workbenchDropSmoke(page: Page, reset: (snapshot?: WorkbenchSnapshot, theme?: string) => Promise<void>, observations: unknown[]) {
-  async function edit(close = true) { await page.getByTestId('edit-layout').click(); await settle(page); if (close) { await page.locator('.widget-catalog-toggle').click(); await settle(page) } }
+export function dropDriver(page: Page, observations: unknown[]) {
   async function hold(source: Locator, to: { x: number; y: number }) {
     // Let Playwright wait for the real hit target to be visible/stable and scroll
     // it into view before reading coordinates. Never synthesize capture.
@@ -24,6 +23,7 @@ export async function workbenchDropSmoke(page: Page, reset: (snapshot?: Workbenc
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await page.mouse.down()
     assert.ok(await source.evaluate(node => node.hasPointerCapture(1)), 'The actual native pointer must be captured')
     await page.mouse.move(to.x, to.y, { steps: 8 }); await settle(page)
+    assert.ok(await source.evaluate(node => node.hasPointerCapture(1)), 'Native capture must survive through the held destination before release')
   }
   async function sampleRelease(id: string, reduced = false) {
     await page.evaluate(id => {
@@ -61,7 +61,10 @@ export async function workbenchDropSmoke(page: Page, reset: (snapshot?: Workbenc
       near(flying.at(-1)!.image!, final, 1)
       const distance = (box: Box) => keys.reduce((sum, key) => sum + Math.abs(box[key] - final[key]), 0)
       for (let i = 1; i < flying.length; i++) assert.ok(distance(flying[i]!.image!) <= distance(flying[i - 1]!.image!) + .15, 'Position and size must converge without reversing or jumping at reveal')
-      const revealed = samples.find(sample => !sample.image && sample.opacity === '1' && sample.live)
+      // Sampling starts before pointer-up. A dormant, display:none catalog view
+      // can have opacity:1 and a zero rectangle before the transaction; only the
+      // first visible frame after the measured flight is its reveal.
+      const revealed = samples.find(sample => sample.time > flying.at(-1)!.time && !sample.image && sample.opacity === '1' && sample.live && sample.live.width > 0 && sample.live.height > 0)
       assert.ok(revealed); near(revealed.live!, final)
       assert.equal(flying.at(-1)!.clip, await page.locator(`[data-widget-id="${id}"]`).evaluate(node => getComputedStyle(node).clipPath))
     }
@@ -69,6 +72,11 @@ export async function workbenchDropSmoke(page: Page, reset: (snapshot?: Workbenc
     observations.push({ kind: 'landing', id, reduced, samples, final })
     return final
   }
+  return { hold, sampleRelease }
+}
+export async function workbenchDropSmoke(page: Page, reset: (snapshot?: WorkbenchSnapshot, theme?: string) => Promise<void>, observations: unknown[]) {
+  const { hold, sampleRelease } = dropDriver(page, observations)
+  async function edit(close = true) { await page.getByTestId('edit-layout').click(); await settle(page); if (close) { await page.locator('.widget-catalog-toggle').click(); await settle(page) } }
   const empty = () => {
     const state = initialWorkbench(); state.placements = state.placements.filter(p => p.id === 'summary')
     state.organization.bars[0]!.members = []; state.organization.bars[0]!.positions = {}

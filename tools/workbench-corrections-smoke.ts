@@ -10,12 +10,14 @@ import { parseWorkbench, serializeWorkbench } from '../src/shared/workbench/code
 import { moveView } from '../src/shared/workbench/commands.ts'
 import { settle } from './freeform-smoke.ts'
 import { workbenchDropSmoke } from './workbench-drop-smoke.ts'
+import { workbenchCompositionSmoke } from './workbench-composition-smoke.ts'
 
 const profile = await mkdtemp(join(tmpdir(), 'geppio-smoke-corrections-'))
 const env: Record<string, string> = Object.fromEntries(Object.entries(process.env).filter((item): item is [string, string] => item[1] !== undefined))
 delete env.ELECTRON_RUN_AS_NODE; delete env.NODE_OPTIONS; delete env.ELECTRON_RENDERER_URL
 env.GEPPIO_TEST_USER_DATA = profile; env.NODE_ENV = 'production'
 await mkdir('.local/diagnostics/corrections-alpha13', { recursive: true })
+await mkdir('.local/diagnostics/compositions-alpha14', { recursive: true })
 const application = await electron.launch({ args: ['.', ...(process.argv.includes('--scale125') ? ['--force-device-scale-factor=1.25'] : [])], env })
 const observations: unknown[] = []
 let page: Page
@@ -40,14 +42,20 @@ try {
       regions: [...document.querySelectorAll<HTMLElement>('[data-region]')].map(node => ({ region: node.dataset.region, box: node.getBoundingClientRect().toJSON() })) }))) })
     await page.screenshot({ path: `.local/diagnostics/corrections-alpha13/${name}.png` })
   }
-  await workbenchDropSmoke(page, reset, observations)
-  if (!process.argv.includes('--drops-only')) {
+  if (!process.argv.includes('--presentation-only') && !process.argv.includes('--compositions-only')) await workbenchDropSmoke(page, reset, observations)
+  if (!process.argv.includes('--presentation-only') && !process.argv.includes('--drops-only')) await workbenchCompositionSmoke(page, reset, observations)
+  if (!process.argv.includes('--drops-only') && !process.argv.includes('--compositions-only')) {
   // AC-G01/G02: real host content at the original shell minima, no recovery.
   for (const theme of ['light', 'dark']) {
     const snapshot = initialWorkbench(); snapshot.organization.chrome.sidebar.size = 180; snapshot.organization.chrome.bottom.size = 125
     await reset(snapshot, theme)
     assert.equal(await page.locator('[data-region="sidebar"]').evaluate(node => node.getBoundingClientRect().width), 180)
-    assert.equal(await page.locator('[data-surface="sidebar"]').getAttribute('data-usable-width'), '150')
+    const sidebarWidth = Number(await page.locator('[data-surface="sidebar"]').getAttribute('data-usable-width'))
+    const dpr = await page.evaluate(() => devicePixelRatio)
+    // Thin native gutter pixels quantize at fractional DPR; clientWidth is an
+    // integer CSS measure (150 at DPR1, 151 observed at DPR1.25). Keep the outer
+    // 180px contract and all feasibility/content checks strict.
+    assert.ok(sidebarWidth >= 150 && sidebarWidth <= 150 + (Number.isInteger(dpr) ? 0 : 1), `Native Sidebar usable width: ${sidebarWidth} at DPR ${dpr}`)
     assert.equal(await page.locator('[data-surface="bottom"]').getAttribute('data-usable-height'), '105')
     assert.equal(await page.locator('[data-surface="sidebar"]').getAttribute('data-feasible'), 'true')
     assert.equal(await page.locator('[data-surface="bottom"]').getAttribute('data-feasible'), 'true')
@@ -184,7 +192,7 @@ try {
   await page.mouse.click(5, 5); await settingsDialog.waitFor({ state: 'detached' })
   await profileMenu(); await page.getByRole('menuitem', { name: 'Sobre o GeppIO', exact: true }).click()
   const about = page.getByRole('dialog', { name: 'Sobre o GeppIO', exact: true })
-  assert.equal(await about.locator('.profile-version').textContent(), '0.1.0-alpha.13')
+  assert.equal(await about.locator('.profile-version').textContent(), '0.1.0-alpha.14')
   await about.getByText('Seu espaço para criar, organizar e desenvolver.', { exact: true }).waitFor()
   await about.getByRole('button', { name: 'Voltar ao trabalho', exact: true }).click()
   // P32: local typed model/theme history and confirmed Cancel checkpoint.
@@ -320,7 +328,7 @@ try {
   }
   assert.deepEqual(errors, [])
   await writeFile('.local/diagnostics/corrections-alpha13/observations.json', JSON.stringify(observations, null, 2))
-  console.log(process.argv.includes('--drops-only') ? 'PASS focused native drops: six region directions, scrolled custom bar, landing geometry, exact catalog/existing reservation drop, hover/cancel/duplicate/history, themes and reduced motion' : 'PASS approved corrections and native drops: minima/themes/viewports, rail click/jitter/reorder/cancel/blur, 14/legacy20 bars/library/scroll, focus/backdrop, local history/checkpoint, exact slots, format/library scope, preserved incompatible bytes, catalog origins/reduced motion and observed post-toast outline')
+  console.log(process.argv.includes('--compositions-only') ? 'PASS focused native alpha14 composition suite' : process.argv.includes('--drops-only') ? 'PASS focused native drops: six region directions, scrolled custom bar, landing geometry, exact catalog/existing reservation drop, hover/cancel/duplicate/history, themes and reduced motion' : 'PASS approved corrections and native drops: minima/themes/viewports, rail click/jitter/reorder/cancel/blur, 14/legacy20 bars/library/scroll, focus/backdrop, local history/checkpoint, exact slots, format/library scope, preserved incompatible bytes, catalog origins/reduced motion and observed post-toast outline')
 } catch (error) {
   if (page!) await page.screenshot({ path: '.local/diagnostics/corrections-alpha13/failure.png' })
   throw error

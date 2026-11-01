@@ -3,6 +3,10 @@
 Historical foundation handoff: the owner extracted the original package named `semnome`. The current product is GeppIO, with trusted local plugins added separately in #21; do not repeat intake or Git setup. The original foundation contract below remains historical evidence. Do not restart intake, import the
 old application or install the BootCrate app. The current repository has no real plugins and no login.
 
+Historical version instructions below do not override current [TASK_POLICY](../TASK_POLICY.md):
+each newly delivered application-source correction advances its version, even pending acceptance.
+Read-only setup/validation does not bump the app.
+
 Read PROJECT_GUIDE.md, AGENTS.md and docs/development/testing.md. Verify the actual directory, Git
 branch/HEAD/status/diff and package version. Do not create a remote repository or guess its name.
 If an origin and relevant live Issue exist, use the foundation marker described in docs/development/github.md.
