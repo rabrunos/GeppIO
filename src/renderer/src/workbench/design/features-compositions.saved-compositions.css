@@ -475,7 +475,8 @@
   cursor: pointer;
 }
 
-.layout-empty-slot:hover {
+.layout-empty-slot:hover,
+.layout-empty-slot[data-drag-hover] {
   border-color: var(--color-accent);
   color: var(--color-accent);
   background: var(--color-accent-soft);

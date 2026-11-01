@@ -21,7 +21,7 @@ export function systemCompositions(): Composition[] {
 }
 export function captureComposition(snapshot: WorkbenchSnapshot, name: string, mode: Composition['mode'], scopes: Region[], chrome?: ChromePatch, slots: readonly SessionSlot[] = []): Composition {
   const placements = snapshot.placements.filter(p => scopes.includes(p.region))
-  const format = [...placements, ...slots.filter(slot => scopes.includes(slot.region)).map(slot => projectSessionSlot(slot, snapshot.reference[slot.region]))]
+  const format = [...placements, ...slots.filter(slot => scopes.includes(slot.region) && (!slot.sidebarBar || slot.sidebarBar === snapshot.organization.activeBar)).map(slot => projectSessionSlot(slot, snapshot.reference[slot.region]))]
   return { id: `composition:${crypto.randomUUID()}`, name, system: false, scopes, reference: structuredClone(snapshot.reference), mode,
     placements: mode === 'format-widgets' ? structuredClone(placements) : [],
     views: mode === 'format-widgets' ? snapshot.organization.views.filter(view => placements.some(p => p.id === view.id)) : [],
@@ -96,7 +96,7 @@ export function projectSessionSlot(slot: SessionSlot, to: Size): SessionSlot {
 export function compositionSlots(composition: Composition, snapshot: WorkbenchSnapshot): SessionSlot[] {
   return composition.format.map(slot => {
     const from = composition.reference[slot.region], to = snapshot.reference[slot.region]
-    return { ...slot, id: `session:${composition.id}:${slot.id}`, x: slot.x / from.width * to.width, y: slot.y / from.height * to.height,
+    return { ...slot, ...(slot.region === 'sidebar' ? { sidebarBar: snapshot.organization.activeBar } : {}), id: `session:${composition.id}:${slot.id}`, x: slot.x / from.width * to.width, y: slot.y / from.height * to.height,
       width: slot.width / from.width * to.width, height: slot.height / from.height * to.height, reference: { ...to } }
   }).filter(slot => !snapshot.placements.some(p => p.region === slot.region && collides(p, slot)))
 }

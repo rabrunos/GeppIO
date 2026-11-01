@@ -55,7 +55,7 @@
 .host-drag-origin[data-owner-region="sidebar"] { z-index: 41; }
 .host-drag-origin[data-owner-region="bottom"] { z-index: 35; }
 .drag-picture-content { width: 100%; height: 100%; min-width: 0; min-height: 0; overflow: hidden; }
-.drag-picture-content.widget { display: flex; flex-direction: column; border: 1px solid var(--color-border); border-radius: var(--card-radius); background: var(--color-surface); }
+.drag-picture-content.widget { display: flex; flex-direction: column; container-type: inline-size; border: 1px solid var(--color-border); border-radius: var(--card-radius); background: var(--color-surface); }
 .drag-picture-flight > .drag-picture-content { box-shadow: 0 18px 48px -14px rgb(0 0 0 / .32); }
 .host-drop-zone { position: absolute; z-index: 49; border: 1px dashed var(--color-accent); border-radius: var(--card-radius); background: color-mix(in srgb,var(--color-accent) 3%,transparent); pointer-events: none; }
 .host-drop-zone[data-over="true"] { background: color-mix(in srgb,var(--color-accent) 7%,transparent); }
@@ -129,9 +129,9 @@
 .workbench[data-sidebar-presentation="floating"] .host-rail-panel::after { display: none; }
 .widget-frame[data-owner-region="sidebar"] { container-type: inline-size; }
 .widget-frame[data-owner-region="bottom"] { container-type: inline-size; }
-.widget-frame[data-owner-region="sidebar"] .widget-content { overflow-x: hidden; overflow-wrap: anywhere; }
-.widget-frame[data-owner-region="bottom"] .widget-heading { min-height: 28px; padding: 5px 11px; }
-.widget-frame[data-owner-region="bottom"] .widget-heading > strong { font-size: 13px; line-height: 18px; }
+:is(.widget-frame,.drag-picture-content)[data-owner-region="sidebar"] .widget-content { overflow-x: hidden; overflow-wrap: anywhere; }
+:is(.widget-frame,.drag-picture-content)[data-owner-region="bottom"] .widget-heading { min-height: 28px; padding: 5px 11px; }
+:is(.widget-frame,.drag-picture-content)[data-owner-region="bottom"] .widget-heading > strong { font-size: 13px; line-height: 18px; }
 @container (max-width: 209px) {
   .library-fixture { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; padding: 8px; }
   .library-tile { min-width: 0; min-height: 76px; padding: 10px 6px; gap: 7px; overflow-wrap: anywhere; }

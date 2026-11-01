@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { initialWorkbench, widgetRegistry, constraintsForViews, LIMITS } from '../src/shared/workbench/model.ts'
-import type { LocalSessionState, UserBar } from '../src/shared/workbench/model.ts'
+import type { LocalSessionState, UserBar, SessionSlot } from '../src/shared/workbench/model.ts'
 import { addWidget, updateBar, moveView } from '../src/shared/workbench/commands.ts'
 import { parseWorkbench, serializeWorkbench } from '../src/shared/workbench/codec.ts'
 import { projectRegion } from '../src/shared/freeform/projection.ts'
@@ -9,9 +9,81 @@ import { CONSTRAINTS, constraintsFor } from '../src/shared/freeform/policy.ts'
 import { reflow } from '../src/shared/freeform/reflow.ts'
 import { EditHistory, formatSignature } from '../src/shared/workbench/history.ts'
 import { reduceNotifications } from '../src/shared/workbench/notifications.ts'
+import { fillReservation } from '../src/shared/workbench/slots.ts'
+import { captureComposition } from '../src/shared/workbench/compositions.ts'
 
 const registry = widgetRegistry()
 const bar = (index: number, archived = false): UserBar => ({ id: `bar:${index}`, name: `Literal ${index}`, userNamed: true, icon: 'widgets', archived, members: [], positions: {} })
+
+test('catalog drop fills only the current projected reservation, preserving sibling slots and other-area model presence', () => {
+  const source = initialWorkbench(); source.placements = source.placements.filter(p => p.region !== 'main')
+  const surface = { ...source.reference.main, region: 'main' as const, expanded: false }
+  const slots: SessionSlot[] = [0, 1].map(i => ({ id: `slot:${i}`, region: 'main', x: i * 550, y: 0, width: 540, height: 774, reference: { width: 1567, height: 774 } }))
+  const before = structuredClone(source), filled = fillReservation(source, registry, slots, 'slot:0', { ...surface, width: 1089 }, { kind: 'catalog', typeId: 'host:notes' })!
+  assert.ok(filled); assert.deepEqual(filled.slots, [slots[1]])
+  const placed = filled.snapshot.placements.find(p => p.region === 'main')!
+  assert.deepEqual([placed.x, placed.y, placed.width, placed.height], [0, 0, 540 / 1567 * 1089, 774])
+  assert.equal(filled.snapshot.organization.views.find(v => v.id === placed.id)!.modelId, 'model:host:notes')
+  assert.deepEqual(filled.snapshot.placements.find(p => p.id === 'notes'), source.placements.find(p => p.id === 'notes'))
+  assert.deepEqual(source, before)
+  const history = new EditHistory(), draft = { snapshot: source, slots, formatId: 'test' }, after = { ...draft, ...filled }
+  history.begin(draft); history.finish(after)
+  assert.deepEqual(history.undo(after), draft); assert.equal(history.canUndo, false)
+  assert.deepEqual(history.redo(draft), after)
+  history.begin(after); assert.deepEqual(history.abort(), after)
+  assert.equal(fillReservation(filled.snapshot, registry, filled.slots, 'slot:0', surface, { kind: 'catalog', typeId: 'host:notes' }), null)
+})
+
+test('reserved drops reject incompatible, undersized, occupied, duplicate, paused and stale targets atomically', () => {
+  const source = initialWorkbench(), before = structuredClone(source), surface = { ...source.reference.main, region: 'main' as const, expanded: false }
+  const slot: SessionSlot = { id: 'slot', region: 'main', x: 0, y: 0, width: 540, height: 774, reference: surface }
+  const catalog = { kind: 'catalog' as const, typeId: 'host:notes' }
+  assert.equal(fillReservation(source, registry, [slot], slot.id, surface, catalog), null, 'An occupied rectangle cannot push its neighbours')
+  source.placements = source.placements.filter(p => p.region !== 'main')
+  assert.equal(fillReservation(source, registry, [{ ...slot, width: 100 }], slot.id, surface, catalog), null)
+  assert.equal(fillReservation(source, registry, [slot], 'old-slot', surface, catalog), null)
+  assert.equal(fillReservation(source, registry, [slot], slot.id, surface, catalog, new Set(['host'])), null)
+  assert.equal(fillReservation(source, new Map(), [slot], slot.id, surface, { kind: 'move', viewId: 'notes', sourceBar: 'home' }), null, 'Removed plugin/type is revalidated on release')
+  const filled = fillReservation(source, registry, [slot], slot.id, surface, catalog)!
+  assert.equal(fillReservation(filled.snapshot, registry, [{ ...slot, x: 700 }], slot.id, surface, catalog), null, 'Duplicate presence cannot fall through to free insertion')
+  const bottom = { ...source.reference.bottom, region: 'bottom' as const, expanded: false }
+  assert.equal(fillReservation(source, registry, [{ ...slot, region: 'bottom', reference: bottom }], slot.id, bottom, { kind: 'catalog', typeId: 'host:queue' }), null)
+  assert.deepEqual(before.organization, source.organization)
+})
+
+test('existing view exact transfer preserves identity and removes only legitimate source membership', () => {
+  const source = initialWorkbench(); source.placements = source.placements.filter(p => p.region !== 'main')
+  source.organization.bars.push({ ...bar(1), members: ['host:notes'], positions: { 'host:notes': 24 } })
+  const surface = { ...source.reference.main, region: 'main' as const, expanded: false }
+  const slot: SessionSlot = { id: 'slot', region: 'main', x: 24.5, y: 10, width: 500, height: 600, reference: surface }
+  const intent = { kind: 'move' as const, viewId: 'notes', sourceBar: 'home' }, before = structuredClone(source)
+  const filled = fillReservation(source, registry, [slot], slot.id, surface, intent)!
+  assert.ok(filled); assert.deepEqual(filled.snapshot.organization.bars[1], source.organization.bars[1])
+  assert.equal(filled.snapshot.organization.bars[0]!.members.includes('host:notes'), false)
+  assert.ok(filled.snapshot.placements.some(p => p.id === 'notes' && p.region === 'sidebar'), 'Shared Sidebar view is retained for the other bar')
+  const main = filled.snapshot.placements.find(p => p.region === 'main')!
+  assert.equal(filled.snapshot.organization.views.find(v => v.id === main.id)!.modelId, 'model:host:notes')
+  assert.deepEqual([main.x, main.y, main.width, main.height], [24.5, 10, 500, 600])
+  assert.equal(fillReservation(source, registry, [slot], slot.id, surface, { ...intent, sourceBar: 'missing' }), null)
+  assert.deepEqual(source, before)
+  source.organization.bars.pop()
+  const sole = fillReservation(source, registry, [slot], slot.id, surface, intent)!
+  assert.equal(sole.snapshot.placements.find(p => p.region === 'main')!.id, 'notes', 'Unshared view retains its mounted identity')
+})
+
+test('Sidebar exact drop binds only its owning bar and reuses an existing shared view without duplicating IDs', () => {
+  const source = initialWorkbench(); source.organization.bars.push(bar(1)); source.organization.activeBar = 'bar:1'
+  const surface = { ...source.reference.sidebar, region: 'sidebar' as const, expanded: false }
+  const slot: SessionSlot = { id: 'slot', region: 'sidebar', sidebarBar: 'bar:1', x: 0, y: 30, width: 253, height: 400, reference: surface }
+  const filled = fillReservation(source, registry, [slot], slot.id, surface, { kind: 'catalog', typeId: 'host:notes' })!
+  assert.ok(filled); assert.equal(new Set(filled.snapshot.placements.map(p => p.id)).size, filled.snapshot.placements.length)
+  assert.deepEqual(filled.snapshot.organization.bars[0]!.members, source.organization.bars[0]!.members)
+  assert.deepEqual(filled.snapshot.organization.bars[1]!.members, ['host:notes'])
+  assert.equal(filled.snapshot.organization.bars[1]!.positions!['host:notes'], 30)
+  assert.equal(fillReservation({ ...source, organization: { ...source.organization, activeBar: 'home' } }, registry, [slot], slot.id, surface, { kind: 'catalog', typeId: 'host:summary' }), null)
+  const otherBar = { ...source, placements: [], organization: { ...source.organization, activeBar: 'home' } }
+  assert.deepEqual(captureComposition(otherBar, 'Other bar', 'format', ['sidebar'], undefined, [slot]).format, [], 'Capturing another bar cannot adopt its hidden reservation')
+})
 
 test('fourteen new custom activations, independently bounded saved bars and lossless legacy twenty-bar editing', () => {
   const initial = initialWorkbench(); initial.organization.bars.push(...Array.from({ length: 13 }, (_, i) => bar(i)))

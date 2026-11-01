@@ -26,8 +26,10 @@ export const WidgetFrame = memo(function WidgetFrame({ placement: p, measurement
   useLayoutEffect(() => {
     const before = previous.current; previous.current = { left, top, revision: motionRevision, visible }
     const changed = before && Math.abs(before.left - left) + Math.abs(before.top - top) >= .2
-    if (!visible || (interaction.active() && (interaction.activeId === p.id || changed))) flight.current?.cancel()
-    if (!visible || before?.revision === motionRevision || interaction.active() || matchMedia('(prefers-reduced-motion: reduce)').matches || !frame.current) return
+    // The top-layer picture owns this view through pickup, landing and return.
+    // Keep its underlying rectangle final, so measuring/revealing cannot see a FLIP.
+    if (ghosted || !visible || (interaction.active() && (interaction.activeId === p.id || changed))) flight.current?.cancel()
+    if (ghosted || !visible || before?.revision === motionRevision || interaction.active() || matchMedia('(prefers-reduced-motion: reduce)').matches || !frame.current) return
     if ((!before || !before.visible) && motion.entering) {
       flight.current?.cancel()
       flight.current = frame.current.animate([{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'translateY(0px)' }], { duration: motion.duration, easing: 'cubic-bezier(.2,.8,.2,1)' }); return
@@ -36,7 +38,7 @@ export const WidgetFrame = memo(function WidgetFrame({ placement: p, measurement
     const matrix = new DOMMatrixReadOnly(getComputedStyle(frame.current).transform)
     flight.current?.cancel()
     flight.current = frame.current.animate([{ transform: `translate(${before.left + matrix.e - left}px, ${before.top + matrix.f - top}px)` }, { transform: 'translate(0,0)' }], { duration: motion.duration, easing: 'cubic-bezier(.2,.8,.2,1)' })
-  }, [left, top, motionRevision, visible])
+  }, [left, top, motionRevision, visible, ghosted])
   useLayoutEffect(() => () => flight.current?.cancel(), [])
   return <section className={'widget widget-frame ' + (editing ? 'editing ' : '') + (editing && interaction.selected === p.id ? 'selected ' : '') + (editing && interaction.blocked === p.id ? 'invalid' : '')}
     ref={frame} data-widget-appearance={definition.appearance} data-model-id={`model:${definition.id}`} data-swap-selected={swapSelected ? '' : undefined}

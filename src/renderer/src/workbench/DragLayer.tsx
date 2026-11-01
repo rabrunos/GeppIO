@@ -66,7 +66,7 @@ export function DragLayer({ picture: p, label, children, complete, pointer, cont
   }, [p.key, label])
   useLayoutEffect(() => {
     const element = node.current!, caption = labelNode.current!
-    let frame = 0, flight: Animation | null = null, canceled = false
+    let frame = 0, flight: Animation | null = null, clipping: Animation | null = null, canceled = false
     function paint(now: number) {
       frame = 0
       const state = pointer.current, size = labelSize.current, elapsed = matchMedia('(prefers-reduced-motion: reduce)').matches ? 1 : Math.min(1, (now - p.started) / 220), value = progress(elapsed)
@@ -83,8 +83,8 @@ export function DragLayer({ picture: p, label, children, complete, pointer, cont
     }
     else {
       caption.hidden = true
-      // Transaction geometry is committed before this next read. Measure once;
-      // the completion animation changes geometry, never nonuniform scale.
+      // WidgetFrame suppresses its own FLIP while ghosted. This client rectangle
+      // is the final engine projection, including the current region/scroll mapping.
       frame = requestAnimationFrame(() => {
         const frameNode = p.viewId ? document.querySelector<HTMLElement>(`[data-widget-id="${CSS.escape(p.viewId)}"]`) : [...document.querySelectorAll<HTMLElement>('.widget-frame')].find(element => element.dataset.modelId === `model:${p.typeId}` && !element.hidden)
         const returningToBar = p.sourceBar && document.querySelector('.workbench')?.getAttribute('data-active-bar') !== p.sourceBar
@@ -92,6 +92,13 @@ export function DragLayer({ picture: p, label, children, complete, pointer, cont
         const to = target?.getBoundingClientRect() ?? p.origin, from = element.getBoundingClientRect()
         const shrink = !p.accepted && (target === p.tile || returningToBar)
         if (matchMedia('(prefers-reduced-motion: reduce)').matches) { complete(); return }
+        if (p.accepted && frameNode) {
+          const clone = content.current!.firstElementChild as HTMLElement | null
+          if (clone) clone.dataset.ownerRegion = frameNode.dataset.ownerRegion
+          // Leave source clipping behind; converge to the destination's visible
+          // slice as well as its full rectangle before revealing the live view.
+          clipping = content.current!.animate([{ clipPath: 'inset(0px round var(--card-radius))' }, { clipPath: getComputedStyle(frameNode).clipPath }], { duration: 240, easing: EASING, fill: 'forwards' })
+        }
         flight = element.animate(shrink ? [
           { transform: `translate(${from.left}px,${from.top}px) scale(1)`, opacity: 1 },
           { transform: `translate(${to.left}px,${to.top}px) scale(${Math.min(to.width / p.width, to.height / p.height)})`, opacity: .15 }
@@ -102,7 +109,7 @@ export function DragLayer({ picture: p, label, children, complete, pointer, cont
         void flight.finished.then(() => { if (!canceled) complete() }).catch(() => {})
       })
     }
-    return () => { canceled = true; controller.current = null; cancelAnimationFrame(frame); flight?.cancel() }
+    return () => { canceled = true; controller.current = null; cancelAnimationFrame(frame); flight?.cancel(); clipping?.cancel() }
   }, [p.key, p.released])
   return <div ref={layer} className="layout-drag-layer" popover="manual" aria-hidden="true" inert><div ref={node} className={p.released ? 'layout-flight-context drag-picture-flight' : 'layout-drag-node'} style={{ '--layout-drag-width': p.width + 'px', '--layout-drag-height': p.height + 'px', width: p.width, height: p.height } as CSSProperties}><div ref={content} className="drag-picture-content">{!p.source && children}</div></div><span ref={labelNode} className="layout-drag-label">{label}</span></div>
 }

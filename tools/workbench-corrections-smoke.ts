@@ -9,19 +9,20 @@ import type { WorkbenchSnapshot } from '../src/shared/workbench/model.ts'
 import { parseWorkbench, serializeWorkbench } from '../src/shared/workbench/codec.ts'
 import { moveView } from '../src/shared/workbench/commands.ts'
 import { settle } from './freeform-smoke.ts'
+import { workbenchDropSmoke } from './workbench-drop-smoke.ts'
 
 const profile = await mkdtemp(join(tmpdir(), 'geppio-smoke-corrections-'))
 const env: Record<string, string> = Object.fromEntries(Object.entries(process.env).filter((item): item is [string, string] => item[1] !== undefined))
 delete env.ELECTRON_RUN_AS_NODE; delete env.NODE_OPTIONS; delete env.ELECTRON_RENDERER_URL
 env.GEPPIO_TEST_USER_DATA = profile; env.NODE_ENV = 'production'
 await mkdir('.local/diagnostics/corrections-alpha13', { recursive: true })
-const application = await electron.launch({ args: ['.'], env })
+const application = await electron.launch({ args: ['.', ...(process.argv.includes('--scale125') ? ['--force-device-scale-factor=1.25'] : [])], env })
 const observations: unknown[] = []
 let page: Page
 try {
   page = await application.firstWindow()
   page.setDefaultTimeout(15000)
-  const errors: string[] = []; page.on('pageerror', error => errors.push(error.message))
+  const errors: string[] = []; page.on('pageerror', error => { errors.push(error.message); console.error('Renderer error:', error.message) })
   async function size(width: number, height: number) {
     await application.evaluate(({ BrowserWindow }, dimensions) => { const win = BrowserWindow.getAllWindows()[0]!; win.setContentSize(dimensions.width, dimensions.height); win.show(); win.focus() }, { width, height })
     await settle(page)
@@ -39,6 +40,8 @@ try {
       regions: [...document.querySelectorAll<HTMLElement>('[data-region]')].map(node => ({ region: node.dataset.region, box: node.getBoundingClientRect().toJSON() })) }))) })
     await page.screenshot({ path: `.local/diagnostics/corrections-alpha13/${name}.png` })
   }
+  await workbenchDropSmoke(page, reset, observations)
+  if (!process.argv.includes('--drops-only')) {
   // AC-G01/G02: real host content at the original shell minima, no recovery.
   for (const theme of ['light', 'dark']) {
     const snapshot = initialWorkbench(); snapshot.organization.chrome.sidebar.size = 180; snapshot.organization.chrome.bottom.size = 125
@@ -314,9 +317,10 @@ try {
   await reset(literalBar); await profileMenu(); await page.getByRole('menuitemradio', { name: 'English', exact: true }).click(); await page.keyboard.press('Escape')
   assert.equal(await rail('bar:literal').getAttribute('aria-label'), 'Ferramentas', 'User names remain literal even when they equal an application translation key')
   assert.equal(await rail('home').getAttribute('aria-label'), 'Tools')
+  }
   assert.deepEqual(errors, [])
   await writeFile('.local/diagnostics/corrections-alpha13/observations.json', JSON.stringify(observations, null, 2))
-  console.log('PASS approved corrections: minima/themes/viewports, rail click/jitter/reorder/cancel/blur, 14/legacy20 bars/library/scroll, focus/backdrop, local history/checkpoint, exact slots, format/library scope, preserved incompatible bytes, catalog origins/reduced motion and observed post-toast outline')
+  console.log(process.argv.includes('--drops-only') ? 'PASS focused native drops: six region directions, scrolled custom bar, landing geometry, exact catalog/existing reservation drop, hover/cancel/duplicate/history, themes and reduced motion' : 'PASS approved corrections and native drops: minima/themes/viewports, rail click/jitter/reorder/cancel/blur, 14/legacy20 bars/library/scroll, focus/backdrop, local history/checkpoint, exact slots, format/library scope, preserved incompatible bytes, catalog origins/reduced motion and observed post-toast outline')
 } catch (error) {
   if (page!) await page.screenshot({ path: '.local/diagnostics/corrections-alpha13/failure.png' })
   throw error

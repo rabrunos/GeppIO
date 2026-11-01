@@ -100,7 +100,7 @@ export function useTransaction(registry: Registry = widgetRegistry(), localState
     } catch { if (ticket === epoch.current) setMessage('Arquivo incompatível. Dados anteriores preservados.') }
   }
   const withOrganization = (next: Snapshot): WorkbenchSnapshot => ({ ...next, organization: ('organization' in next ? next as WorkbenchSnapshot : live.current).organization })
-  return { snapshot, live, editing, recovery, message, setMessage, put, begin, cancel, action, slots,
+  return { snapshot, live, editing, recovery, message, setMessage, put, begin, cancel, action, slots, currentSlots: () => slotsRef.current,
     changeLocal(patch: Partial<LocalSessionState>) {
       const before = current(); if (!before.localState) return
       const after = { ...before, localState: { ...before.localState, ...patch } }

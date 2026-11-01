@@ -153,6 +153,15 @@ executable; physical owner acceptance remains separate.
 
 This file defines repeatable checks and the meaning of their evidence. It is not a last-report/status file. Record the actual environment, commands, output/failures and pending manual checks in the active GitHub Issue or delivery response.
 
+`tools/workbench-corrections-smoke.ts` extends its existing disposable Electron controller with
+`workbench-drop-smoke.ts`. `--drops-only` runs the focused native-capture landing/reservation
+matrix; `--scale125` also applies the explicit Chromium 1.25 override. Both themes cover six
+region-transfer directions, a scrolled custom Sidebar, start/intermediate/end position and
+dimensions, live-view suppression/reveal, clipping, exact catalog/existing-view reservation
+drops, ordinary space, rejection, hover/cancellation/history and reduced motion. Raw samples
+and captures remain in ignored diagnostics. Automated scale/native capture is separate from
+the owner's physical Windows DPI and visual acceptance.
+
 ## Layers
 
 | Layer | Command | What it does not prove |

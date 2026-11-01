@@ -15,6 +15,7 @@ import type { Direction, Placement, Region, Surface } from '../../../shared/free
 import type { Transaction } from './useTransaction.ts'
 import type { Surfaces } from './useSurfaces.ts'
 import { useDragVisual } from '../workbench/DragLayer.tsx'
+import type { SlotIntention } from '../../../shared/workbench/slots.ts'
 
 interface Gesture {
   id: string; pointer: number; kind: 'move' | Direction; x: number; y: number; original: Placement; sourceBar: string;
@@ -22,7 +23,8 @@ interface Gesture {
   clientX: number; clientY: number; time: number; last: string; extension: number; directionX: number; preview: WorkbenchSnapshot | null
 }
 export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surfaces: Surfaces, expanded: boolean, feasible: Record<Region, boolean>, registry: Registry = widgetRegistry(), catalog?: {
-  select?(viewId: string): void; available(typeId: string, region: Region): boolean; commit(typeId: string, region: Region, at: { x: number; y: number }): boolean
+  select?(viewId: string): void; available(typeId: string, region: Region): boolean; commit(typeId: string, region: Region, at: { x: number; y: number }): boolean;
+  reservationKey: string; reservation(id: string, intention: SlotIntention, baseline: WorkbenchSnapshot | null, commit: boolean): boolean
 }) {
   const baseConstraints = constraintsForViews(tx.snapshot, registry)
   const visual = useDragVisual()
@@ -36,6 +38,7 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
   const catalogPointer = useRef({ x: 0, y: 0 }), suppressCatalogClick = useRef(false)
   const currentCatalog = useRef(catalog); currentCatalog.current = catalog
   const dwell = useRef<{ id: string; element: HTMLElement; timer: ReturnType<typeof setTimeout> | null } | null>(null)
+  const slotHover = useRef<{ element: HTMLElement; allowed: boolean } | null>(null)
   const [gestureLabel, setGestureLabel] = useState<{ id: string; region: Region } | null>(null)
   const rejection = useRef<Animation | null>(null)
   const [released, setReleased] = useState<{ snapshot: WorkbenchSnapshot; region: Region } | null>(null)
@@ -43,6 +46,7 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
   function surface(region: Region): Surface { return { ...surfaces.measures[region], region, expanded: expanded && region === 'main' } }
   function end(cancel: boolean, releaseVisual = true) {
     if (releaseVisual) visual.release(!cancel)
+    clearSlotHover()
     rejection.current?.cancel(); rejection.current = null
     if (dwell.current) { if (dwell.current.timer) clearTimeout(dwell.current.timer); dwell.current.element.removeAttribute('data-drag-hover'); dwell.current = null }
     setGestureLabel(null)
@@ -97,10 +101,42 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
     const a = gesture.current
     if (a?.kind === 'move' && visual.active()) { frameTargets.current = movementTargets(a); setFrameDrop({ targets: frameTargets.current, over: targetRegion(a.clientX, a.clientY, frameTargets.current) }) }
   }, [tx.snapshot.organization.activeBar])
+  const slotPolicyKey = REGIONS.map(region => `${surfaces.measures[region].width},${surfaces.measures[region].height}`).join(';') + catalog?.reservationKey
+  useLayoutEffect(() => { clearSlotHover(); visual.controller.current?.wake() }, [tx.slots, tx.snapshot.organization.activeBar, tx.editing, registry, measurementKey, slotPolicyKey])
+  useLayoutEffect(() => () => clearSlotHover(), [])
+  function clearSlotHover() { slotHover.current?.element.removeAttribute('data-drag-hover'); slotHover.current = null }
+  function reservationAt(x: number, y: number) {
+    // Native capture retargets pointer events, but elementFromPoint still resolves
+    // the visible, clipped hit beneath our pointer-transparent top-layer picture.
+    const hit = document.elementFromPoint(x, y)
+    if (hit?.closest('dialog[open],.editor-panel,[popover]:popover-open')) return null
+    const element = hit?.closest<HTMLElement>('[data-session-slot]')
+    if (!element || (element.dataset.slotBar && element.dataset.slotBar !== tx.live.current.organization.activeBar)) return null
+    return { element, id: element.dataset.sessionSlot! }
+  }
+  function reservationIntent(): { intention: SlotIntention; baseline: WorkbenchSnapshot | null } | null {
+    const a = gesture.current, entry = catalogGesture.current
+    if (a?.kind === 'move') return { intention: { kind: 'move', viewId: a.id, sourceBar: a.sourceBar }, baseline: { ...a.snapshot, organization: { ...a.snapshot.organization, activeBar: tx.live.current.organization.activeBar } } }
+    return entry?.lifted ? { intention: { kind: 'catalog', typeId: entry.typeId }, baseline: null } : null
+  }
+  function hoverReservation(x: number, y: number) {
+    const hit = reservationAt(x, y)
+    if (hit?.element === slotHover.current?.element) return
+    clearSlotHover()
+    const intent = reservationIntent()
+    if (!hit || !intent) return
+    const allowed = !!currentCatalog.current?.reservation(hit.id, intent.intention, intent.baseline, false)
+    slotHover.current = { element: hit.element, allowed }
+    if (allowed) hit.element.setAttribute('data-drag-hover', '')
+  }
+  function destinationId(result: WorkbenchSnapshot, typeId: string, region: Region) {
+    return activePlacements(result).find(p => p.region === region && result.organization.views.some(v => v.id === p.id && v.typeId === typeId))?.id
+  }
   function movementTargets(a: Gesture) {
     const source = { ...a.snapshot, organization: { ...a.snapshot.organization, activeBar: tx.live.current.organization.activeBar } }
     return REGIONS.filter(region => feasible[region] && (region === a.original.region && (region !== 'sidebar' || a.sourceBar === source.organization.activeBar)
-      || !!moveView(source, registry, a.id, surface(region), undefined, a.sourceBar)))
+      || !!moveView(source, registry, a.id, surface(region), undefined, a.sourceBar)
+      || tx.currentSlots().some(slot => slot.region === region && currentCatalog.current?.reservation(slot.id, { kind: 'move', viewId: a.id, sourceBar: a.sourceBar }, source, false))))
   }
   function targetRegion(x: number, y: number, targets: Region[]) {
     return targets.find(region => {
@@ -113,6 +149,7 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
   // events only update the latest intention; labels are measured once per drag.
   visual.measure.current = pointer => {
     hoverBar(pointer.x, pointer.y)
+    hoverReservation(pointer.x, pointer.y)
     const catalog = catalogGesture.current
     let over: Region | null = null
     if (catalog?.lifted) {
@@ -166,14 +203,16 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
       },
       onPointerUp(event: PointerEvent<HTMLElement>) {
         const a = catalogGesture.current; if (!a || a.pointer !== event.pointerId) return
-        const region = a.lifted ? targetRegion(event.clientX, event.clientY, REGIONS.filter(region => currentCatalog.current?.available(a.typeId, region))) : null
+        const slot = a.lifted ? reservationAt(event.clientX, event.clientY) : null
+        const region = slot ? slot.element.dataset.ownerRegion as Region : a.lifted ? targetRegion(event.clientX, event.clientY, REGIONS.filter(region => currentCatalog.current?.available(a.typeId, region))) : null
         let accepted = false
-        if (region) {
+        if (slot) accepted = !!currentCatalog.current?.reservation(slot.id, { kind: 'catalog', typeId }, null, true)
+        else if (region) {
           const rect = surfaces.ports[region].current!.getBoundingClientRect(), scroller = surfaces.scroller(region)
           accepted = !!catalog?.commit(typeId, region, { x: event.clientX - rect.left + (scroller?.scrollLeft ?? 0), y: event.clientY - rect.top + (scroller?.scrollTop ?? 0) })
         }
         end(!accepted, false)
-        const destination = accepted ? tx.live.current.placements.find(p => p.region === region && tx.live.current.organization.views.find(v => v.id === p.id)?.typeId === typeId)?.id : undefined
+        const destination = accepted && region ? destinationId(tx.live.current, typeId, region) : undefined
         visual.release(accepted, destination)
       },
       onPointerCancel() { end(true) }, onLostPointerCapture() { if (catalogGesture.current) end(true) },
@@ -345,6 +384,15 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
   function finish(e: PointerEvent<HTMLElement>, cancel = false) {
     const a = gesture.current
     if (!a || a.pointer !== e.pointerId) return
+    const slot = !cancel && a.kind === 'move' && visual.active() ? reservationAt(e.clientX, e.clientY) : null
+    if (slot) {
+      const intent = reservationIntent()!, region = slot.element.dataset.ownerRegion as Region
+      end(true, false)
+      const accepted = !!currentCatalog.current?.reservation(slot.id, intent.intention, intent.baseline, true)
+      const typeId = a.source.organization.views.find(v => v.id === a.id)!.typeId
+      visual.release(accepted, accepted ? destinationId(tx.live.current, typeId, region) : undefined)
+      return
+    }
     if (!cancel && a.kind === 'move' && a.original.region === 'sidebar' && a.sourceBar !== tx.live.current.organization.activeBar) {
       const owner = surfaces.scroller('sidebar')!, box = owner.getBoundingClientRect(), bar = tx.live.current.organization.activeBar
       const source = { ...a.snapshot, organization: { ...a.snapshot.organization, activeBar: bar } }
@@ -353,7 +401,7 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
       const result = inside ? moveView(source, registry, a.id, surface('sidebar'), { x: 0, y: e.clientY - box.top + owner.scrollTop }, a.sourceBar) : null
       if (result) tx.action(settleSnapshot(result))
       else tx.put({ ...a.source, organization: { ...a.source.organization, activeBar: bar } })
-      visual.release(!!result)
+      visual.release(!!result, result ? destinationId(result, a.source.organization.views.find(v => v.id === a.id)!.typeId, 'sidebar') : undefined)
       return
     }
     if (!cancel && a.kind === 'move') {
@@ -369,7 +417,7 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
           y: e.clientY - r.top + (surfaces.ports[region].current?.scrollTop ?? 0) }, a.sourceBar) : null
         if (result) { tx.action(settleSnapshot(result)); tx.setMessage(`Widget transferido para ${REGION_LABELS[region]}. Salve ou cancele.`) }
         else { setBlocked(a.id); tx.setMessage('Transferência incompatível ou sem espaço. A composição anterior foi restaurada.') }
-        visual.release(!!result)
+        visual.release(!!result, result ? destinationId(result, a.source.organization.views.find(v => v.id === a.id)!.typeId, region) : undefined)
         return
       }
     }
@@ -414,7 +462,7 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
       onLostPointerCapture: (e: PointerEvent<HTMLElement>) => finish(e, true), onKeyDown: (e: KeyboardEvent<HTMLElement>) => keyboard(e, p, kind) }
   }
   return { selected, setSelected, blocked, heldExtent, handlers, catalogHandlers, catalogDrag, frameDrop, gestureLabel, visual,
-    catalogSurfaceKey: REGIONS.map(region => `${surfaces.measures[region].width},${surfaces.measures[region].height}`).join(';') + expanded,
+    catalogSurfaceKey: REGIONS.map(region => `${surfaces.measures[region].width},${surfaces.measures[region].height}`).join(';') + expanded + JSON.stringify(tx.slots),
     canCatalogPlace: (typeId: string, region: Region) => !!currentCatalog.current?.available(typeId, region),
     activeId: gesture.current?.id ?? null,
     movingId: gesture.current?.kind === 'move' ? gesture.current.id : null, sourceBar: gesture.current?.sourceBar ?? null,

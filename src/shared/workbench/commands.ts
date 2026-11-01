@@ -44,13 +44,16 @@ export function addWidget(source: WorkbenchSnapshot, registry: Registry, typeId:
   }
   const existing = next.placements.find(p => p.id === view.id)
   if (existing && existing.region !== surface.region && type.presence === 'single-view' && !slotSize) return moveView(source, registry, existing.id, surface, at)
-  if (existing && slotSize) next = removePresence(next, existing.id)
+  if (existing && slotSize) {
+    next = removePresence(next, existing.id)
+    next.placements = next.placements.filter(p => p.id !== existing.id)
+  }
   if (surface.region === 'sidebar') {
     const bar = next.organization.bars.find(bar => bar.id === next.organization.activeBar)!
     const peers = activePlacements(next).filter(p => p.region === 'sidebar')
     bar.positions ??= {}
     bar.positions[typeId] ??= at?.y ?? Math.max(0, ...peers.map(p => p.y + p.height + POLICY.gap))
-    bar.members.push(typeId)
+    if (!bar.members.includes(typeId)) bar.members.push(typeId)
     if (existing?.region === 'sidebar' && !slotSize) return next
   }
   if (!existing || slotSize) next.placements.push({ id: view.id, region: surface.region, x: slotSize ? at?.x ?? 0 : 0, y: slotSize ? at?.y ?? 0 : 0,
@@ -58,7 +61,7 @@ export function addWidget(source: WorkbenchSnapshot, registry: Registry, typeId:
   if (slotSize) {
     // A reserved rectangle is an explicit placement/size intention, not a move
     // pretending to resize its default seed. The solver's move invariant stays intact.
-    return validLayout(activePlacements(next).filter(p => p.region === surface.region), surface, constraintsFor(surface, constraintsForViews(next, registry))) ? next : null
+    return exactPlacement(next, registry, view.id, surface, at, slotSize)
   }
   return transferActive(next, registry, view.id, surface, at)
 }
@@ -83,28 +86,43 @@ function transferActive(source: WorkbenchSnapshot, registry: Registry, id: strin
   return result
 }
 /** Movement changes only the source association and the chosen destination bar. */
-export function moveView(source: WorkbenchSnapshot, registry: Registry, id: string, target: Surface, at?: { x: number; y: number }, sourceBar = source.organization.activeBar): WorkbenchSnapshot | null {
+export function moveView(source: WorkbenchSnapshot, registry: Registry, id: string, target: Surface, at?: { x: number; y: number }, sourceBar = source.organization.activeBar, slotSize?: Size, disabled?: ReadonlySet<string>): WorkbenchSnapshot | null {
   const view = source.organization.views.find(view => view.id === id), placement = source.placements.find(p => p.id === id)
   if (!view || !placement) return null
-  const type = registry.get(view.typeId)!
+  const type = registry.get(view.typeId)
+  if (!type) return null
   const next = structuredClone(source), destination = next.organization.bars.find(bar => bar.id === next.organization.activeBar)!
   const otherSidebar = next.placements.find(p => p.id !== id && p.region === 'sidebar' && next.organization.views.find(view => view.id === p.id)?.typeId === type.id)
   if (target.region === 'sidebar' && destination.members.includes(type.id) && (placement.region !== 'sidebar' || sourceBar !== destination.id)) return null
-  if (!evaluatePlacement(source, registry, type.id, target.region, 'move', [id, ...(otherSidebar ? [otherSidebar.id] : [])]).allowed) return null
+  if (!evaluatePlacement(source, registry, type.id, target.region, 'move', [id, ...(otherSidebar ? [otherSidebar.id] : [])], disabled).allowed) return null
   if (placement.region === 'sidebar' && (sourceBar !== destination.id || target.region !== 'sidebar')) {
     const origin = next.organization.bars.find(bar => bar.id === sourceBar)
     if (origin) { origin.members = origin.members.filter(member => member !== type.id); if (origin.positions) delete origin.positions[type.id] }
-    if (type.presence === 'multiple-areas' && target.region !== 'sidebar' && next.organization.bars.some(bar => bar.members.includes(type.id))) return addWidget(next, registry, type.id, target, at)
+    if (type.presence === 'multiple-areas' && target.region !== 'sidebar' && next.organization.bars.some(bar => bar.members.includes(type.id))) return addWidget(next, registry, type.id, target, at, disabled, slotSize)
   }
   if (target.region === 'sidebar' && otherSidebar) {
     next.placements = next.placements.filter(p => p.id !== id)
     if (!destination.members.includes(type.id)) destination.members.push(type.id)
     destination.positions ??= {}; destination.positions[type.id] ??= Math.max(0, ...activePlacements(next).filter(p => p.region === 'sidebar' && p.id !== otherSidebar.id).map(p => p.y + p.height + POLICY.gap))
-    return next
+    return slotSize ? exactPlacement(next, registry, otherSidebar.id, target, at, slotSize) : next
   }
-  const moved = transferActive(next, registry, id, target, at)
+  if (slotSize && target.region === 'sidebar' && !destination.members.includes(type.id)) destination.members.push(type.id)
+  const moved = slotSize ? exactPlacement(next, registry, id, target, at, slotSize) : transferActive(next, registry, id, target, at)
   if (moved && target.region === 'sidebar' && !destination.members.includes(type.id)) destination.members.push(type.id)
   return moved
+}
+/** An explicit rectangle never goes through default-size insertion or solver resize. */
+function exactPlacement(source: WorkbenchSnapshot, registry: Registry, id: string, target: Surface, at: { x: number; y: number } | undefined, size: Size): WorkbenchSnapshot | null {
+  const next = structuredClone(source), placement = next.placements.find(p => p.id === id)
+  if (!placement || !at) return null
+  Object.assign(placement, { x: at.x, y: at.y, width: size.width, height: size.height, region: target.region, preferred: { width: size.width, height: size.height } })
+  next.reference[target.region] = { width: target.width, height: target.region === 'sidebar' ? Math.max(target.height, at.y + size.height) : target.height }
+  if (target.region === 'sidebar') {
+    const bar = next.organization.bars.find(bar => bar.id === next.organization.activeBar)!
+    bar.positions ??= {}; bar.positions[next.organization.views.find(view => view.id === id)!.typeId] = at.y
+  }
+  if (!validLayout(activePlacements(next).filter(p => p.region === target.region), target, constraintsFor(target, constraintsForViews(next, registry)))) return null
+  return target.region === 'sidebar' ? reconcileBarHeights(next) : next
 }
 export function removePresence(source: WorkbenchSnapshot, id: string): WorkbenchSnapshot {
   const next = structuredClone(source), placement = next.placements.find(p => p.id === id), view = next.organization.views.find(v => v.id === id)

@@ -23,7 +23,7 @@ export interface Organization {
 }
 export interface WorkbenchSnapshot extends Snapshot { organization: Organization }
 export interface FormatSlot { id: string; region: Region; x: number; y: number; width: number; height: number }
-export interface SessionSlot extends FormatSlot { reference: Size }
+export interface SessionSlot extends FormatSlot { reference: Size; sidebarBar?: string }
 export interface LocalSessionState {
   projectName: string | null; theme: 'light' | 'dark'; snap: boolean;
   properties: { name: string; density: 'compact' | 'comfortable'; details: boolean }

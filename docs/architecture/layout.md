@@ -39,6 +39,16 @@ dimensions for 240ms without nonuniform scaling. History uses 240ms and composit
 pointer sleeps after pickup. Coupled horizontal dividers optionally snap at center with the
 approved 7px entry/14px exit hysteresis; individual solver gestures remain fractional.
 
+The active picture suppresses only its ghosted view's FLIP through landing/return, so the
+measured client rectangle is the final engine projection. Other views retain their normal
+motion. Destination clipping and responsive content also converge before the live view is
+revealed. Native pointer capture does not own hit-testing: visible, clipped session reservations
+resolve before a general region, including invalid reservations that must reject without a
+free-space fallback. Click and drop share current-identity exact-slot validation. Sidebar
+reservations belong to their originating session bar; transient hover never selects a slot,
+opens a panel or enters saved state. Eligibility is probed on hover-target/context changes,
+then revalidated on release; hover never runs the packing solver.
+
 `useCatalogAvailability` caches real command feasibility for visible catalog cards and inline
 destinations. Geometry probes pause during a held gesture; bar, runtime and surface changes
 still refresh eligibility. Drop uses the same command again against its current destination.

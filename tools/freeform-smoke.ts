@@ -116,7 +116,12 @@ async function transferSelected(page: Page, id: string, region: string) {
   await settle(page)
   const grip = await page.locator(`[data-widget="${id}"] .widget-grip`).boundingBox(), destination = await page.locator(`[data-surface="${region}"]`).boundingBox()
   assert.ok(grip && destination)
-  await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2); await page.mouse.down()
+  await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2)
+  await page.waitForFunction(id => {
+    const grip = document.querySelector<HTMLElement>(`[data-widget="${id}"] .widget-grip`)
+    return grip && getComputedStyle(grip).pointerEvents === 'auto'
+  }, id)
+  await page.mouse.down()
   assert.ok(await page.locator(`[data-widget="${id}"] .widget-grip`).evaluate(node => node.hasPointerCapture(1)), 'A region transfer requires real pointer capture')
   await page.mouse.move(destination.x + Math.min(25, destination.width / 2), destination.y + Math.min(25, destination.height / 2), { steps: 5 }); await page.mouse.up()
   await settle(page)
@@ -455,7 +460,9 @@ export async function freeformSmoke(page: Page, resizeWindow: (width: number, he
   // A real pointer transfer uses the target content origin and preserves content identity.
   const dropFrom = await page.locator('[data-widget="chart"] .widget-grip').boundingBox(), dropTo = await page.locator('[data-surface="main"]').boundingBox()
   assert.ok(dropFrom && dropTo)
-  await page.mouse.move(dropFrom.x + dropFrom.width / 2, dropFrom.y + dropFrom.height / 2); await page.mouse.down()
+  await page.mouse.move(dropFrom.x + dropFrom.width / 2, dropFrom.y + dropFrom.height / 2)
+  await page.waitForFunction(() => getComputedStyle(document.querySelector('[data-widget="chart"] .widget-grip')!).pointerEvents === 'auto')
+  await page.mouse.down()
   await page.mouse.move(dropTo.x + dropTo.width * .5, dropTo.y + dropTo.height * .7, { steps: 4 }); await page.mouse.up(); await settle(page)
   assert.equal((await rect(page, 'chart')).region, 'main')
   await transferSelected(page, 'chart', 'bottom'); assert.equal((await rect(page, 'chart')).region, 'bottom')

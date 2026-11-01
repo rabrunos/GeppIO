@@ -10,6 +10,8 @@ import type { Region } from '../../shared/freeform/types.ts'
 import { constraintsForViews, widgetRegistry, activePlacements } from '../../shared/workbench/model.ts'
 import type { SessionSlot, UserBar, WorkbenchSnapshot, WidgetType } from '../../shared/workbench/model.ts'
 import { projectSessionSlot } from '../../shared/workbench/compositions.ts'
+import { fillReservation } from '../../shared/workbench/slots.ts'
+import type { SlotIntention } from '../../shared/workbench/slots.ts'
 import { addWidget, configureBar, removePresence, swapViews } from '../../shared/workbench/commands.ts'
 import { useTransaction } from './freeform/useTransaction.ts'
 import { useSurfaces } from './freeform/useSurfaces.ts'
@@ -83,7 +85,7 @@ function Workbench({ plugins }: { plugins: ReturnType<typeof usePlugins> }) {
   const [panel, setPanel] = useState<PanelState>({ open: false, presentation: 'overlay', anchor: 'bottom' })
   const frames = useRef(new Map<string, WorkbenchSnapshot['placements'][number]>())
   const surfaceSizes = REGIONS.map(r => `${surfaces.measures[r].width},${surfaces.measures[r].height}`).join(';')
-  const sessionSlots = tx.slots.map(item => projectSessionSlot(item, surfaces.measures[item.region]))
+  const sessionSlots = tx.slots.filter(item => !item.sidebarBar || item.sidebarBar === tx.snapshot.organization.activeBar).map(item => projectSessionSlot(item, surfaces.measures[item.region]))
   const chosenSlot = sessionSlots.find(item => item.id === slot?.id) ?? null
   const source = pairPreview ?? tx.snapshot
   const visible = { ...source, placements: activePlacements(source).filter(p => constraints[p.id]) }
@@ -96,9 +98,12 @@ function Workbench({ plugins }: { plugins: ReturnType<typeof usePlugins> }) {
     if (feasible[r] && m.width > 0 && m.height > 0) view.reference[r] = { width: m.width, height: r === 'sidebar' ? Math.max(m.height, projected.sidebar.world.height) : m.height }
   }
   const interaction = useInteraction(tx, view, surfaces, expanded, feasible, registry, {
+    reservationKey: [...disabledOwners()].join(';'),
     select(id) { setEditorOpen(true); setWidgetsRequest(value => value + 1); setMoveRequest(previous => ({ id, serial: (previous?.serial ?? 0) + 1 })) },
-    available(type, region) { return !!addWidget(view, registry, type, { ...surfaces.measures[region], region, expanded: expanded && region === 'main' }, undefined, disabledOwners()) },
-    commit(type, region, at) { return add(type, region, undefined, at) }
+    available(type, region) { return !!addWidget(view, registry, type, { ...surfaces.measures[region], region, expanded: expanded && region === 'main' }, undefined, disabledOwners())
+      || tx.currentSlots().some(slot => slot.region === region && reserve(slot.id, { kind: 'catalog', typeId: type }, view, false)) },
+    commit(type, region, at) { return add(type, region, undefined, at) },
+    reservation(id, intention, baseline, commit) { return reserve(id, intention, baseline ?? view, commit) }
   }), displayed = { ...projected }
   if (interaction.preview && interaction.activeRegion) {
     const region = interaction.activeRegion, preview = interaction.preview
@@ -132,10 +137,19 @@ function Workbench({ plugins }: { plugins: ReturnType<typeof usePlugins> }) {
   }
   function add(type: string, region: Region, target?: SessionSlot, at?: { x: number; y: number }) {
     if (!tx.editing) return false
+    if (target) return reserve(target.id, { kind: 'catalog', typeId: type }, view, true)
     const surface = { ...surfaces.measures[region], region, expanded: expanded && region === 'main' }
-    const next = addWidget(view, registry, type, surface, target ?? at, disabled, target ? { width: target.width, height: target.height } : undefined)
+    const next = addWidget(view, registry, type, surface, at, disabled)
     if (!next) { tx.setMessage(t('Widget incompatível ou sem espaço nesta área.')); return false }
-    tx.action(next, target ? tx.slots.filter(item => item.id !== target.id) : tx.slots); return true
+    tx.action(next); return true
+  }
+  function reserve(id: string, intention: SlotIntention, baseline: WorkbenchSnapshot, commit: boolean) {
+    const stored = tx.currentSlots().find(item => item.id === id)
+    if (!tx.editing || !stored) return false
+    const region = stored.region, surface = { ...surfaces.measures[region], region, expanded: expanded && region === 'main' }
+    const result = fillReservation(baseline, registry, tx.currentSlots(), id, surface, intention, disabledOwners())
+    if (result && commit) tx.action(result.snapshot, result.slots)
+    return !!result
   }
   async function saveBar(bar: UserBar) {
     const surface = { ...surfaces.measures.sidebar, region: 'sidebar' as const, expanded: false }
@@ -192,7 +206,8 @@ function Workbench({ plugins }: { plugins: ReturnType<typeof usePlugins> }) {
           wheel={(dx, dy) => { const element = surfaces.scroller(placement.region); if (!element) return; if (placement.region === 'main' && expanded) element.scrollLeft += dx; if (placement.region === 'sidebar') element.scrollTop += dy }}>
           {definition.widgetId ? <PluginBody definition={definition} plugins={plugins} /> : undefined}
         </WidgetFrame>
-      })}{sessionSlots.map(item => { const m = surfaces.measures[item.region]; return <button key={item.id} className="ui-button host-format-slot layout-empty-slot" data-owner-region={item.region} data-catalog-slot-target={chosenSlot?.id === item.id ? '' : undefined} aria-pressed={chosenSlot?.id === item.id} style={{ left: m.left + item.x - m.scrollLeft, top: m.top + item.y - m.scrollTop, width: item.width, height: item.height }} onClick={() => { if (!editorOpen) { setEditorOpen(true); if (chosenSlot?.id !== item.id) setSlot(item) } else setSlot(chosenSlot?.id === item.id ? null : item) }} aria-label={t('Escolher widget')}><PlusIcon className="icon" /><strong>{t('Adicionar widget')}</strong><small>{t('Espaço {0}', sessionSlots.filter(slot => slot.region === item.region).findIndex(slot => slot.id === item.id) + 1)}</small></button> })}</div>
+      })}{sessionSlots.map(item => { const m = surfaces.measures[item.region], left = m.left + item.x - m.scrollLeft, top = m.top + item.y - m.scrollTop; return <button key={item.id} className="ui-button host-format-slot layout-empty-slot" data-session-slot={item.id} data-slot-bar={item.sidebarBar} data-owner-region={item.region} data-catalog-slot-target={chosenSlot?.id === item.id ? '' : undefined} aria-pressed={chosenSlot?.id === item.id} style={{ left, top, width: item.width, height: item.height,
+        clipPath: `inset(${Math.max(0, m.top - top)}px ${Math.max(0, left + item.width - m.left - (m.clipWidth ?? m.width))}px ${Math.max(0, top + item.height - m.top - (m.clipHeight ?? m.height))}px ${Math.max(0, m.left - left)}px round var(--card-radius))` }} onClick={() => { if (!editorOpen) { setEditorOpen(true); if (chosenSlot?.id !== item.id) setSlot(item) } else setSlot(chosenSlot?.id === item.id ? null : item) }} aria-label={t('Escolher widget')}><PlusIcon className="icon" /><strong>{t('Adicionar widget')}</strong><small>{t('Espaço {0}', sessionSlots.filter(slot => slot.region === item.region).findIndex(slot => slot.id === item.id) + 1)}</small></button> })}</div>
       <PairDividers tx={tx} registry={registry} view={view} surfaces={surfaces} preview={setPairPreview} snap={snap} />
       {swapping.preview && <div className="widget-swap-preview" style={{ left: swapping.preview.x, top: swapping.preview.y, zIndex: 152 }} aria-hidden="true"><WorkbenchMoveIcon />{registry.get(tx.snapshot.organization.views.find(v => v.id === swapping.preview!.id)!.typeId)?.title}</div>}
       {picture && !picture.catalog && !picture.released && (!picture.sourceBar || picture.sourceBar === tx.snapshot.organization.activeBar) && <div className="layout-drag-origin host-drag-origin" data-owner-region={picture.source?.dataset.ownerRegion} aria-hidden="true" inert style={{ left: picture.origin.left, top: picture.origin.top, width: picture.origin.width, height: picture.origin.height, clipPath: picture.originClip }} />}

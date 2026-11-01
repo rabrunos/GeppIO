@@ -35,13 +35,13 @@
 .bottom-region .placement-port, .bottom-region .placement-port.recovery-surface { overflow: clip; }
 /* The two eligible demonstration formats fit their declared minima without an
    internal Bottom scroll owner. Text remains present; the chart consumes slack. */
-.widget-frame[data-owner-region="bottom"] .widget-content { overflow: clip; }
-.widget-frame[data-owner-region="bottom"] .chart-fixture { height: 100%; padding: 4px 8px; display: flex; flex-direction: column; }
-.widget-frame[data-owner-region="bottom"] .bars { flex: 1; min-height: 4px; height: auto; margin: 2px 0; }
-.widget-frame[data-owner-region="bottom"] .fixture-caption { line-height: 1.3; }
-.widget-frame[data-owner-region="bottom"] .summary-fixture { padding: 4px 8px; }
-.widget-frame[data-owner-region="bottom"] .summary-fixture strong { font-size: 14px; margin: 3px 0; }
-.widget-frame[data-owner-region="bottom"] .summary-fixture p { margin-top: 3px; }
+:is(.widget-frame,.drag-picture-content)[data-owner-region="bottom"] .widget-content { overflow: clip; }
+:is(.widget-frame,.drag-picture-content)[data-owner-region="bottom"] .chart-fixture { height: 100%; padding: 4px 8px; display: flex; flex-direction: column; }
+:is(.widget-frame,.drag-picture-content)[data-owner-region="bottom"] .bars { flex: 1; min-height: 4px; height: auto; margin: 2px 0; }
+:is(.widget-frame,.drag-picture-content)[data-owner-region="bottom"] .fixture-caption { line-height: 1.3; }
+:is(.widget-frame,.drag-picture-content)[data-owner-region="bottom"] .summary-fixture { padding: 4px 8px; }
+:is(.widget-frame,.drag-picture-content)[data-owner-region="bottom"] .summary-fixture strong { font-size: 14px; margin: 3px 0; }
+:is(.widget-frame,.drag-picture-content)[data-owner-region="bottom"] .summary-fixture p { margin-top: 3px; }
 .bottom-recovery { position: absolute; inset: 15px; z-index: 20; display: flex; align-items: center; align-content: center; flex-wrap: wrap; gap: 6px; background: var(--surface); color: var(--ink); }
 .bottom-recovery span { flex-basis: 100%; }
 .bottom-tools { flex-shrink: 0; min-height: 18px; }

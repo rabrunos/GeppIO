@@ -11,6 +11,7 @@ Integrated source changes, not a publication ledger. Version comes from package.
 - Add only the owner-authorized fixed minimize/maximize/close bridge, guarded by the exact main-frame origin and argument validation, with no plugin SDK expansion.
 - Apply the owner-approved correction packet: responsive native content at 180px Sidebar/125px Bottom, fourteen custom active bars with preserved legacy twenty-bar documents, short-click rail selection, scoped icons, divider, shared scroll state, nested menus, dialogs and composition thumbnails/markers.
 - Fill reserved slots with exact validated geometry, distinguish catalog moves from new presences, preserve swap selection and include reversible host metadata/models in session history. Keep library-only actions outside format pending state and retain transaction/CAS failure recovery.
+- Correct drag landing by giving the top-layer picture sole motion ownership of its active view through the 240ms position/size flight. Resolve visible composition reservations before ordinary region drops, sharing exact-slot validation with click-to-fill, preserving source associations/history and reusing normal slot hover alongside the existing region highlight.
 - Supply bounded in-memory notifications from native plugin lifecycle events, with read/filter/dismiss/clear states, and extend disposable Windows Electron coverage. Project location stays explicitly unavailable until an authorized native project state exists.
 
 ## [0.1.0-alpha.12] — 2026-10-16
