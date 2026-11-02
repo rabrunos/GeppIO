@@ -2,6 +2,13 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.15] — 2026-11-02
+
+- Reconcile current product, architecture, development and validation documentation with the integrated workbench, continuous geometry, current chrome, scoped composition restoration and normal-mode paired resize; retain historical migration contracts and acceptance boundaries (Issue #36).
+- Distinguish host metadata from the restricted local plugin SDK, layout persistence from plugin-owned data, and synthetic UI from functional IDE/account/native tools.
+- Carry the selected shadcn/ui source and individual external-code adoption gate into minimal stable guidance, and separate the recorded Windows/Linux direction from current Windows validation and absent distribution.
+- This is an independent documentation/version-metadata increment. No application runtime, dependency graph, permission boundary, CI configuration or product feature changes.
+
 ## [0.1.0-alpha.14] — 2026-11-01
 
 - Save new compositions as format plus widget associations, with explicit Main/Bottom scope and optional Sidebar width only. Allow opting into logically collapsed panels using their remembered or checkpointed dimensions; retain legacy format-only records and checkpoint/storage safeguards.

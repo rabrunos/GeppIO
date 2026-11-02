@@ -25,6 +25,27 @@ package mirrors when generated; it is not a second independent version source. C
 summarize integrated effects, including internal work. Versioning and successful validation never
 authorize commit, push, publication or Issue closure by themselves.
 
+## External library and source adoption
+
+[Issue #19](https://github.com/rabrunos/GeppIO/issues/19) requires individual owner approval
+before deliberately adopting a new external library or copied/adapted repository implementation,
+including free, nonvisual or attribution-free code. Compare existing project tools, a
+no-dependency approach and suitable maintained candidates in proportion to the active task.
+For visual options, present public demos and the expected behavior before adoption; for
+nonvisual options, explain value, alternatives, effort saved and meaningful risks.
+Check provenance, license/distribution/attribution obligations, costs/credits, telemetry and
+supply-chain implications. Research/reference reading is allowed before approval; it does not
+authorize copying source, installing a candidate or executing its scripts. A selected candidate
+still needs a scoped implementation contract and relevant validation.
+
+Existing chosen foundation stack is not retroactively unapproved. Transitive dependencies
+receive normal lockfile/license/supply-chain review without individual approval for every node.
+[Issue #8](https://github.com/rabrunos/GeppIO/issues/8) specifically selects the canonical
+shadcn/ui source for needed components; it is not blanket approval of arbitrary registries,
+unrelated packages or future upgrades. Preserve the scope of prior approvals and evaluate the
+concrete code, license and dependencies in the task that incorporates them. Lack of an approval
+copy in one document is not evidence that an existing dependency was adopted without permission.
+
 ## Effort, discovery, risk and consumption are separate
 
 | Class | Normal execution | Escalation |

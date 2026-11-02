@@ -1,11 +1,20 @@
 # [0.1.0-alpha.1] Validate the new local foundation
 
 Historical foundation handoff: the owner extracted the original package named `semnome`. The current product is GeppIO, with trusted local plugins added separately in #21; do not repeat intake or Git setup. The original foundation contract below remains historical evidence. Do not restart intake, import the
-old application or install the BootCrate app. The current repository has no real plugins and no login.
+old application or install the BootCrate app. The original alpha.1 handoff had no independently
+loaded plugins; the current app has the trusted local runtime of #21 and still has no login service.
 
 Historical version instructions below do not override current [TASK_POLICY](../TASK_POLICY.md):
 each newly delivered application-source correction advances its version, even pending acceptance.
 Read-only setup/validation does not bump the app.
+
+For current authorized work use [EXECUTION](EXECUTION.md), the active Issue, the existing locked
+dependency graph and the actual local checkout. Foundation acceptance is recorded in Issue #1;
+do not treat the original unchecked intake as proof that its accepted journeys remain untested.
+The historical commands, target and Git restrictions below describe that original handoff and
+do not supersede current authorization, TASK_POLICY or the completed repository binding.
+
+## Historical alpha.1 contract
 
 Read PROJECT_GUIDE.md, AGENTS.md and docs/development/testing.md. Verify the actual directory, Git
 branch/HEAD/status/diff and package version. Do not create a remote repository or guess its name.

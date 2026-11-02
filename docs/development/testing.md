@@ -1,6 +1,60 @@
 # Validation guide
 
-## Workbench integration — Issue #2 / alpha.13
+## Current baseline and evidence boundaries
+
+This guide describes repeatable checks and their scope, not current task status or an execution
+receipt. The workbench behavior integrated in alpha.13/alpha.14 uses continuous geometry, a host
+catalog and Main-only manifest-v1 contributions. Read [package.json](../../package.json) for the
+current version/command chain and [layout](../architecture/layout.md) for current contracts.
+An independent documentation increment does not imply new application behavior or fresh UX acceptance.
+
+The fixed baseline [fcb9eef](https://github.com/rabrunos/GeppIO/commit/fcb9eefa20e1f509fc8dddcd3ed7d29941edb5eb)
+(alpha.14) has [CI 41348463299](https://github.com/rabrunos/GeppIO/actions/runs/41348463299) success:
+Windows ran frozen installation, structure/types/lint, 166 core tests, examples/build and the built
+desktop chain; the Ubuntu secrets job ran whitespace/Gitleaks, not the Linux application.
+The 166 count belongs to that SHA's core tests and is not a total of desktop scenarios or a claim
+that checks were rerun for the documentation task. Read later task/commit CI separately.
+Local DEV/scale125 reports and intermediate failures are documented in
+[Issue 2's alpha.14 receipt](https://github.com/rabrunos/GeppIO/issues/2#issuecomment-6563687364),
+including focused final runs and an extra 125% attempt without a successful drop. Do not describe
+all observations as one entirely clean final extra scale125 run or infer an unconfirmed root cause.
+
+Seven bundled synthetic types start in four Main/two Sidebar/one Bottom placements. They are not
+an editor, filesystem project, Git, terminal or telemetry. Native window maximize is not widget
+maximize; a visual project name/profile is not a native project/account. Normal individual movement
+is protected, but paired dividers have a dedicated normal-mode transaction. Save editing advances a
+checkpoint; Cancel restores it and Conclude validates/commits/exits. History is session memory,
+not a durable backup. Plugin-owned data is separate from layout/installation state.
+
+The owner's alpha.14 Aprovado response is conversation-only acceptance of that specific delivery,
+not a new physical test checklist or global acceptance. Historical scoped owner reports in
+Issues 1, 6 and 21 remain valid within their recorded scope. Do not ask for them automatically again.
+P12 paused appearance and M07 post-drop outline remain review items; P19's incompatible membership
+is preserved in recovery but not removable in that selector state, as recorded. M09 seamless and
+native paused-plugin Bottom scenarios cannot be certified with the existing card/Main-only fixtures.
+Evidence and remaining decisions belong in the live Issues, not a tracked last-report file.
+
+## Layers
+
+| Layer | Command | What it does not prove |
+| --- | --- | --- |
+| Project structure | `pnpm check:repo` or direct Node invocation of `tools/check-repo.ts` | Effective Codex config, installed graph or runtime security |
+| Core behavior/negative paths | `pnpm test` | React rendering, Electron launch or Windows graphics |
+| Full type analysis/lint | `pnpm typecheck`, `pnpm lint` | Correct product behavior on their own |
+| Bundling | `pnpm build` | A signed/installed product or successful GUI launch |
+| Automated built desktop | `pnpm test:desktop` including `test:workbench` | All pointer/DPI/native integrations, subjective UX or production readiness |
+| Owner smoke | Applicable current scenarios below | Comprehensive performance/security certification |
+
+For documentation-only work, use the dependency-free source check and focused policy tests required
+by the active contract; full graph installation/build/desktop are not automatic checklist steps.
+`pnpm test:desktop:dev` covers identity/desktop with a Vite renderer and is a different chain from
+`test:workbench`. Focused built matrices can use
+`node --experimental-strip-types tools/workbench-corrections-smoke.ts --compositions-only` or
+`--drops-only`, with `--scale125` when relevant. Prepare the matching build/examples first.
+
+The dependency-free test command may run in a constrained source-inspection environment using Node's type stripping. Report the actual Node version there; that is narrower than the supported Node24 + resolved TS6/Electron toolchain. Never call a TS syntax/transpile check a full semantic typecheck.
+
+## Current workbench coverage — Issue #2 / alpha.13 and alpha.14
 
 Alpha.14 extends the same corrections controller with `workbench-composition-smoke.ts`.
 Use `workbench-corrections-smoke.ts --compositions-only` (also `--scale125`) for the focused
@@ -12,7 +66,7 @@ invalid Bottom interception and ordinary free-space placement. Source tests addi
 paused admission; current manifest-v1 plugins cannot contribute a native Bottom widget. These
 sequences do not certify an unobserved owner-specific scene or physical visual acceptance.
 
-Run the same complete checks listed below with Node24/pnpm11. `tests/workbench-model.test.ts`
+For runtime work, select the applicable checks above with Node24/pnpm11. `tests/workbench-model.test.ts`
 adds dynamic ownership/model validation, host-only v1 normalization, explicit legacy adoption,
 unchanged original bytes, CAS/quota failures, independent membership, atomic bilateral resizing
 and session-history branching. `tests/window-controls.test.ts` rejects subframes, wrong URLs
@@ -67,12 +121,22 @@ restore usable space, then checks the successful atomic commit; it never lowers 
 The alpha.12 geometry/security/lifecycle assertions below remain regression requirements;
 update only superseded chrome dimensions, labels and intentional storage-adoption paths.
 
-## Active freeform acceptance — Issue #29 / alpha.12
+`tools/workbench-corrections-smoke.ts` extends its existing disposable Electron controller with
+`workbench-drop-smoke.ts`. `--drops-only` runs the focused native-capture landing/reservation
+matrix; `--scale125` also applies the explicit Chromium 1.25 override. Both themes cover six
+region-transfer directions, a scrolled custom Sidebar, start/intermediate/end position and
+dimensions, live-view suppression/reveal, clipping, exact catalog/existing-view reservation
+drops, ordinary space, rejection, hover/cancellation/history and reduced motion. Raw samples
+and captures remain in ignored diagnostics. Automated scale/native capture is separate from
+the owner's physical Windows DPI and visual acceptance.
 
-Run pnpm check, pnpm test:desktop, pnpm test:desktop:dev, the desktop launcher with --scale125,
-and git diff --check. On Windows with a blocked PowerShell script shim, pnpm.cmd invokes the same
+## Current continuous geometry coverage — Issue #29 basis and workbench adapters
+
+For approved geometry changes, the usual runtime gates are pnpm check, pnpm test:desktop,
+pnpm test:desktop:dev, the desktop launcher with --scale125 and git diff --check.
+Choose any additional focused matrix from the actual changed behavior. On Windows with a blocked PowerShell script shim, pnpm.cmd invokes the same
 scripts without weakening ExecutionPolicy. All Electron runs allocate disposable profiles; never
-use owner userData. Actual outcomes/CI/Git evidence belong in Issue #29, not this guide.
+use owner userData. Actual outcomes/CI/Git evidence belong in the active Issue, with #29/#2 cross-references as applicable, not this guide.
 
 tests/freeform-geometry.test.ts exercises arbitrary fractional pixels, eight anchored directions,
 region axes, direct local push chains, far-edge compression, preferred recovery, bounded rearrangement,
@@ -108,9 +172,10 @@ region splitters. These automated DOM/forced-DPR observations do not replace own
 Corrective region assertions include Sidebar vertical content extent with a single navigation/widget
 scroll owner, no horizontal range, and Bottom zero ranges on both axes in normal/expanded/recovery
 states. Attempt programmatic scrolling, focus, keyboard and wheel input. Compact eligible Bottom
-content must fit without an internal scroll owner or omitted text. Check desired 230px/120px
-minima against DOM/DPR and coherent ARIA/collapse bounds, plus the status strip's 15px total,
-border and tone in both themes. Main's first automatic scrollbar must not cancel a gesture.
+content must fit without an internal scroll owner or omitted text. Check nominal chrome minima
+of Sidebar 180/Bottom 125, adapted useful minima 150/105, and the independent 25px status bar against
+DOM/DPR and coherent ARIA/collapse bounds. Use measured insets rather than adding the old 15px
+frame again; Main retains its own declared minima. Check border/tone in both themes. Main's first automatic scrollbar must not cancel a gesture.
 
 `node --experimental-strip-types tools/freeform-performance.ts` measures the built Electron renderer
 using a disposable profile and the default seven-widget dense composition near 960×620 CSS pixels.
@@ -133,24 +198,60 @@ CSS/device-scale coverage; it does not establish the owner's physical display DP
 
 Owner physical checks: both themes, normal/maximized/narrow windows and usual Windows DPI; smooth
 push/compression/no teleport/no gravity, all eight handles, cancellation/focus, normal content scrolling,
-Sidebar/Bottom cross-axis behavior and collapse/reopen, small Bottom rejection, reversible fallback,
-historical adoption/rollback and no form/Worker loss. Keep Issue #29 open pending owner visual acceptance.
+Sidebar/Bottom cross-axis behavior and collapse/reopen, infeasible Bottom rejection with native content fitting at the approved 125px chrome minimum,
+reversible fallback, historical adoption/rollback and no form/Worker loss. Record only unobserved
+or newly changed scenarios in the relevant Issue; do not demand a repeat of an already evidenced
+scoped acceptance. The alpha.14 conversation approval does not accept all of #29 or the app.
 
-## Historical validation below
+## Current desktop plugin and identity coverage
 
-The following describes retained earlier contracts/tests. Old grid/horizontal DOM smoke tools are
-reference material and are no longer called against the active freeform app. Their grid codecs and
-pure regression tests still run in pnpm test. Statements about the previous active UI are historical.
+Build the app and independent examples before the applicable desktop commands. Launchers allocate
+restricted `geppio-smoke-*` roots under the OS temporary directory; never point the override at owner
+userData. Only generated disposable roots are removed. Captures/raw diagnostics remain in ignored
+`.local/diagnostics/`. Renderer errors, launch failures and observations must be reported, not hidden
+by a screenshot. The desktop launcher also records a process-metrics sample; a point sample is not
+representative multi-plugin CPU/RAM coverage.
 
-## Historical alpha.11 horizontal comparison / Issue #28
+`pnpm test:desktop` runs identity, desktop and the four workbench controllers. The desktop path
+calls current freeform/correction and trusted-plugin checks. Identity seeds disposable old/new
+Chromium profiles and covers origin/layout/theme transfer, retained IDs/revisions/enabled flags,
+unchanged original/backup bytes, restart/idempotence, destination preservation and rejected legacy
+URLs. DEV uses built Main/preload plus the exact loopback Vite origin; it is not proof of every HMR
+or Task Buttons/launcher behavior. See [identity recovery](renaming.md) for the separate owner procedure.
+
+For a new or changed plugin lifecycle scenario, install reviewed generated Counter/Pulse folders
+through the header Plugins manager or Settings > Development and recovery. Confirm disabled installs;
+activate Counter and place its contribution from the catalog into Main, then exercise its action.
+Activate Pulse and observe advancing real status with zero widgets. Removing a widget presence must
+retain its Worker. Disabling ends execution/publications; an existing host placement remains as a
+paused placeholder. Re-enable starts fresh Counter state. Restart with one disabled and verify
+installation/enabled preferences, then test removal/restart in the disposable profile. Existing
+5/5 owner acceptance in Issue 21 is historical evidence; do not assume the old disappear-on-disable
+presentation is the current host rule or require its automatic repetition.
+
+Negative package/lifecycle cases include duplicate or malformed manifests, missing/import-failing
+modules, exceptions, hangs, message floods and corrupt preference preservation. No owner profile,
+unknown package or credential is used. Assertions about no Node globals/narrow bridge and bounded
+Workers are narrower than untrusted-plugin isolation. Keep keyboard/Escape/focus, scrolling and
+both themes tied to the actual changed scenario and usual physical Windows DPI when owner review
+is needed. Linux application behavior remains unobserved; Linux core tests/secret scan do not prove it.
+
+## Historical contracts retained for recovery and regression
+
+The sections below describe earlier UI/engines and their tests. Their cell counts, chrome values,
+Save/Cancel flows, guide/Alt behavior and owner checklists do not override the current workbench
+above. Retained grid/fractional codecs and pure tests still protect recovery; old DOM smoke tools
+are reference material, outside the active freeform command chain. Execute a historical comparison
+only under an explicit task with the corresponding source/build; no old acceptance is reset here.
+
+### Historical alpha.11 horizontal comparison / Issue #28
 
 `tests/grid-horizontal.test.ts` covers height-only ten-row geometry, bounded extent, the independent
 codec, hostile/corrupt/oversized input, unchanged old keys, quota/concurrent-save rejection and reflow
 beyond column 24. Responsive schema/projection/reflow tests retain their existing assertions.
-Desktop responsive suites explicitly select **Responsivo atual** after reload, since the session default
-is horizontal; selection goes through Development, never a persisted/test-only bypass.
+The alpha.11 desktop responsive suites selected **Responsivo atual** after reload, because its session default was horizontal; selection went through Development, not a persisted/test-only bypass.
 
-Both desktop launchers also execute `tools/horizontal-smoke.ts`: independent actual DOM rectangles,
+The historical desktop launchers executed `tools/horizontal-smoke.ts`: independent actual DOM rectangles,
 single 15px frame, no reserving scrollbar, occupied-world bounds, focus/keyboard/wheel/slider, nonzero
 scroll pointer movement and eight resize directions, reversal/auto-scroll/Escape, Save/Cancel/reload,
 switch rejection, form retention and corrupt/unsupported/oversized/concurrent state in disposable
@@ -160,32 +261,6 @@ and mode changes. A bounded 120-surface/12,000-child synthetic workload measures
 skipped surfaces and Chromium performance counters. This does not establish generalized CPU or plugin
 budgets. Comparison captures use the preserved alpha.10 engine and horizontal engine in the same
 executable; physical owner acceptance remains separate.
-
-This file defines repeatable checks and the meaning of their evidence. It is not a last-report/status file. Record the actual environment, commands, output/failures and pending manual checks in the active GitHub Issue or delivery response.
-
-`tools/workbench-corrections-smoke.ts` extends its existing disposable Electron controller with
-`workbench-drop-smoke.ts`. `--drops-only` runs the focused native-capture landing/reservation
-matrix; `--scale125` also applies the explicit Chromium 1.25 override. Both themes cover six
-region-transfer directions, a scrolled custom Sidebar, start/intermediate/end position and
-dimensions, live-view suppression/reveal, clipping, exact catalog/existing-view reservation
-drops, ordinary space, rejection, hover/cancellation/history and reduced motion. Raw samples
-and captures remain in ignored diagnostics. Automated scale/native capture is separate from
-the owner's physical Windows DPI and visual acceptance.
-
-## Layers
-
-| Layer | Command | What it does not prove |
-| --- | --- | --- |
-| Project structure | `pnpm check:repo` | Effective Codex config, installed graph or runtime security |
-| Core behavior/negative paths | `pnpm test` | React rendering, Electron launch or Windows graphics |
-| Full type analysis/lint | `pnpm typecheck`, `pnpm lint` | Correct product behavior on their own |
-| Bundling | `pnpm build` | A signed/installed product or successful GUI launch |
-| Automated built desktop | `pnpm test:desktop` | All pointer/DPI/native integrations, subjective UX or production readiness |
-| Owner smoke | Steps below | Comprehensive performance/security certification |
-
-The dependency-free test command may run in a constrained source-inspection environment using Node's type stripping. Report the actual Node version there; that is narrower than the supported Node24 + resolved TS6/Electron toolchain. Never call a TS syntax/transpile check a full semantic typecheck.
-
-## Core cases
 
 ### Historical alpha.10 grid / Issue #24
 
@@ -225,8 +300,8 @@ both counts, grid dimensions, four margins, source hashes and logical/pixel rect
 topologies, pitch, logical/pixel rectangles, transitions and maxima to ignored `.local/diagnostics/`.
 `--before` labels a baseline run and disables acceptance assertions; run it only against baseline code.
 
-`tools/grid-smoke.ts`, called by both desktop launchers, replaces the former continuous editor
-smoke. It asserts clean Main, square rendering/no Main scroll, permanent centering across window/region/panel
+`tools/grid-smoke.ts` was called by the historical desktop launchers and replaced the then-current
+fractional editor smoke. It is not in the active freeform launcher chain. It asserts clean Main, square rendering/no Main scroll, permanent centering across window/region/panel
 changes and both themes, absence of an alignment control in Settings, unchanged units/bytes,
 independent pixel splitters, normal form/scroll interaction, real eight-direction gestures in both
 themes, native wide/medium/narrow/portrait resize, a free-size sweep, maximize/restore, numeric margins
@@ -261,7 +336,7 @@ shrink, mouse splitter/resize behavior, compressed neighbours/preferred-size rec
 with no Main scrollbar, lower/middle empty cells, explicit recovery preview and original v1 rollback.
 Use disposable profiles. Do not claim subjective UX, physical DPI or owner acceptance from automation.
 
-### Alpha.8 region sizing / Issue #26
+### Historical alpha.8 region sizing / Issue #26
 
 `tests/region-policy.test.ts` checks live proportional/absolute/Main-space caps, requested defaults,
 fractional/tiny/invalid measurements, nonnegative coherent bounds and reversible request clamping.
@@ -280,17 +355,20 @@ Continuous fractions and boundary clamping; touching edges versus overlaps; all 
 
 Fixtures are synthetic. Tests must not read personal projects or credentials. Negative inputs are data, never executable instructions.
 
-## Desktop smoke
+### Historical alpha.1 to alpha.6 desktop contracts
 
 Build first. The smoke launcher allocates its own `geppio-smoke-*` directory under the OS temporary root and passes a restricted test override. Never point it at the owner's actual userData. Only that generated test directory is removed afterward. Screenshot output goes to ignored `.local/diagnostics/`.
 
-The automation checks the three regions, seven Main widgets, absence of renderer Node globals,
+The foundation-era automation checked three regions and seven Main fixtures, absence of renderer Node globals,
 the fixed bridge shape, edit cancel/save, the sample panel, theme persistence after reload and a
 real process-metrics sample. It must report launch or renderer failures; a screenshot alone cannot
 replace the assertions.
 
-For alpha.6 / Issue #16, `tools/layout-smoke.ts` adds real pointer assertions before plugin smoke,
-using validated imported fixture compositions in the same disposable profile. It exercises all eight
+For alpha.6 / Issue #16, the former `tools/layout-smoke.ts` added pointer assertions before plugin smoke.
+That file is absent from the current tree; this is historical provenance, not a command to run.
+The current routes are `tools/freeform-smoke.ts`, `tools/freeform-correction-smoke.ts` and the
+workbench smokes described above. The old contract used validated imported fixture compositions
+in the same disposable profile and exercised all eight
 resize zones in both themes (outward/inward drags, anchored opposite edges, cursors/labels), keyboard
 move/resize, live displacement and adaptive resizing before pointer-up, reversal, Escape, pointer
 cancel/lost capture, Save/Cancel/reload, v1 compatibility, invalid import, corrupt-byte preservation
@@ -318,29 +396,11 @@ full Electron process with that same test profile to verify installation, enable
 persistence. The worker/renderer checks assert no Node globals or Worker management bridge. None of
 these tests touch the owner's installed packages. Unit tests cover bounded package validation,
 corrupt state preservation, immutable snapshots, rollback, lifecycle timeout and message floods.
-`pnpm test:desktop:dev` repeats this smoke with built Main/preload and a Vite renderer loaded from
+At that stage, `pnpm test:desktop:dev` repeated this smoke with built Main/preload and a Vite renderer loaded from
 the project configuration on the exact loopback origin, validating local protocol module imports
 and development CSP/CORS. It does not certify every HMR or electron-vite launcher behavior.
 
-## Owner plugin smoke (Issue #21)
-
-Issue #6 adds a preceding Chromium identity-migration smoke to both desktop commands. It seeds
-only disposable old/new profiles, checks layout/theme transfer, retained plugin IDs/revisions/
-enabled flags, unchanged original/backup bytes, repeat launches, existing/corrupt destination
-preservation and rejected legacy/recovery URLs. See [identity recovery](renaming.md) for backup,
-rollback and migration-specific Windows acceptance. #6 does not accept #21 or #1.
-
-Generate the examples and build/preview the app. In Settings > Plugins install each generated folder;
-confirm disabled status and no widget before activation. Activate the counter, close Settings and
-click Incrementar twice. Activate pulse and confirm advancing status/events with zero widgets.
-Disable/re-enable both repeatedly: counter resets, widgets disappear on disable, and pulse records
-timer cleanup. Restart the same app origin/profile with one disabled; confirm preferences and only
-the enabled contribution. Remove both and restart; confirm no installation/widgets remain. Check
-Settings keyboard/Escape/focus, scrolling and both themes at the usual Windows DPI. Use disposable
-test packages for duplicate IDs, malformed manifests and exceptions; never install unknown code.
-Record owner acceptance in #21; automated Windows smoke does not substitute that UX acceptance.
-
-## Historical owner Windows smoke contracts
+### Historical owner Windows smoke contracts
 
 Use the actual Windows setup, including the usual display scaling. Confirm text is legible in both themes and the fixed header/Bottom remain correctly separated. In normal mode try dragging a widget header and using its form/scroll content: no accidental layout movement should occur.
 
@@ -368,8 +428,10 @@ then disable guides or hold Alt and verify continuous unsnapped size changes and
 Load an old touching-edge layout: normal mode must preserve it. Edit may normalize spacing only in
 the preview; Cancel must restore the old composition/bytes, and Save may persist only a spaced layout.
 If normalization cannot fit, the warning and blocked Save must be recoverable by reducing widgets
-or Cancel. Repeat in both themes, 100%/usual physical scale and a small scrolling window. The prior
-7/7 functional checklist is not visual acceptance; the owner rejected alpha.6 and must retest.
+or Cancel. Repeat in both themes, 100%/usual physical scale and a small scrolling window. The then-reported
+7/7 functional checklist was not visual acceptance: the owner rejected alpha.6 UX and the
+corrective retest was still pending in that historical record. Later delivered behavior and
+scoped acceptances must be read separately; this paragraph does not request a new repeat.
 
 Open the sample panel on all four sides in both Overlay and Docked. Overlay should leave underlying geometry unchanged; Docked should reserve viewport space (the minimum canvas may scroll). Test floating Overlay and the persistent reopen button. Resize the native window and verify overflow remains reachable rather than hiding widgets permanently.
 
@@ -379,4 +441,12 @@ processes. A fixture/sample result cannot certify future plugin costs or OS reso
 
 ## Completion standard
 
-Report pass/fail/blocked/not_run for each relevant layer. A missing package graph, failed compiler or unobserved Windows smoke is not a success. Do not use `--no-sandbox`, disabled webSecurity, removed type rules or skipped assertions as fixes. Use the active owner-assigned Target Version under TASK_POLICY; alpha.13 does not accept or close alpha.12/#29.
+Report passed/failed/blocked/not_run for each selected layer, the actual command/environment and
+its limits in the active Issue. Link CI to the exact commit and distinguish global result, job,
+step and tested scope. A passed source check is not a semantic TypeScript build, effective model
+setting, physical mouse/DPI acceptance, Linux support or secure community-plugin boundary.
+Do not use --no-sandbox, disabled webSecurity, weakened type rules or skipped assertions as fixes.
+Preserve original bytes and security/solver/storage assertions when updating superseded chrome.
+Apply the current Target Version and authorization policy; integration/CI never authorizes closure,
+publication or acceptance of unrelated Issues. Representative CPU/RAM and native-surface workloads
+remain separate measurements, not inferred from synthetic charts, solver timings or fixture counts.

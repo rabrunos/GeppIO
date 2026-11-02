@@ -10,7 +10,7 @@ This is a selected control map, not a security certification or a list of claime
 | External page/new window/navigation | Reject window-open, navigation away and attached webviews; production web requests restricted; permissions and downloads denied | Source controls plus actual desktop smoke; a future remote surface requires separate tests |
 | Production asset request | Fixed custom origin, GET only, allowlisted MIME and path containment in `src/main/security.ts`; CSP and nosniff | Parser/traversal negative tests; production startup smoke still required |
 | Dev server selected by environment | Exact validated `127.0.0.1:5173` origin; no arbitrary host fallback | Unit tests; dev-only CSP has HMR allowances and is not production policy |
-| Stored/imported layout | 64 KiB input bound, known schema/constraint version/IDs/regions, finite pixel sizes/coordinates, minima and clearance; separate freeform key and explicit adoption | `tests/freeform-*.test.ts`, historical `tests/layout.test.ts` / grid codecs; byte CAS plus cooperative Web Lock, not hostile-origin isolation |
+| Stored/imported layout | 64 KiB input bound, known schema/constraint version/IDs/regions, finite pixel sizes/coordinates, minima and clearance; separate `geppio:workbench:v1` envelope and explicit historical adoption | `tests/workbench-model.test.ts`, `tests/freeform-*.test.ts`, historical `tests/layout.test.ts` / grid codecs; byte CAS plus cooperative Web Lock, not a transaction across independent keys or hostile-origin isolation |
 | Local disk storage fails/corrupts | Error result and fallback copy; do not overwrite malformed state automatically | Storage tests; no guarantee against every OS/browser failure |
 | Identity/profile migration | Bounded non-link snapshots, unchanged original/backup, absent destination only; hidden inert recovery windows without preload, fixed Main scripts, legacy scheme only in a separate session | `tests/identity-migration.test.ts`, `tools/identity-smoke.ts` in production/dev; no arbitrary storage/IPC authority or hostile same-user disk isolation |
 | Test suite touches owner data | Desktop smoke creates a temp `geppio-smoke-*` profile; Main rejects other override roots | Restricted launcher path logic and actual owner-safe smoke; only the created temp root is cleaned |
@@ -18,6 +18,11 @@ This is a selected control map, not a security certification or a list of claime
 | Dependency / source secret leakage | Exact pins, approved install-script list, ignored credentials/local output; read-only CI secret scan | First install/lock review and CI scanner; ignore rules are not access control |
 
 No arbitrary content injection, safe-storage credential service, PTY, general local file browser or unrestricted IPC handler exists. Advanced future controls described in [Plugin boundaries](plugins.md) are requirements, not implemented protections.
+
+Disabling a plugin clears its runtime publications and terminates its Worker; the host may retain
+the saved widget presence and position as paused. Removing only a presence does not stop an enabled
+Worker. These layout/lifecycle distinctions do not grant plugin-owned persistence, credential access
+or a cross-plugin capability broker; see [the current runtime contract](plugins.md).
 
 The owner explicitly authorized minimize/maximize/close for the alpha.13 frameless header.
 `window-controls.ts` validates the fixed host request; Main resolves the sender's own window.

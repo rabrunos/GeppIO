@@ -28,6 +28,10 @@ choices and unresolved product questions. Route only relevant context. Do not re
    a narrow documentation change needs less detail than a trust-boundary change. Inherit canonical
    policies by repository path instead of copying the policy library. Missing required evidence or
    unresolved blocking scope is reported explicitly, not filled with guesses.
+   If the task deliberately adopts a new library or copied/adapted external implementation,
+   identify its individual owner approval under TASK_POLICY/Issue #19 before integration.
+   Reuse an existing approval within its actual scope; Issue #8's shadcn/ui source selection
+   is not a blanket dependency or registry approval.
 6. If an authorized direct executor call is available, send the complete contract to it. Otherwise,
    **automatically deliver the full copy-ready contract to the owner in a single fenced text block
    per root contract**. Do not merely offer to generate it later. An Issue link, recorded task,

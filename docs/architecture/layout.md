@@ -1,6 +1,6 @@
 # Region-aware continuous widget geometry
 
-## Host workbench — Issue #2 / alpha.13
+## Current host workbench — Issue #2 / alpha.13 and alpha.14
 
 The host keeps the continuous solver below. `shared/workbench/model.ts` separates immutable
 widget types, owner-qualified models, mounted views, placements and user bars. Manifest-v1
@@ -12,8 +12,11 @@ Bar membership and vertical positions are independent; a shared Sidebar view can
 multiple bars without another model or Worker. Empty format slots and selection/filter/dock
 state belong to the editing session. Save editing advances its Cancel checkpoint; Conclude
 validates and writes the slot-free document before clearing transient UI. History records one
-gesture/action, not solver frames. The normal-mode paired-divider command validates two adjacent
-rectangles against the confirmed baseline without adopting another draft or migration.
+gesture/action, not solver frames; its stack of at most 256 intentions is session memory, not persisted
+history. The normal-mode paired-divider command validates two adjacent rectangles against the
+confirmed baseline without adopting another draft or migration. It is an explicit exception to
+individual Edit-only geometry: accepted normal pairs have their own guarded commit; Edit pairs
+use draft/history. Pair and region splitters retain keyboard operation in production.
 Every bar member must resolve to its actual shared Sidebar view. A single-view type still
 used by another bar cannot move/swap out of Sidebar and leave that bar dangling; multiple-area
 types retain the shared Sidebar view and use an eligible view of the same model elsewhere.
@@ -36,8 +39,11 @@ Actual frames/inputs stay mounted in the shared geometry layer. Pickup follows t
 for 220ms; return uses uniform scale for 220ms, and accepted flight interpolates translation and
 dimensions for 240ms without nonuniform scaling. History uses 240ms and composition changes
 380ms, with the approved easing. No animation owns layout storage or plugin execution. A parked
-pointer sleeps after pickup. Coupled horizontal dividers optionally snap at center with the
+pointer sleeps after pickup. Dividers between horizontally adjacent widgets optionally snap at center with the
 approved 7px entry/14px exit hysteresis; individual solver gestures remain fractional.
+This is 50-percent width equalization of a horizontally adjacent pair, not the historical
+general edge/center/size guides or Alt bypass. Earlier guide wishes in #3/#10 remain for
+scope conciliation; their absence here is not automatically regression or approved cancellation.
 
 The active picture suppresses only its ghosted view's FLIP through landing/return, so the
 measured client rectangle is the final engine projection. Other views retain their normal
@@ -54,10 +60,19 @@ destinations. Geometry probes pause during a held gesture; bar, runtime and surf
 still refresh eligibility. Drop uses the same command again against its current destination.
 
 The approved chrome uses 11px horizontal/9px vertical spacing, a separate 48px rail,
-180–430px Sidebar content, a 238px peek, 125–250px Bottom, 480px editor and 25px status bar.
-Sidebar's inner content uses 15px per side. `useSurfaces` measures origins, native scrollbars
-and actual chrome once; collapse clipping is separate from frozen logical width. The old
-15px-all-sides and 15px-status values below document the alpha.12 basis, not alpha.13 chrome.
+180–430px Sidebar content (initial 283px), a 238px peek, 125–250px Bottom (initial 167px),
+480px editor and 25px status bar with host content. Sidebar dimensions exclude the rail.
+Sidebar's inner content uses 15px per side. `useSurfaces` centralizes measured origins, native
+scrollbar reservation and actual region space; collapse clipping is separate from frozen logical width. The old
+15px-all-sides and 15px-status contract is preserved below as historical alpha.12 chrome.
+Effective bounds clamp to the viewport; Sidebar reserves rail plus minimum Main space.
+Collapsing Sidebar preserves its rail and user-bar actions; optional plugin-authored rail
+actions are a future SDK scope (#31), not inferred from Sidebar region eligibility.
+Current region pointer resize uses capture and a 4px activation threshold; collapse distance
+is 48px beyond the effective minimum. Escape/cancel/lost capture/region resize restore the
+gesture request. Keyboard steps are 10px (Shift 40px), Home/End select bounds, and Enter/Space
+toggle visibility; keyboard confirmation publishes on blur. These are the current
+`workbench/region-policy.ts` and `useRegions.ts` rules, distinct from the historical ones below.
 
 ## Approved alpha.13 correction adapters
 
@@ -68,8 +83,8 @@ bar configuration and exact slot filling resolve the same declaration; the solve
 move-size invariant and collision/clearance checks are unchanged. Responsive container
 styles adapt bundled content without scaling it or replacing it with recovery UI.
 
-New activations allow fourteen custom bars plus protected Home; the saved cap remains
-100. The codec still accepts up to twenty active legacy custom bars, preserving their
+New activations allow fourteen custom bars plus protected Home; up to 100 custom bars may be
+saved in addition to Home. The codec still accepts up to twenty active legacy custom bars, preserving their
 order, identities and positions. Editing/reduction is allowed above fourteen, but any
 count-increasing activation is rejected. Incompatible historical Sidebar memberships
 still enter existing recovery without modifying original bytes; no silent repair is added.
@@ -85,7 +100,28 @@ Scroll direction flags use coalesced local scroll/content/resize observation, ne
 polling loop. Notification state is a bounded twenty-item in-memory reducer, initially empty,
 fed by real native inventory changes/errors; it does not create a backend or persisted news.
 
-## Continuous solver basis — Issue #29 / alpha.12
+## Composition capture and restoration — alpha.14
+
+New saves use format plus widget associations. Main and Bottom have explicit scopes;
+Sidebar contributes optional width only, never its bars, widgets or pin state. Logical
+visibility supplies defaults: collapsed panels begin unchecked but remain eligible to include.
+Opening/changing the capture dialog does not itself confirm temporary Edit chrome.
+
+Restoration filters even historical chrome patches by that component contract. An included
+Bottom may restore its height and inclusion; omitted regions retain canonical placements,
+references and visibility through checkpoint/Conclude. Widgets cannot take a single-view
+presence from an omitted region. Format first arranges the current included widgets; repeating
+Format can replace them with session reservations. Click, catalog and existing-view moves share
+current-identity exact-slot admission, reject invalid slots without free-space fallback and
+record accepted filling/removal as one reversible intention. Reservations are never executable
+persisted widgets. See `src/shared/workbench/compositions.ts`, `src/shared/workbench/slots.ts`
+and `src/renderer/src/workbench/EditorPanel.tsx`.
+
+## Current continuous solver — Issue #29 with host adapters from Issue #2
+
+The continuous algorithms originated in alpha.12. Current host declarations, projection,
+organization and transaction rules above take precedence over the historical delivery
+contracts preserved later; no mandatory cell engine has been reintroduced.
 
 Mandatory cell placement is superseded. The only active renderer is App → freeform/; no grid
 metrics, cell rounding, square requirement, row count or column count participates in placement.
@@ -95,8 +131,10 @@ region ownership, constraints, collision, projection, transfers, codecs and stor
 
 ### Coordinates, constraints and regions
 
-Each region owns one ordinary 15px content inset. Coordinates start at that inner content origin.
-Bounded mode retains all four insets; expanded Main omits the right inset and uses a native
+Coordinates start at the measured inner content origin. Current Main/Bottom chrome uses 11px
+horizontal/9px vertical spacing; Sidebar content has 15px per side. Borders and native scrollbar
+reservation are measured separately rather than assuming a universal 15px inset.
+Bounded Main retains its chrome insets; expanded Main omits the right inset and uses a native
 thin horizontal scrollbar only when content overflows. Its normal reservation is measured.
 Sidebar has one vertical scroll owner containing navigation and the occupied placement world;
 width follows its inner content area, including native scrollbar reservation. Bottom and its
@@ -113,16 +151,22 @@ contract; imported JSON cannot grant permissions or override minima. Actual geom
 dimensions are separate. Main supports both axes/eight handles. Sidebar fixes x=0 and follows inner
 width, editing y/height; Bottom fixes y=0 and follows inner height, editing x/width. Navigation and
 toolbar remain structural. Summary/chart are eligible in all regions; queue is Main-only; other
-fixtures support Main/Sidebar. A Bottom content height below 112px rejects Summary/chart, preserving
-the existing region caps. A collapsed or too-small region retains composition with a warning.
+fixtures support Main/Sidebar. The host registry specializes Sidebar width minima to 150px and
+eligible Bottom height minima to 105px; the base/legacy Summary/chart minimum remains 112px.
+Thus approved Bottom 125px chrome can show its native content instead of mandatory recovery.
+A collapsed or genuinely too-small region retains the composition with explicit recovery.
 
 The minimal transfer route uses the same solver, accepts only eligible feasible targets and rejects
-atomically. Pointer drops and the selected-widget region selector provide mouse/keyboard routes.
+atomically. Pointer drops and host catalog/destination controls share the same eligibility rules.
 All fixture frames have one stable React parent. Per-frame CSS clipping maps their region origin and
 scroll offsets into Work Area coordinates; moving between regions does not change component keys or
 portal roots. Offscreen frames remain mounted with content-visibility:auto and inert focus handling.
-There are three constant-size scroll worlds and seven actual fixtures, not empty cells. Plugin widgets
-remain in their separate tray; usePlugins remains App-owned and geometry never manages Workers.
+There are three constant-size scroll worlds, not empty cells. The host has seven synthetic types,
+initially four Main/two Sidebar/one Bottom. Plugin widgets are integrated through the host
+catalog/placement layer as Main-only single-view cards; `usePlugins` remains App-owned and
+geometry never manages Workers. Host types include card/seamless appearance infrastructure,
+but current registered types are card and manifest/API v1 does not expose appearance, regions,
+category, multi-area presence or rail contributions to authors.
 
 ### Direct manipulation and bounded search
 
@@ -144,7 +188,8 @@ starting snapshot, so reversing while held restores the entire initial geometry.
 actual positions and sizes in memory: settlement replaces compressed preferred dimensions with actual
 dimensions, preserving unchanged records. The next gesture cannot resurrect older geometry. Legacy v1
 preferences remain decodable; load/import/edit entry normalize them in memory without changing bytes.
-Widget defaults remain independent registry values. Explicit Save writes settled geometry and preferences.
+Widget defaults remain independent registry values. Explicit Edit checkpoint/Conclude writes
+settled geometry and preferences; the normal paired-divider path is the separate exception above.
 
 Catalog/transfer insertion first reuses a vacant seed. When none exists, a distinct `insert`
 intention validates every existing peer, adds only the new active rectangle and runs the same
@@ -165,14 +210,15 @@ rectangle's opposite edges, even when neighbors need responsive fitting. Direct 
 projection while ResizeObserver catches up. Releasing a held extent refreshes native scroll mapping
 before paint; removing a scrollbar rebases the reference without changing the accepted rectangles.
 Blocked intentions retain the last valid anchored preview. Cancellation restores only that gesture's
-source, including its reference. Layout Cancel restores the previously persisted composition.
+source, including its reference. Cancel editing restores its last confirmed checkpoint.
 
 Experimental widget grip/resize keyboard controls exist only when Vite's build-time import.meta.env.DEV
 is true. Development retains handle Tab stops, focused outlines and 1px arrows (Shift:10px). Each key
 action settles independently from the synchronous live draft. Production removes these handle Tab stops,
 ignores their arrow shortcuts and suppresses their focus outlines, retaining all pointer handles. There
 is no production opt-in. Normal forms, buttons, Settings, dialogs, region splitters and Tab navigation
-retain their native keyboard behavior in both builds; no native security setting or bridge changes.
+retain their native keyboard behavior in both builds; paired dividers also retain production
+keyboard operation. No native security setting or bridge changes.
 
 ### Stable projection, expansion and recovery
 
@@ -187,7 +233,9 @@ Sidebar never acquires arbitrary horizontal placement. Its y coordinates and hei
 across viewport changes; occupied bottom edges define finite vertical extent. Navigation and widgets
 share one scroll owner, and renderer mapping includes the navigation offset. Bottom ignores Main's
 expansion option and always solves/projects into actual finite dimensions. Coordinates/worlds are capped at 100000px,
-individual dimensions at 4096px, known documents at seven fixtures (engine cap 16), input at 64 KiB.
+individual dimensions at 4096px and input at 64 KiB. Legacy freeform documents require seven
+known fixture identities; current workbench documents validate dynamic qualified views against
+their host registry, within the same 16-view engine cap.
 No pixel/cell-count-dependent arrays are allocated.
 
 Bounded presentation projects from one stable canonical/edit source and each region's recorded inner
@@ -205,33 +253,56 @@ Save is blocked while an occupied region is infeasible. Surface measurements run
 not every React commit; size-only projection memoization avoids work on pure scroll/selection updates.
 Scrolling, window/region resizing, collapse and preference toggles never write layout positions.
 
-### Persistence and historical data
+### Current persistence and historical data
 
-geppio:layout:freeform:v1 stores {schemaVersion:1,engine:'freeform',constraintVersion:1,reference,
+`geppio:workbench:v1` is the active host envelope. It stores validated layout plus typed
+organization (views, bars, compositions, favorites/order/default and confirmed chrome), not
+session slots, selection, previews or history. Registry declarations remain authoritative;
+imported metadata cannot grant capabilities or invent executable widget types. Unknown or
+incompatible plugin/view associations preserve bytes and enter explicit recovery; the existing
+incompatible-membership recovery does not promise selector removal (#2 P19).
+
+The transaction adapter validates, acquires a same-origin Web Lock, compares observed bytes and
+uses generation tokens to cancel stale queued writes. Quota, unavailable storage and conflicts
+preserve the draft and prior bytes. This coordinates cooperative writers, not malicious code
+sharing origin authority or every OS failure mode. Save editing advances Cancel's checkpoint
+without leaving Edit; Conclude writes a slot-free document and exits. Normal bar/chrome updates
+and accepted bilateral pair commands have guarded paths without adopting an unrelated draft.
+Theme/display name/snap/Properties remain separate local stores or session state, not one atomic
+multi-key transaction. None of these persists a plugin's own notes or chat sessions (#23).
+
+`geppio:layout:freeform:v1` is the preserved alpha.12 source and stores {schemaVersion:1,engine:'freeform',constraintVersion:1,reference,
 placements}. reference records CSS-pixel inner sizes for Main/Sidebar/Bottom; each placement records
 id, region, x/y/width/height and preferred width/height. Validation enforces exact registry membership,
 ownership/eligibility, finite coordinate/document limits, minima/maxima, cross-axis rules and clearance.
 Corrupt/unknown future schemas are withheld recoverably, with unchanged original bytes. Unknown or
 missing widgets reject the document rather than silently dropping content. Themes stay independent.
 
-Old fractional v1, responsive grid v2 and horizontal v1 keys are never written by the new engine.
-When no freeform source exists, Settings exposes separate historical choices rather than silently
-selecting among customizations. Conversion is a read-only preview; only explicit Save adopts it.
+The active workbench does not write old fractional v1, responsive grid v2, horizontal v1 or
+freeform v1 keys. Settings exposes separate historical/freeform preview choices rather than
+silently selecting among saved customizations. Conversion is a read-only preview; only explicit
+confirmation adopts it into the workbench envelope without changing the originals.
 v1 uses its documented 960×620 reference. Since grid/horizontal schemas never stored CSS viewport
 sizes, conversion visibly uses documented stable pitches (70px responsive, 62px horizontal), removes
 the historical 10px trailing cell gutter and never rounds to a grid. Current content minima/clearance
 are enforced; impossible conversions reject with originals intact. Import accepts freeform or one
 explicitly selected historical JSON copy; stored historical keys also have separate preview buttons.
-Cancel abandons adoption.
+Cancel abandons adoption. Full process restart reads the validated workbench envelope and its
+confirmed chrome; old alpha.12 session-only sizing is not the current persistence contract.
+Installed package/enabled preferences are separate native state, and the SDK still supplies no
+generic persistence for plugin-owned content.
 
-Save validates then acquires a same-origin Web Lock and compares previously observed bytes before
-synchronous replacement. A generation token invalidates queued Save on Cancel/another preview. Quota,
-unavailable storage and external byte changes retain the draft for recovery. This coordinates normal
-same-origin writers, not hostile trusted plugins with shared origin authority or all OS failure modes.
-Full process restart uses the same validated freeform source; session-only region sizes may initially
-need reopening/enlargement. Installed plugin preferences and lifecycle boundaries are unchanged.
+### Historical alpha.12 workbench chrome
 
-### Workbench chrome
+The following record describes the alpha.12 delivery only. The current chrome, region-specific
+host minima, persistent rail, 25px status bar and confirmed organization state above supersede it;
+these earlier values must not be restored as fixes to the current application.
+
+The alpha.12 renderer used a 15px inset on each region (omitting Main's right inset when
+expanded), seven built-in fixtures and a separate trusted-plugin tray. Its independent
+`geppio:layout:freeform:v1` source and session-only chrome predated the workbench envelope,
+catalog-integrated plugin views and guarded normal-mode pair commands. Those delivery facts
+are history, not missing work to recreate in the current host.
 
 Open Sidebar/Bottom request initial/minimum sizes of 230px/120px and keep the established maximum
 bounds (including 300px/20% and 180px/25% caps,

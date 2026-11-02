@@ -33,6 +33,26 @@ Historical layouts remain read-only recovery sources. Visual policies remain pro
 The fixed header is outside the widget layout. Regions are logically peers. Product choices
 not explicitly closed by the owner remain labelled provisional in the specification.
 
+The alpha.13/alpha.14 workbench adds host-owned bars, catalog placement, compositions,
+reservations, checkpoints and session undo/redo. Individual widget movement/resize requires
+Edit mode; adjacent-pair resize also works in normal mode through its own validated commit.
+The host has seven synthetic widget types (initially four Main, two Sidebar, one Bottom).
+Local plugin contributions use Main-only, single-view declarative cards; host metadata is not
+automatically an author-facing SDK capability. Project names, Git indicators, avatar and the
+presentation test panel do not implement filesystem projects, Git, accounts or a terminal.
+
+The owner's recorded product direction retains Electron for Windows and Linux; the currently
+validated platform/profile is Windows x64. Linux app smoke, packaging and distribution remain
+unimplemented/unverified, not implied by the Ubuntu secrets job. A complete modular IDE and
+the provisional plugin/widget catalog are future product work in Issues #32/#35, not an
+approved implementation sequence. Local desktop use does not require a GeppIO account;
+the optional community identity in #34 is a separate future scope.
+
+Issue #8 selects the canonical shadcn/ui source for needed components; no identifiable
+shadcn integration is asserted by the current stack. New deliberate library or copied/adapted
+external-code adoption requires individual owner approval under [TASK_POLICY](docs/.ai/TASK_POLICY.md)
+and Issue #19. This is not a blanket approval of registries, unrelated dependencies or upgrades.
+
 `package.json` is the canonical version source; `CHANGELOG.md` is integrated product history.
 The initial source baseline is `0.1.0-alpha.1`; its owner acceptance remains in Issue #1.
 Issue #21 assigns the independent plugin increment `0.1.0-alpha.2`. Every newly delivered
@@ -43,10 +63,10 @@ Local repair/test iterations share the batch target; machine setup does not itse
 
 The existing repository is `rabrunos/GeppIO`; intake and GitHub binding are complete. Do not repeat them. The following paragraph describes the original pre-repository handoff only.
 
-The owner explicitly requested a ZIP **before creating the new repository**. This is the only
+The owner explicitly requested a ZIP **before creating the new repository**. This was the only
 pre-repository materialization exception. There is no fabricated repository URL, HEAD, Issue,
-push receipt or release. After the owner creates the repository, prepare the metadata with
-`tools/github-prepare.ts` under explicit authorization and use its real foundation Issue.
+push receipt or release in that original handoff. Repository binding and materialization are
+now complete; do not run `tools/github-prepare.ts` or the first-run template merely to resume work.
 New executable project work requires an actual Issue; an unavailable shared record is a
 blocker to report, not permission to maintain a local imitation of GitHub.
 

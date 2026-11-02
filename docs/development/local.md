@@ -1,60 +1,126 @@
-# Local Windows development
+# Local development
 
-## Requirements and installation
+## Existing checkout and supported environment
 
-Use Node.js 24.x, pnpm 11.25.0 and Git. GitHub CLI is required only to apply GitHub metadata. No Python, Docker, Rust, Visual Studio native build tools or paid model API is needed by the intended foundation. This dependency set has no node-pty/sqlite/native-plugin addon.
+Use Node.js 24.x, pnpm 11.25.0 and Git. Windows is the first validated desktop target.
+The owner direction includes Windows and Linux; Linux application validation and distribution
+remain separate work. The Ubuntu secret-scan job does not exercise the Linux desktop app.
+GitHub CLI is needed only for authorized GitHub operations, not for the local UI.
+The current dependency set has no PTY, SQLite or native-plugin addon requirement.
 
-From the extracted repository root, in PowerShell:
+The repository, Issues and real `pnpm-lock.yaml` already exist. On another machine, use the
+existing checkout and locked graph; do not repeat intake, GitHub binding or foundation bootstrap.
+From the repository root in PowerShell:
 
 ```powershell
 node --version
 npm install --global pnpm@11.25.0
 node --experimental-strip-types tools/doctor.ts
-pnpm install
+pnpm install --frozen-lockfile
 pnpm run doctor
 pnpm check
 pnpm test:desktop
 pnpm dev
 ```
 
-The global pnpm installation is an explicit owner step, not performed by project scripts. The project doctor reports a missing dependency directory/lockfile before the first installation; install, then rerun it with `pnpm run doctor`. Explicit `run` avoids selecting pnpm's native doctor command. Before installation, invoke the script directly with Node because pnpm 11 verifies dependencies before scripts and can install automatically. Do not use administrator privileges merely to suppress project errors. Use a user-managed Node installation where appropriate.
+Skip the global installation when the selected pnpm version is already available. It is an
+explicit owner/setup operation, not a project lifecycle script. Before installation, the doctor
+may report missing dependencies; run it again afterward. Explicit `pnpm run doctor` avoids the
+package manager's own doctor command. Direct Node invocation avoids pnpm's dependency preflight,
+which may install before running scripts. On Windows, `pnpm.cmd` can avoid a blocked PowerShell
+script shim without weakening ExecutionPolicy. Do not elevate merely to suppress a project error.
 
-`pnpm install` downloads packages; Electron 44.6.0 downloads its binary when first used. Extracting the source ZIP alone is not a completely offline installation. After dependency and binary setup, the prototype does not need a service/API connection. `pnpm-workspace.yaml` permits install scripts only for the reviewed esbuild versions 0.25.12 and 0.28.2. Electron 44.6.0 has no lifecycle install script to approve. Strict engine/peer/build policies and exact dependency saving are configured in this YAML file because pnpm 11 no longer reads non-authentication settings from `.npmrc`.
+Installation needs registry access and the Electron binary download. The current Electron package
+downloads its binary on first use. This is not an offline source bundle; after setup, the bounded
+local app does not require service credentials. `pnpm-workspace.yaml` permits lifecycle builds only
+for the reviewed esbuild versions and retains strict engine/peer/build policies and exact saving.
+Do not regenerate the lockfile, weaken those controls or change dependency pins to make setup pass.
+An actual mismatch needs a scoped task, observed evidence and the external-adoption gate where applicable.
 
-## Dependency and validation disclosure
+## Commands and their scope
 
-The source archive intentionally has no fabricated lockfile or bundled `node_modules`. The source-generation environment could not resolve npm hosts, so the declared dependency graph, TS6 full semantic check, bundling and desktop behavior were not observed there. Package pins start from the owner's earlier toolchain, with Electron 44.6.0 and Motion 14.0.0 checked against primary release/source information. They are candidate pins, not a claim that a registry-resolved graph passed every peer rule.
+The canonical command definitions are in [package.json](../../package.json).
 
-The first real `pnpm install` generates `pnpm-lock.yaml`. Inspect and commit the real lockfile as part of the still-unaccepted `0.1.0-alpha.1` baseline. All subsequent installs/CI use `pnpm install --frozen-lockfile`. Do not replace the missing file with hand-written integrity values, `latest`, or a guessed lock.
-
-If install/typecheck/build finds a dependency mismatch, repair the smallest incompatible pin/import in the same foundation validation Issue and rerun the full gate. Do not weaken strict peer, type or security checks to force success. Record the actual installed/runtime versions and command output; do not claim the ZIP's source checks proved the Electron runtime.
-
-## Commands
-
-| Command | Effect |
+| Command | Effect and prerequisite |
 | --- | --- |
-| `pnpm dev` | Local Vite HMR + Electron window; development data origin |
-| `pnpm build` | Compile the source to `out/`; no installer or publication |
-| `pnpm start` | Preview built code through the local production protocol |
-| `pnpm run doctor` | Run the project prerequisite checks; use direct Node before installation |
-| `pnpm check:repo` | Materialized structure, configuration and local-link checks |
-| `pnpm test` | Dependency-free TS core/control tests using Node |
-| `pnpm typecheck` / `pnpm lint` | Full configured toolchain checks after installation |
-| `pnpm check` | Structure + types + lint + tests + build |
-| `pnpm test:desktop` | Built Electron smoke in a disposable profile |
+| `node --experimental-strip-types tools/doctor.ts` | Read prerequisite availability before dependency setup |
+| `pnpm run doctor` | Project doctor after setup; does not prove effective client/model settings |
+| `pnpm install --frozen-lockfile` | Install the existing locked graph; network/native downloads may be needed |
+| `pnpm dev` | Vite development renderer and Electron; separate development data origin |
+| `pnpm build` | Compile Main/preload/renderer to `out/`; no installer or publication |
+| `pnpm start` | Preview built code using the production protocol; prepare the matching build first |
+| `pnpm check:repo` | Dependency-free structure, selected policy and local Markdown-link checks |
+| `pnpm typecheck` / `pnpm lint` | Full configured semantic type/lint checks after dependency setup |
+| `pnpm test` | Run all top-level TS core/control tests through Node type stripping; not a semantic typecheck |
+| `pnpm plugins:build` | Compile independent trusted examples into ignored `.local/plugin-packages/` |
+| `pnpm check` | Structure, types, lint, core tests, plugin examples and application build |
+| `pnpm test:desktop` | Identity smoke, desktop smoke and the four built workbench smokes; prepare the build/examples first |
+| `pnpm test:workbench` | Built workbench, organization, plugin and corrections smokes in disposable profiles |
+| `pnpm test:desktop:dev` | Identity/desktop paths with built Main/preload and a Vite renderer; not the same chain as `test:workbench` |
+| `pnpm github:prepare` | Historical metadata helper; no need to rerun it for a materialized project; `--apply` requires explicit metadata authority |
 
-## Data and another machine
+For read-only inspection or bounded documentation work, choose the checks required by the active
+contract. Direct Node can run `tools/check-repo.ts` or relevant dependency-free policy tests without
+installing the full graph. Do not run installation, build or desktop merely to fill a checklist.
+For runtime changes use the relevant gates in [testing](testing.md) and the active Issue.
+Never describe documented commands as executed until their actual result has been observed.
 
-The prototype stores a small layout/theme snapshot in renderer localStorage and trusted plugin
-copies/preferences under application userData. Development and built-preview origins can have
-independent layout drafts; plugin installation preferences share the same desktop profile.
-Issue #6's bounded migration is documented in [identity recovery](renaming.md); close the prior
-app and keep both profiles backed up. Other profile moves require explicit recovery. There is no automatic updater,
-native credential store or application login. `pnpm plugins:build` generates independent sample
-packages under `.local/plugin-packages`; install those through Settings, never by changing core imports.
+The VS Code tasks invoke Dev with `--watch`, preview, plugin build and check. Stop Dev/Start before
+another command writes the same `out/`; each task permits one instance per workspace window.
+The fixed loopback port can be occupied by an unrelated process. Diagnose ownership and obtain
+appropriate authority rather than silently terminating it or changing shared configuration.
 
-Keep diagnostics, temporary configuration and local artifacts under ignored `.local/` only when needed. Never commit machine-specific absolute paths, tokens, raw personal documents or production data. No tracked checkpoint/last-report is required.
+## Data and plugin boundaries
 
-## First Codex session
+Production assets use `geppio://app/`; development uses the exact configured loopback Vite origin.
+They can have independent renderer storage. The current workbench envelope is
+`geppio:workbench:v1`; fractional v1, responsive grid v2, horizontal v1 and earlier freeform keys
+remain preserved recovery sources. Explicit adoption writes the current envelope, not those originals.
+A historical preview or JSON import is not permission to overwrite the original. Save editing
+advances the Cancel checkpoint; Conclude
+validates and confirms the slot-free document. Normal paired resize and organization operations
+also have their own confirmed transactions. Viewport projection alone does not save geometry.
 
-Read [FIRST_LOCAL_RUN](../.ai/prompts/FIRST_LOCAL_RUN.md) after binding the real repository/Issue. The root `AGENTS.md`, `.codex/` and `.agents/skills/` are the selected harness. Verify client trust and effective settings locally; a TOML file in the ZIP cannot activate a model/permission profile remotely. If package installation requires network escalation, request that limited operation rather than full-access mode.
+Undo/redo holds up to 256 whole intentions in the editing session, not a durable event history.
+Theme, locale, snap and project display metadata retain separate preferences; there is no atomic
+multi-key database. A displayed project name is not a native project path. The initial seven
+bundled widget types are demonstrations, with four Main, two Sidebar and one Bottom placement.
+
+Main stores managed trusted plugin copies and installation/enabled preferences under
+`userData/plugins`. Install generated examples via the header Plugins manager or the Development
+and recovery settings; do not add core imports. Manifest v1 contributions normalize to Main-only,
+single-view cards. Moving/removing a presence does not dispose its Worker; disabling does, and an
+existing placement can remain as a paused placeholder. Counter state resets on activation.
+Layout persistence does not provide plugin-owned storage. The plugin SDK exposes no filesystem,
+process, PTY, remote-network, secret or cross-plugin authority. Workers share origin/storage authority;
+they are not an untrusted community sandbox. See [plugin boundaries](../architecture/plugins.md).
+
+Issue #6's bounded migration copies eligible old profile data only when the new destination is
+absent, preserves original/backup bytes and refuses to merge an existing destination. Close the
+old app and follow [identity recovery](renaming.md); do not delete either profile. Windows defaults
+are `%APPDATA%\semnome` and `%APPDATA%\geppio`. No automatic updater, credential vault, app account,
+installer or synchronization service is configured.
+
+Keep disposable diagnostics/configuration under ignored `.local/` when needed. Never commit
+machine paths, credentials, personal files or production data. No tracked status/checkpoint/report
+file is required; active evidence belongs in the GitHub Issue.
+
+## Executor entry and historical provenance
+
+Read [PROJECT_GUIDE](../../PROJECT_GUIDE.md), [AGENTS](../../AGENTS.md), the active Issue and
+[TASK_POLICY](../.ai/TASK_POLICY.md). Approved implementation uses the populated
+[EXECUTION](../.ai/prompts/EXECUTION.md) contract. Verify actual branch/HEAD/status/diff and preserve
+unrelated work. A remote SHA is not a substitute for inspecting the checkout.
+Project TOML expresses requested settings; verify effective trust, effort, sandbox, reviewer and
+network settings in the running client. Any technical elevation remains bounded by its authority;
+do not switch to Full Access or edit global settings as a workaround.
+
+[FIRST_LOCAL_RUN](../.ai/prompts/FIRST_LOCAL_RUN.md) is historical foundation context, applicable
+only to an explicitly requested continuation of that foundation. It is not the default route for
+a new conversation or another machine. BootCrate intake/materialization are complete.
+
+The initial pre-repository ZIP had no resolved lockfile or bundled dependencies because its
+generation environment could not access npm. The real graph and desktop were subsequently
+validated and integrated under Issue #1. Those old limitations describe that handoff only, not
+the current checkout or a requirement to recreate its first commit. Source/build history remains
+in [CHANGELOG](../../CHANGELOG.md); actual task and acceptance evidence remains in Issues.

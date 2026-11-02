@@ -25,16 +25,28 @@ must match the manifest. `reportStatus(text)` exposes bounded lifecycle/backgrou
 Settings. The host binds identity to the Worker callback, renders text literally and routes only
 published actions back to that Worker. No DOM, HTML, arbitrary CSS, FS/process/native API or
 inter-plugin API is supplied. The alpha.13 host catalog normalizes legacy contributions to
-qualified Main-only, single-view cards using the existing publication/action route. View presence
-and bar membership never activate another Worker. Sidebar/Bottom permissions, appearance and
-custom surface declarations are not added to manifest v1. Issue #29 originally added regional
+qualified Main-only, single-view cards in the `Plugins` category using the existing publication/action
+route. Category, region eligibility, appearance and presence are host adapter values, not fields
+available to authors in manifest v1. Sidebar/Bottom permissions and custom surface declarations
+are not added to that manifest. Issue #29 originally added regional
 placement for bundled fixtures only; the host adapter does not change runtime authority. Widget surface descriptions
 are separate from activate/dispose, allowing future UI adapters without replacing the logic runtime.
 
+Workbench movement and visibility changes preserve mounted view identities. Removing a widget's
+presence or changing bar membership does not dispose an enabled plugin or create another Worker;
+placing the widget again can reuse its current publication. The
+[workbench plugin smoke](../../tools/workbench-plugins-smoke.ts) distinguishes this from disabling
+the plugin. Host view/layout persistence is not plugin-owned data persistence: API v1 has no
+generic state storage, and Counter initializes its count inside each activation (Issue #23).
+
 Activation, actions and disposal have a 3-second timeout. Exceptions, invalid messages, undeclared
 widgets and more than 60 messages/second fail that plugin and terminate its Worker. Disposal clears
-widgets immediately, attempts the hook and terminates the Worker even on failure; no widgets or
-timers are retained on disable/remove. Reload/process exit forcibly terminates Workers; dispose is
+runtime widget publications immediately, attempts the hook and terminates the Worker even on failure;
+the Worker and its timers are not retained on plugin disable/remove. Disabling does not delete the
+existing workbench presence or position: it remains visible with a paused/awaiting-publication message.
+Reactivation creates a new Worker and resets the example's activation-local state. The earlier #21
+manual acceptance describes the UI of that historical delivery, not removal of current saved placements.
+Reload/process exit forcibly terminates Workers; dispose is
 best effort during explicit disable/remove, not guaranteed on process exit. Enabled preference
 survives a runtime failure; retry is explicit in Settings, or occurs on restart. Sessions retain
 only eight recent events and widget state is reset on activation. Package revision changes invalidate
@@ -57,6 +69,11 @@ through Settings; the core build never imports it. Adding another ready package 
 or rebuild. The counter contributes a working button; pulse runs a disposable timer with zero widgets.
 
 ## Future design intent
+
+External service authentication belongs to its corresponding plugin. The proposed optional
+[community identity in Issue #34](https://github.com/rabrunos/GeppIO/issues/34) does not make an
+account mandatory for local desktop work or replace service-specific authentication. No community
+account, OAuth service, broker or vault is implemented by this runtime.
 
 ## One developer experience
 

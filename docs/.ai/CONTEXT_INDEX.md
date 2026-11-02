@@ -16,6 +16,7 @@ Read only the rows needed for the active Issue. This is a route map, not task st
 | Future plugins, APIs, slots and scripts | [Plugin design boundaries](../architecture/plugins.md) |
 | Native boundary or untrusted input | [Security baseline](SECURITY_BASELINE.md), [control map](../architecture/security.md) |
 | Task version, effort, scope or approval | [Task policy](TASK_POLICY.md) |
+| New library/copied external code approval; selected shadcn/ui source | [Task policy](TASK_POLICY.md#external-library-and-source-adoption), Issues #19 and #8 |
 | New machine or GitHub binding | [Local setup](../development/local.md), [GitHub](../development/github.md) |
 | What validation proves | [Testing](../development/testing.md) |
 | Product identity and legacy profile recovery | [Identity recovery](../development/renaming.md) |

@@ -4,7 +4,7 @@
   "project": {
     "name": "geppio",
     "kind": "desktop-workbench-prototype",
-    "summary": "Windows-first local workbench prototype with peer regions, region-aware continuous CSS-pixel widget placement, trusted experimental local plugins and a future permissioned untrusted-plugin platform."
+    "summary": "Windows-first local workbench with continuous regional geometry, host organization/compositions and trusted local plugins; modular IDE and Windows/Linux product direction remain future scopes beyond current Windows validation."
   },
   "owner": {
     "repository_language": "en",
@@ -33,19 +33,25 @@
   ],
   "constraints": [
     "Product name GeppIO; technical namespace geppio; Canonical GitHub repository rabrunos/GeppIO, stable repository ID 1409287329 (Issue #6).",
-    "No application login, external service or paid AI API.",
+    "No mandatory GeppIO login, external service or paid AI API in the current desktop. Optional community identity (#34) and provider-specific authentication belong to separately authorized future scopes.",
     "The alpha.1 foundation used static fixtures; alpha.2 added trusted experimental local plugins (Issue #21). No native terminal or secure untrusted-plugin platform is implemented.",
     "No BootCrate Setup, Console, raw intake or upstream application code.",
-    "Completed, validated approved GeppIO Issues inherit standing commit/push authorization under TASK_POLICY after repository ID/origin/main/staged-diff verification; explicit task overrides apply. Issue metadata/closure and publication require separate authority."
+    "Completed, validated approved GeppIO Issues inherit standing commit/push authorization under TASK_POLICY after repository ID/origin/main/staged-diff verification; explicit task overrides apply. Issue metadata/closure and publication require separate authority.",
+    "Retain Electron for the owner-recorded Windows/Linux direction; platforms currently records validated Windows x64 scope, not delivered Linux support. Linux runtime smoke/packaging and distribution remain unverified/unimplemented.",
+    "Issue #8 selects the canonical shadcn/ui source for needed components, not arbitrary registries/dependencies; no identifiable integration is claimed in the current toolchain.",
+    "New deliberate external-library or copied/adapted source adoption requires individual owner approval under Issue #19 and TASK_POLICY. Existing chosen stack is not retroactively unapproved; transitive nodes receive normal graph review rather than separate approval per node."
   ],
   "architecture_invariants": [
     "Fixed header outside widget arrangement.",
     "The prototype represents Sidebar, Main and Bottom as siblings; the owner discussion about the final abstraction remains open.",
     "Continuous CSS-pixel geometry across Main/Sidebar/Bottom; bounded default, optional content-bounded horizontal expansion, stable-source reversible projection and no viewport-only layout writes (Issue #29). Historical grid data remains preserved.",
-    "Editing layout requires an explicit mode.",
+    "Individual widget movement/resize requires explicit Edit mode; adjacent-pair resize can commit through its own validated normal-mode transaction. Viewport projection alone never persists geometry.",
     "Presentation, anchor and collapsibility remain independent concepts.",
     "A plugin is not equivalent to a widget; trusted local packages run in disposable Web Workers with declarative widgets and lifecycle limits. This experimental runtime is not secure isolation for untrusted plugins.",
-    "No Node, filesystem or generic IPC exposed to the renderer."
+    "No Node, filesystem or generic IPC exposed to the renderer.",
+    "Host catalog, model/view identities, bars, compositions, reservations and session undo/redo do not extend manifest v1 authority. Local plugin widgets remain declarative Main-only single-view cards.",
+    "The active host registry has seven synthetic widget types, initially four Main, two Sidebar and one Bottom. Display project names/Git indicators/profile and the presentation panel are demonstrations, not filesystem/Git/accounts/terminal implementations.",
+    "Workbench layout/organization persistence, session history and plugin-owned data are different scopes. Session history is not persisted; a composition does not persist plugin content."
   ],
   "validation": {
     "canonical_capabilities": [

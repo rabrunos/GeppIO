@@ -16,6 +16,9 @@ Execution: E-class / requested Main effort, risk, discovery and consumption; rep
 Goal: exact intended outcome.
 Scope: relevant files/behaviors and task-specific implementation steps.
 Non-goals: explicit exclusions and boundaries to preserve.
+If external code/library adoption is in scope: identify the concrete candidate and applicable
+individual owner approval under TASK_POLICY/Issue #19; preserve the limits of existing approvals.
+Research alone is not permission to copy/install/run the candidate.
 
 Context and preflight: read PROJECT_GUIDE.md, AGENTS.md, the active Issue and docs/.ai/TASK_POLICY.md;
 route only needed context through docs/.ai/CONTEXT_INDEX.md. List additional task-specific sources.

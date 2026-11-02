@@ -4,6 +4,10 @@ The current app is local and has no account, remote content, terminal, database 
 secret vault. Issue #21 adds only explicitly trusted local development plugins. Offline does not mean trusted input. JSON layout import, saved layout bytes,
 asset URLs and build dependencies are relevant inputs. See the [control map](../architecture/security.md).
 
+The proposed [optional community identity](https://github.com/rabrunos/GeppIO/issues/34) is separate
+from local desktop use and per-plugin external service authentication. It is not an implemented
+account service or a requirement to sign in before using the local workbench.
+
 Keep the Electron renderer sandboxed and context-isolated with Node integration and webview disabled.
 The preload exposes version/platform metadata, four fixed plugin-management operations and the
 owner-authorized minimize/maximize/close host chrome actions. All operations are validated

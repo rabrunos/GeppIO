@@ -44,6 +44,20 @@ Do not add Node, Electron, filesystem, process execution or arbitrary IPC to the
 Accounts, telemetry, a backend, a vault, SQLite, PTY, code injection, WebContentsView and new
 plugin capabilities require their own approved task and safety controls.
 
+The active host also owns catalog/views, bars, compositions, reservations and session history.
+Individual widget gestures require Edit mode; normal-mode adjacent-pair resize has its own
+validated transaction. Keep host metadata separate from manifest v1 author APIs. Synthetic
+fixtures, display-only project/Git/profile controls and the presentation panel are not real IDE
+tools. Windows/Linux is the recorded direction, while current app validation is Windows x64;
+do not report the Ubuntu secrets job as Linux application support.
+
+Before any new deliberate external-library or copied/adapted source adoption, follow the
+individual owner-approval gate in TASK_POLICY and Issue #19. Issue #8 already selects the
+canonical shadcn/ui source for needed components, not every registry/dependency or unrelated
+upgrade. Research is allowed before approval; copying, installing or running external code is
+not authorized by research alone. Existing chosen stack and transitive graph nodes are not
+retroactively subject to individual approval.
+
 ## Version and Git
 
 Use TASK_POLICY. Each independent tracked mutation needs an assigned Target Version. Every newly

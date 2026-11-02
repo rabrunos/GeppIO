@@ -63,6 +63,15 @@ A changing task has a Target Version and relevant Issue. A small task needs only
 
 ## CI and acceptance
 
-The Windows workflow performs frozen-lock installation, full checks and an isolated Electron smoke. A separate read-only secret scan uses a checksum-verified scanner. It does not publish packages, close Issues or spend model API credits. The lockfile must be generated/committed before this CI can pass.
+The Windows workflow installs the existing committed graph with `--frozen-lockfile`, runs full
+checks and the built desktop chain in disposable profiles. A separate Ubuntu job checks whitespace
+and history with a checksum-verified secret scanner; it does not test the Linux application.
+The real lockfile has been integrated since Issue #1; do not regenerate it as a first-run step.
+CI does not publish packages, close Issues or spend model API credits. Read actual results by
+commit/run/job, rather than infer success from the workflow file or a different SHA.
 
-CI files in a ZIP are not a passed run. Required manual journeys (DPI, real drag/drop responsiveness, appearance and owner acceptance) stay open in the Issue until actually observed. Use related-Issue links in PRs; avoid auto-closing an unaccepted task just because a PR merged.
+CI files in the original ZIP were not a passed run; later observed runs remain evidence only for
+their own commits and tested scope. Required unobserved manual journeys (physical DPI, mouse
+responsiveness and appearance) remain explicit in the relevant Issue. Preserve existing scoped
+owner acceptance rather than ask for automatic repetition or expand it to the whole app.
+Use related-Issue links in PRs; avoid auto-closing an unaccepted task just because a PR merged.

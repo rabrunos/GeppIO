@@ -1,34 +1,46 @@
 # GeppIO
 
-Base local de um workbench desktop. O nome do produto é **GeppIO**; o namespace técnico é `geppio`.
-O produto começa do zero: nenhum código do aplicativo anterior, nenhum plugin ChatGPT/Codex,
-nenhum terminal real, login, serviço remoto ou aplicativo do BootCrate foi incluído.
+Workbench desktop local com widgets e plugins modulares. O nome do produto é **GeppIO**;
+o namespace técnico é `geppio`. A base usa Electron, TypeScript, React, Tailwind, Heroicons
+e Motion. A escolha de shadcn/ui para futuras incorporações está registrada na
+[issue #8](https://github.com/rabrunos/GeppIO/issues/8); isso não significa integração já concluída.
 
-## Começar no Windows
+O workbench tem geometria contínua, catálogo, barras, composições, histórico de edição e
+persistência de layout. Há um runtime experimental real para plugins locais confiáveis.
+Editor de arquivos, projeto conectado ao filesystem, Git, terminal, ChatGPT, Codex e GitLayer
+ainda são propostas, não ferramentas funcionais desta base. Não há conta GeppIO, backend,
+sincronização em nuvem ou API paga de IA.
 
-Use **Node.js 24.x**, **pnpm 11.25.0** e Git. A primeira instalação precisa de internet para
-baixar dependências e o Electron; depois disso a execução desta base não usa serviços externos.
+Windows é o primeiro alvo validado. A direção de produto inclui Windows e Linux, mas não há
+validação equivalente do aplicativo Linux nem distribuição pronta para esses sistemas.
+`pnpm build` gera artefatos locais; não gera instalador, assinatura ou release.
+
+## Começar no checkout existente
+
+Use **Node.js 24.x**, **pnpm 11.25.0** e Git. O repositório já inclui o lockfile real.
+Na raiz do checkout, em PowerShell:
 
 ```powershell
+node --version
 npm install --global pnpm@11.25.0
-pnpm install
+node --experimental-strip-types tools/doctor.ts
+pnpm install --frozen-lockfile
 pnpm run doctor
 pnpm check
 pnpm dev
 ```
 
-Se o pnpm indicado já estiver instalado, ignore o primeiro comando. Não use versões diferentes
-silenciosamente. `pnpm run doctor` executa o diagnóstico do projeto; `pnpm doctor` pode selecionar
-o comando nativo do gerenciador. Antes de instalar dependências, execute o diagnóstico diretamente
-com `node --experimental-strip-types tools/doctor.ts` para evitar a instalação automática do pnpm.
+Ignore a instalação global se a versão indicada já estiver disponível. O diagnóstico anterior
+à instalação pode informar dependências ausentes; repita-o depois de instalar. `pnpm run doctor`
+é o diagnóstico do projeto; `pnpm doctor` pode selecionar o comando nativo do gerenciador.
+A invocação direta pelo Node evita o preflight de dependências que o pnpm pode iniciar antes
+de scripts. Não gere outro lockfile nem altere versões para contornar um erro de instalação.
 
-O checkout inclui o lockfile real; use `pnpm install --frozen-lockfile` nas instalações seguintes. A criação do Git já foi concluída; as instruções do ZIP abaixo são históricas e não devem ser repetidas. **O ZIP original não incluía `node_modules`, um executável pronto nem um lockfile fabricado.**
-O ambiente de geração não acessou o registro npm. O primeiro `pnpm install` deve produzir
-`pnpm-lock.yaml`; revise e inclua esse arquivo no primeiro commit. O build completo e o teste
-gráfico Windows devem ser executados localmente antes de aceitar a fundação. A configuração de
-CI usa instalação congelada e exige esse lockfile real.
+A primeira instalação precisa de internet para os pacotes e o binário do Electron. Depois
+do preparo, esta base local não exige serviço externo. Consulte a lista de comandos e os detalhes
+em [desenvolvimento local](docs/development/local.md).
 
-Para testar a versão compilada:
+Para abrir o código compilado ou executar a suíte desktop em perfil descartável:
 
 ```powershell
 pnpm build
@@ -36,133 +48,142 @@ pnpm start
 pnpm test:desktop
 ```
 
+Esses comandos não representam resultados já obtidos nesta máquina. Evidências por commit,
+limites dos testes e aceites estão nas issues e no [guia de validação](docs/development/testing.md).
+
+## O que existe no workbench
+
+Cabeçalho fixo, barra contextual, Sidebar, Main, Bottom e barra de status compõem o shell.
+Minimizar, maximizar e fechar operam a janela Electron real; maximizar a janela não maximiza
+um widget dentro da Main. Tema claro/escuro, idioma e movimento reduzido fazem parte do host.
+
+O registro nativo atual tem sete tipos sintéticos: **Panorama**, **Fila de trabalho**,
+**Biblioteca**, **Ideias em aberto**, **Atividade**, **Propriedades** e **Ritmo**. A composição
+inicial contém quatro widgets na Main, dois na Sidebar e um na Bottom. Eles exercitam leitura,
+formulários, layout e interação. Biblioteca não explora arquivos; Ritmo não mede recursos;
+Fila e Atividade não consultam tarefas ou Git. O nome do projeto é metadado local renomeável;
+`main`, `Clean`, caminho, abrir no Explorer e exportar configuração são demonstrações.
+O perfil e avatar também são visuais, sem login real.
+
+O catálogo tem busca, filtros, presença e avaliação de destino/espaço. É possível acrescentar,
+mover e trocar widgets entre regiões compatíveis sem recriar o conteúdo montado. Elegibilidade,
+restrições e multiplicidade são validadas pelo host; não implicam permissão nativa para um plugin.
+
+### Regiões e interação
+
+As posições usam pixels CSS contínuos, sem grade obrigatória de células. Main permite
+movimento bidimensional e oito direções de resize; Sidebar organiza verticalmente e acompanha
+sua largura útil; Bottom organiza horizontalmente e acompanha sua altura útil. Vizinhos podem
+ser empurrados ou comprimidos dentro dos mínimos. Reverter antes de soltar restaura a base do
+gesto; soltar consolida a referência para o próximo gesto. Tentativas impossíveis preservam uma
+prévia válida, sem sobreposição, descarte ou compactação automática dos espaços vazios.
+
+| Elemento | Medidas nominais atuais |
+| --- | --- |
+| Conteúdo Sidebar, sem rail | 180 a 430 px; inicial 283 px |
+| Rail persistente | 48 px; permanece quando o painel recolhe |
+| Sidebar flutuante | 238 px |
+| Bottom | 125 a 250 px; inicial 167 px |
+| Barra de status | 25 px, com conteúdo, fora do layout dos widgets |
+
+Os limites efetivos consideram a janela e a reserva da Main. O shell usa espaçamento de 11 px
+horizontal e 9 px vertical; Sidebar tem 15 px internos de cada lado. Widgets nativos elegíveis
+foram adaptados aos 150 px úteis da Sidebar mínima e aos 105 px úteis da Bottom mínima.
+O gap entre widgets é 10 px. Esses adaptadores não alteram os mínimos da Main ou dos legados.
+
+Sidebar tem rolagem vertical própria; Bottom não rola. **Ativar expansão horizontal**, em
+**Configurações > Desenvolvimento e recuperação**, começa desligado e limita a expansão da Main
+ao conteúdo ocupado. Projeções por viewport não gravam novas posições. Conteúdo e Workers
+permanecem montados durante rolagem, transferência e recolhimento.
+
+Mover e redimensionar individualmente exige **Editar layout**. Divisores de pares adjacentes
+também funcionam no modo normal e confirmam uma transação bilateral própria. Divisores regionais
+e de pares mantêm teclado em produção; os atalhos experimentais de movimento/resize individual
+são exclusivos do renderer Vite de desenvolvimento. A opção **Guia e encaixe no centro** equaliza
+pares horizontais da Main e Bottom em 50%; não implementa todas as guias antigas nem bypass Alt.
+
+### Barras composições e edição
+
+Home é protegida. Barras personalizadas têm associações e posições independentes, reordenação,
+arquivamento, restauração e biblioteca. São permitidas 14 novas barras personalizadas ativas além
+de Home; documentos legados com até 20 continuam legíveis sem truncamento automático.
+
+**Salvar edição** confirma um checkpoint e mantém a edição aberta. **Cancelar** retorna ao último
+checkpoint; **Concluir** valida, confirma e sai. Desfazer e refazer registram intenções completas,
+com histórico de sessão em memória de até 256 entradas; não são backup persistido ou histórico Git.
+
+Novas composições salvam formato e associações dos widgets das áreas selecionadas. Main e Bottom
+têm escopo explícito; Sidebar contribui apenas com a largura, sem barras ou widgets. Painéis
+recolhidos começam desmarcados, mas podem ser incluídos. Restaurar preserva as áreas omitidas.
+**Formato** e **Widgets** são ações diferentes; repetir Formato pode criar reservas, preenchidas
+por catálogo ou view existente após validação de encaixe exato. Reservas transitórias não são
+widgets executáveis persistidos. Composições não salvam notas, tarefas ou sessões de futuros plugins.
+
+O envelope `geppio:workbench:v1` tem validação, Web Locks e comparação dos bytes observados para
+detectar conflitos. As chaves históricas permanecem como fontes de recuperação. Importar JSON e
+escolher uma prévia histórica são operações explícitas de desenvolvimento/recuperação; abrir a
+prévia não substitui o original. Preferências usam chaves próprias, sem transação atômica geral.
+O painel Overlay/Docked é um demonstrador de apresentação, não um terminal nem uma API geral.
+
+## Plugins locais confiáveis
+
+Gere os exemplos com `pnpm plugins:build`. No botão **Plugins** do cabeçalho, use **Instalar pasta
+local** e selecione `.local/plugin-packages/counter` e `.local/plugin-packages/pulse` separadamente.
+O gerenciamento também está disponível na área de desenvolvimento das configurações.
+
+A instalação começa desativada. Counter publica contador e ação reais; Pulse executa atividade
+em segundo plano sem widget. As contribuições v1 entram no catálogo como cards **Main only** e
+**single view**, com movimentação e persistência de posição pelo host. O manifesto não oferece
+campos públicos de categoria, região, appearance ou ação na rail. O SDK publica texto, ação e status;
+não concede filesystem, PTY, processos, rede remota, segredos, APIs entre plugins ou storage próprio.
+
+Remover apenas a presença do widget conserva o Worker. Desativar encerra a execução e retira a
+publicação; uma presença já salva pode continuar na cena com mensagem de pausa. Reativar reinicia
+o estado do Counter. Instalação e enabled persistem; o conteúdo próprio não ganha persistência por
+salvar o layout. Atualizações exigem remover e reinstalar o pacote gerado, não editar a cópia fonte.
+
+Os exemplos têm `plugin.json` e TypeScript independentes em `examples/plugins/`. Instale a pasta
+gerada de `.js`/`.json`, não a fonte. Pacotes adicionais compatíveis não exigem recompilar o Core.
+Use somente código local revisado e confiável: Workers compartilham autoridade de origem/storage
+e não certificam isolamento comunitário. Não há marketplace, broker, cofre ou superfície HTML/CSS
+arbitrária. Consulte [limites do runtime e SDK](docs/architecture/plugins.md).
+
 ## Atalhos no VS Code
 
-Abra a pasta do projeto no VS Code e instale a extensão recomendada
-**Task Buttons** (`spencerwmiles.vscode-task-buttons`). A barra de status mostra
-**Dev**, **Start**, **Plugins** e **Check**; as mesmas tarefas ficam disponíveis em
-**Terminal > Run Task**, mesmo sem a extensão.
+As tarefas **Dev**, **Start**, **Plugins** e **Check** ficam em **Terminal > Run Task**. A extensão
+recomendada **Task Buttons** (`spencerwmiles.vscode-task-buttons`) também as expõe na barra de status.
+Dev chama `pnpm dev --watch`; Start abre o preview, que deve usar o build correspondente; Plugins
+gera os exemplos e Check executa os checks completos. Instale as dependências antes de usá-las.
 
-**Dev** executa `pnpm dev --watch`: atualiza o renderer ao salvar e recompila Main/preload
-quando mudam. **Start** executa `pnpm start`; o electron-vite compila antes de abrir o preview.
-**Plugins** gera os exemplos independentes e **Check** executa a validação completa.
-Instale as dependências antes de usar os atalhos.
+Cada tarefa usa terminal dedicado e permite uma instância por janela. Encerre Dev/Start em
+**Terminal > Terminate Task** antes de outro comando que escreva no mesmo `out/`. A porta Vite é
+fixa; os atalhos não encerram processos iniciados por fora das tarefas.
 
-Cada tarefa usa um terminal dedicado e permite uma instância por janela do workspace.
-Para encerrar Dev/Start, use **Terminal > Terminate Task** e escolha a tarefa, ou a lixeira
-do terminal correspondente. Encerre Dev antes de executar Start/Check, pois eles escrevem
-no mesmo `out/`. Feche também qualquer execução manual anterior antes de iniciar Dev:
-a porta local é fixa e os atalhos não encerram processos iniciados fora das tarefas.
+## Dados identidade e método
 
-## O que há na tela
+A migração da [issue #6](https://github.com/rabrunos/GeppIO/issues/6) usa `geppio://app`,
+`window.geppio` e `%APPDATA%\geppio`. Se o destino estiver ausente, copia dados elegíveis do perfil
+`%APPDATA%\semnome` sem alterar o original. Um destino existente não é mesclado ou sobrescrito.
+Feche a versão antiga, mantenha os backups e siga o [procedimento de recuperação](docs/development/renaming.md).
+Origens de desenvolvimento e produção podem manter estados de layout independentes.
 
-Cabeçalho fixo, Sidebar, Main e Bottom. Dez tipos de widgets fictícios: sete na Main, uma
-navegação lateral, a barra inferior e um painel recolhível de demonstração. Os exemplos não
-executam integrações: servem para testar espaço, leitura, rolagem e interação.
-
-**Editar layout** libera posições e dimensões livres em pixels CSS, sem células ou encaixe
-obrigatório. Arraste pelo título e pelas bordas. Somente no renderer de desenvolvimento Vite,
-os handles também têm navegação por Tab e setas (1px; Shift: 10px). Na versão de produção,
-campos, botões e divisores mantêm sua navegação normal por teclado. Main permite movimento e oito
-direções de redimensionamento; Sidebar organiza verticalmente e acompanha sua largura interna;
-Bottom organiza horizontalmente e acompanha sua altura interna. Selecione um widget e use
-**Mover widget** no cabeçalho para transferi-lo a uma região compatível. A navegação e a toolbar
-continuam estruturais. Bottom precisa ser ampliada antes de receber os exemplos compatíveis.
-
-Vizinhos podem ser empurrados e comprimidos até seus mínimos em pixels. Reverter o movimento
-antes de soltar restaura a geometria inicial do gesto; ao soltar, posições e tamanhos tornam-se
-a referência do próximo gesto, sem recuperação automática de tamanhos antigos. Escape cancela
-somente o gesto atual. Rearranjos são limitados; tentativas impossíveis preservam a última prévia válida.
-Não há gravidade nem compactação de espaços vazios. Cada região tem uma margem interna de 15px;
-o afastamento entre widgets é de aproximadamente 10px.
-
-**Ativar expansão horizontal**, em Configurações > Desenvolvimento, começa desligado e persiste
-independentemente da composição. Quando ativo, Main expande somente até os widgets
-ocupados, sem margem vazia permanente à direita. Sidebar tem uma única rolagem vertical,
-incluindo a navegação, e nunca rola para os lados. Bottom é finita e nunca tem rolagem.
-Campos e Workers continuam montados e ativos fora da tela. O plugin experimental ainda usa
-sua própria faixa; esta versão não adiciona integração geral de plugins às regiões.
-
-Janela e divisores geram projeções reversíveis a partir de uma referência estável, sem gravar
-posições. Quando os mínimos não cabem, a composição é preservada com um aviso. Main oferece
-rolagem de recuperação; Bottom apresenta ações para ampliar a região ou, em edição, mover
-os widgets para Main, sem exibir conteúdo cortado. **Salvar layout** adota a prévia livre; **Cancelar**
-restaura a composição anterior. Layouts fracionário v1, responsivo v2 e horizontal v1 permanecem
-intactos. Configurações oferece prévias históricas separadas, importação de cópias JSON e composição inicial;
-somente Salvar confirma a adoção. Conversões impossíveis informam o limite e preservam o original.
-
-Sidebar começa com mínimo desejado de 230px e Bottom de 120px. Os limites máximos e a reserva
-para Main continuam ativos; janelas pequenas reduzem os mínimos efetivos com segurança.
-Sidebar e Bottom mantêm os divisores em pixels. Arrastar além do mínimo
-recolhe a região completamente; **Reabrir Sidebar/Bottom** no cabeçalho restaura o tamanho pedido.
-Setas operam os divisores; Home recolhe e Escape cancela a sequência ou o gesto em andamento.
-Uma faixa estrutural vazia de 15px, com borda e contraste discretos, permanece fixa na base da janela, fora da disposição dos widgets.
-O painel de teste mantém Overlay/Docked e suas bordas. Temas claro/escuro demonstram tokens visuais.
-
-## Plugins locais de teste
-
-A versão `0.1.0-alpha.2` carrega pacotes externos confiáveis. Para gerar os dois exemplos,
-execute `pnpm plugins:build` e abra o app com `pnpm dev` ou `pnpm start` após `pnpm build`.
-Em **Configurações > Plugins > Instalar pasta local**, escolha
-`.local/plugin-packages/counter` e `.local/plugin-packages/pulse` separadamente.
-A instalação começa desativada; **Ativar** executa o pacote. O contador contribui um widget
-interativo na Main; o pulso não possui widgets e mostra sua atividade nos eventos do gerenciamento.
-**Desativar** descarta o Worker e **Remover** exclui a cópia gerenciada. Instalações e preferências
-persistem ao reiniciar; o estado interno do contador recomeça em cada ativação.
-
-Cada exemplo possui seu próprio `plugin.json` e fonte TypeScript em `examples/plugins/`.
-Adicionar uma nova pasta de exemplo e gerar seus assets não exige editar ou recompilar o core.
-O app copia apenas pacotes prontos de arquivos `.js`/`.json`; escolha a pasta gerada, não a fonte.
-Atualizações exigem remover e reinstalar. Widgets de plugins aparecem em uma faixa na Main,
-sem entrar ainda na persistência/movimentação do layout das fixtures.
-
-Use somente código local revisado e confiável. Workers executam a lógica sem DOM ou ponte
-Node/Electron; isso **não certifica isolamento para terceiros**. Não há marketplace, broker,
-vault, HTML/CSS arbitrário ou superfícies próprias. Veja o [contrato técnico](docs/architecture/plugins.md).
-
-## Git e fluxo do projeto
-
-O repositório atual é **`rabrunos/GeppIO`** (ID GitHub `1409287329`), após o rename realizado pelo proprietário em 2026-10-08. O proprietário também atualizou `origin`. A autorização de Git continua restrita a esse mesmo repositório e à `main`, com todos os gates anteriores. O Git e as Issues já existem. Commits e pushes de implementações aprovadas seguem a [política de tarefas](docs/.ai/TASK_POLICY.md), após validação e revisão. Publicação e fechamento de Issues exigem autorização separada.
-
-### Handoff histórico do ZIP
-
-Extraia o conteúdo para a pasta que será a raiz do projeto. Não existe `.git` nem remote no ZIP.
-
-```powershell
-git init -b main
-```
-
-Faça a instalação, os checks e a revisão do conteúdo antes do primeiro commit. Quando estiver
-validado, prepare o commit com o token `[0.1.0-alpha.1]`. Crie um repositório **vazio** no GitHub
-e configure `origin` usando o endereço que ele fornecer. O ZIP não cria repositórios nem envia commits.
-
-Depois de configurar `origin`, use o GitHub CLI autenticado (`gh`) para preparar os metadados:
-
-```powershell
-node --experimental-strip-types tools/github-prepare.ts --repo SEU_USUARIO/SEU_REPOSITORIO
-node --experimental-strip-types tools/github-prepare.ts --repo SEU_USUARIO/SEU_REPOSITORIO --apply
-```
-
-O primeiro comando só mostra a prévia. O segundo autoriza criar/atualizar as labels deste projeto
-e criar, se ainda não existir, **uma Issue inicial de validação da fundação**. Ele confere o
-repositório contra `origin`, preserva labels não relacionadas e não fecha Issues nem faz push.
-Use sua identidade real no lugar dos exemplos. Mais detalhes em [GitHub](docs/development/github.md).
-
-## ChatGPT e Codex
-
-| Para quem | Arquivo de entrada |
+| Uso | Entrada |
 | --- | --- |
-| ChatGPT, planejamento/orquestração | [PROJECT_GUIDE.md](PROJECT_GUIDE.md) |
-| Codex local, implementação | [AGENTS.md](AGENTS.md) |
-| Primeiro teste local com Codex | [FIRST_LOCAL_RUN.md](docs/.ai/prompts/FIRST_LOCAL_RUN.md) |
-| Requisitos consolidados | [requirements.md](docs/product/requirements.md) |
-| Testes e critérios de aceite | [testing.md](docs/development/testing.md) |
+| Planejamento e orquestração | [PROJECT_GUIDE.md](PROJECT_GUIDE.md) |
+| Implementação local | [AGENTS.md](AGENTS.md) e [contrato de execução](docs/.ai/prompts/EXECUTION.md) |
+| Produto e limites | [Requisitos](docs/product/requirements.md) e [arquitetura](docs/architecture/overview.md) |
+| Checks e aceites | [Validação](docs/development/testing.md) e a issue relevante |
 
-O intake foi convertido em requisitos e perfil do projeto; não há questionário a refazer.
-O método fica nos arquivos de orientação, nas configurações do Codex, nas skills e no GitHub.
-**A situação das tarefas, a evidência e o aceite pertencem às Issues**, não a arquivos de status
-paralelos. A conta do ChatGPT/Codex continua sendo a sua; nenhuma chave ou API paga foi adicionada.
+GitHub e intake já estão materializados em **rabrunos/GeppIO**, ID `1409287329`. Não repita Git init,
+bootstrap ou o handoff original. [FIRST_LOCAL_RUN](docs/.ai/prompts/FIRST_LOCAL_RUN.md) é contexto
+histórico da fundação, usado apenas em continuação explicitamente autorizada. O ZIP inicial não
+incluía dependências, executável ou lockfile resolvido; isso descreve a origem, não o checkout atual.
 
-A fonte da versão é `package.json`. A migração da Issue #6 usa `geppio://app`, `window.geppio` e o perfil `%APPDATA%\geppio`. Com o perfil novo ausente, copia plugins e armazenamento local de `%APPDATA%\semnome`, sem alterar o original. Layouts válidos são transferidos para a nova chave; dados presentes no destino têm prioridade.
-
-Feche a versão anterior antes de abrir GeppIO. Consulte o [procedimento de recuperação](docs/development/renaming.md) para backup, rollback, corrupção ou perfis novos já existentes. Não apague o perfil antigo.
+`package.json` é a fonte canônica da versão; `CHANGELOG.md` registra o histórico integrado.
+**Issues mantêm tarefas, decisões, evidências e aceites.** Não há banco paralelo de status/roadmap.
+Commit e push seguem a [política de tarefas](docs/.ai/TASK_POLICY.md) e o escopo autorizado;
+publicação e fechamento exigem autoridade própria. Adoção deliberada de nova biblioteca ou código
+externo requer aprovação individual conforme a [issue #19](https://github.com/rabrunos/GeppIO/issues/19);
+o gate não exige aprovação de cada nó transitivo nem invalida a stack já escolhida.
+Configuração do projeto expressa defaults solicitados; verifique os valores efetivos do cliente
+separadamente. Integração, CI e documentação não concedem aceite global do aplicativo.
