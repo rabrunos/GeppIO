@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { _electron as electron } from 'playwright'
 import type { Page } from 'playwright'
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { initialWorkbench, widgetRegistry, WORKBENCH_KEY } from '../src/shared/workbench/model.ts'
@@ -12,6 +12,7 @@ import { settle } from './freeform-smoke.ts'
 import { workbenchDropSmoke } from './workbench-drop-smoke.ts'
 import { workbenchCompositionSmoke } from './workbench-composition-smoke.ts'
 
+const canonicalVersion = (JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }).version
 const profile = await mkdtemp(join(tmpdir(), 'geppio-smoke-corrections-'))
 const env: Record<string, string> = Object.fromEntries(Object.entries(process.env).filter((item): item is [string, string] => item[1] !== undefined))
 delete env.ELECTRON_RUN_AS_NODE; delete env.NODE_OPTIONS; delete env.ELECTRON_RENDERER_URL
@@ -192,7 +193,7 @@ try {
   await page.mouse.click(5, 5); await settingsDialog.waitFor({ state: 'detached' })
   await profileMenu(); await page.getByRole('menuitem', { name: 'Sobre o GeppIO', exact: true }).click()
   const about = page.getByRole('dialog', { name: 'Sobre o GeppIO', exact: true })
-  assert.equal(await about.locator('.profile-version').textContent(), '0.1.0-alpha.14')
+  assert.equal(await about.locator('.profile-version').textContent(), canonicalVersion)
   await about.getByText('Seu espaço para criar, organizar e desenvolver.', { exact: true }).waitFor()
   await about.getByRole('button', { name: 'Voltar ao trabalho', exact: true }).click()
   // P32: local typed model/theme history and confirmed Cancel checkpoint.

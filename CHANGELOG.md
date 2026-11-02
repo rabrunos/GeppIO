@@ -2,6 +2,10 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.16] — 2026-11-02
+
+- Compare the native About-dialog version with canonical package.json in the existing correction smoke instead of the hardcoded alpha.14 expectation exposed by alpha.15 CI (Issue #36). Retain strict equality and the complete smoke; no runtime behavior or dependencies change.
+
 ## [0.1.0-alpha.15] — 2026-11-02
 
 - Reconcile current product, architecture, development and validation documentation with the integrated workbench, continuous geometry, current chrome, scoped composition restoration and normal-mode paired resize; retain historical migration contracts and acceptance boundaries (Issue #36).
