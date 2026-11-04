@@ -6,6 +6,7 @@ import { BAR_ICONS, HOME, LIMITS, activePlacements, constraintsForViews, modelId
 import type { Composition, Organization, Registry, UserBar, View, WorkbenchSnapshot } from './model.ts'
 import { defaultChrome, parseChrome } from './chrome.ts'
 import type { WorkbenchChrome } from './chrome.ts'
+import { parsePresentations } from './presentations.ts'
 
 const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value)
 const identifier = (value: unknown): value is string => typeof value === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,159}$/.test(value)
@@ -76,7 +77,7 @@ function parseDocument(value: unknown, views: View[], registry: Registry, bars?:
 export function parseWorkbench(raw: string, registry: Registry): WorkbenchSnapshot {
   if (raw.length > POLICY.maxBytes || new TextEncoder().encode(raw).length > POLICY.maxBytes) throw new Error('Workbench exceeds 64 KiB')
   const data: unknown = JSON.parse(raw)
-  if (!object(data) || data.schemaVersion !== 1 || data.kind !== 'geppio-workbench' || !object(data.organization)) throw new Error('Unsupported workbench')
+  if (!object(data) || ![1, 2].includes(Number(data.schemaVersion)) || typeof data.schemaVersion !== 'number' || data.kind !== 'geppio-workbench' || !object(data.organization)) throw new Error('Unsupported workbench')
   const source = data.organization, views = parseViews(source.views, registry), bars = parseBars(source.bars, registry)
   const layout = parseDocument(data.layout, views, registry, bars)
   if (typeof source.activeBar !== 'string' || !bars.some(bar => bar.id === source.activeBar && !bar.archived)) throw new Error('Invalid active bar')
@@ -103,7 +104,8 @@ export function parseWorkbench(raw: string, registry: Registry): WorkbenchSnapsh
   const favorites = strings(source.favorites, LIMITS.favorites), known = (id: string) => ['system:default', 'system:focus', 'system:balanced'].includes(id) || compositions.some(item => item.id === id)
   if (favorites.some(id => !known(id)) || (source.defaultComposition !== null && (typeof source.defaultComposition !== 'string' || !favorites.includes(source.defaultComposition)))) throw new Error('Invalid favorite/default')
   const organization: Organization = { views, bars, activeBar: source.activeBar, compositions, favorites, defaultComposition: source.defaultComposition as string | null,
-    chrome: source.chrome === undefined ? defaultChrome() : parseChrome(source.chrome) as WorkbenchChrome }
+    chrome: source.chrome === undefined ? defaultChrome() : parseChrome(source.chrome) as WorkbenchChrome,
+    presentations: parsePresentations(source.presentations, views) }
   if (source.compositionOrder !== undefined) {
     const order = strings(source.compositionOrder, LIMITS.compositions + 3)
     if (order.some(id => !known(id))) throw new Error('Invalid composition order')
@@ -120,7 +122,7 @@ export function serializeWorkbench(snapshot: WorkbenchSnapshot, registry: Regist
   const sidebarHeight = Math.max(source.reference.sidebar.height, ...source.placements.filter(p => p.region === 'sidebar').map(p => p.y + p.height))
   const layout = { ...source, reference: { ...source.reference, sidebar: { width: sidebarWidth, height: sidebarHeight } },
     placements: source.placements.map(p => p.region === 'sidebar' ? { ...p, width: sidebarWidth } : p) }
-  const raw = JSON.stringify({ schemaVersion: 1, kind: 'geppio-workbench', layout, organization })
+  const raw = JSON.stringify({ schemaVersion: 2, kind: 'geppio-workbench', layout, organization })
   parseWorkbench(raw, registry)
   return raw
 }

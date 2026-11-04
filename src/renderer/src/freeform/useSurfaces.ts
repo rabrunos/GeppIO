@@ -28,10 +28,13 @@ export function useSurfaces() {
           clipWidth: clip ? Math.max(0, Math.min(port.clientWidth, clip.right - r.left - (parseFloat(style.paddingRight) || 0))) : port.clientWidth }]
       }
       const owner = port?.closest<HTMLElement>('[data-region]'), style = owner ? getComputedStyle(owner) : null
+      const ownerBox = owner?.getBoundingClientRect()
       return [region, port && r ? { width: port.clientWidth, height: port.clientHeight,
         frameWidth: r.width, frameHeight: r.height,
-        ownerWidth: owner && style ? owner.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) : port.clientWidth,
-        ownerHeight: owner && style ? owner.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom) : port.clientHeight,
+        // Panels need exact CSS bounds: integer client extents can round outward
+        // at fractional DPR, especially Main's unpadded expansion edge.
+        ownerWidth: ownerBox && style ? ownerBox.width - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) - parseFloat(style.borderLeftWidth) - parseFloat(style.borderRightWidth) : port.clientWidth,
+        ownerHeight: ownerBox && style ? ownerBox.height - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom) - parseFloat(style.borderTopWidth) - parseFloat(style.borderBottomWidth) : port.clientHeight,
         ...(region === 'bottom' && owner ? { clipHeight: Math.max(0, Math.min(port.clientHeight, owner.getBoundingClientRect().bottom - r.top)) } : {}),
         left: r.left - area.left, top: r.top - area.top, scrollLeft: port.scrollLeft, scrollTop: port.scrollTop } : empty()]
     })) as Record<Region, Measurement>

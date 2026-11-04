@@ -2,6 +2,13 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.17] — 2026-11-04
+
+- Give the host Properties view visible mouse controls for Normal, bottom Docked and bottom Overlay, explicit collapse/reopen and preferred panel height. Keep its content mounted and its Normal slot recoverable; no terminal process or plugin capability is added (Issue #11).
+- Persist identity-bound presentation preferences in the existing guarded workbench key using envelope v2; read alpha.16 v1 documents with Normal/open defaults. Preserve expected-byte/lock, quota and recovery safeguards and integrate intentions with Edit checkpoints/history without extending composition records.
+- Temporarily reduce Docked height, then collapse when panel and Main minima cannot fit; restore the explicit open preference and preferred size when space returns. Keep Overlay layout-neutral and Bottom/Sidebar independent. Main geometry editing resumes in Normal, preserving the reserved Normal scene during panel previews.
+- Add codec, failure, composition and geometry tests plus disposable-profile Electron restart/mouse coverage for presentations, both themes and simulated DPR 1.25. Physical owner assessment remains separate.
+
 ## [0.1.0-alpha.16] — 2026-11-02
 
 - Compare the native About-dialog version with canonical package.json in the existing correction smoke instead of the hardcoded alpha.14 expectation exposed by alpha.15 CI (Issue #36). Retain strict equality and the complete smoke; no runtime behavior or dependencies change.

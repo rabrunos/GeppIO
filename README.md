@@ -122,8 +122,18 @@ widgets executáveis persistidos. Composições não salvam notas, tarefas ou se
 O envelope `geppio:workbench:v1` tem validação, Web Locks e comparação dos bytes observados para
 detectar conflitos. As chaves históricas permanecem como fontes de recuperação. Importar JSON e
 escolher uma prévia histórica são operações explícitas de desenvolvimento/recuperação; abrir a
-prévia não substitui o original. Preferências usam chaves próprias, sem transação atômica geral.
-O painel Overlay/Docked é um demonstrador de apresentação, não um terminal nem uma API geral.
+prévia não substitui o original. Outras preferências, como tema e idioma, usam chaves próprias,
+sem transação atômica geral.
+
+O widget demonstrativo **Propriedades** tem controles visíveis junto ao nome do projeto para
+**Normal**, **Docked**, **Overlay**, abrir/recolher e escolher a altura preferida do painel.
+Docked reserva espaço acima da Bottom; Overlay cobre Main sem reorganizar seu layout. A posição
+Normal fica reservada e o conteúdo continua montado. Para editar a geometria de Main, escolha Normal.
+Apresentação, abertura explícita, dimensões preferidas e âncora persistem no mesmo envelope, agora
+com versão 2; documentos anteriores continuam legíveis. Se Docked não couber, sua altura reduz
+até 220px; sem espaço para os mínimos, recolhe temporariamente com aviso. Ampliar restaura a
+preferência de abertura e o tamanho quando possível. Recolher explicitamente permanece salvo.
+Esse piloto não executa terminal nem amplia a API de plugins.
 
 ## Plugins locais confiáveis
 

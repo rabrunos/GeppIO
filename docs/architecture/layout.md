@@ -1,5 +1,54 @@
 # Region-aware continuous widget geometry
 
+## First persistent presentation — Issue #11 / alpha.17
+
+The host Properties view (`properties`, `host:properties`, `model:host:properties`, owner
+`host`) is the bounded pilot. Its existing keyed frame and content stay mounted across
+Normal, bottom Docked, bottom Overlay and explicit collapse. The visible controls beside
+the project name select presentation, toggle visibility and select preferred panel height.
+Normal retains its canonical placement as a reserved slot. Docked projects that unchanged
+Main scene into the remaining usable height; Overlay has zero reservation. Both panel
+rectangles stay within Main above the independent Bottom, and neither changes Sidebar.
+
+The unchanged `geppio:workbench:v1` key now writes **envelope schemaVersion 2**, with
+`organization.presentations.version: 1` and at most one identity-bound pilot entry.
+Geometry keeps its independent freeform schema. Envelope v1 remains readable with
+Normal/open defaults and no read-time write. Older alpha.16 readers reject v2 into their
+existing recovery path instead of silently dropping the presentation. The same 64 KiB,
+codec, expected-byte comparison, same-origin Web Lock, quota and explicit recovery/adoption
+boundaries protect geometry and presentations together. No separate envelope or writer is added.
+
+Preferred panel width/height (240/220 through 4096 CSS px) are stored separately from
+effective rectangles. Docked uses full usable Main width. Overlay uses preferred width
+clamped to Main. Docked height first reduces from its preference to 220px while the
+existing projector can still fit every Main minimum, including the reserved Normal slot.
+If that is impossible (or Overlay itself cannot fit 240×220), the panel temporarily hides,
+reserves nothing and reports limited space in the always-reachable external controls.
+Explicit `open: true` remains true. Enlarging automatically restores the panel and then
+its preferred height. Explicit collapse persists as `open: false` and never auto-opens.
+Outer panel bounds use fractional DOM CSS rectangles. Docked fit rounds its usable
+budget inward and allows one extra CSS pixel for native scrollbar quantization; neither
+the rounding nor this safety margin changes saved preferences or freeform source geometry.
+No adaptation/hover/animation writes storage. Reveal/collapse uses existing Sidebar timing,
+easing and reduced-motion conventions; Docked never requires hover. Hidden UI does not
+dispose the content/model. Focus inside a temporarily hidden panel returns to its opener.
+There is no new shortcut or Escape-to-collapse action.
+
+Presentation intentions use guarded normal commits and Edit history/checkpoints. Cancel
+restores the checkpoint; Save advances it; Conclude confirms and exits as before. While
+a non-Normal presentation is selected, Main geometry gestures/pairs/insertion are suspended
+with a visible instruction to select Normal; other regions, removal, composition application
+and presentation editing remain available. Canonical Main geometry is used for checkpoints
+and compositions during panel previews, avoiding adoption of temporary reserved-space fit.
+
+Composition records deliberately gain no presentation fields: same-identity applications
+retain the current view preference and may explicitly replace its Normal placement within
+their existing scope. Omitted regions stay omitted. Removing a presence retains its view
+and preference; a same-view restoration resumes them. Moving out of Main suspends panel
+presentation, renders the ordinary destination widget, and retains the preference for a
+return to Main. An absent/replaced view cannot receive another view's preference. Malformed,
+unsupported or mismatched associations preserve original bytes in existing recovery.
+
 ## Current host workbench — Issue #2 / alpha.13 and alpha.14
 
 The host keeps the continuous solver below. `shared/workbench/model.ts` separates immutable

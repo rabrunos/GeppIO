@@ -31,8 +31,8 @@ import { DragLayer } from './workbench/DragLayer.tsx'
 import { ProjectMenu, useProjectName } from './workbench/ProjectMenu.tsx'
 import { StatusBar } from './workbench/StatusBar.tsx'
 import { ScrollArea } from './workbench/ScrollArea.tsx'
-import { TestPanel } from './workbench/TestPanel.tsx'
-import type { PanelState } from './workbench/TestPanel.tsx'
+import { PresentationControls } from './workbench/PresentationControls.tsx'
+import { PILOT_VIEW, presentationFor, effectivePresentation } from '../../shared/workbench/presentations.ts'
 import { Settings } from './settings/Settings.tsx'
 import { WidgetContent } from './WidgetContent.tsx'
 import './settings/settings.css'
@@ -82,7 +82,13 @@ function Workbench({ plugins }: { plugins: ReturnType<typeof usePlugins> }) {
   const [selectedViews, setSelectedViews] = useState<string[]>([])
   const [pairPreview, setPairPreview] = useState<WorkbenchSnapshot | null>(null)
   const [showFeedback, setShowFeedback] = useState(false), initialMessage = useRef(tx.message)
-  const [panel, setPanel] = useState<PanelState>({ open: false, presentation: 'overlay', anchor: 'bottom' })
+  const panel = presentationFor(tx.snapshot)
+  const fullMain = { width: surfaces.measures.main.ownerWidth ?? 0, height: surfaces.measures.main.ownerHeight ?? 0 }
+  const mainScrollbar = expanded && tx.snapshot.placements.some(p => p.region === 'main' && p.x + p.width > fullMain.width) ? surfaces.scrollbarHeight.current : 0
+  const panelGeometry = effectivePresentation(tx.snapshot, fullMain, constraints, expanded, mainScrollbar)
+  const panelActive = panelGeometry.active && panel.presentation !== 'normal'
+  const panelNotice = panelGeometry.active && panel.open && panelGeometry.adapted
+    ? panelGeometry.shown ? 'Painel com tamanho temporário. Amplie a janela para restaurar o tamanho preferido.' : 'Painel recolhido temporariamente por falta de espaço. Amplie a janela ou escolha Normal; a preferência de abrir foi preservada.' : ''
   const frames = useRef(new Map<string, WorkbenchSnapshot['placements'][number]>())
   const surfaceSizes = REGIONS.map(r => `${surfaces.measures[r].width},${surfaces.measures[r].height}`).join(';')
   const sessionSlots = tx.slots.filter(item => !item.sidebarBar || item.sidebarBar === tx.snapshot.organization.activeBar).map(item => projectSessionSlot(item, surfaces.measures[item.region]))
@@ -97,10 +103,16 @@ function Workbench({ plugins }: { plugins: ReturnType<typeof usePlugins> }) {
     const m = surfaces.measures[r]
     if (feasible[r] && m.width > 0 && m.height > 0) view.reference[r] = { width: m.width, height: r === 'sidebar' ? Math.max(m.height, projected.sidebar.world.height) : m.height }
   }
-  const interaction = useInteraction(tx, view, surfaces, expanded, feasible, registry, {
+  // A panel reserves its Normal slot. Geometry editing in Main resumes in Normal;
+  // metadata, composition application and presentation history use canonical Main.
+  if (panelActive) {
+    view.reference.main = tx.snapshot.reference.main
+    view.placements = view.placements.map(p => p.region === 'main' ? tx.snapshot.placements.find(q => q.id === p.id)! : p)
+  }
+  const interaction = useInteraction(tx, view, surfaces, expanded, { ...feasible, main: feasible.main && !panelActive }, registry, {
     reservationKey: [...disabledOwners()].join(';'),
     select(id) { setEditorOpen(true); setWidgetsRequest(value => value + 1); setMoveRequest(previous => ({ id, serial: (previous?.serial ?? 0) + 1 })) },
-    available(type, region) { return !!addWidget(view, registry, type, { ...surfaces.measures[region], region, expanded: expanded && region === 'main' }, undefined, disabledOwners())
+    available(type, region) { if (panelActive && region === 'main') return false; return !!addWidget(view, registry, type, { ...surfaces.measures[region], region, expanded: expanded && region === 'main' }, undefined, disabledOwners())
       || tx.currentSlots().some(slot => slot.region === region && reserve(slot.id, { kind: 'catalog', typeId: type }, view, false)) },
     commit(type, region, at) { return add(type, region, undefined, at) },
     reservation(id, intention, baseline, commit) { return reserve(id, intention, baseline ?? view, commit) }
@@ -137,6 +149,7 @@ function Workbench({ plugins }: { plugins: ReturnType<typeof usePlugins> }) {
   }
   function add(type: string, region: Region, target?: SessionSlot, at?: { x: number; y: number }) {
     if (!tx.editing) return false
+    if (panelActive && region === 'main') { tx.setMessage('Escolha Normal em Propriedades para editar a geometria de Main.'); return false }
     if (target) return reserve(target.id, { kind: 'catalog', typeId: type }, view, true)
     const surface = { ...surfaces.measures[region], region, expanded: expanded && region === 'main' }
     const next = addWidget(view, registry, type, surface, at, disabled)
@@ -145,7 +158,7 @@ function Workbench({ plugins }: { plugins: ReturnType<typeof usePlugins> }) {
   }
   function reserve(id: string, intention: SlotIntention, baseline: WorkbenchSnapshot, commit: boolean) {
     const stored = tx.currentSlots().find(item => item.id === id)
-    if (!tx.editing || !stored) return false
+    if (!tx.editing || !stored || (panelActive && stored.region === 'main')) return false
     const region = stored.region, surface = { ...surfaces.measures[region], region, expanded: expanded && region === 'main' }
     const result = fillReservation(baseline, registry, tx.currentSlots(), id, surface, intention, disabledOwners())
     if (result && commit) { tx.action(result.snapshot, result.slots); tx.setMessage('Espaço preenchido. Salve ou cancele.') }
@@ -165,9 +178,6 @@ function Workbench({ plugins }: { plugins: ReturnType<typeof usePlugins> }) {
       data-usable-width={surfaces.measures[region].width} data-usable-height={surfaces.measures[region].height} role="region" aria-label={t('Área de widgets: {0}', region)} tabIndex={region === 'main' && (expanded || !projection.feasible) ? 0 : -1} onScroll={surfaces.measure}
       style={region === 'sidebar' ? { height } : undefined}><div className="placement-world" style={{ width: Math.max(projection.world.width, region === 'main' && interaction.heldExtent?.region === region ? interaction.heldExtent.width : 0), height }} />{empty && <div className="workspace-region-empty host-region-empty" data-empty-region={region}><WorkbenchEmptyIcon /><strong>{t('Nenhum widget nesta área')}</strong><button className="ui-button workspace-text-action" onClick={begin} disabled={tx.recovery && !tx.editing}>{t('Escolher widgets')}</button></div>}</div>
   }
-  const docked = panel.open && panel.presentation === 'docked'
-  const dockWidth = docked && ['left', 'right'].includes(panel.anchor) ? Math.min(270, (surfaces.measures.main.ownerWidth ?? 0) / 3) : 0
-  const dockHeight = docked && ['top', 'bottom'].includes(panel.anchor) ? Math.min(180, (surfaces.measures.main.ownerHeight ?? 0) / 3) : 0
   const picture = interaction.visual.picture
   const dropZones = interaction.catalogDrag ?? interaction.frameDrop
   return <div className={'workbench ' + (regions.resizing ? 'is-resizing' : '')} data-theme={theme} data-sidebar-mode={regions.sidebarMode} data-active-bar={tx.snapshot.organization.activeBar} data-bottom-mode={regions.collapsed.bottom ? 'hidden' : 'docked'}
@@ -184,13 +194,14 @@ function Workbench({ plugins }: { plugins: ReturnType<typeof usePlugins> }) {
       if (!textInput && tx.editing && (event.ctrlKey || event.metaKey) && ['z', 'y'].includes(event.key.toLowerCase())) { event.preventDefault(); if (tx.gestureActive || interaction.active() || regions.active() || swapping.active()) return; regions.commitKeyboard(); interaction.visual.after(event.shiftKey || event.key.toLowerCase() === 'y' ? tx.redo : tx.undo); setSwapSelection(null); setSelectedViews([]) }
       if (event.key === 'Escape') { if (interaction.active()) interaction.end(true); else if (slot) setSlot(null); else if (selectedViews.length || swapSelection) { setSwapSelection(null); setSelectedViews([]) } else if (regions.sidebarMode === 'peek') regions.closePeek(); else if (tx.editing) tx.cancel() }
     }}>
-    <Header projectName={project.name ?? t('Laboratório')} openProject={() => setProjectMenu(true)} menu={headerMenu} setMenu={setHeaderMenu} history={interaction.visual.after} plugins={plugins} tx={tx} theme={theme} toggleTheme={toggleTheme} openSettings={() => setSettingsOpen(true)} begin={begin} save={() => confirmLayout(false)} conclude={() => confirmLayout(true)} /><ContextBar projectName={project.name ?? t('Laboratório')} projectAnchor={projectAnchor} openProject={() => setProjectMenu(!projectMenu)} begin={() => tx.editing ? setEditorOpen(!editorOpen) : begin()} editing={tx.editing} recovery={tx.recovery} feedback={tx.setMessage} />
+    <Header projectName={project.name ?? t('Laboratório')} openProject={() => setProjectMenu(true)} menu={headerMenu} setMenu={setHeaderMenu} history={interaction.visual.after} plugins={plugins} tx={tx} theme={theme} toggleTheme={toggleTheme} openSettings={() => setSettingsOpen(true)} begin={begin} save={() => confirmLayout(false)} conclude={() => confirmLayout(true)} /><ContextBar projectName={project.name ?? t('Laboratório')} projectAnchor={projectAnchor} openProject={() => setProjectMenu(!projectMenu)} begin={() => tx.editing ? setEditorOpen(!editorOpen) : begin()} editing={tx.editing} recovery={tx.recovery} feedback={tx.setMessage}><PresentationControls state={panel} tx={tx} active={panelGeometry.active} adapted={panelGeometry.adapted} shown={panelGeometry.shown} /></ContextBar>
     <ProjectMenu open={projectMenu} close={() => setProjectMenu(false)} anchor={projectAnchor} name={project.name ?? t('Laboratório')} rename={value => { const name = value.trim(); if (!name || name.length > 60) return false; if (tx.editing) { tx.changeLocal({ projectName: name }); return true }; return project.rename(name) }} snapshot={tx.snapshot} feedback={tx.setMessage} />
       <div ref={element => { regions.area.current = element; surfaces.root.current = element }} className="work-area" onPointerDown={event => { const box = regions.area.current?.getBoundingClientRect(); const safeGap = box && event.clientX >= box.left + 48 && event.clientX <= box.left + 59; if (regions.sidebarMode === 'peek' && !safeGap && !(event.target as HTMLElement).closest('.host-sidebar-content, .sidebar-rail')) regions.closePeek() }}>
       <Sidebar tx={tx} registry={registry} regions={regions} sidebarWidth={surfaces.measures.sidebar.width} theme={theme} toggleTheme={toggleTheme} saveBar={saveBar}><ScrollArea as="aside" className="sidebar-region ui-scrollbar" data-region="sidebar" onScroll={surfaces.measure} tabIndex={0} aria-label={t('Barra lateral')}>{port('sidebar')}</ScrollArea></Sidebar>
-      <main className={'main-region ' + (expanded ? 'expanded' : '')} data-region="main" data-testid="layout-canvas" data-engine="freeform" data-expanded={expanded} style={{ '--dock-width': dockWidth + 'px', '--dock-height': dockHeight + 'px' } as CSSProperties}><div className="main-placement" style={{ display: 'flex', flex: 1, minWidth: 0, minHeight: 0,
-        marginLeft: docked && panel.anchor === 'left' ? dockWidth + 11 : 0, marginRight: docked && panel.anchor === 'right' ? dockWidth + 11 : 0,
-        marginTop: docked && panel.anchor === 'top' ? dockHeight + 9 : 0, marginBottom: docked && panel.anchor === 'bottom' ? dockHeight + 9 : 0 }}>{port('main')}</div><TestPanel state={panel} close={() => setPanel({ ...panel, open: false })} /></main>
+      <main className={'main-region ' + (expanded ? 'expanded' : '')} data-region="main" data-testid="layout-canvas" data-engine="freeform" data-expanded={expanded} data-panel-adapted={panelGeometry.adapted} data-panel-reservation={panelGeometry.reservation}>
+        <div className="main-placement" style={{ display: 'flex', flex: 1, minWidth: 0, minHeight: 0, marginBottom: panelGeometry.reservation }}>{port('main')}</div>
+        {panelActive && tx.editing && <div className="presentation-edit-notice">{t('Escolha Normal em Propriedades para editar a geometria de Main.')}</div>}
+      </main>
       <footer className="bottom-region" data-region="bottom"><div className="bottom-surface">{port('bottom')}{!feasible.bottom && visible.placements.some(p => p.region === 'bottom') && <div className="bottom-recovery" data-testid="bottom-recovery" role="alert"><span>{t('Espaço insuficiente. Amplie a região antes de salvar.')}</span><button className="ui-button tool-button" onClick={() => regions.expand('bottom')}>{t('Ampliar Bottom')}</button></div>}</div></footer>
       <div className="region-splitter sidebar-splitter" data-active={regions.resizing === 'sidebar' ? '' : undefined} role="separator" aria-label={t('Largura da Sidebar')} aria-orientation="vertical" tabIndex={regions.sidebarMode === 'docked' ? 0 : -1} aria-valuenow={regions.sidebar} aria-valuemin={regions.bounds.sidebar.min} aria-valuemax={regions.bounds.sidebar.max} {...regions.handlers('sidebar')} />
       <div className="region-splitter bottom-splitter" data-active={regions.resizing === 'bottom' ? '' : undefined} role="separator" aria-label={t('Altura da Bottom')} aria-orientation="horizontal" tabIndex={0} aria-valuenow={regions.bottom} aria-valuemin={regions.collapsed.bottom || regions.bottomRevealing ? 0 : regions.bounds.bottom.min} aria-valuemax={regions.bounds.bottom.max} {...regions.handlers('bottom')} />
@@ -200,29 +211,33 @@ function Workbench({ plugins }: { plugins: ReturnType<typeof usePlugins> }) {
         const placement = current ?? frames.current.get(record.id)
         if (!definition || !placement) return null
         const shown = visible.placements.some(p => p.id === record.id)
-        return <WidgetFrame key={record.id} placement={placement} definition={definition} measurement={surfaces.measures[placement.region]} constraint={constraintsFor({ ...surfaces.measures[placement.region], region: placement.region, expanded }, constraints)[record.id]!}
-          editing={tx.editing && feasible[placement.region]} inactive={(placement.region === 'sidebar' && regions.sidebarMode === 'hidden') || (placement.region === 'bottom' && regions.collapsed.bottom)} ghosted={!!picture && record.id === picture.viewId && (!picture.catalog || picture.released) && (!picture.sourceBar || picture.released || picture.sourceBar === tx.snapshot.organization.activeBar)} withheld={(tx.recovery && !tx.editing) || !current || (!shown && interaction.movingId !== record.id)} unavailable={placement.region === 'bottom' && !feasible.bottom}
+        const pilot = record.id === PILOT_VIEW && placement.region === 'main'
+        const panelFrame = pilot && panelActive
+        const measurement = panelFrame ? { ...surfaces.measures.main, ...fullMain, clipWidth: fullMain.width, clipHeight: fullMain.height, scrollLeft: 0, scrollTop: 0 } : surfaces.measures[placement.region]
+        const rendered = panelFrame ? { ...placement, x: Math.max(0, fullMain.width - panelGeometry.width), y: Math.max(0, fullMain.height - panelGeometry.height), width: panelGeometry.width, height: panelGeometry.height } : displayed[placement.region].placements.find(p => p.id === placement.id) ?? placement
+        return <WidgetFrame presentation={pilot ? { mode: panel.presentation, open: panelGeometry.shown } : undefined} key={record.id} placement={rendered} definition={definition} measurement={measurement} constraint={constraintsFor({ ...surfaces.measures[placement.region], region: placement.region, expanded }, constraints)[record.id]!}
+          editing={tx.editing && feasible[placement.region] && !(panelActive && placement.region === 'main')} inactive={(placement.region === 'sidebar' && regions.sidebarMode === 'hidden') || (placement.region === 'bottom' && regions.collapsed.bottom)} ghosted={!!picture && record.id === picture.viewId && (!picture.catalog || picture.released) && (!picture.sourceBar || picture.released || picture.sourceBar === tx.snapshot.organization.activeBar)} withheld={(tx.recovery && !tx.editing) || !current || (!shown && interaction.movingId !== record.id)} unavailable={placement.region === 'bottom' && !feasible.bottom}
           interaction={interaction} swapping={swapping} motionRevision={tx.motionRevision} motion={tx.motion} remove={() => setRemoving(record.id)} swapSelected={selectedViews.includes(record.id)} swapAvailable={selectedViews.length >= 2} swap={() => { if (swapSelection && swapSelection !== record.id) { const next = swapViews(view, registry, swapSelection, record.id); if (next) tx.action(next); else tx.setMessage(t('Troca incompatível ou sem espaço.')); setSwapSelection(null) } else setSwapSelection(record.id) }}
           wheel={(dx, dy) => { const element = surfaces.scroller(placement.region); if (!element) return; if (placement.region === 'main' && expanded) element.scrollLeft += dx; if (placement.region === 'sidebar') element.scrollTop += dy }}>
           {definition.widgetId ? <PluginBody definition={definition} plugins={plugins} /> : undefined}
         </WidgetFrame>
       })}{sessionSlots.map(item => { const m = surfaces.measures[item.region], left = m.left + item.x - m.scrollLeft, top = m.top + item.y - m.scrollTop; return <button key={item.id} className="ui-button host-format-slot layout-empty-slot" data-session-slot={item.id} data-slot-bar={item.sidebarBar} data-owner-region={item.region} data-catalog-slot-target={chosenSlot?.id === item.id ? '' : undefined} aria-pressed={chosenSlot?.id === item.id} style={{ left, top, width: item.width, height: item.height,
         clipPath: `inset(${Math.max(0, m.top - top)}px ${Math.max(0, left + item.width - m.left - (m.clipWidth ?? m.width))}px ${Math.max(0, top + item.height - m.top - (m.clipHeight ?? m.height))}px ${Math.max(0, m.left - left)}px round var(--card-radius))` }} onClick={() => { if (!editorOpen) { setEditorOpen(true); if (chosenSlot?.id !== item.id) setSlot(item) } else setSlot(chosenSlot?.id === item.id ? null : item) }} aria-label={t('Escolher widget')}><PlusIcon className="icon" /><strong>{t('Adicionar widget')}</strong><small>{t('Espaço {0}', sessionSlots.filter(slot => slot.region === item.region).findIndex(slot => slot.id === item.id) + 1)}</small></button> })}</div>
-      <PairDividers tx={tx} registry={registry} view={view} surfaces={surfaces} preview={setPairPreview} snap={snap} />
+      <PairDividers suspendMain={panelActive} tx={tx} registry={registry} view={view} surfaces={surfaces} preview={setPairPreview} snap={snap} />
       {swapping.preview && <div className="widget-swap-preview" style={{ left: swapping.preview.x, top: swapping.preview.y, zIndex: 152 }} aria-hidden="true"><WorkbenchMoveIcon />{registry.get(tx.snapshot.organization.views.find(v => v.id === swapping.preview!.id)!.typeId)?.title}</div>}
       {picture && !picture.catalog && !picture.released && (!picture.sourceBar || picture.sourceBar === tx.snapshot.organization.activeBar) && <div className="layout-drag-origin host-drag-origin" data-owner-region={picture.source?.dataset.ownerRegion} aria-hidden="true" inert style={{ left: picture.origin.left, top: picture.origin.top, width: picture.origin.width, height: picture.origin.height, clipPath: picture.originClip }} />}
       <EditorPanel moveRequest={moveRequest} move={interaction.transferTo} request={widgetsRequest} tx={tx} registry={registry} view={view} open={editorOpen} setOpen={setEditorOpen} slot={chosenSlot} chooseSlot={setSlot} add={add} remove={setRemoving} disabled={disabled} interaction={interaction} openPlugins={() => setHeaderMenu('plugins')} />
       {picture && <DragLayer picture={picture} pointer={interaction.visual.pointer} controller={interaction.visual.controller} measure={interaction.visual.measure} complete={interaction.visual.complete} label={t(picture.catalog ? 'Adicionando widget' : picture.sourceBar ? 'Movendo da barra lateral' : (interaction.gestureLabel?.region ?? picture.source?.dataset.ownerRegion) === 'bottom' ? 'Movendo da barra inferior' : 'Movendo da área principal')}><section className="widget drag-picture-content"><header className="widget-heading"><strong>{registry.get(picture.typeId)?.owner === 'host' ? t(registry.get(picture.typeId)!.title) : registry.get(picture.typeId)?.title}</strong></header><div className="widget-content">{registry.get(picture.typeId)?.fixture ? <WidgetContent id={registry.get(picture.typeId)!.fixture!} /> : <PluginBody definition={registry.get(picture.typeId)!} plugins={plugins} preview />}</div></section></DragLayer>}
       {dropZones?.targets.map(region => { const m = surfaces.measures[region], width = m.width + 6, height = m.height + 6; return <div key={region} className="layout-edit-zone" data-over={dropZones.over === region ? '' : undefined} style={{ left: m.left - 3, top: m.top - 3, width, height }}><EditOutline width={width} height={height} /></div> })}
     </div><StatusBar />
-    <div className={'workspace-feedback ' + (showFeedback || tx.recovery || geometryWarning ? 'workspace-toast' : 'sr-only')} role="status" aria-live="polite">{[geometryWarning ? t('Espaço insuficiente para os mínimos. Composição preservada; amplie ou reabra a região.') : '', t(tx.message)].filter(Boolean).join(' ')}</div>
+    <div className={'workspace-feedback ' + (showFeedback || tx.recovery || geometryWarning || panelNotice ? 'workspace-toast' : 'sr-only')} role="status" aria-live="polite">{[panelNotice ? t(panelNotice) : '', geometryWarning ? t('Espaço insuficiente para os mínimos. Composição preservada; amplie ou reabra a região.') : '', t(tx.message)].filter(Boolean).join(' ')}</div>
     {removing && <Confirm title="Remover widget?" text={t('Remover esta presença? Os dados e plugins continuam disponíveis.')} confirm={() => {
       const typeId = view.organization.views.find(record => record.id === removing)?.typeId
       tx.action(removePresence(view, removing)); setRemoving(null)
       requestAnimationFrame(() => { const button = editorOpen && typeId ? document.querySelector<HTMLElement>(`[data-catalog-type="${CSS.escape(typeId)}"]`) : null
         if (button?.getClientRects().length) button.focus(); else document.querySelector<HTMLElement>('.widget-catalog-toggle')?.focus() })
     }} close={() => setRemoving(null)} />}
-    {settingsOpen && <Settings plugins={plugins} close={() => setSettingsOpen(false)} tx={tx} panel={panel} setPanel={setPanel} expanded={expanded} setExpanded={toggleExpansion} theme={theme} toggleTheme={toggleTheme} snap={snap} setSnap={setSnap} />}
+    {settingsOpen && <Settings plugins={plugins} close={() => setSettingsOpen(false)} tx={tx} expanded={expanded} setExpanded={toggleExpansion} theme={theme} toggleTheme={toggleTheme} snap={snap} setSnap={setSnap} />}
   </div>
 }
 function WorkbenchMoveIcon() { return <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v18M3 12h18M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3" /></svg> }

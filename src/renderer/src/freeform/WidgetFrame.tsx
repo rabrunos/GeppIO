@@ -13,7 +13,8 @@ import { WorkbenchIcon } from '../workbench/WorkbenchIcon.tsx'
 import type { useSwap } from '../workbench/useSwap.ts'
 
 const LABELS: Record<Direction, string> = { n: 'borda superior', e: 'borda direita', s: 'borda inferior', w: 'borda esquerda', ne: 'canto superior direito', nw: 'canto superior esquerdo', se: 'canto inferior direito', sw: 'canto inferior esquerdo' }
-export const WidgetFrame = memo(function WidgetFrame({ placement: p, measurement: m, constraint, editing, interaction, withheld, unavailable, wheel, definition, children, remove, swap, swapSelected, swapAvailable, motionRevision, motion, ghosted, swapping, inactive }: {
+export const WidgetFrame = memo(function WidgetFrame({ placement: p, measurement: m, constraint, editing, interaction, withheld, unavailable, wheel, definition, children, remove, swap, swapSelected, swapAvailable, motionRevision, motion, ghosted, swapping, inactive, presentation }: {
+  presentation?: { mode: 'normal' | 'docked' | 'overlay'; open: boolean };
   placement: Placement; measurement: Measurement; constraint: Constraint; editing: boolean; interaction: Interaction; withheld: boolean; unavailable: boolean; inactive: boolean;
   wheel(dx: number, dy: number): void; definition: WidgetType; children?: ReactNode; remove(): void; swap(): void; swapSelected: boolean; swapAvailable: boolean; motionRevision: number; motion: { duration: number; entering: boolean }; ghosted: boolean; swapping: ReturnType<typeof useSwap>
 }) {
@@ -23,6 +24,7 @@ export const WidgetFrame = memo(function WidgetFrame({ placement: p, measurement
   const clipWidth = m.clipWidth ?? m.width, clipHeight = m.clipHeight ?? m.height
   const outside = p.x + p.width <= m.scrollLeft || p.x >= m.scrollLeft + clipWidth || p.y + p.height <= m.scrollTop || p.y >= m.scrollTop + clipHeight
   const visible = !withheld && !unavailable && m.width > 0 && m.height > 0
+  const focusInside = frame.current?.contains(document.activeElement)
   useLayoutEffect(() => {
     const before = previous.current; previous.current = { left, top, revision: motionRevision, visible }
     const changed = before && Math.abs(before.left - left) + Math.abs(before.top - top) >= .2
@@ -40,9 +42,12 @@ export const WidgetFrame = memo(function WidgetFrame({ placement: p, measurement
     flight.current = frame.current.animate([{ transform: `translate(${before.left + matrix.e - left}px, ${before.top + matrix.f - top}px)` }, { transform: 'translate(0,0)' }], { duration: motion.duration, easing: 'cubic-bezier(.2,.8,.2,1)' })
   }, [left, top, motionRevision, visible, ghosted])
   useLayoutEffect(() => () => flight.current?.cancel(), [])
-  return <section className={'widget widget-frame ' + (editing ? 'editing ' : '') + (editing && interaction.selected === p.id ? 'selected ' : '') + (editing && interaction.blocked === p.id ? 'invalid' : '')}
+  useLayoutEffect(() => {
+    if (presentation?.open === false && focusInside) document.querySelector<HTMLButtonElement>('[aria-controls="properties-presentation"]')?.focus({ preventScroll: true })
+  }, [presentation?.open])
+  return <section id={presentation ? "properties-presentation" : undefined} data-presentation={presentation?.mode} data-panel-open={presentation?.open} className={'widget widget-frame ' + (editing ? 'editing ' : '') + (editing && interaction.selected === p.id ? 'selected ' : '') + (editing && interaction.blocked === p.id ? 'invalid' : '')}
     ref={frame} data-widget-appearance={definition.appearance} data-model-id={`model:${definition.id}`} data-swap-selected={swapSelected ? '' : undefined}
-    hidden={withheld || unavailable || m.width <= 0 || m.height <= 0} inert={withheld || unavailable || inactive || (outside && interaction.activeId !== p.id)} data-widget={withheld ? undefined : p.id} data-owner-region={p.region} data-layout-keyboard={import.meta.env.DEV}
+    hidden={withheld || unavailable || m.width <= 0 || m.height <= 0} inert={presentation?.open === false || withheld || unavailable || inactive || (outside && interaction.activeId !== p.id)} data-widget={withheld ? undefined : p.id} data-owner-region={p.region} data-layout-keyboard={import.meta.env.DEV}
     data-widget-id={p.id} data-swap-over={swapping.preview?.target === p.id ? '' : undefined}
     data-x={p.x} data-y={p.y} data-w={p.width} data-h={p.height} data-preferred-w={p.preferred.width} data-preferred-h={p.preferred.height}
     style={{ left, top, width: p.width, height: p.height, opacity: ghosted ? 0 : undefined,

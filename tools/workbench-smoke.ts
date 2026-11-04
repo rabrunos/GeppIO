@@ -10,6 +10,7 @@ await mkdir('.local/diagnostics', { recursive: true })
 const env: Record<string, string> = { ...Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined)), GEPPIO_TEST_USER_DATA: profile, NODE_ENV: 'production' }
 delete env.ELECTRON_RUN_AS_NODE; delete env.NODE_OPTIONS; delete env.ELECTRON_RENDERER_URL
 const app = await electron.launch({ args: ['.'], env })
+const appProcess = app.process()
 const errors: string[] = []
 try {
   const page = await app.firstWindow()
@@ -198,15 +199,30 @@ try {
   await page.getByRole('button', { name: 'Maximizar', exact: true }).click()
   assert.equal(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.isMaximized()), false)
   assert.deepEqual(errors, [])
-  await Promise.all([page.waitForEvent('close'), page.getByRole('button', { name: 'Fechar', exact: true }).click()])
+  const processClosed = new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('Native Close did not terminate the disposable app')), 10000)
+    appProcess.once('exit', () => { clearTimeout(timer); resolve() })
+  })
+  const closeClick = page.getByRole('button', { name: 'Fechar', exact: true }).click().catch(async error => {
+    // Native Close can destroy CDP before its click acknowledgement arrives.
+    // Accept only that specific acknowledgement race after proving clean exit.
+    if (!(error instanceof Error) || !error.message.includes('Target page, context or browser has been closed')) throw error
+    await processClosed
+    assert.equal(page.isClosed(), true); assert.equal(appProcess.exitCode, 0)
+  })
+  await Promise.all([processClosed, page.waitForEvent('close'), closeClick])
+  assert.equal(appProcess.exitCode, 0, 'Native Close exits the actual disposable process successfully')
   console.log('PASS alpha13 functional: checkpoint/history/remove/cancel/form identity, normal pair, cross-region drag swap/undo, slots/failed Conclude and all three native window controls')
 } catch (error) {
   console.error('Renderer errors:', errors)
+  console.error('Functional smoke failure:', error)
+  try {
   const page = await app.firstWindow()
   await page.screenshot({ path: '.local/diagnostics/workbench-failure.png' })
   await writeFile('.local/diagnostics/workbench-failure.json', JSON.stringify(await page.evaluate(() => ({ focused: document.hasFocus(), viewport: [innerWidth, innerHeight],
     hovered: [...document.querySelectorAll(':hover')].map(node => node.tagName + '.' + node.className),
     controls: [...document.querySelectorAll<HTMLElement>('.layout-widget-remove,.composition-restore-button')].map(node => ({ name: node.getAttribute('aria-label') ?? node.textContent, opacity: getComputedStyle(node).opacity, pointer: getComputedStyle(node).pointerEvents, rect: node.getBoundingClientRect().toJSON() })) })), null, 2))
+  } catch (diagnosticError) { console.error('Failure capture unavailable:', String(diagnosticError)) }
   throw error
 }
-finally { if (app.process().exitCode === null) await app.close(); await rm(profile, { recursive: true, force: true }) }
+finally { if (appProcess.exitCode === null) await app.close(); await rm(profile, { recursive: true, force: true }) }

@@ -5,15 +5,12 @@ import { IconButton, useModalDialog } from '../workbench/Primitives.tsx';
 import { PluginSettings } from '../Plugins.tsx';
 import type { usePlugins } from '../Plugins.tsx';
 import type { Transaction } from '../freeform/useTransaction.ts';
-import type { PanelState, Anchor, Presentation } from '../workbench/TestPanel.tsx';
 import { useScrollState } from '../workbench/ScrollArea.tsx';
 import { LanguageChoice } from '../workbench/Locale.tsx';
-export function Settings({ plugins, close, tx, panel, setPanel, expanded, setExpanded, theme, toggleTheme, snap, setSnap }: {
+export function Settings({ plugins, close, tx, expanded, setExpanded, theme, toggleTheme, snap, setSnap }: {
     plugins: ReturnType<typeof usePlugins>;
     close(): void;
     tx: Transaction;
-    panel: PanelState;
-    setPanel(value: PanelState): void;
     expanded: boolean;
     setExpanded(value: boolean): void;
     theme: string; toggleTheme(): void; snap: boolean; setSnap(value: boolean): void;
@@ -32,13 +29,7 @@ export function Settings({ plugins, close, tx, panel, setPanel, expanded, setExp
       {tx.previous !== null && <button className="ui-button tool-button" disabled={tx.editing} onClick={() => { tx.adoptPrevious(); close(); }}>{t("Pr\u00E9via: layout livre anterior")}</button>}
       <button className="ui-button tool-button" onClick={() => { tx.resetPreview(); close(); }}>{t("Pr\u00E9via da composi\u00E7\u00E3o inicial")}</button>
       <label className="import-layout">{t("Importar layout")}<input type="file" accept=".json,application/json" disabled={tx.editing} onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; void tx.importFile(file); close(); }}/></label>
-      <div className="presentation-options"><span>{t("Painel de teste")}</span><select aria-label={t("Apresenta\u00E7\u00E3o do painel")} value={panel.presentation} disabled={tx.editing} onChange={e => {
-            const presentation = e.target.value as Presentation;
-            setPanel({ ...panel, presentation, anchor: presentation === 'docked' && panel.anchor === 'floating' ? 'bottom' : panel.anchor });
-        }}><option value="overlay">{t("Overlay")}</option><option value="docked">{t("Docked")}</option></select>
-        <select aria-label={t("Borda do painel")} value={panel.anchor} disabled={tx.editing} onChange={e => setPanel({ ...panel, anchor: e.target.value as Anchor })}><option value="bottom">{t("Inferior")}</option><option value="top">{t("Superior")}</option><option value="left">{t("Esquerda")}</option><option value="right">{t("Direita")}</option>{panel.presentation === 'overlay' && <option value="floating">{t("Flutuante")}</option>}</select>
-        <button className="ui-button tool-button" disabled={tx.editing} onClick={() => { setPanel({ ...panel, open: !panel.open }); close(); }}>{t(panel.open ? 'Recolher' : 'Abrir painel')}</button>
-      </div>
+      <p>{t('As apresentações de Propriedades estão nos controles visíveis junto ao nome do projeto.')}</p>
     </section><PluginSettings plugins={plugins}/></div>
   </dialog>;
 }

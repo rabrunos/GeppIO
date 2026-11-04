@@ -8,7 +8,7 @@ import type { Surfaces } from '../freeform/useSurfaces.ts'
 import { useLocale } from './Locale.tsx'
 
 type Pair = { first: string; second: string; axis: 'x' | 'y' }
-export function PairDividers({ tx, registry, view, surfaces, preview, snap }: { tx: Transaction; registry: Registry; view: WorkbenchSnapshot; surfaces: Surfaces; preview(value: WorkbenchSnapshot | null): void; snap: boolean }) {
+export function PairDividers({ tx, registry, view, surfaces, preview, snap, suspendMain = false }: { suspendMain?: boolean; tx: Transaction; registry: Registry; view: WorkbenchSnapshot; surfaces: Surfaces; preview(value: WorkbenchSnapshot | null): void; snap: boolean }) {
   const { t } = useLocale(), [active, setActive] = useState<string | null>(null)
   const [guide, setGuide] = useState<{ left: number; top: number; height: number; zIndex: number } | null>(null), snapped = useRef(false)
   const gesture = useRef<{ pair: Pair; source: WorkbenchSnapshot; delta: number; x: number; y: number; pointer: number; scale: number; target: HTMLButtonElement } | null>(null)
@@ -16,7 +16,7 @@ export function PairDividers({ tx, registry, view, surfaces, preview, snap }: { 
   const pairs: Pair[] = []
   const visible = activePlacements(view), layers = { main: 16, bottom: 36, sidebar: 42 }
   for (const a of visible) for (const b of visible) {
-    if (a.id === b.id || a.region !== b.region) continue
+    if (a.id === b.id || a.region !== b.region || (suspendMain && a.region === 'main')) continue
     if (a.region !== 'sidebar' && Math.abs(b.x - a.x - a.width - 10) < .1 && a.y < b.y + b.height && b.y < a.y + a.height) pairs.push({ first: a.id, second: b.id, axis: 'x' })
     if (a.region !== 'bottom' && Math.abs(b.y - a.y - a.height - 10) < .1 && a.x < b.x + b.width && b.x < a.x + a.width) pairs.push({ first: a.id, second: b.id, axis: 'y' })
   }

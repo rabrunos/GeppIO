@@ -14,6 +14,8 @@ import { configureBar, resizePair } from '../../../shared/workbench/commands.ts'
 import type { ResizePair } from '../../../shared/workbench/commands.ts'
 import type { UserBar } from '../../../shared/workbench/model.ts'
 import type { Surface } from '../../../shared/freeform/types.ts'
+import { changePresentation } from '../../../shared/workbench/presentations.ts'
+import type { WidgetPresentation } from '../../../shared/workbench/presentations.ts'
 
 export function useTransaction(registry: Registry = widgetRegistry(), localState?: { read(): LocalSessionState; apply(value: LocalSessionState): void }) {
   const localOwner = useRef(localState); localOwner.current = localState
@@ -135,6 +137,16 @@ export function useTransaction(registry: Registry = widgetRegistry(), localState
       if (recovery) { setMessage('Escolha e confirme uma prévia explícita antes de alterar as barras.'); return false }
       if (JSON.stringify(next.placements) !== JSON.stringify(committed.current.placements)) return false
       return commit(next, false, true, 'Preferência salva.')
+    },
+    async present(patch: Partial<Pick<WidgetPresentation, 'presentation' | 'open' | 'preferred'>>) {
+      if (saving.current || history.current.active) return false
+      let next: WorkbenchSnapshot
+      try { next = changePresentation(live.current, patch) } catch { setMessage('Apresentação incompatível. Dados anteriores preservados.'); return false }
+      if (editingRef.current) { action(next); return true }
+      if (recovery || normalizationPending.current || JSON.stringify(live.current) !== JSON.stringify(committed.current)) {
+        setMessage('Confirme ou recupere a composição em Editar antes de alterar a apresentação.'); return false
+      }
+      return commit(next, false, true, 'Apresentação salva.')
     },
     async commitPair(intent: ResizePair) {
       if (editingRef.current || intent.delta === 0) return false

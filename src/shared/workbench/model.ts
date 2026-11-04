@@ -3,6 +3,7 @@ import type { Constraint, Constraints, Placement, Region, Size, Snapshot } from 
 import type { InstalledPlugin } from '../plugins.ts'
 import { CHROME_LIMITS, defaultChrome } from './chrome.ts'
 import type { ChromePatch, WorkbenchChrome } from './chrome.ts'
+import type { Presentations } from './presentations.ts'
 
 export interface WidgetType {
   id: string; owner: string; title: string; category: string; description: string;
@@ -19,7 +20,7 @@ export interface Composition {
 }
 export interface Organization {
   views: View[]; bars: UserBar[]; activeBar: string;
-  compositions: Composition[]; compositionOrder?: string[]; favorites: string[]; defaultComposition: string | null; chrome: WorkbenchChrome
+  compositions: Composition[]; compositionOrder?: string[]; favorites: string[]; defaultComposition: string | null; chrome: WorkbenchChrome; presentations?: Presentations
 }
 export interface WorkbenchSnapshot extends Snapshot { organization: Organization }
 export interface FormatSlot { id: string; region: Region; x: number; y: number; width: number; height: number }
@@ -82,7 +83,7 @@ export function adoptLayout(layout: Snapshot): WorkbenchSnapshot {
     bars: [{ id: HOME, name: 'Ferramentas', userNamed: false, icon: 'home', archived: false,
       members: layout.placements.filter(p => p.region === 'sidebar').map(p => `host:${p.id}`),
       positions: Object.fromEntries(layout.placements.filter(p => p.region === 'sidebar').map(p => [`host:${p.id}`, p.y])) }],
-    activeBar: HOME, compositions: [], favorites: ['system:default', 'system:focus', 'system:balanced'], defaultComposition: 'system:default', chrome
+    activeBar: HOME, compositions: [], favorites: ['system:default', 'system:focus', 'system:balanced'], defaultComposition: 'system:default', chrome, presentations: { version: 1, entries: [] }
   } }
 }
 export function initialWorkbench() {

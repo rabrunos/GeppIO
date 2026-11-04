@@ -36,6 +36,29 @@ Evidence and remaining decisions belong in the live Issues, not a tracked last-r
 
 ## Layers
 
+The alpha.17 pilot adds `tests/workbench-presentations.test.ts` for v1 defaults, v2
+roundtrips, exact identity, invalid enums/dimensions, CAS/quota/recovery, reversible bounded
+Docked fit, Overlay reservation, intention history and composition/removal/region behavior.
+`pnpm test:presentations` runs `tools/presentation-smoke.ts` in a disposable Electron profile
+and is included in `pnpm test:desktop`. It verifies actual process restarts for all modes in
+open and collapsed states, both themes, content DOM identity through switches/collapse,
+preferred heights, wide/narrow/wide recovery, preserved layout/chrome bytes, Edit
+undo/redo/Cancel/checkpoints and normal-use quota/stale refusal feedback.
+The same pilot matrix checks horizontal expansion with the real native scrollbar and
+strict fractional Main bounds; ARIA expansion reflects effective visibility. Run
+`node --experimental-strip-types tools/presentation-smoke.ts --scale125` after building for
+explicit Chromium DPR 1.25. Artifacts go under ignored `.local/diagnostics/presentations-alpha17-*`.
+These checks do not establish physical Windows 125%, mouse fluency or owner visual acceptance.
+
+Owner mouse check: use the controls beside the project name, type in Properties, switch
+Normal → Docked → Overlay, collapse/reopen each and verify retained content. At a wide
+window select Docked/260px, close the application and reopen: it should return open at
+260px when Main has room. Resize to 1000×720 content size (or the native minimum): the
+pilot temporarily hides with a limited-space notice and Main regains its height. Restart
+there, then maximize or enlarge: Docked should return open/260px when space permits. Explicitly collapse,
+restart and enlarge: it must stay collapsed until opened. Check both themes and usual
+physical display scale; report legibility, reachable controls, animation or mouse issues.
+
 | Layer | Command | What it does not prove |
 | --- | --- | --- |
 | Project structure | `pnpm check:repo` or direct Node invocation of `tools/check-repo.ts` | Effective Codex config, installed graph or runtime security |

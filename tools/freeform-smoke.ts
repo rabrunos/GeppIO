@@ -200,21 +200,25 @@ export async function freeformSmoke(page: Page, resizeWindow: (width: number, he
     }
     await page.screenshot({ path: `.local/diagnostics/freeform-chrome-${theme}-${await page.evaluate(() => devicePixelRatio)}.png` })
   }
-  // Preserve the existing session-only panel presentations on all four edges.
+  assert.deepEqual(await page.evaluate(() => (window as unknown as { layoutWrites: string[] }).layoutWrites), [], 'Theme and viewport projection never persist')
+  // The active pilot replaces the detached four-edge demonstrator. Explicit
+  // presentation intentions persist; their viewport projections never do.
   const undocked = await dimensions(page)
-  for (const presentation of ['overlay', 'docked']) for (const anchor of ['left', 'right', 'top', 'bottom']) {
-    await settings(page)
-    await page.getByRole('combobox', { name: 'Apresentação do painel', exact: true }).selectOption(presentation)
-    await page.getByRole('combobox', { name: 'Borda do painel', exact: true }).selectOption(anchor)
-    await page.getByRole('button', { name: 'Abrir painel', exact: true }).click(); await settle(page)
+  const panelLayout = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).layout, FREEFORM_KEY)
+  for (const presentation of ['overlay', 'docked']) {
+    await page.getByLabel('Apresentação de Propriedades', { exact: true }).selectOption(presentation); await settle(page)
     const withPanel = await dimensions(page)
     if (presentation === 'overlay') assert.deepEqual(withPanel, undocked)
-    else if (['left', 'right'].includes(anchor)) assert.ok(withPanel.width < undocked.width)
-    else assert.ok(withPanel.height < undocked.height)
+    else {
+      const reservation = Number(await page.getByTestId('layout-canvas').getAttribute('data-panel-reservation'))
+      assert.ok(reservation > 0 ? withPanel.height < undocked.height : await page.getByTestId('layout-canvas').getAttribute('data-panel-adapted') === 'true')
+    }
     await page.getByRole('button', { name: 'Recolher painel', exact: true }).click(); await settle(page)
     assert.deepEqual(await dimensions(page), undocked)
+    await page.getByRole('button', { name: 'Abrir painel', exact: true }).click(); await settle(page)
   }
-  assert.deepEqual(await page.evaluate(() => (window as unknown as { layoutWrites: string[] }).layoutWrites), [], 'Theme, viewport and panel projection never persist')
+  await page.getByLabel('Apresentação de Propriedades', { exact: true }).selectOption('normal'); await settle(page)
+  assert.deepEqual(await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).layout, FREEFORM_KEY), panelLayout, 'Presentation commits preserve the canonical Normal scene')
   const beforeChrome = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).layout, FREEFORM_KEY)
   const initial = await rect(page, 'chart')
   await beginEdit(page); await drag(page, 'chart', 'move', 13.25, -7.125, true)

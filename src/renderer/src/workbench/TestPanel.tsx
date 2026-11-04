@@ -3,6 +3,7 @@ import { useLocale } from './Locale.tsx'
 export type Anchor = 'bottom' | 'top' | 'left' | 'right' | 'floating'
 export type Presentation = 'overlay' | 'docked'
 export interface PanelState { open: boolean; anchor: Anchor; presentation: Presentation }
+/** Historical grid demonstrator; the active host uses PresentationControls. */
 export function TestPanel({ state, close }: { state: PanelState; close(): void }) {
   const { t } = useLocale()
   if (!state.open) return null
