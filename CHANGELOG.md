@@ -2,6 +2,13 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.18] — 2026-11-08
+
+- Move the Properties presentation selector into the widget's Edit controls beside remove, showing the selected name in a compact dropdown with localized Normal/Encaixado/Flutuante options and host region capabilities (Issue #11).
+- Give Docked an independent Bottom-style click/drag edge, guarded height confirmation and reversible constrained-window adaptation; keep preferred height and explicit collapse durable, leaving a visible collapsed bar above the independent Bottom.
+- Reveal full-Main-width Floating through a persistent full-width 31px collapsed bar in lower Main with Sidebar timing and popup retention. Keep hover transient, legacy Normal visible and all content mounted through presentation changes.
+- Update disposable-profile presentation smoke for local controls, gestures, restart, compatibility, English labels and both themes. Synchronize pointer tests with completed drag pictures and preserve bounded diagnostics across reloads without masking original failures. Physical mouse/DPI and owner visual acceptance remain pending.
+
 ## [0.1.0-alpha.17] — 2026-11-04
 
 - Give the host Properties view visible mouse controls for Normal, bottom Docked and bottom Overlay, explicit collapse/reopen and preferred panel height. Keep its content mounted and its Normal slot recoverable; no terminal process or plugin capability is added (Issue #11).

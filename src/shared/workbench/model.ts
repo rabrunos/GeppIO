@@ -3,12 +3,13 @@ import type { Constraint, Constraints, Placement, Region, Size, Snapshot } from 
 import type { InstalledPlugin } from '../plugins.ts'
 import { CHROME_LIMITS, defaultChrome } from './chrome.ts'
 import type { ChromePatch, WorkbenchChrome } from './chrome.ts'
-import type { Presentations } from './presentations.ts'
+import type { Presentation, Presentations } from './presentations.ts'
 
 export interface WidgetType {
   id: string; owner: string; title: string; category: string; description: string;
   appearance: 'card' | 'seamless'; presence: 'single-view' | 'multiple-areas';
   constraint: Constraint; fixture?: string; widgetId?: string; pluginId?: string
+  presentations?: Partial<Record<Region, readonly Presentation[]>>
 }
 export type Registry = ReadonlyMap<string, WidgetType>
 export interface View { id: string; typeId: string; modelId: string }
@@ -46,6 +47,7 @@ const FIXTURES = [
 export function widgetRegistry(plugins: readonly InstalledPlugin[] = []): Registry {
   const entries: WidgetType[] = FIXTURES.map(([fixture, title, category]) => ({
     id: `host:${fixture}`, owner: 'host', fixture, title, category, description: 'Widget de demonstração do GeppIO.',
+    ...(fixture === 'properties' ? { presentations: { main: ['normal', 'docked', 'overlay'] as const } } : {}),
     appearance: 'card', presence: fixture === 'notes' || fixture === 'library' ? 'multiple-areas' : 'single-view', constraint: {
       ...CONSTRAINTS[fixture]!, regionMin: {
         sidebar: { width: 150, height: CONSTRAINTS[fixture]!.min.height },

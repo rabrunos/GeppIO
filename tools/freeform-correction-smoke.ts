@@ -8,7 +8,7 @@ import { DIRECTIONS } from '../src/shared/freeform/types.ts'
 import { validLayout } from '../src/shared/freeform/geometry.ts'
 import { constraintsFor } from '../src/shared/freeform/policy.ts'
 import type { Placement, Surface } from '../src/shared/freeform/types.ts'
-import { dimensions, drag, expansion, preview, rect, resizeRegion } from './freeform-smoke.ts'
+import { dimensions, drag, expansion, preview, rect, resizeRegion, settle as shellSettle } from './freeform-smoke.ts'
 
 const settle = (page: Page) => page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
 const near = (a: number, b: number, label: string) => assert.ok(Math.abs(a - b) <= .06, `${label}: ${a} != ${b}`)
@@ -84,7 +84,7 @@ export async function freeformCorrectionSmoke(page: Page, dev: boolean, resizeWi
       await page.mouse.move(x + (/w/.test(direction) ? -delta : /e/.test(direction) ? delta : 0), y + (/n/.test(direction) ? -delta : /s/.test(direction) ? delta : 0))
       await settle(page)
     }
-    await page.mouse.up(); await settle(page)
+    await page.mouse.up(); await shellSettle(page)
     const frames = await stopTrace(page)
     evidence.push({ direction, before, frames })
     await writeFile(`.local/diagnostics/freeform-anchor-${direction}-${dev ? 'dev' : 'production'}-${await page.evaluate(() => devicePixelRatio)}.json`, JSON.stringify({ before, frames }, null, 2))
@@ -115,7 +115,7 @@ export async function freeformCorrectionSmoke(page: Page, dev: boolean, resizeWi
   const ex = east.x + east.width / 2, ey = east.y + east.height / 2
   await page.mouse.move(ex, ey); await page.mouse.down(); await trace(page, 'properties')
   for (const delta of [1, 9.125, 40, 200, 500, 9.125, 0]) { await page.mouse.move(ex + delta, ey); await settle(page) }
-  await page.mouse.up(); await settle(page)
+  await page.mouse.up(); await shellSettle(page)
   const transitionFrames = await stopTrace(page)
   await writeFile(`.local/diagnostics/freeform-scroll-anchor-${dev ? 'dev' : 'production'}-${await page.evaluate(() => devicePixelRatio)}.json`, JSON.stringify(transitionFrames, null, 2))
   anchored(transitionFrames, 'e')
@@ -158,7 +158,7 @@ export async function freeformCorrectionSmoke(page: Page, dev: boolean, resizeWi
     assert.ok((await rect(page, 'summary')).height < height - 210)
     await page.mouse.move(x, y); await settle(page)
     assert.deepEqual((await layouts(page)).map(p => p.slice(0, 6)), original.map(p => p.slice(0, 6)), 'Held reversal restores all actual geometry; projected preferences use the current baseline')
-    await page.mouse.move(x, y + 37.375); await page.mouse.up(); await settle(page)
+    await page.mouse.move(x, y + 37.375); await page.mouse.up(); await shellSettle(page)
     const completed = await layouts(page), compressed = await rect(page, 'summary')
     await drag(page, 'chart', kind, 0, -37.375)
     near((await rect(page, 'summary')).height, compressed.height, 'Second gesture retains settled compression')
@@ -169,12 +169,12 @@ export async function freeformCorrectionSmoke(page: Page, dev: boolean, resizeWi
     await page.mouse.move(now.x + now.width / 2, now.y + now.height / 2); await page.mouse.down()
     await page.mouse.move(now.x + now.width / 2, now.y + now.height / 2 + 10); await settle(page)
     await grip.evaluate(e => { if (!e.hasPointerCapture(1)) throw new Error('No capture'); e.releasePointerCapture(1) })
-    await page.mouse.up(); await settle(page); assert.deepEqual(await layouts(page), second, 'Lost capture retains completed gestures')
+    await page.mouse.up(); await shellSettle(page); assert.deepEqual(await layouts(page), second, 'Lost capture retains completed gestures')
     const cancelBox = await grip.boundingBox(); assert.ok(cancelBox)
     await page.mouse.move(cancelBox.x + cancelBox.width / 2, cancelBox.y + cancelBox.height / 2); await page.mouse.down()
     await page.mouse.move(cancelBox.x + cancelBox.width / 2, cancelBox.y + cancelBox.height / 2 + 10); await settle(page)
     await grip.evaluate(e => e.dispatchEvent(new PointerEvent('pointercancel', { bubbles: true, pointerId: 1 })))
-    await page.mouse.up(); await settle(page); assert.deepEqual(await layouts(page), second, 'Pointercancel retains completed gestures')
+    await page.mouse.up(); await shellSettle(page); assert.deepEqual(await layouts(page), second, 'Pointercancel retains completed gestures')
     assert.notDeepEqual(completed, original)
     assert.equal(await page.evaluate(key => localStorage.getItem(key), FREEFORM_KEY), bytes, 'Pointer release never persists')
     await page.getByTestId('conclude-layout').click(); await page.getByTestId('edit-layout').waitFor()
@@ -248,6 +248,8 @@ export async function freeformCorrectionSmoke(page: Page, dev: boolean, resizeWi
   const input = page.getByRole('textbox', { name: 'Nome de exemplo', exact: true })
   await input.focus(); await page.keyboard.type('normal'); await page.keyboard.press('Shift+Tab')
   assert.equal(await page.evaluate(() => document.activeElement?.matches('.layout-widget-remove')), true, 'The approved removal control remains keyboard reachable in both builds')
+  await page.keyboard.press('Shift+Tab')
+  assert.equal(await page.evaluate(() => document.activeElement?.matches('.widget-presentation-control')), true, 'The local presentation selector precedes remove')
   await page.keyboard.press('Shift+Tab')
   assert.equal(await page.evaluate(() => document.activeElement?.matches('.widget-grip, .resize-zone')), dev)
   await input.focus(); await page.keyboard.press('Tab')

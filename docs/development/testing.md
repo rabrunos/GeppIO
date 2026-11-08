@@ -36,28 +36,32 @@ Evidence and remaining decisions belong in the live Issues, not a tracked last-r
 
 ## Layers
 
-The alpha.17 pilot adds `tests/workbench-presentations.test.ts` for v1 defaults, v2
-roundtrips, exact identity, invalid enums/dimensions, CAS/quota/recovery, reversible bounded
-Docked fit, Overlay reservation, intention history and composition/removal/region behavior.
-`pnpm test:presentations` runs `tools/presentation-smoke.ts` in a disposable Electron profile
-and is included in `pnpm test:desktop`. It verifies actual process restarts for all modes in
-open and collapsed states, both themes, content DOM identity through switches/collapse,
-preferred heights, wide/narrow/wide recovery, preserved layout/chrome bytes, Edit
-undo/redo/Cancel/checkpoints and normal-use quota/stale refusal feedback.
-The same pilot matrix checks horizontal expansion with the real native scrollbar and
-strict fractional Main bounds; ARIA expansion reflects effective visibility. Run
-`node --experimental-strip-types tools/presentation-smoke.ts --scale125` after building for
-explicit Chromium DPR 1.25. Artifacts go under ignored `.local/diagnostics/presentations-alpha17-*`.
-These checks do not establish physical Windows 125%, mouse fluency or owner visual acceptance.
+The presentation pilot uses `tests/workbench-presentations.test.ts` for old defaults,
+v2 roundtrips, identity/capability/region gates, invalid dimensions, CAS/quota/recovery,
+bounded Docked fit, layout-neutral Floating and history/composition behavior.
+`pnpm test:presentations` runs `tools/presentation-smoke.ts` with a disposable Electron
+profile and is included in `pnpm test:desktop`. Alpha.18 covers local Edit selection,
+Normal-only controls, button alignment, both themes, content identity, popup reachability,
+Docked click/drag/cancellation and independent Bottom, real open/collapsed restarts,
+Floating hover and hidden restart, alpha.17 closed Normal/Floating compatibility, v1
+reading, wide/narrow/wide recovery, expansion/scrollbar bounds, Edit checkpoints and
+rejected Save bytes. Hover/adaptation/resize previews and canceled gestures must not write.
+Run `pnpm test:presentations --scale125` after building for explicit Chromium DPR 1.25.
+Artifacts go under ignored `.local/diagnostics/presentations-alpha18-*`.
+This does not establish physical Windows DPI, mouse fluency or owner visual acceptance.
 
-Owner mouse check: use the controls beside the project name, type in Properties, switch
-Normal → Docked → Overlay, collapse/reopen each and verify retained content. At a wide
-window select Docked/260px, close the application and reopen: it should return open at
-260px when Main has room. Resize to 1000×720 content size (or the native minimum): the
-pilot temporarily hides with a limited-space notice and Main regains its height. Restart
-there, then maximize or enlarge: Docked should return open/260px when space permits. Explicitly collapse,
-restart and enlarge: it must stay collapsed until opened. Check both themes and usual
-physical display scale; report legibility, reachable controls, animation or mouse issues.
+Owner mouse check: enter Edit, hover Properties and open the selected-mode button immediately left of X.
+Choose Normal, Encaixado and Flutuante; Save advances the Cancel checkpoint and Conclude
+exits. Type a sample name before switching and verify retained content. In Encaixado click
+the outer top edge to collapse/reopen, drag it vertically and restart both open and collapsed.
+For recovery start in a wide window (e.g. 2000×1200 content), drag to about 420px and Conclude.
+Reduce to the native minimum (1000×720 content), restart there, then maximize: the temporarily
+hidden panel must reopen at the preferred height when it fits. Repeat after an explicit
+collapse: it must stay collapsed. In narrow Edit, the selector on the collapsed bar still offers Normal.
+For Flutuante hover the full-width collapsed Properties bar above Bottom, move into
+the panel and its Edit menu, then away; restart must await hover. See the exact provisional
+bar dimensions in [layout](../architecture/layout.md). Repeat in both themes and usual
+physical scale; assess legibility, controls, motion and pointer reachability.
 
 | Layer | Command | What it does not prove |
 | --- | --- | --- |

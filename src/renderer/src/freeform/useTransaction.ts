@@ -140,8 +140,9 @@ export function useTransaction(registry: Registry = widgetRegistry(), localState
     },
     async present(patch: Partial<Pick<WidgetPresentation, 'presentation' | 'open' | 'preferred'>>) {
       if (saving.current || history.current.active) return false
+      if (patch.presentation && !editingRef.current) return false
       let next: WorkbenchSnapshot
-      try { next = changePresentation(live.current, patch) } catch { setMessage('Apresentação incompatível. Dados anteriores preservados.'); return false }
+      try { next = changePresentation(live.current, patch, registry) } catch { setMessage('Apresentação incompatível. Dados anteriores preservados.'); return false }
       if (editingRef.current) { action(next); return true }
       if (recovery || normalizationPending.current || JSON.stringify(live.current) !== JSON.stringify(committed.current)) {
         setMessage('Confirme ou recupere a composição em Editar antes de alterar a apresentação.'); return false

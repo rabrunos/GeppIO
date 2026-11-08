@@ -131,5 +131,7 @@ export const appMessages: Readonly<Record<string, string>> = {
   'Conteúdo de demonstração': 'Demonstration content', 'Ação de demonstração. Nenhuma pasta foi aberta.': 'Demonstration action. No folder was opened.',
   'Preferência alterada somente nesta sessão.': 'Preference changed for this session only.', 'Escolher widget': 'Choose widget',
   'Prévia: {0}': 'Preview: {0}', 'Fracionário v1': 'Fractional v1', 'Responsivo v2': 'Responsive v2', 'Horizontal v1': 'Horizontal v1',
-  'Nenhum widget encontrado.': 'No widgets found.', '{0} widgets': '{0} widgets', 'Redimensionar widgets em conjunto': 'Resize widgets together'
+  'Nenhum widget encontrado.': 'No widgets found.', '{0} widgets': '{0} widgets', 'Redimensionar widgets em conjunto': 'Resize widgets together',
+  'Normal': 'Normal', 'Encaixado': 'Docked',
+  'Altura de Propriedades': 'Properties height', 'Apresentação de Propriedades': 'Properties presentation'
 }

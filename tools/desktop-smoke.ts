@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path'
 import assert from 'node:assert/strict'
 import ts from 'typescript'
 import type { Page } from 'playwright'
-import { freeformSmoke, freeformPluginSmoke, placeContribution, beginEdit, settle, portugueseFixture } from './freeform-smoke.ts'
+import { choosePresentation, freeformSmoke, freeformPluginSmoke, placeContribution, beginEdit, settle, portugueseFixture } from './freeform-smoke.ts'
 import { freeformCorrectionSmoke } from './freeform-correction-smoke.ts'
 import { WORKBENCH_KEY as FREEFORM_KEY } from '../src/shared/workbench/model.ts'
 const temporary = await mkdtemp(join(tmpdir(), 'geppio-smoke-'))
@@ -29,20 +29,21 @@ async function launch(): Promise<Page> {
   await portugueseFixture(page)
   await application!.evaluate(({ BrowserWindow }) => { const window = BrowserWindow.getAllWindows()[0]!; window.show(); window.focus() })
   await page.bringToFront()
-  await page.evaluate(() => {
+  const installPointerEvidence = () => {
     const events: unknown[] = []
     ;(window as Window & { smokePointerEvents?: unknown[] }).smokePointerEvents = events
     function record(event: Event) {
       const target = event.target instanceof Element ? event.target : null, pointer = event instanceof PointerEvent ? event : null
       events.push({ time: performance.now(), event: event.type, focused: document.hasFocus(),
         widget: target?.closest<HTMLElement>('[data-widget]')?.dataset.widget, resize: target?.getAttribute('data-resize'),
-        point: pointer ? [pointer.clientX, pointer.clientY] : null, buttons: pointer?.buttons })
+        point: pointer ? [pointer.clientX, pointer.clientY] : null, buttons: pointer?.buttons, button: pointer?.button, pointerId: pointer?.pointerId })
       if (events.length > 200) events.shift()
     }
     // Test-only bounded event evidence, no polling or product-state writes.
     for (const type of ['pointerdown', 'pointerup', 'pointercancel', 'gotpointercapture', 'lostpointercapture']) document.addEventListener(type, record, true)
     window.addEventListener('blur', record); window.addEventListener('focus', record)
-  })
+  }
+  await page.addInitScript(installPointerEvidence); await page.evaluate(installPointerEvidence)
   const listings = await page.evaluate(() => Promise.all([window.geppio!.plugins.list(), window.geppio!.plugins.list()]))
   assert.ok(listings.every(result => result.ok), 'Concurrent startup inventory reads must succeed')
   return page
@@ -154,11 +155,12 @@ try {
   await page.getByTestId('edit-layout').waitFor()
   const saved = await page.evaluate(key => localStorage.getItem(key), FREEFORM_KEY)
   if (!saved) throw new Error('No saved layout')
-  await page.getByLabel('Apresentação de Propriedades', { exact: true }).selectOption('overlay')
-  await page.locator('[data-widget="properties"][data-presentation="overlay"]').waitFor()
-  await page.getByRole('button', { name: 'Recolher painel', exact: true }).click()
-  await page.getByRole('button', { name: 'Abrir painel', exact: true }).click()
-  await page.getByLabel('Apresentação de Propriedades', { exact: true }).selectOption('normal')
+  await choosePresentation(page, 'overlay')
+  await page.locator('[data-widget-id="properties"]').hover(); await page.waitForTimeout(150); await settle(page)
+  await page.locator('[data-widget="properties"][data-presentation="overlay"][data-panel-open="true"]').waitFor()
+  await page.mouse.move(10, 10); await page.waitForTimeout(600); await settle(page)
+  assert.equal(await page.locator('[data-widget="properties"]').getAttribute('data-panel-open'), 'false')
+  await choosePresentation(page, 'normal')
   await page.getByRole('button', { name: 'Alternar tema', exact: true }).click()
   if (await page.locator('.workbench').getAttribute('data-theme') !== 'light') throw new Error('Theme change failed')
   await page.reload(); await page.getByTestId('edit-layout').waitFor()
@@ -272,6 +274,7 @@ try {
   console.log('Process metrics after plugin removal (observed sample, not a plugin performance budget):')
   console.log(JSON.stringify(await application!.evaluate(({ app }) => app.getAppMetrics().map(metric => ({ type: metric.type, cpu: metric.cpu, memory: metric.memory }))), null, 2))
 } catch (error) {
+  console.error('Original desktop smoke failure:', error)
   if (application) {
     const page = await application.firstWindow()
     await page.screenshot({ path: '.local/diagnostics/desktop-failure.png' })
@@ -279,7 +282,7 @@ try {
     console.error('Renderer failures:', errors)
     console.error('Workbench feedback:', await page.locator('.workspace-feedback').textContent())
     await writeFile('.local/diagnostics/desktop-console-errors.json', JSON.stringify(consoleErrors, null, 2))
-    await writeFile('.local/diagnostics/desktop-pointer-events.json', JSON.stringify(await page.evaluate(() => (window as Window & { smokePointerEvents?: unknown[] }).smokePointerEvents), null, 2))
+    await writeFile('.local/diagnostics/desktop-pointer-events.json', JSON.stringify(await page.evaluate(() => (window as Window & { smokePointerEvents?: unknown[] }).smokePointerEvents) ?? null, null, 2))
   }
   throw error
 } finally { if (application) await application.close(); if (devServer) await devServer.close(); await rm(temporary, { recursive: true, force: true }) }

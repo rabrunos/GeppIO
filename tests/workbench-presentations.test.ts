@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { initialWorkbench, widgetRegistry, constraintsForViews, WORKBENCH_KEY } from '../src/shared/workbench/model.ts'
-import { changePresentation, defaultPresentation, effectivePresentation, presentationFor } from '../src/shared/workbench/presentations.ts'
+import { availablePresentations, changePresentation, defaultPresentation, effectivePresentation, presentationFor } from '../src/shared/workbench/presentations.ts'
 import { parseWorkbench, serializeWorkbench } from '../src/shared/workbench/codec.ts'
 import { readWorkbench, writeWorkbench } from '../src/shared/workbench/storage.ts'
 import { EditHistory, formatSignature } from '../src/shared/workbench/history.ts'
@@ -9,6 +9,23 @@ import { applyComposition, captureCurrentComposition, systemCompositions } from 
 import { removePresence, moveView, addWidget } from '../src/shared/workbench/commands.ts'
 
 const registry = widgetRegistry()
+test('host capabilities gate modes by type and current region; legacy closed Normal and Overlay remain recoverable', () => {
+  assert.deepEqual(availablePresentations(registry.get('host:queue')!, 'main'), ['normal'])
+  assert.deepEqual(availablePresentations(registry.get('host:properties')!, 'main'), ['normal', 'docked', 'overlay'])
+  assert.deepEqual(availablePresentations(registry.get('host:properties')!, 'sidebar'), ['normal'])
+  const source = initialWorkbench(), side = { ...source, placements: source.placements.map(p => p.id === 'properties' ? { ...p, region: 'sidebar' as const } : p) }
+  assert.throws(() => changePresentation(side, { presentation: 'docked' }))
+  const disabled = new Map(registry); disabled.set('host:properties', { ...registry.get('host:properties')!, presentations: undefined })
+  assert.throws(() => changePresentation(source, { presentation: 'overlay' }, disabled))
+  for (const presentation of ['normal', 'overlay'] as const) {
+    const legacy = JSON.parse(serializeWorkbench(changePresentation(source, { presentation }), registry))
+    legacy.organization.presentations.entries[0].open = false
+    const restored = parseWorkbench(JSON.stringify(legacy), registry)
+    assert.equal(effectivePresentation(restored, { width: 1567, height: 900 }, constraintsForViews(restored, registry)).shown, true)
+    assert.equal(presentationFor(restored).open, false, 'Reading never changes historical bytes or explicit state')
+    assert.equal(presentationFor(changePresentation(restored, { presentation: 'normal' })).open, true)
+  }
+})
 test('all presentations, explicit visibility and fractional preferred sizes survive the actual envelope codec', () => {
   for (const presentation of ['normal', 'docked', 'overlay'] as const) for (const open of [false, true]) {
     const original = initialWorkbench(), next = changePresentation(original, { presentation, open, preferred: { width: 701.25, height: 340.125 } })
@@ -52,14 +69,14 @@ test('Docked bounded fit and temporary collapse are pure and reverse wide/narrow
   const medium = effectivePresentation(snapshot, { width: 1567, height: 650 }, constraints)
   assert.equal(medium.shown, true); assert.ok(medium.height >= 220 && medium.height < 420); assert.equal(medium.adapted, true)
   const small = effectivePresentation(parseWorkbench(before, registry), { width: 600, height: 400 }, constraints)
-  assert.equal(small.shown, false); assert.equal(small.adapted, true); assert.equal(small.reservation, 0)
+  assert.equal(small.shown, false); assert.equal(small.adapted, true); assert.equal(small.reservation, 40)
   assert.deepEqual(effectivePresentation(snapshot, { width: 1567, height: 900 }, constraints), wide)
   const fractional = effectivePresentation(snapshot, { width: 659.6, height: 654.6 }, constraints, true, 7)
   assert.equal(fractional.shown, true); assert.ok(fractional.height >= 220)
   assert.ok(Math.floor(654.6 - fractional.reservation - 8) >= 344, 'Scrollbar and inward CSS-pixel quantization preserve Main minima')
   assert.equal(serializeWorkbench(snapshot, registry), before); assert.equal(presentationFor(snapshot).open, true)
   const closed = changePresentation(snapshot, { open: false })
-  assert.equal(effectivePresentation(closed, { width: 1567, height: 900 }, constraints).reservation, 0)
+  assert.equal(effectivePresentation(closed, { width: 1567, height: 900 }, constraints).reservation, 40)
   assert.equal(effectivePresentation(closed, { width: 1567, height: 900 }, constraints).shown, false)
 })
 test('Overlay has no reservation and clips to Main; a truly tiny viewport keeps a recovery control outside the panel', () => {
@@ -67,6 +84,9 @@ test('Overlay has no reservation and clips to Main; a truly tiny viewport keeps 
   const effective = effectivePresentation(source, { width: 500, height: 230 }, constraints)
   assert.equal(effective.reservation, 0); assert.equal(effective.shown, true); assert.equal(effective.width, 500); assert.equal(effective.height, 230)
   assert.equal(effectivePresentation(source, { width: 500, height: 200 }, constraints).shown, false)
+  const wide = effectivePresentation(source, { width: 1567, height: 900 }, constraints)
+  assert.equal(wide.width, 1567, 'Floating follows the full available Main width, independently of legacy preferred width')
+  assert.equal(wide.adapted, false); assert.equal(presentationFor(source).preferred.width, 720)
 })
 test('stale, quota, invalid and historical adoption writes never replace a valid prior envelope', () => {
   const source = changePresentation(initialWorkbench(), { presentation: 'overlay' }), raw = serializeWorkbench(source, registry)

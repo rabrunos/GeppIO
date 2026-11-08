@@ -1,6 +1,46 @@
 # Region-aware continuous widget geometry
 
-## First persistent presentation — Issue #11 / alpha.17
+## Local presentation controls — Issue #11 / alpha.18
+
+The host declares the Properties pilot's Normal, Docked and Floating modes only in Main.
+All other current types/regions offer Normal alone and have no selector. The transaction
+rechecks this declaration; mode selection requires Edit. The compact localized menu button
+shows the selected mode in the widget's hover controls immediately before remove, including while Main geometry is
+suspended. Normal ignores historical alpha.17 closed visibility and restores the ordinary
+reserved placement. Selecting Normal explicitly requests open. Mode changes use Edit
+history, Save, Conclude and Cancel; no global project/context controls remain.
+
+Docked has an independent 9 CSS-pixel outer top handle across usable Main, above the real
+Bottom. A short click toggles explicit open/collapsed intent, reopening at preferred height.
+Vertical movement activates at 4px, previews within panel/Main feasible bounds, and confirms
+once on release. Escape during capture, pointer cancellation, capture loss, blur and viewport
+changes discard the preview. Dragging below the 220px minimum by 48px collapses while keeping
+the previous preferred height. Ordinary Bottom controls and geometry remain independent.
+
+Floating follows the same full usable Main width as Docked, retains the lower Main anchor
+and never reserves space. Historical preferred width stays valid in storage but does not
+limit this full-width pilot. Both panel modes keep a 31px full-width collapsed bar at
+usable Main's lower edge. It occupies the band from the former trigger button's top to
+that lower limit, with the Properties title and local Edit selector still visible. The
+same frame/header/content tree remains mounted. Docked keeps its independent 9px orange
+hover handle immediately above the bar; the real Bottom handle remains below Main's
+ordinary 9px inset. Collapsed Docked reserves only the 31px bar plus the 9px handle gap,
+releasing its content reservation. Floating's bar and expanded content overlay Main
+without reservation. Hovering anywhere on its collapsed bar reveals the panel. No new
+anchors are introduced.
+Hover opens after 100ms; leaving the trigger/panel closes after 280ms, retaining focused
+panel content until focus leaves as in Sidebar. An open Edit popup retains the panel across its top-layer pointer gap. The
+existing Sidebar motion tokens and reduced-motion rule apply. On restart Floating always
+starts hidden and reveals even when alpha.17 stored open=false. Hover creates no layout
+write or history entry. It adds no Escape-collapse or shortcuts.
+
+Preferred geometry, explicit Docked collapse and viewport adaptation retain the alpha.17
+codec and fit rules below. Temporary shrink/collapse never changes saved intent; expanding
+restores requested opening/height, while explicit collapse stays collapsed. When a panel
+cannot fit, its collapsed bar keeps the compact Edit selector available to return to Normal. Content/frame identity,
+composition rules, guarded writes and the reserved Normal scene remain unchanged.
+
+## Historical first persistent presentation — Issue #11 / alpha.17
 
 The host Properties view (`properties`, `host:properties`, `model:host:properties`, owner
 `host`) is the bounded pilot. Its existing keyed frame and content stay mounted across

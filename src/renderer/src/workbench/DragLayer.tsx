@@ -54,7 +54,7 @@ export function DragLayer({ picture: p, label, children, complete, pointer, cont
       }
       const fields = source.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('input,textarea,select')
       clone.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('input,textarea,select').forEach((field, index) => { field.value = fields[index]!.value; if (field instanceof HTMLInputElement && fields[index] instanceof HTMLInputElement) field.checked = fields[index].checked })
-      clone.querySelectorAll('.layout-widget-grip,.layout-widget-remove,.widget-swap-control,.resize-zone').forEach(control => control.remove())
+      clone.querySelectorAll('.layout-widget-grip,.widget-local-controls,.layout-widget-remove,.widget-swap-control,.resize-zone').forEach(control => control.remove())
       clone.classList.remove('widget-frame', 'editing', 'selected', 'invalid'); clone.classList.add('drag-picture-content')
       clone.removeAttribute('style'); clone.inert = true; clone.setAttribute('aria-hidden', 'true'); host.replaceChildren(clone)
     }

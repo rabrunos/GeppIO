@@ -27,6 +27,17 @@ export const settle = (page: Page) => page.evaluate(async () => {
   // content animations in a skipped subtree. Pointer tests must hit the final
   // 24px overlay grip rather than a stale position in an accepted flight.
   await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+  // Completion releases the host's gesture guard after the return/landing
+  // animation. A finished picture still mounted is not yet another gesture.
+  if (document.querySelector('.drag-picture-flight')) await new Promise<void>((resolve, reject) => {
+    let frame = 0
+    const timeout = setTimeout(() => { cancelAnimationFrame(frame); reject(new Error('Released drag picture did not complete')) }, 15000)
+    function check() {
+      if (!document.querySelector('.drag-picture-flight')) { clearTimeout(timeout); resolve() }
+      else frame = requestAnimationFrame(check)
+    }
+    check()
+  })
   const root = document.querySelector('.workbench')
   if (!root) throw new Error('Workbench unmounted while waiting for its own shell animations; inspect renderer errors')
   const targets = [root, ...[...document.querySelectorAll<HTMLElement>('.widget-frame:not([hidden]),.sidebar-rail [data-bar-id],.composition-tile,.catalog-slot-context,.catalog-slot-context > div,.widget-browser-grid,.host-format-slot,.layout-flight-context')].filter(node => !node.inert || node.classList.contains('layout-flight-context'))]
@@ -48,6 +59,19 @@ export async function beginEdit(page: Page) {
   if (await page.locator('.widget-catalog-toggle').getAttribute('aria-expanded') === 'true') await page.locator('.widget-catalog-toggle').click()
   await page.waitForFunction(() => parseFloat(getComputedStyle(document.querySelector('.workbench')!).getPropertyValue('--catalog-track')) < .01)
   await settle(page)
+}
+/** Mouse-only route used by the older geometry/plugin smokes as well as the pilot. */
+export async function choosePresentation(page: Page, mode: 'normal' | 'docked' | 'overlay') {
+  if (await page.getByTestId('edit-layout').count()) await beginEdit(page)
+  const frame = page.locator('[data-widget-id="properties"]')
+  if (await frame.getAttribute('data-presentation') === 'overlay') {
+    await frame.hover(); await page.waitForTimeout(150); await settle(page)
+  }
+  if (await frame.getAttribute('data-presentation') !== mode || mode === 'normal') {
+    await frame.hover(); await page.getByRole('button', { name: 'Apresentação de Propriedades', exact: true }).click()
+    await page.getByRole('menuitemradio', { name: { normal: 'Normal', docked: 'Encaixado', overlay: 'Flutuante' }[mode], exact: true }).click(); await settle(page)
+  }
+  await page.getByTestId('conclude-layout').click(); await page.getByTestId('edit-layout').waitFor(); await settle(page)
 }
 async function settings(page: Page) {
   await page.getByRole('button', { name: 'Abrir menu do perfil', exact: true }).click()
@@ -91,6 +115,7 @@ export async function drag(page: Page, id: string, direction: string, dx: number
     return grip && getComputedStyle(grip).pointerEvents === 'auto'
   }, id)
   await page.mouse.down()
+  await page.waitForFunction(selector => document.querySelector(selector)?.hasPointerCapture(1), `[data-widget="${id}"] ${direction === 'move' ? '.widget-grip' : `[data-resize="${direction}"]`}`)
   assert.ok(await element.evaluate(e => e.hasPointerCapture(1)), `${id} ${direction}: real pointer capture required: ` + JSON.stringify(await page.evaluate(({ x, y }) => ({
     point: [x, y], hit: document.elementFromPoint(x, y)?.outerHTML.slice(0, 200), viewport: [innerWidth, innerHeight],
     scroll: [document.querySelector('.freeform-layer')?.scrollLeft, document.querySelector('.freeform-layer')?.scrollTop],
@@ -122,6 +147,7 @@ async function transferSelected(page: Page, id: string, region: string) {
     return grip && getComputedStyle(grip).pointerEvents === 'auto'
   }, id)
   await page.mouse.down()
+  await page.waitForFunction(id => document.querySelector(`[data-widget="${id}"] .widget-grip`)?.hasPointerCapture(1), id)
   assert.ok(await page.locator(`[data-widget="${id}"] .widget-grip`).evaluate(node => node.hasPointerCapture(1)), 'A region transfer requires real pointer capture')
   await page.mouse.move(destination.x + Math.min(25, destination.width / 2), destination.y + Math.min(25, destination.height / 2), { steps: 5 }); await page.mouse.up()
   await settle(page)
@@ -203,21 +229,23 @@ export async function freeformSmoke(page: Page, resizeWindow: (width: number, he
   assert.deepEqual(await page.evaluate(() => (window as unknown as { layoutWrites: string[] }).layoutWrites), [], 'Theme and viewport projection never persist')
   // The active pilot replaces the detached four-edge demonstrator. Explicit
   // presentation intentions persist; their viewport projections never do.
+  await choosePresentation(page, 'normal')
   const undocked = await dimensions(page)
   const panelLayout = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).layout, FREEFORM_KEY)
-  for (const presentation of ['overlay', 'docked']) {
-    await page.getByLabel('Apresentação de Propriedades', { exact: true }).selectOption(presentation); await settle(page)
+  for (const presentation of ['overlay', 'docked'] as const) {
+    await choosePresentation(page, presentation)
     const withPanel = await dimensions(page)
     if (presentation === 'overlay') assert.deepEqual(withPanel, undocked)
     else {
       const reservation = Number(await page.getByTestId('layout-canvas').getAttribute('data-panel-reservation'))
       assert.ok(reservation > 0 ? withPanel.height < undocked.height : await page.getByTestId('layout-canvas').getAttribute('data-panel-adapted') === 'true')
     }
-    await page.getByRole('button', { name: 'Recolher painel', exact: true }).click(); await settle(page)
-    assert.deepEqual(await dimensions(page), undocked)
-    await page.getByRole('button', { name: 'Abrir painel', exact: true }).click(); await settle(page)
+    if (presentation === 'docked') { await page.getByRole('separator', { name: 'Altura de Propriedades', exact: true }).click(); await settle(page) }
+    else { await page.locator('[data-widget-id="properties"]').hover(); await page.waitForTimeout(150); await settle(page); await page.mouse.move(10, 10); await page.waitForTimeout(600); await settle(page) }
+    assert.deepEqual(await dimensions(page), presentation === 'docked' ? { ...undocked, height: undocked.height - 40 } : undocked)
+    if (presentation === 'docked') { await page.getByRole('separator', { name: 'Altura de Propriedades', exact: true }).click(); await settle(page) }
   }
-  await page.getByLabel('Apresentação de Propriedades', { exact: true }).selectOption('normal'); await settle(page)
+  await choosePresentation(page, 'normal')
   assert.deepEqual(await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).layout, FREEFORM_KEY), panelLayout, 'Presentation commits preserve the canonical Normal scene')
   const beforeChrome = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).layout, FREEFORM_KEY)
   const initial = await rect(page, 'chart')
