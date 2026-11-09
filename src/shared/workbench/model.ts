@@ -47,7 +47,7 @@ const FIXTURES = [
 export function widgetRegistry(plugins: readonly InstalledPlugin[] = []): Registry {
   const entries: WidgetType[] = FIXTURES.map(([fixture, title, category]) => ({
     id: `host:${fixture}`, owner: 'host', fixture, title, category, description: 'Widget de demonstração do GeppIO.',
-    ...(fixture === 'properties' ? { presentations: { main: ['normal', 'docked', 'overlay'] as const } } : {}),
+    ...(['summary', 'queue', 'properties', 'activity'].includes(fixture) ? { presentations: { main: ['normal', 'docked', 'overlay'] as const } } : {}),
     appearance: 'card', presence: fixture === 'notes' || fixture === 'library' ? 'multiple-areas' : 'single-view', constraint: {
       ...CONSTRAINTS[fixture]!, regionMin: {
         sidebar: { width: 150, height: CONSTRAINTS[fixture]!.min.height },
@@ -85,7 +85,7 @@ export function adoptLayout(layout: Snapshot): WorkbenchSnapshot {
     bars: [{ id: HOME, name: 'Ferramentas', userNamed: false, icon: 'home', archived: false,
       members: layout.placements.filter(p => p.region === 'sidebar').map(p => `host:${p.id}`),
       positions: Object.fromEntries(layout.placements.filter(p => p.region === 'sidebar').map(p => [`host:${p.id}`, p.y])) }],
-    activeBar: HOME, compositions: [], favorites: ['system:default', 'system:focus', 'system:balanced'], defaultComposition: 'system:default', chrome, presentations: { version: 1, entries: [] }
+    activeBar: HOME, compositions: [], favorites: ['system:default', 'system:focus', 'system:balanced'], defaultComposition: 'system:default', chrome, presentations: { version: 2, entries: [] }
   } }
 }
 export function initialWorkbench() {

@@ -16,6 +16,7 @@ import type { Transaction } from './useTransaction.ts'
 import type { Surfaces } from './useSurfaces.ts'
 import { useDragVisual } from '../workbench/DragLayer.tsx'
 import type { SlotIntention } from '../../../shared/workbench/slots.ts'
+import { panelIds } from '../../../shared/workbench/presentations.ts'
 
 interface Gesture {
   id: string; pointer: number; kind: 'move' | Direction; x: number; y: number; original: Placement; sourceBar: string;
@@ -240,10 +241,11 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
     const tracing = performance.getEntriesByName('geppio:anchors').length > 0
     const attempts: unknown[] = []
     let s = surface(p.region)
-    const peers = (p.region === 'sidebar' ? activePlacements(snapshot) : snapshot.placements).filter(q => q.region === p.region)
+    const panels = panelIds(snapshot)
+    const peers = (p.region === 'sidebar' ? activePlacements(snapshot) : snapshot.placements).filter(q => q.region === p.region && !panels.has(q.id))
     function solve(at: Surface, budget?: { probes: number; states: number }): Result {
       const cs = constraintsFor(at, baseConstraints)
-      const adapted = p.region === 'main' && snapshot.reference.main.height !== at.height ? projectRegion(snapshot, 'main', at, at.expanded, baseConstraints) : null
+      const adapted = p.region === 'main' && snapshot.reference.main.height !== at.height ? projectRegion({ ...snapshot, placements: peers }, 'main', at, at.expanded, baseConstraints) : null
       if (adapted && !adapted.feasible) return { status: 'blocked', placements: peers, reason: 'space', probes: 0, states: 0, candidates: 0 }
       const source = adapted?.placements ?? peers
       // Responsive neighbor fitting cannot change a resize's stable opposite edges.

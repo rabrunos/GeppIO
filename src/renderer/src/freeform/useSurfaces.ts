@@ -1,8 +1,9 @@
 import { useLayoutEffect, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { REGIONS } from '../../../shared/freeform/types.ts'
 import type { Region, Size } from '../../../shared/freeform/types.ts'
 
-export interface Measurement extends Size { frameWidth: number; frameHeight: number; left: number; top: number; scrollLeft: number; scrollTop: number; clipWidth?: number; clipHeight?: number; ownerWidth?: number; ownerHeight?: number }
+export interface Measurement extends Size { frameWidth: number; frameHeight: number; left: number; top: number; scrollLeft: number; scrollTop: number; clipWidth?: number; clipHeight?: number; ownerWidth?: number; ownerHeight?: number; ownerLeft?: number; ownerTop?: number }
 const empty = (): Measurement => ({ width: 0, height: 0, frameWidth: 0, frameHeight: 0, left: 0, top: 0, scrollLeft: 0, scrollTop: 0 })
 export function useSurfaces() {
   const root = useRef<HTMLDivElement>(null)
@@ -29,12 +30,19 @@ export function useSurfaces() {
       }
       const owner = port?.closest<HTMLElement>('[data-region]'), style = owner ? getComputedStyle(owner) : null
       const ownerBox = owner?.getBoundingClientRect()
-      return [region, port && r ? { width: port.clientWidth, height: port.clientHeight,
+      const portStyle = port && region === 'main' ? getComputedStyle(port) : null
+      const verticalGutter = port && portStyle && ['auto', 'scroll'].includes(portStyle.overflowY) && port.scrollHeight > port.clientHeight ? port.offsetWidth - port.clientWidth : 0
+      const horizontalGutter = port && portStyle && ['auto', 'scroll'].includes(portStyle.overflowX) && port.scrollWidth > port.clientWidth ? port.offsetHeight - port.clientHeight : 0
+      // Main conversions retain exact fractional CSS rectangles. Integer client
+      // rounding must not resize a just-converted panel at simulated/physical DPR.
+      return [region, port && r ? { width: region === 'main' ? r.width - verticalGutter : port.clientWidth, height: region === 'main' ? r.height - horizontalGutter : port.clientHeight,
         frameWidth: r.width, frameHeight: r.height,
         // Panels need exact CSS bounds: integer client extents can round outward
         // at fractional DPR, especially Main's unpadded expansion edge.
         ownerWidth: ownerBox && style ? ownerBox.width - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) - parseFloat(style.borderLeftWidth) - parseFloat(style.borderRightWidth) : port.clientWidth,
         ownerHeight: ownerBox && style ? ownerBox.height - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom) - parseFloat(style.borderTopWidth) - parseFloat(style.borderBottomWidth) : port.clientHeight,
+        ownerLeft: ownerBox && style ? ownerBox.left - area.left + parseFloat(style.paddingLeft) + parseFloat(style.borderLeftWidth) : r.left - area.left,
+        ownerTop: ownerBox && style ? ownerBox.top - area.top + parseFloat(style.paddingTop) + parseFloat(style.borderTopWidth) : r.top - area.top,
         ...(region === 'bottom' && owner ? { clipHeight: Math.max(0, Math.min(port.clientHeight, owner.getBoundingClientRect().bottom - r.top)) } : {}),
         left: r.left - area.left, top: r.top - area.top, scrollLeft: port.scrollLeft, scrollTop: port.scrollTop } : empty()]
     })) as Record<Region, Measurement>
@@ -49,7 +57,9 @@ export function useSurfaces() {
     root.current?.append(probe)
     scrollbarHeight.current = probe.getBoundingClientRect().height - probe.clientHeight
     probe.remove()
-    const observer = new ResizeObserver(measure)
+    // All mounted widgets sample the same native CSS-track frame before paint.
+    // Do not add per-presentation left/width transitions to these measurements.
+    const observer = new ResizeObserver(() => flushSync(measure))
     if (root.current) observer.observe(root.current)
     for (const region of REGIONS) if (ports[region].current) observer.observe(ports[region].current!)
     if (scroller('sidebar')) observer.observe(scroller('sidebar')!)

@@ -160,7 +160,29 @@ try {
   await page.locator('[data-widget="properties"][data-presentation="overlay"][data-panel-open="true"]').waitFor()
   await page.mouse.move(10, 10); await page.waitForTimeout(600); await settle(page)
   assert.equal(await page.locator('[data-widget="properties"]').getAttribute('data-panel-open'), 'false')
-  await choosePresentation(page, 'normal')
+  const floatingBytes = await page.evaluate(key => localStorage.getItem(key), FREEFORM_KEY)
+  await beginEdit(page)
+  const properties = page.locator('[data-widget-id="properties"]')
+  await properties.hover(); await page.waitForTimeout(150); await settle(page)
+  const expandedProperties = await properties.boundingBox(); assert.ok(expandedProperties)
+  await page.getByRole('button', { name: 'Apresentação de Propriedades', exact: true }).click()
+  await page.getByRole('menuitemradio', { name: 'Normal', exact: true }).click(); await settle(page)
+  if (await properties.getAttribute('data-presentation') === 'normal') {
+    const returned = await properties.boundingBox(); assert.ok(returned)
+    for (const axis of ['x', 'y', 'width', 'height'] as const) assert.ok(Math.abs(returned[axis] - expandedProperties[axis]) < .03)
+    console.log('PASS Floating return: exact expanded rectangle')
+  } else {
+    assert.equal(await properties.getAttribute('data-presentation'), 'overlay')
+    assert.match(await page.locator('.workspace-feedback').innerText(), /Libere o local ou reduza o painel/)
+    assert.equal(await page.evaluate(key => localStorage.getItem(key), FREEFORM_KEY), floatingBytes)
+    assert.equal(await page.getByRole('button', { name: 'Desfazer', exact: true }).isDisabled(), true)
+    console.log('PASS Floating return: atomic overlap refusal; saved bytes and mode preserved')
+  }
+  await page.getByTestId('cancel-layout').click(); await settle(page)
+  // Restore the earlier Normal fixture for the independent plugin/runtime chain.
+  // This is disposable smoke data, not a product fallback to the historical slot.
+  await page.evaluate(({ key, saved }) => localStorage.setItem(key, saved), { key: FREEFORM_KEY, saved })
+  await page.reload(); await page.getByTestId('edit-layout').waitFor(); await settle(page)
   await page.getByRole('button', { name: 'Alternar tema', exact: true }).click()
   if (await page.locator('.workbench').getAttribute('data-theme') !== 'light') throw new Error('Theme change failed')
   await page.reload(); await page.getByTestId('edit-layout').waitFor()

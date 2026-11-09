@@ -5,6 +5,7 @@ import { transfer } from '../freeform/transfer.ts'
 import type { Placement, Region, Size, Surface } from '../freeform/types.ts'
 import { HOME, LIMITS, activePlacements, constraintsForViews, evaluatePlacement, modelId } from './model.ts'
 import type { Registry, UserBar, WorkbenchSnapshot } from './model.ts'
+import { panelIds, validatePresentationEdges } from './presentations.ts'
 
 /** Shared Sidebar heights may push later members in another bar, without gravity
  * or membership changes. Work is bounded by 100 bars and 16 view records.
@@ -66,7 +67,8 @@ export function addWidget(source: WorkbenchSnapshot, registry: Registry, typeId:
   return transferActive(next, registry, view.id, surface, at)
 }
 function transferActive(source: WorkbenchSnapshot, registry: Registry, id: string, target: Surface, at?: { x: number; y: number }) {
-  const active = activePlacements(source), activeIds = new Set(active.map(p => p.id))
+  const panels = panelIds(source)
+  const active = activePlacements(source).filter(p => !panels.has(p.id) || p.id === id), activeIds = new Set(active.map(p => p.id))
   const original = source.placements.find(p => p.id === id)!
   const solverSource = { ...source, placements: [...active.filter(p => p.id !== id), original] }
   const moved = transfer(solverSource, id, target, at, constraintsForViews(source, registry))
@@ -74,6 +76,7 @@ function transferActive(source: WorkbenchSnapshot, registry: Registry, id: strin
   const placements = source.placements.map(p => moved.placements.find(q => q.id === p.id) ?? p)
   for (const p of moved.placements) if (!placements.some(q => q.id === p.id)) placements.push(p)
   const result = { ...moved, placements }
+  try { validatePresentationEdges(result) } catch { return null }
   if (target.region === 'sidebar') {
     const bar = result.organization.bars.find(bar => bar.id === result.organization.activeBar)!
     bar.positions ??= {}
@@ -121,7 +124,9 @@ function exactPlacement(source: WorkbenchSnapshot, registry: Registry, id: strin
     const bar = next.organization.bars.find(bar => bar.id === next.organization.activeBar)!
     bar.positions ??= {}; bar.positions[next.organization.views.find(view => view.id === id)!.typeId] = at.y
   }
-  if (!validLayout(activePlacements(next).filter(p => p.region === target.region), target, constraintsFor(target, constraintsForViews(next, registry)))) return null
+  try { validatePresentationEdges(next) } catch { return null }
+  const panels = panelIds(next)
+  if (!validLayout(activePlacements(next).filter(p => p.region === target.region && !panels.has(p.id)), target, constraintsFor(target, constraintsForViews(next, registry)))) return null
   return target.region === 'sidebar' ? reconcileBarHeights(next) : next
 }
 export function removePresence(source: WorkbenchSnapshot, id: string): WorkbenchSnapshot {
@@ -246,5 +251,7 @@ export function fitTargets(source: WorkbenchSnapshot, registry: Registry, target
     result.push(...projected.placements)
   }
   if (result.some((p, i) => result.slice(i + 1).some(q => p.id === q.id || (p.region === q.region && collides(p, q))))) return null
-  return { ...source, placements: result }
+  const next = { ...source, placements: result }
+  try { validatePresentationEdges(next) } catch { return null }
+  return next
 }

@@ -6,7 +6,8 @@ import { BAR_ICONS, HOME, LIMITS, activePlacements, constraintsForViews, modelId
 import type { Composition, Organization, Registry, UserBar, View, WorkbenchSnapshot } from './model.ts'
 import { defaultChrome, parseChrome } from './chrome.ts'
 import type { WorkbenchChrome } from './chrome.ts'
-import { parsePresentations } from './presentations.ts'
+import { parsePresentations, validatePresentationEdges } from './presentations.ts'
+import type { Presentations } from './presentations.ts'
 
 const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value)
 const identifier = (value: unknown): value is string => typeof value === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,159}$/.test(value)
@@ -56,10 +57,21 @@ function parseBars(value: unknown, registry: Registry): UserBar[] {
   if (bars[0]?.id !== HOME || bars[0].archived || bars.filter(bar => !bar.archived && bar.id !== HOME).length > LIMITS.legacyActiveBars) throw new Error('Protected Home or bar cap')
   return bars
 }
-function parseDocument(value: unknown, views: View[], registry: Registry, bars?: UserBar[]) {
+function parseDocument(value: unknown, views: View[], registry: Registry, bars?: UserBar[], presentations?: Presentations) {
   if (!object(value)) throw new Error('Invalid geometry')
   const constraints = constraintsForViews({ organization: { views } } as WorkbenchSnapshot, registry)
-  const layout = parseGeometry(JSON.stringify(value), constraints, undefined, (a, b) => !bars || a.region !== 'sidebar' || b.region !== 'sidebar')
+  // Active panels retain validated Normal seeds, but those seeds do not collide
+  // with or constrain the reference height of the visible Normal scene.
+  const panels = new Set(presentations?.entries.filter(e => e.presentation !== 'normal').map(e => e.viewId))
+  if (!Array.isArray(value.placements)) throw new Error('Missing widget placements')
+  const rawPlacements = value.placements
+  const dormant = rawPlacements.filter(p => object(p) && p.region === 'main' && panels.has(String(p.id)))
+  const ordinary = rawPlacements.filter(p => !dormant.includes(p))
+  const layout = parseGeometry(JSON.stringify({ ...value, placements: ordinary }), constraints, undefined, (a, b) => !bars || a.region !== 'sidebar' || b.region !== 'sidebar')
+  const seeds = dormant.flatMap(p => parseGeometry(JSON.stringify({ ...value, reference: { ...layout.reference,
+    main: { ...layout.reference.main, height: POLICY.maxCoordinate } }, placements: [p] }), constraints).placements)
+  if (ordinary.length + seeds.length > POLICY.maxWidgets || new Set([...layout.placements, ...seeds].map(p => p.id)).size !== rawPlacements.length) throw new Error('Duplicate panel identity')
+  layout.placements = rawPlacements.map(p => [...layout.placements, ...seeds].find(q => object(p) && q.id === p.id)!)
   const used = new Set<string>()
   for (const placement of layout.placements) {
     const view = views.find(view => view.id === placement.id)!, type = registry.get(view.typeId)!
@@ -79,7 +91,8 @@ export function parseWorkbench(raw: string, registry: Registry): WorkbenchSnapsh
   const data: unknown = JSON.parse(raw)
   if (!object(data) || ![1, 2].includes(Number(data.schemaVersion)) || typeof data.schemaVersion !== 'number' || data.kind !== 'geppio-workbench' || !object(data.organization)) throw new Error('Unsupported workbench')
   const source = data.organization, views = parseViews(source.views, registry), bars = parseBars(source.bars, registry)
-  const layout = parseDocument(data.layout, views, registry, bars)
+  const presentations = parsePresentations(source.presentations, views, registry)
+  const layout = parseDocument(data.layout, views, registry, bars, presentations)
   if (typeof source.activeBar !== 'string' || !bars.some(bar => bar.id === source.activeBar && !bar.archived)) throw new Error('Invalid active bar')
   const compositions: Composition[] = unique(list(source.compositions, LIMITS.compositions).map(item => {
     if (!object(item) || !identifier(item.id) || !item.id.startsWith('composition:') || item.id.length <= 12 || item.system !== false || !['format', 'format-widgets'].includes(String(item.mode))) throw new Error('Invalid saved composition')
@@ -105,13 +118,15 @@ export function parseWorkbench(raw: string, registry: Registry): WorkbenchSnapsh
   if (favorites.some(id => !known(id)) || (source.defaultComposition !== null && (typeof source.defaultComposition !== 'string' || !favorites.includes(source.defaultComposition)))) throw new Error('Invalid favorite/default')
   const organization: Organization = { views, bars, activeBar: source.activeBar, compositions, favorites, defaultComposition: source.defaultComposition as string | null,
     chrome: source.chrome === undefined ? defaultChrome() : parseChrome(source.chrome) as WorkbenchChrome,
-    presentations: parsePresentations(source.presentations, views) }
+    presentations }
   if (source.compositionOrder !== undefined) {
     const order = strings(source.compositionOrder, LIMITS.compositions + 3)
     if (order.some(id => !known(id))) throw new Error('Invalid composition order')
     organization.compositionOrder = order
   }
-  return { ...layout, organization }
+  const result = { ...layout, organization }
+  validatePresentationEdges(result)
+  return result
 }
 export function serializeWorkbench(snapshot: WorkbenchSnapshot, registry: Registry) {
   // Persist only the typed document. Session slots/history/preview state never

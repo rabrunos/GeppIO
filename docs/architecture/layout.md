@@ -1,6 +1,83 @@
 # Region-aware continuous widget geometry
 
-## Local presentation controls — Issue #11 / alpha.18
+## Four-edge host presentations — Issue #11 / alpha.19
+
+Panorama, Fila de trabalho, Propriedades and Atividade declare Normal/Docked/Floating
+only in Main, keeping their default Normal and existing region eligibility. This is
+host metadata, not a manifest-v1 author capability. Preferences bind validated
+view/type/model/owner identities. The compact local Edit selector shows the current
+mode. Normal applies directly; other modes require an edge, with an additional free
+choice for Floating. Mode and anchor form one intention. One active anchored view
+may own each edge, including mixed Docked/Floating arrangements, without same-edge stacks.
+Occupied edges are disabled in the menu and rechecked by transactions,
+reactivation and the codec; inactive preferences remain available.
+
+The pure arrangement uses Main's measured inset independently of Sidebar/Bottom.
+Top/bottom own full-width corners, including their collapsed bars. Left/right occupy
+the height between horizontal reservations; an absent horizontal edge contributes zero.
+Both anchored modes reserve a fixed 31px compact strip plus 10px clearance once.
+Collapsed strips have no move/resize controls or geometry gesture. Docked opens by
+clicking the compact widget; when expanded its actual extent replaces that reservation.
+Its independent 9px inward handle clicks to collapse or drags height/width with a
+4px threshold. Capture cancellation, Escape during a gesture, blur and viewport
+changes discard previews. The keyed frame/content/model remain mounted.
+
+All anchored reservations fit as one arrangement against Normal peers and actual Main.
+Preferred extents first interpolate together toward 240px width / 220px height minima.
+If those minima do not fit, temporarily collapse right, left, bottom, then top until
+the remaining arrangement fits. Keep at least 32px in the center and 150px side-bar
+span for local controls. At physically impossible bounds, preserve bars and ordinary
+recovery feedback. Expansion restores explicit preferences; temporary fit never writes.
+Active panels' historical Normal seeds are validated but excluded from Normal projection
+and clearance. Ordinary Normal gesture paths exclude those seeds too.
+
+Anchored Floating keeps its compact reservation during hover reveal/retraction; only
+its expanded content overlays Main. Horizontal strips span usable Main width; sides
+span between horizontal reservations. Free Floating reserves nothing and uses a
+208×31px trigger and preferred-size panel clamped to the remaining area. Its header drags
+in Edit, with no persistence until release. The trigger shares the panel's top-left
+position when it fits; near a boundary the expanded panel still contains its trigger
+to provide a continuous pointer path. Coincident free triggers receive deterministic
+temporary separated positions, preserving saved intent. The joint fit includes trigger
+control minima. Hover uses 100/280ms reveal/leave timing,
+focus and local menu retention, existing motion and reduced-motion rules. Restart waits
+for hover regardless of historical open. Reveal/retraction do not change reservations.
+
+Every mounted widget uses `useSurfaces` and `freeform/frame-layout.ts::projectFrame`
+for its native regional measurement, inset coordinates, scrolling constraint and clip/hit
+boundary. Anchors provide a viewport constraint; App does not synthesize a separate
+panel measurement. ResizeObserver updates share one synchronous pre-paint measurement
+for normal widgets and compact strips during host CSS-track transitions. WidgetFrame's
+shared geometry/motion path handles reveal using existing Sidebar timing/easing, without
+independent left/width/top transitions chasing each sampled Sidebar frame. All Main
+widget layers and presentation resize edges remain below the floating Sidebar surface
+and Sidebar widgets, including when hovered or focused.
+
+Return to Normal computes the current expanded rectangle even if collapsed. Freeze
+visible Normal peer rectangles before releasing the reservation, translate them into
+the post-switch Main budget, and use existing freeform clearance/constraint validation.
+Apply mode, anchor removal and geometry together or refuse the whole intention with
+feedback to free the location or reduce the panel. A full-width horizontal return can
+conflict with remaining side reservations; returning sides first can preserve all four
+rectangles. Overlapping Floating or a collapsed panel's expanded area can also conflict.
+Successful returns retain content and permit ordinary movement/resize. Later viewport
+changes, including opening/closing the Edit catalog, use ordinary stable projection.
+
+The existing guarded envelope remains schemaVersion 2; only nested presentations
+advance to version 2 for multiple entries, edge/null anchors and free position. Read
+alpha.17/18 nested v1 bottom records and absent presentation data without writing.
+Unsupported nested versions fail closed. Keep expected-byte/Web Lock, recovery and
+quota protection, composition scope and Edit history/checkpoints. Viewport fit, hover
+and pointer previews enter neither saved bytes nor history. Composition records gain
+no presentation fields. The historical sections below describe their original batches.
+
+The decorative Sidebar rail divider matches V1.141: 1px at the 48px rail edge, 12px
+insets at both panel ends, theme border at 50% opacity and a 6px transparent fade at
+each end. The host's former -38px top override is removed. Existing collapsed clipping,
+hover-hidden visibility and pointer transparency are unchanged; the resize splitter
+and widget anchoring do not participate in this visual correction.
+
+## Historical local presentation controls — Issue #11 / alpha.18
 
 The host declares the Properties pilot's Normal, Docked and Floating modes only in Main.
 All other current types/regions offer Normal alone and have no selector. The transaction

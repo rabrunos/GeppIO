@@ -55,10 +55,11 @@ export function Popover({ title, description, open, close, anchor, point, placem
     position()
     let frame = 0
     const resized = () => { if (!frame) frame = requestAnimationFrame(() => { frame = 0; position() }) }
+    const observer = new ResizeObserver(resized); observer.observe(element)
     window.addEventListener('resize', resized)
     if (bare) element.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus()
     else element.querySelector<HTMLInputElement>('input')?.focus()
-    return () => { cancelAnimationFrame(frame); window.removeEventListener('resize', resized) }
+    return () => { observer.disconnect(); cancelAnimationFrame(frame); window.removeEventListener('resize', resized) }
   }, [open, point?.x, point?.y])
   return <div ref={ref} popover="auto" role={bare ? 'menu' : 'dialog'} aria-label={bare ? t(title) : undefined} aria-labelledby={bare ? undefined : id} className={(bare ? '' : 'workspace-popover ') + className} onToggle={event => { if (event.target === event.currentTarget && event.newState === 'closed' && open) close() }} onKeyDown={event => {
     if (!bare || !['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return

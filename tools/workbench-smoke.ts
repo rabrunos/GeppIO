@@ -34,7 +34,10 @@ try {
   try {
     const move = await page.locator('[data-widget="properties"] .widget-grip').boundingBox(), main = await page.locator('[data-surface="main"]').boundingBox(); assert.ok(move && main)
     const pointer = { x: main.x + main.width / 2, y: main.y + main.height / 2 }
-    await page.mouse.move(move.x + move.width / 2, move.y + move.height / 2); await page.mouse.down(); await page.mouse.move(pointer.x, pointer.y)
+    await page.locator('[data-widget="properties"]').hover()
+    await page.locator('[data-widget="properties"] .widget-grip').hover(); await page.mouse.down()
+    assert.ok(await page.locator('[data-widget="properties"] .widget-grip').evaluate(node => node.hasPointerCapture(1)), 'Pickup requires native grip capture')
+    await page.mouse.move(pointer.x, pointer.y)
     await page.waitForFunction(pointer => { const rect = document.querySelector('.layout-drag-node')?.getBoundingClientRect(); return rect && Math.abs(rect.left - pointer.x + 4) < .06 && Math.abs(rect.top - pointer.y + 4) < .06 }, pointer)
     // Quantized DOM coordinates can reach the tolerance just before the 220ms
     // clock finishes. Drain its last frame and the resulting layout notification.

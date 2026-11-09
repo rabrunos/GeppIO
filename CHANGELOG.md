@@ -2,6 +2,16 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.19] — 2026-11-09
+
+- Extend host Main presentation capabilities to Panorama, Fila de trabalho, Propriedades and Atividade. Select mode and edge as one Edit intention, with anchored edge occupancy guarded at selection, restoration and persistence boundaries (Issue #11).
+- Arrange four simultaneous anchored edges with full-width horizontal corner ownership and immediate side-span updates. Both compact strip types reserve fixed thickness plus clearance; only expanded Docked replaces its reservation and offers resizing. Fit reservations together, clamp preferred extents and temporarily collapse in reverse top/bottom/left/right priority without saving adaptation.
+- Add four-edge Floating hover reveal and a movable free trigger with bounded panel geometry, focus/menu retention and transient pointer previews. Keep compact edge strips fixed and preserve mounted view/model identity and independent Sidebar/Bottom behavior.
+- Route every widget through shared regional measurement, frame projection, clipping and motion. Follow native Sidebar CSS-track frames before paint without competing panel position transitions, and keep Main frames/strips below the floating Sidebar for paint and pointer hit testing.
+- Return to Normal at the exact current expanded rectangle, freezing legal visible Normal peers before releasing space; refuse conflicts atomically. Keep mode, geometry, checkpoints and undo/redo together.
+- Read legacy bottom-only and absent presentation data, write nested presentation v2 in the existing guarded envelope v2, and cover migration, geometry, rejection and disposable-profile desktop interaction. Physical Windows and owner visual acceptance remain pending.
+- Restore the decorative Sidebar rail divider's 12px top inset from the approved V1.141 reference; preserve its bottom inset, theme opacity/fade, clipping, visibility and pointer behavior in docked/collapsed/hover states.
+
 ## [0.1.0-alpha.18] — 2026-11-08
 
 - Move the Properties presentation selector into the widget's Edit controls beside remove, showing the selected name in a compact dropdown with localized Normal/Encaixado/Flutuante options and host region capabilities (Issue #11).

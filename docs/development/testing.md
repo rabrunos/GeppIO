@@ -36,7 +36,43 @@ Evidence and remaining decisions belong in the live Issues, not a tracked last-r
 
 ## Layers
 
-The presentation pilot uses `tests/workbench-presentations.test.ts` for old defaults,
+The current four-edge slice uses `tests/workbench-presentations.test.ts` for identity,
+Main-only capabilities, nested v1/v2 migration, occupied-edge rejection/reactivation,
+corner ownership, joint fit, exact Normal returns/refusal, storage guards and history.
+`pnpm test:presentations` runs disposable-profile Electron checks in both themes:
+four collapsed, top open, all open, zero/one/two horizontal reservations, all-axis
+expanded Docked click/drag/cancel, fixed compact strip drag refusal, independent Bottom,
+narrow restart/recovery, anchored/free Floating,
+menu/focus continuity, free-trigger drag, geometry-preserving Normal conversion and
+atomic conflict refusal. The desktop chain includes default scale; explicitly run
+`pnpm test:presentations --scale125` for simulated DPR 1.25. Diagnostics remain ignored
+under `.local/diagnostics/presentations-alpha19-*`. Simulated DPR and screenshots do
+not establish physical mouse/DPI or owner visual acceptance.
+
+Owner mouse check: in Edit, use each Main widget's local menu beside X. Choose
+Encaixado then a different edge for each widget. Click its fixed compact strip to
+open; use the expanded inner edge to collapse or drag it inward/outward to resize.
+Compact strips have no move or resize gesture. Top/bottom span the width and shorten the
+sides immediately. Try a busy edge: the existing panel must stay in place. For
+Floating choose each edge, hover its strip, enter content/menu, then leave. Choose
+Sem âncora, drag its compact header in Edit, leave and return: the trigger remembers
+the location. To compare a return to Normal, keep the Edit catalog in the same state;
+the expanded rectangle must match exactly. For four open panels, return left/right
+before top/bottom; a conflicting return must keep the original mode with feedback.
+Narrow the native window, restart and enlarge; explicit open intent returns when
+feasible, while explicit collapse stays collapsed. Repeat both themes at physical
+Windows scale. The historical alpha.18 coverage description follows for provenance.
+
+The current smoke also samples Main, an ordinary Main widget and Docked/Floating
+compact strips throughout Sidebar collapse/reopen, including intermediate native CSS
+frames. Compare native Main insets, shared measurement values and frame endpoints;
+verify paint and pointer delivery to a floating Sidebar overlapping either strip.
+Mixed anchored reservations count each strip once. Floating reveal must leave peer
+rectangles unchanged; expanded Docked must change its reservation and peer viewport.
+`tests/widget-frame-layout.test.ts` exercises their common fractional projection and
+clipping path. Keep physical Windows smoothness/visual acceptance separate.
+
+The alpha.18 presentation pilot used `tests/workbench-presentations.test.ts` for old defaults,
 v2 roundtrips, identity/capability/region gates, invalid dimensions, CAS/quota/recovery,
 bounded Docked fit, layout-neutral Floating and history/composition behavior.
 `pnpm test:presentations` runs `tools/presentation-smoke.ts` with a disposable Electron

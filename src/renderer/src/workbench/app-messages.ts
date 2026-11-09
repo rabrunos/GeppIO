@@ -133,5 +133,11 @@ export const appMessages: Readonly<Record<string, string>> = {
   'Prévia: {0}': 'Preview: {0}', 'Fracionário v1': 'Fractional v1', 'Responsivo v2': 'Responsive v2', 'Horizontal v1': 'Horizontal v1',
   'Nenhum widget encontrado.': 'No widgets found.', '{0} widgets': '{0} widgets', 'Redimensionar widgets em conjunto': 'Resize widgets together',
   'Normal': 'Normal', 'Encaixado': 'Docked',
-  'Altura de Propriedades': 'Properties height', 'Apresentação de Propriedades': 'Properties presentation'
+  'Altura de Propriedades': 'Properties height', 'Apresentação de Propriedades': 'Properties presentation',
+  'Apresentação de {0}': '{0} presentation', 'Altura de {0}': '{0} height', 'Largura de {0}': '{0} width',
+  'Topo': 'Top', 'Embaixo': 'Bottom', 'Sem âncora': 'Unanchored', 'Ocupado': 'Occupied', 'Painel de {0}': '{0} panel',
+  'Painéis com tamanho ou abertura temporários. Amplie a janela para restaurar as preferências.': 'Panels temporarily resized or collapsed. Enlarge the window to restore your preferences.',
+  'Libere o local ou reduza o painel antes de voltar a Normal. Dados anteriores preservados.': 'Free this location or reduce the panel before returning to Normal. Previous data preserved.',
+  'Borda de apresentação ocupada. Mova o outro painel antes de restaurar esta presença.': 'Presentation edge occupied. Move the other panel before restoring this view.',
+  'Apresentação incompatível ou borda ocupada. Dados anteriores preservados.': 'Incompatible presentation or occupied edge. Previous data preserved.'
 }

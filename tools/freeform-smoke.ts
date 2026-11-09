@@ -69,8 +69,11 @@ export async function choosePresentation(page: Page, mode: 'normal' | 'docked' |
   }
   if (await frame.getAttribute('data-presentation') !== mode || mode === 'normal') {
     await frame.hover(); await page.getByRole('button', { name: 'Apresentação de Propriedades', exact: true }).click()
-    await page.getByRole('menuitemradio', { name: { normal: 'Normal', docked: 'Encaixado', overlay: 'Flutuante' }[mode], exact: true }).click(); await settle(page)
+    await page.getByRole('menuitemradio', { name: { normal: 'Normal', docked: 'Encaixado', overlay: 'Flutuante' }[mode], exact: true }).click()
+    if (mode !== 'normal') await page.getByRole('menuitemradio', { name: 'Embaixo', exact: true }).click()
+    await settle(page)
   }
+  assert.equal(await frame.getAttribute('data-presentation'), mode)
   await page.getByTestId('conclude-layout').click(); await page.getByTestId('edit-layout').waitFor(); await settle(page)
 }
 async function settings(page: Page) {
@@ -227,26 +230,31 @@ export async function freeformSmoke(page: Page, resizeWindow: (width: number, he
     await page.screenshot({ path: `.local/diagnostics/freeform-chrome-${theme}-${await page.evaluate(() => devicePixelRatio)}.png` })
   }
   assert.deepEqual(await page.evaluate(() => (window as unknown as { layoutWrites: string[] }).layoutWrites), [], 'Theme and viewport projection never persist')
-  // The active pilot replaces the detached four-edge demonstrator. Explicit
+  // The active host replaces the detached four-edge demonstrator. Explicit
   // presentation intentions persist; their viewport projections never do.
+  await resizeWindow(2000, 1400); await settle(page)
   await choosePresentation(page, 'normal')
   const undocked = await dimensions(page)
   const panelLayout = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).layout, FREEFORM_KEY)
   for (const presentation of ['overlay', 'docked'] as const) {
     await choosePresentation(page, presentation)
     const withPanel = await dimensions(page)
-    if (presentation === 'overlay') assert.deepEqual(withPanel, undocked)
+    if (presentation === 'overlay') assert.deepEqual(withPanel, { ...undocked, height: undocked.height - 41 })
     else {
       const reservation = Number(await page.getByTestId('layout-canvas').getAttribute('data-panel-reservation'))
       assert.ok(reservation > 0 ? withPanel.height < undocked.height : await page.getByTestId('layout-canvas').getAttribute('data-panel-adapted') === 'true')
     }
     if (presentation === 'docked') { await page.getByRole('separator', { name: 'Altura de Propriedades', exact: true }).click(); await settle(page) }
     else { await page.locator('[data-widget-id="properties"]').hover(); await page.waitForTimeout(150); await settle(page); await page.mouse.move(10, 10); await page.waitForTimeout(600); await settle(page) }
-    assert.deepEqual(await dimensions(page), presentation === 'docked' ? { ...undocked, height: undocked.height - 40 } : undocked)
-    if (presentation === 'docked') { await page.getByRole('separator', { name: 'Altura de Propriedades', exact: true }).click(); await settle(page) }
+    assert.deepEqual(await dimensions(page), { ...undocked, height: undocked.height - 41 })
+    if (presentation === 'docked') { await page.locator('[data-widget-id="properties"] .widget-heading').click(); await settle(page) }
   }
+  assert.deepEqual(await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).layout, FREEFORM_KEY), panelLayout, 'Mode/anchor/open intentions do not adopt temporary fit')
+  const expandedPanel = await rect(page, 'properties')
   await choosePresentation(page, 'normal')
-  assert.deepEqual(await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).layout, FREEFORM_KEY), panelLayout, 'Presentation commits preserve the canonical Normal scene')
+  const returnedPanel = await rect(page, 'properties')
+  for (const axis of ['x', 'y', 'width', 'height'] as const) near(returnedPanel[axis], expandedPanel[axis], 'Normal uses the expanded panel rectangle')
+  await resizeWindow(1280, 900); await settle(page)
   const beforeChrome = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).layout, FREEFORM_KEY)
   const initial = await rect(page, 'chart')
   await beginEdit(page); await drag(page, 'chart', 'move', 13.25, -7.125, true)

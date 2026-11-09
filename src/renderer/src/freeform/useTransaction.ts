@@ -14,8 +14,9 @@ import { configureBar, resizePair } from '../../../shared/workbench/commands.ts'
 import type { ResizePair } from '../../../shared/workbench/commands.ts'
 import type { UserBar } from '../../../shared/workbench/model.ts'
 import type { Surface } from '../../../shared/freeform/types.ts'
-import { changePresentation } from '../../../shared/workbench/presentations.ts'
-import type { WidgetPresentation } from '../../../shared/workbench/presentations.ts'
+import { changePresentation, presentationFor, returnToNormal, validatePresentationEdges } from '../../../shared/workbench/presentations.ts'
+import type { PresentationPatch } from '../../../shared/workbench/presentations.ts'
+import type { Size } from '../../../shared/freeform/types.ts'
 
 export function useTransaction(registry: Registry = widgetRegistry(), localState?: { read(): LocalSessionState; apply(value: LocalSessionState): void }) {
   const localOwner = useRef(localState); localOwner.current = localState
@@ -39,10 +40,12 @@ export function useTransaction(registry: Registry = widgetRegistry(), localState
   function refresh() { notify(value => value + 1) }
   function put(next: Snapshot | WorkbenchSnapshot) {
     const value: WorkbenchSnapshot = 'organization' in next ? next as WorkbenchSnapshot : { ...next, organization: live.current.organization }
+    try { validatePresentationEdges(value) } catch { setMessage('Borda de apresentação ocupada. Mova o outro painel antes de restaurar esta presença.'); return }
     epoch.current++; live.current = value; setSnapshot(value)
   }
   function apply(draft: SessionDraft) { if (draft.localState) localOwner.current?.apply(structuredClone(draft.localState)); put(draft.snapshot); slotsRef.current = draft.slots; setSlotState(draft.slots); formatId.current = draft.formatId; formatMode.current = draft.formatMode ?? null; formatSource.current = draft.formatSource ?? null; refresh() }
   function action(next: WorkbenchSnapshot, nextSlots = slotsRef.current, nextFormat = formatId.current, nextSource = formatSource.current, animation = { duration: 240, entering: false }, nextMode = formatMode.current) {
+    try { validatePresentationEdges(next) } catch { setMessage('Borda de apresentação ocupada. Mova o outro painel antes de restaurar esta presença.'); return }
     const before = current(), after = { snapshot: next, slots: nextSlots, formatId: nextFormat, formatMode: nextMode, formatSource: nextSource, localState: before.localState }
     if (editingRef.current && !history.current.active) history.current.record(before, after)
     motionRevision.current++; motion.current = animation
@@ -138,11 +141,17 @@ export function useTransaction(registry: Registry = widgetRegistry(), localState
       if (JSON.stringify(next.placements) !== JSON.stringify(committed.current.placements)) return false
       return commit(next, false, true, 'Preferência salva.')
     },
-    async present(patch: Partial<Pick<WidgetPresentation, 'presentation' | 'open' | 'preferred'>>) {
+    async present(patch: PresentationPatch, id = 'properties', bounds?: { size: Size; expanded: boolean; scrollbar: number }) {
       if (saving.current || history.current.active) return false
       if (patch.presentation && !editingRef.current) return false
       let next: WorkbenchSnapshot
-      try { next = changePresentation(live.current, patch, registry) } catch { setMessage('Apresentação incompatível. Dados anteriores preservados.'); return false }
+      try {
+        if (patch.presentation === 'normal' && presentationFor(live.current, id, registry).presentation !== 'normal') {
+          const converted = bounds && returnToNormal(live.current, id, bounds.size, registry, bounds.expanded, bounds.scrollbar)
+          if (!converted) { setMessage('Libere o local ou reduza o painel antes de voltar a Normal. Dados anteriores preservados.'); return false }
+          next = converted
+        } else next = changePresentation(live.current, patch, registry, id)
+      } catch { setMessage('Apresentação incompatível ou borda ocupada. Dados anteriores preservados.'); return false }
       if (editingRef.current) { action(next); return true }
       if (recovery || normalizationPending.current || JSON.stringify(live.current) !== JSON.stringify(committed.current)) {
         setMessage('Confirme ou recupere a composição em Editar antes de alterar a apresentação.'); return false
