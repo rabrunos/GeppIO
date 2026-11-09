@@ -2,6 +2,10 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.23] — 2026-11-09
+
+- Synchronize the archived-bar desktop smoke with the stable popup grip before measuring pointer coordinates. Assert actual hit target, pointer capture and rail drop admission while preserving same-ID and ordering checks; no product behavior changes.
+
 ## [0.1.0-alpha.22] — 2026-11-09
 
 - Stack Sidebar widgets from the existing top inset in Home and custom bars, preserving individual heights, usable width, normal gaps and vertical scrolling.

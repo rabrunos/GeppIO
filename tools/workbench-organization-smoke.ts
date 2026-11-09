@@ -74,9 +74,19 @@ try {
   await page.getByRole('button', { name: 'Barras salvas', exact: true }).click()
   const library = page.getByRole('dialog', { name: 'Barras salvas', exact: true })
   await library.getByRole('button', { name: /^Arquivadas/ }).click()
-  const grip = await library.getByRole('button', { name: 'Arrastar Barra A para a barrinha', exact: true }).boundingBox(), target = await b().boundingBox(); assert.ok(grip && target)
+  const restoreGrip = library.getByRole('button', { name: 'Arrastar Barra A para a barrinha', exact: true })
+  // Filtering changes the popup height; its ResizeObserver reanchors it on the
+  // next frame. Locator actionability waits for the actual, stable pointer target
+  // before taking coordinates (a stale center can hit the filter 58px above it).
+  await restoreGrip.hover()
+  const grip = await restoreGrip.boundingBox(), target = await b().boundingBox(); assert.ok(grip && target)
+  const origin = { x: grip.x + grip.width / 2, y: grip.y + grip.height / 2 }
+  assert.ok(await restoreGrip.evaluate((node, point) => node.contains(document.elementFromPoint(point.x, point.y)), origin), 'Restore starts on the actual archived-bar grip')
   await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2); await page.mouse.down()
-  await page.mouse.move(target.x + target.width / 2, target.y + target.height + 4, { steps: 6 }); await page.mouse.up(); await settle()
+  assert.ok(await page.evaluate(() => document.body.hasPointerCapture(1)), 'Restore owns a captured pointer before leaving the popup')
+  await page.mouse.move(target.x + target.width / 2, target.y + target.height + 4, { steps: 6 })
+  await page.waitForFunction(() => document.querySelector('[data-layout-rail-zone]')?.hasAttribute('data-over'))
+  await page.mouse.up(); await settle()
   assert.deepEqual(await order(), ['home', second, first], 'Restore retains the same saved bar ID')
   assert.equal(await input.getAttribute('data-proof'), 'organization'); assert.equal(await input.inputValue(), 'Nome literal Ω')
   await create('Descartável', [])

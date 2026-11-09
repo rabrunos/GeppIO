@@ -45,6 +45,13 @@ Evidence and remaining decisions belong in the live Issues, not a tracked last-r
 
 ## Layers
 
+Archived-bar pointer restore in `tools/workbench-organization-smoke.ts` waits for
+the filtered library grip's actionability before sampling coordinates. Filtering
+can change popup height and reanchor it on the ResizeObserver frame. The smoke
+checks the actual hit target, body pointer capture and admitted rail destination
+before retaining the exact same-ID/order assertion. A missed pointer start must
+fail as a driver precondition, rather than be reported as a completed restore.
+
 The current four-edge slice uses `tests/workbench-presentations.test.ts` for identity,
 Main-only capabilities, nested v1/v2 migration, occupied-edge rejection/reactivation,
 corner ownership, joint fit, exact Normal returns/refusal, storage guards and history.
