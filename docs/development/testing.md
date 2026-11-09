@@ -35,6 +35,14 @@ is protected, but paired dividers have a dedicated normal-mode transaction. Save
 checkpoint; Cancel restores it and Conclude validates/commits/exits. History is session memory,
 not a durable backup. Plugin-owned data is separate from layout/installation state.
 
+`pnpm test:essentials` also exercises the real notes/checklist/prompts in Bottom:
+selection, selectable previews, checklist writes, region transfer with identical
+view/model IDs, scratch refusal, restart, both themes, narrow width and minimum
+height. For a mouse walkthrough, enter Edit, click an existing widget's move grip,
+choose Inferior and Conclude. Select a saved note/prompt or mark a checklist item.
+Use the same grip to return to Principal/Lateral for text editing. Shrink Bottom
+with its splitter and switch themes; use existing recovery when width is infeasible.
+
 The owner's alpha.14 Aprovado response is conversation-only acceptance of that specific delivery,
 not a new physical test checklist or global acceptance. Historical scoped owner reports in
 Issues 1, 6 and 21 remain valid within their recorded scope. Do not ask for them automatically again.

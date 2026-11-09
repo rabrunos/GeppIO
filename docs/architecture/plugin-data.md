@@ -5,6 +5,11 @@ sandbox. The independently built first-party Workspace Essentials package uses t
 directory installation, enablement and Worker contribution path. Anotações, Rascunho, Checklist and
 Prompts salvos require explicit placement. Since alpha.22 / Issue #41, the shared host registry
 allows Anotações, Checklist and Prompts salvos in Main and Sidebar; Rascunho stays Main-only.
+Since alpha.24, these same three types also support Bottom with a 180×105 CSS-pixel
+useful minimum. The host renders existing publications as a saved-entry selector
+and selectable literal text preview, or an interactive checklist. Text creation and
+editing remain in Main/Sidebar; scratch remains Main-only. The region never scrolls;
+long preview text and checklist items scroll within their compact content area.
 Their Sidebar useful minimum is 150px, following the inner panel width with wrapped controls.
 Existing installation UUIDs, runtime identity and data stay unchanged through placement and
 restart; no reinstall or manifest migration is required. Fresh profiles remain empty; each type

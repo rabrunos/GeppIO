@@ -36,7 +36,7 @@ function insertSidebar(source: WorkbenchSnapshot, registry: Registry, id: string
   const c = constraintInRegion(registry.get(typeId)!.constraint, 'sidebar')
   if (size && (size.width < c.min.width || size.width > c.max.width)) return null
   const insertion = sidebarInsertion(source, id, y)
-  Object.assign(placement, { region: 'sidebar', x: 0, width: target.width, height: size?.height ?? placement.height })
+  Object.assign(placement, { region: 'sidebar', x: 0, width: target.width, height: size?.height ?? Math.max(c.min.height, Math.min(c.max.height, placement.height)) })
   const ordered = [...insertion.peers]; ordered.splice(insertion.index, 0, placement)
   const bar = next.organization.bars.find(bar => bar.id === next.organization.activeBar)!
   bar.members = ordered.map(p => next.organization.views.find(view => view.id === p.id)!.typeId)

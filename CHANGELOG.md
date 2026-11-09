@@ -2,6 +2,12 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.24] — 2026-11-09
+
+- Enable existing Workspace Essentials notes, checklist and saved prompts in Bottom through host placement policy, with compact selection/read-only text previews and checklist toggles at the useful 105px minimum. Keep full editors in Main/Sidebar and scratch Main-only.
+- Reuse the installation, view/model identity, existing API 2 publications and revisioned data; no reinstall, manifest migration or additional plugin authority.
+- Adapt compact Bottom heights to the Sidebar minimum on ordinary transfers while retaining exact-slot validation. Require the focused Sidebar smoke to observe the exact confirmed note on disk before reloading, rather than a preceding New acknowledgement plus a pending local draft.
+
 ## [0.1.0-alpha.23] — 2026-11-09
 
 - Synchronize the archived-bar desktop smoke with the stable popup grip before measuring pointer coordinates. Assert actual hit target, pointer capture and rail drop admission while preserving same-ID and ordering checks; no product behavior changes.

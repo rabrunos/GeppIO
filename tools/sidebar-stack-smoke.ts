@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict'
 import { _electron as electron } from 'playwright'
 import type { ElectronApplication, Page } from 'playwright'
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, rm, writeFile, readdir, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'
 import { portugueseFixture, settle } from './freeform-smoke.ts'
 import { WORKBENCH_KEY } from '../src/shared/workbench/model.ts'
+import { IDENTITY } from '../src/shared/identity.ts'
 
 const profile = await mkdtemp(join(tmpdir(), 'geppio-smoke-sidebar-'))
 const diagnostics = '.local/diagnostics/sidebar-stack-alpha22'
@@ -86,6 +87,13 @@ try {
     const c = document.querySelector('[data-plugin-widget="geppio.workspace-essentials:notes"]')
     return c?.querySelector('p')?.textContent === 'Salvo.' && c.querySelector('textarea')?.value === value
   }, literal)
+  // The preceding New acknowledgement can still say Saved while the local
+  // field draft is being delivered. Reload only after this exact body is durable.
+  const dataRoot = join(profile, IDENTITY.directory, 'plugin-data')
+  const dataFile = join(dataRoot, (await readdir(dataRoot)).find(name => name.endsWith('.json'))!)
+  await page.waitForFunction(() => ![...document.querySelectorAll('[data-plugin-widget="geppio.workspace-essentials:notes"] small[role="status"]')].some(node => node.textContent?.includes('Alterações pendentes')))
+  const confirmedNote = JSON.parse(await readFile(dataFile, 'utf8'))
+  assert.equal(confirmedNote.document.value.notes[0].body, literal, 'The exact note must be acknowledged on disk before the read-only reload scenario')
   evidence.installAndContent = 'passed'
 
   // An older saved envelope is read with gaps in both bars. No writer runs on load.
@@ -169,7 +177,7 @@ try {
   await page.locator('[data-widget-place="main"]').click(); await settle(page)
   assert.equal(await frame('checklist').getAttribute('data-owner-region'), 'main'); await order(['prompts', 'notes'])
   await frame('checklist').hover({ position: { x: 40, y: 12 } }); await frame('checklist').locator('.widget-grip').click(); await settle(page)
-  assert.equal(await page.locator('[data-widget-place="bottom"]').isEnabled(), false)
+  assert.equal(await page.locator('[data-widget-place="bottom"]').isEnabled(), true)
   await page.locator('[data-widget-place="sidebar"]').click(); await settle(page); await order(['prompts', 'notes', 'checklist'])
   await dragToBar('checklist', 'custom'); await order(['notes', 'prompts', 'checklist'])
   await page.getByRole('button', { name: 'Desfazer', exact: true }).click(); await settle(page)

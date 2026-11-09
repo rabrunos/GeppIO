@@ -94,7 +94,9 @@ existing placement can remain as a paused placeholder. Counter state resets on a
 Layout persistence does not provide plugin-owned storage. API 2 Workspace Essentials uses a
 separate installation-bound profile store; see [data retention/recovery](../architecture/plugin-data.md).
 Build it with `pnpm plugins:build`, install `.local/plugin-packages/workspace-essentials`, enable,
-then place each selected widget explicitly in Main or, for notes/checklist/prompts, Sidebar.
+then place each selected widget explicitly in Main or, for notes/checklist/prompts,
+Sidebar or Bottom. Bottom provides compact reading/selection and checklist toggles;
+create/edit text in Main or Sidebar. Existing installations need no reinstall.
 Scratch stays Main-only. `pnpm test:essentials` and `pnpm test:sidebar` use disposable profiles.
 The plugin SDK exposes no filesystem,
 process, PTY, remote-network, secret or cross-plugin authority. Workers share origin/storage authority;

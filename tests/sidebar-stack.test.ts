@@ -27,7 +27,7 @@ function packed(source: WorkbenchSnapshot) {
 }
 
 test('Workspace Essentials host eligibility is shared, narrowly scoped and independent of install revision', () => {
-  for (const name of ['notes', 'checklist', 'prompts']) assert.deepEqual(registry.get(type(name))!.constraint.regions, ['main', 'sidebar'])
+  for (const name of ['notes', 'checklist', 'prompts']) assert.deepEqual(registry.get(type(name))!.constraint.regions, ['main', 'sidebar', 'bottom'])
   assert.deepEqual(registry.get(type('scratch'))!.constraint.regions, ['main'])
   assert.equal(addWidget(initialWorkbench(), registry, type('scratch'), side), null)
   assert.equal(addWidget(initialWorkbench(), registry, type('notes'), { ...side, width: 149 }), null)
@@ -90,7 +90,12 @@ test('insertion/reorder/removal/pair resize and region/bar moves pack Home and c
   assert.equal(stack(next).length, 0)
   next = moveView(next, registry, c!.id, side)!
   assert.equal(stack(next)[0]!.height, c!.height); packed(next)
-  assert.equal(moveView(next, registry, c!.id, { ...main, region: 'bottom' }), null)
+  const bottom = moveView(next, registry, c!.id, { ...main, region: 'bottom', height: 105 })!
+  assert.ok(bottom)
+  assert.equal(bottom.placements.find(p => p.id === c!.id)?.region, 'bottom')
+  const returned = moveView(bottom, registry, c!.id, side)!
+  assert.ok(returned, 'A minimum-height Bottom widget adapts to the Sidebar minimum on transfer')
+  assert.equal(returned.placements.find(p => p.id === c!.id)?.height, 112)
   assert.equal(moveView(next, registry, c!.id, side, { x: 0, y: NaN }), null)
   assert.equal(addWidget(initialWorkbench(), registry, type('notes'), side, { x: 0, y: 0 }, undefined, { width: 149, height: 360 }), null)
   const restarted = parseWorkbench(serializeWorkbench(next, registry), registry)

@@ -36,6 +36,7 @@ async function conclude() { await page.getByTestId('conclude-layout').click(); a
 async function place(name: string) {
   await page.locator(`[data-catalog-type="plugin:${id}:${name}"]`).click()
   assert.equal(await page.locator('.widget-browser-destination [data-widget-place="sidebar"]').isEnabled(), name !== 'scratch')
+  assert.equal(await page.locator('.widget-browser-destination [data-widget-place="bottom"]').isEnabled(), name !== 'scratch')
   await page.locator('.widget-browser-destination [data-widget-place="main"]').click(); await settle(page)
 }
 async function saved(name: string) { await widget(name).getByRole('status').filter({ hasText: /^Salvo\.$/ }).waitFor() }
@@ -70,6 +71,29 @@ async function compare() {
   assert.equal(await widget('prompts').getByRole('textbox', { name: 'Texto do prompt', exact: true }).inputValue(), prompt)
   assert.deepEqual(await widget('checklist').locator('.plugin-check-item').evaluateAll(nodes => nodes.map(node => ({ text: node.textContent, checked: node.querySelector('input')!.checked }))), [{ text: 'Primeiro item', checked: true }, { text: 'Segundo item', checked: false }])
   assert.equal(await page.locator('.host-plugin-content script,.host-plugin-content b').count(), 0)
+}
+async function move(name: string, region: 'main' | 'sidebar' | 'bottom') {
+  const frame = page.locator('.widget-frame').filter({ has: widget(name) })
+  if (await frame.getAttribute('data-owner-region') === 'sidebar') await page.locator('[data-region="sidebar"]').evaluate(node => { node.scrollTop = node.scrollHeight })
+  await frame.hover({ position: { x: 40, y: 12 } })
+  const grip = frame.locator('.widget-grip'), box = await grip.boundingBox(); assert.ok(box)
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await page.waitForFunction(name => getComputedStyle(document.querySelector(`[data-plugin-widget="geppio.workspace-essentials:${name}"]`)!.closest('.widget-frame')!.querySelector('.widget-grip')!).pointerEvents === 'auto', name)
+  await grip.click(); await settle(page)
+  await page.locator(`.widget-browser-destination [data-widget-place="${region}"]`).click(); await settle(page)
+  assert.equal(await frame.getAttribute('data-owner-region'), region)
+}
+async function bottom() {
+  assert.equal(await widget('notes').getByRole('combobox', { name: 'Anotações', exact: true }).inputValue().then(Boolean), true)
+  assert.equal(await widget('notes').getByRole('region', { name: 'Texto da anotação', exact: true }).textContent(), 'Segunda nota')
+  assert.equal(await widget('prompts').getByRole('region', { name: 'Texto do prompt', exact: true }).textContent(), prompt)
+  assert.equal(await widget('checklist').getByRole('checkbox', { name: 'Primeiro item', exact: true }).isChecked(), true)
+  assert.equal(await page.locator('[data-owner-region="bottom"] textarea,[data-owner-region="bottom"] input[type="text"]').count(), 0)
+  for (const name of ['notes', 'checklist', 'prompts']) {
+    const box = await widget(name).evaluate(node => { const frame = node.closest('.widget-frame')!, content = frame.querySelector('.widget-content')!, control = node.querySelector('select,input')!, a = content.getBoundingClientRect(), b = control.getBoundingClientRect(); return { visible: b.top >= a.top && b.bottom <= a.bottom + 1, height: frame.getBoundingClientRect().height } })
+    assert.ok(box.visible && box.height >= 104.9, JSON.stringify({ name, ...box }))
+  }
+  assert.ok(await page.locator('[data-region="bottom"]').evaluate(node => node.scrollHeight <= node.clientHeight + 1 && node.scrollWidth <= node.clientWidth + 1), 'Bottom itself never scrolls')
 }
 try {
   await launch()
@@ -177,6 +201,29 @@ try {
   assert.ok((await readFile(dataPath, 'utf8')).includes(pending)); evidence.failureDraftRetry = 'passed'
   await fill('scratch', 'Texto do rascunho', scratch)
   await app!.close(); app = undefined; await launch(); await compare()
+  const originalViews = await page.evaluate(() => JSON.parse(localStorage.getItem('geppio:workbench:v1')!).organization.views)
+  await page.getByTestId('edit-layout').click(); await settle(page)
+  for (const name of ['notes', 'checklist', 'prompts']) await move(name, 'bottom')
+  await conclude(); await bottom()
+  const noteId = await widget('notes').getByRole('combobox').locator('option').filter({ hasText: 'Nota um' }).getAttribute('value')
+  await widget('notes').getByRole('combobox').selectOption(noteId!); await page.waitForFunction(value => document.querySelector('.bottom-plugin-preview[aria-label="Texto da anotação"]')?.textContent === value, note)
+  await widget('notes').getByRole('combobox').selectOption({ label: 'Nota dois' })
+  await widget('prompts').getByRole('combobox').selectOption({ label: 'Segundo prompt' })
+  await page.waitForFunction(() => document.querySelector('.bottom-plugin-preview[aria-label="Texto do prompt"]')?.textContent === 'Outra instrução salva')
+  await widget('prompts').getByRole('combobox').selectOption({ label: 'Prompt piloto' })
+  for (const checked of [false, true]) { await widget('checklist').getByRole('checkbox', { name: 'Primeiro item', exact: true }).click(); await page.waitForFunction(checked => document.querySelector<HTMLInputElement>('.bottom-plugin-checklist input')?.checked === checked && document.querySelector('[data-plugin-widget="geppio.workspace-essentials:checklist"] [role="status"]')?.textContent === 'Salvo.', checked) }
+  // Exercise both themes and the supported minimum Bottom height with all three real types.
+  await page.getByTestId('edit-layout').click(); await settle(page)
+  const splitter = page.getByRole('separator', { name: 'Altura da Bottom', exact: true })
+  await splitter.focus(); await page.keyboard.press('Home'); await settle(page); await conclude()
+  await app!.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows()[0]!.setContentSize(1000, 720) }); await settle(page)
+  await bottom(); await page.screenshot({ path: diagnostics + '/bottom-dark.png' })
+  await page.getByRole('button', { name: 'Alternar tema', exact: true }).click(); await settle(page); await bottom(); await page.screenshot({ path: diagnostics + '/bottom-light.png' })
+  await app!.close(); app = undefined; await launch(); await bottom()
+  assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem('geppio:workbench:v1')!).organization.views), originalViews, 'Region moves retain every existing view/model identity')
+  await page.getByTestId('edit-layout').click(); await settle(page)
+  for (const name of ['notes', 'checklist', 'prompts']) { await move(name, 'sidebar'); await move(name, 'main') }
+  await conclude(); await compare(); evidence.bottom = 'passed: selection, toggle, all regions, identity, minimum height/narrow width, both themes and restart'
   await page.screenshot({ path: diagnostics + '/four-widgets.png' })
   assert.deepEqual(errors, [])
   await writeFile(diagnostics + '/result.json', JSON.stringify(evidence, null, 2))
