@@ -8,7 +8,7 @@ import type { Presentation, Presentations } from './presentations.ts'
 export interface WidgetType {
   id: string; owner: string; title: string; category: string; description: string;
   appearance: 'card' | 'seamless'; presence: 'single-view' | 'multiple-areas';
-  constraint: Constraint; fixture?: string; widgetId?: string; pluginId?: string
+  constraint: Constraint; fixture?: string; widgetId?: string; pluginId?: string; retired?: boolean
   presentations?: Partial<Record<Region, readonly Presentation[]>>
 }
 export type Registry = ReadonlyMap<string, WidgetType>
@@ -23,7 +23,8 @@ export interface Organization {
   views: View[]; bars: UserBar[]; activeBar: string;
   compositions: Composition[]; compositionOrder?: string[]; favorites: string[]; defaultComposition: string | null; chrome: WorkbenchChrome; presentations?: Presentations
 }
-export interface WorkbenchSnapshot extends Snapshot { organization: Organization }
+export interface WorkbenchSnapshot extends Snapshot { organization: Organization; retiredDemos?: DemoArchive }
+export interface DemoArchive { reference: Snapshot['reference']; placements: Placement[]; views: View[]; bars: Pick<UserBar, 'id' | 'members' | 'positions'>[]; presentations: Presentations }
 export interface FormatSlot { id: string; region: Region; x: number; y: number; width: number; height: number }
 export interface SessionSlot extends FormatSlot { reference: Size; sidebarBar?: string }
 export interface LocalSessionState {
@@ -44,9 +45,9 @@ const FIXTURES = [
 /** Metadata comes exclusively from bundled declarations or validated native inventory.
  * Legacy manifest v1 gets no new fields or authority. One model routes to one runtime.
  */
-export function widgetRegistry(plugins: readonly InstalledPlugin[] = []): Registry {
+export function widgetRegistry(plugins: readonly InstalledPlugin[] = [], demoFixtures = false): Registry {
   const entries: WidgetType[] = FIXTURES.map(([fixture, title, category]) => ({
-    id: `host:${fixture}`, owner: 'host', fixture, title, category, description: 'Widget de demonstração do GeppIO.',
+    id: `host:${fixture}`, owner: 'host', fixture, retired: !demoFixtures, title, category, description: 'Widget de demonstração do GeppIO.',
     ...(['summary', 'queue', 'properties', 'activity'].includes(fixture) ? { presentations: { main: ['normal', 'docked', 'overlay'] as const } } : {}),
     appearance: 'card', presence: fixture === 'notes' || fixture === 'library' ? 'multiple-areas' : 'single-view', constraint: {
       ...CONSTRAINTS[fixture]!, regionMin: {
@@ -88,7 +89,8 @@ export function adoptLayout(layout: Snapshot): WorkbenchSnapshot {
     activeBar: HOME, compositions: [], favorites: ['system:default', 'system:focus', 'system:balanced'], defaultComposition: 'system:default', chrome, presentations: { version: 2, entries: [] }
   } }
 }
-export function initialWorkbench() {
+/** Synthetic scenes are opt-in fixtures, never the normal startup/reset policy. */
+export function initialWorkbench(demoFixtures = false) {
   const snapshot = adoptLayout(DEFAULT_FREEFORM)
   snapshot.reference = { main: { width: 1567, height: 774 }, sidebar: { width: 253, height: 950 }, bottom: { width: 1543, height: 147 } }
   snapshot.placements = [
@@ -102,6 +104,10 @@ export function initialWorkbench() {
   ].map(p => ({ ...p, region: p.region as Region, preferred: { width: p.width, height: p.height } }))
   snapshot.organization.bars[0]!.members = ['host:notes', 'host:library']
   snapshot.organization.bars[0]!.positions = { 'host:notes': 0, 'host:library': 310 }
+  if (!demoFixtures) {
+    snapshot.placements = []; snapshot.organization.views = []
+    snapshot.organization.bars[0]!.members = []; snapshot.organization.bars[0]!.positions = {}
+  }
   return snapshot
 }
 export function activePlacements(snapshot: WorkbenchSnapshot) {
@@ -119,7 +125,7 @@ export function activePlacements(snapshot: WorkbenchSnapshot) {
 export function evaluatePlacement(snapshot: WorkbenchSnapshot, registry: Registry, typeId: string, region: Region,
   operation: 'catalog' | 'move' | 'swap' | 'restore', ignored: readonly string[] = [], disabled: ReadonlySet<string> = new Set()) {
   const type = registry.get(typeId)
-  if (!type || !type.constraint.regions.includes(region)) return { allowed: false, reason: 'incompatible' } as const
+  if (!type || type.retired || !type.constraint.regions.includes(region)) return { allowed: false, reason: 'incompatible' } as const
   if (disabled.has(type.owner)) return { allowed: false, reason: 'paused' } as const
   if (region !== 'sidebar' && type.presence === 'single-view' && snapshot.organization.views.some(view => view.typeId === typeId && (operation === 'catalog' || ignored.includes(view.id))
     && snapshot.placements.some(p => p.id === view.id && p.region === 'sidebar'))

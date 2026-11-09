@@ -11,7 +11,7 @@ import { snapshotTree, BACKUP_DIRECTORY } from '../src/main/profile-migration.ts
 import { IDENTITY } from '../src/shared/identity.ts'
 import { DEFAULT_LAYOUT } from '../src/renderer/src/fixtures.ts'
 import { GRID_KEY } from '../src/shared/grid/policy.ts'
-import { WORKBENCH_KEY as FREEFORM_KEY } from '../src/shared/workbench/model.ts'
+import { WORKBENCH_KEY as FREEFORM_KEY } from '../tests/fixtures/workbench.ts'
 import { convertHistorical } from '../src/shared/freeform/migration.ts'
 import { projectRegion } from '../src/shared/freeform/projection.ts'
 
@@ -48,7 +48,7 @@ async function seedProfile(profile: string, url: string, legacy: string, current
   await application.close(); application = undefined
 }
 async function launch(root: string): Promise<Page> {
-  application = await electron.launch({ args: ['.'], cwd: process.cwd(), env: { ...environment, GEPPIO_TEST_USER_DATA: root,
+  application = await electron.launch({ args: ['.'], cwd: process.cwd(), env: { ...environment, GEPPIO_TEST_USER_DATA: root, GEPPIO_TEST_DEMO_WIDGETS: '1',
     ...(devServer ? { ELECTRON_RENDERER_URL: 'http://127.0.0.1:5173/', NODE_ENV: 'development' } : { NODE_ENV: 'production' }) }, timeout: 30000 })
   const url = devServer ? 'http://127.0.0.1:5173/' : 'geppio://app/index.html'
   // Migration owns hidden windows first; wait for the actual application window.

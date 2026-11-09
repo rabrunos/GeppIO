@@ -50,7 +50,7 @@ export function App() {
   return <LocaleProvider><HostModelsProvider><MotionConfig reducedMotion="user">{ready.current ? <Workbench plugins={plugins} /> : <div className="host-loading" role="status">GeppIO…</div>}</MotionConfig></HostModelsProvider></LocaleProvider>
 }
 function Workbench({ plugins }: { plugins: ReturnType<typeof usePlugins> }) {
-  const { t } = useLocale(), registry = useMemo(() => widgetRegistry(plugins.inventory.plugins), [plugins.inventory.plugins])
+  const { t } = useLocale(), registry = useMemo(() => widgetRegistry(plugins.inventory.plugins, window.geppio?.demoFixtures), [plugins.inventory.plugins])
   const [expanded, setExpanded] = useState(() => { try { return localStorage.getItem(EXPANSION_KEY) === 'true' } catch { return false } })
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     try {

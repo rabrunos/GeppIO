@@ -26,5 +26,8 @@ test('static security regression: renderer has only fixed plugin management and 
   assert.match(main, /sandbox: true/); assert.match(main, /contextIsolation: true/)
   assert.match(main, /nodeIntegration: false/); assert.match(main, /webviewTag: false/)
   assert.match(main, /nodeIntegrationInWorker: false/)
+  assert.match(main, /const testData = !app.isPackaged \? process.env.GEPPIO_TEST_USER_DATA : undefined/)
+  assert.match(main, /validatedTestProfile\(testData\)/)
+  assert.match(main, /additionalArguments: testData && process.env.GEPPIO_TEST_DEMO_WIDGETS === '1'/)
   assert.match(PRODUCTION_CSP, /worker-src 'self'/)
 })

@@ -19,7 +19,16 @@ Local DEV/scale125 reports and intermediate failures are documented in
 including focused final runs and an extra 125% attempt without a successful drop. Do not describe
 all observations as one entirely clean final extra scale125 run or infer an unconfirmed root cause.
 
-Seven bundled synthetic types start in four Main/two Sidebar/one Bottom placements. They are not
+Normal alpha.20 profiles start with empty Main/Sidebar/Bottom and offer installed-plugin widgets.
+`tools/demo-retirement-smoke.ts` exercises normal fresh startup, an alpha.19 envelope with an
+installed Counter, unchanged startup bytes, restart, saved-composition restoration and explicit
+reset while retaining plugins/custom bars/compositions. It is part of `pnpm test:desktop`.
+The geometry suites explicitly opt into `GEPPIO_TEST_DEMO_WIDGETS=1`, which Main passes as a
+read-only preload flag only for an unpackaged app with a validated disposable test profile.
+Neither normal storage nor a packaged app enables these fixtures. Shared test factories live
+under `tests/fixtures/`. Four-edge Docked and anchored/free Floating coverage remains in the
+presentation suites at both scales. These test contexts retain seven synthetic types in
+four Main/two Sidebar/one Bottom placements. They are not
 an editor, filesystem project, Git, terminal or telemetry. Native window maximize is not widget
 maximize; a visual project name/profile is not a native project/account. Normal individual movement
 is protected, but paired dividers have a dedicated normal-mode transaction. Save editing advances a

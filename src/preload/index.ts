@@ -14,4 +14,5 @@ const windowControls: WindowControls = Object.freeze({
   maximize: () => ipcRenderer.invoke('window:maximize'),
   close: () => ipcRenderer.invoke('window:close')
 })
-contextBridge.exposeInMainWorld('geppio', Object.freeze({ name: IDENTITY.name, version: __APP_VERSION__, platform: process.platform, plugins, windowControls }))
+contextBridge.exposeInMainWorld('geppio', Object.freeze({ name: IDENTITY.name, version: __APP_VERSION__, platform: process.platform, plugins, windowControls,
+  demoFixtures: process.argv.includes('--geppio-demo-fixtures') }))

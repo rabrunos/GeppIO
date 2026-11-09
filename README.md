@@ -7,6 +7,9 @@ e Motion. A escolha de shadcn/ui para futuras incorporações está registrada n
 
 O workbench tem geometria contínua, catálogo, barras, composições, histórico de edição e
 persistência de layout. Há um runtime experimental real para plugins locais confiáveis.
+O perfil novo abre Main, Sidebar e Bottom vazios; escolha widgets dos plugins instalados
+no catálogo. Os sete demos foram retirados do uso normal. Layouts anteriores preservam
+plugins, barras e composições; referências dos demos ficam guardadas para recuperação.
 Editor de arquivos, projeto conectado ao filesystem, Git, terminal, ChatGPT, Codex e GitLayer
 ainda são propostas, não ferramentas funcionais desta base. Não há conta GeppIO, backend,
 sincronização em nuvem ou API paga de IA.

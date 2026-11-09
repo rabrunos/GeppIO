@@ -4,7 +4,7 @@ import type { ElectronApplication, Page } from 'playwright'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { initialWorkbench, widgetRegistry, WORKBENCH_KEY } from '../src/shared/workbench/model.ts'
+import { initialWorkbench, widgetRegistry, WORKBENCH_KEY } from '../tests/fixtures/workbench.ts'
 import { changePresentation, EDGES } from '../src/shared/workbench/presentations.ts'
 import type { Edge, Presentation } from '../src/shared/workbench/presentations.ts'
 import { serializeWorkbench } from '../src/shared/workbench/codec.ts'
@@ -15,6 +15,7 @@ const profile = await mkdtemp(join(tmpdir(), 'geppio-smoke-presentations-'))
 const directory = `.local/diagnostics/presentations-alpha19-${process.argv.includes('--scale125') ? '1.25' : '1'}`
 await mkdir(directory, { recursive: true })
 const env: Record<string, string> = Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined))
+env.GEPPIO_TEST_DEMO_WIDGETS = '1'
 delete env.ELECTRON_RUN_AS_NODE; delete env.ELECTRON_RENDERER_URL; delete env.NODE_OPTIONS
 env.GEPPIO_TEST_USER_DATA = profile; env.NODE_ENV = 'production'
 let application: ElectronApplication | undefined, page!: Page

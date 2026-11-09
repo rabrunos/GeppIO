@@ -41,7 +41,8 @@ async function createWindow(): Promise<void> {
     show: false, frame: false, thickFrame: true, backgroundColor: '#141922', autoHideMenuBar: true,
     webPreferences: { preload: join(__dirname, '../preload/index.cjs'),
       sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true,
-      nodeIntegrationInWorker: false, webviewTag: false, devTools: development }
+      nodeIntegrationInWorker: false, webviewTag: false, devTools: development,
+      additionalArguments: testData && process.env.GEPPIO_TEST_DEMO_WIDGETS === '1' ? ['--geppio-demo-fixtures'] : [] }
   })
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   win.webContents.on('will-navigate', event => event.preventDefault())

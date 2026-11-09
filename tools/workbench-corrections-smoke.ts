@@ -4,8 +4,8 @@ import type { Page } from 'playwright'
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { initialWorkbench, widgetRegistry, WORKBENCH_KEY } from '../src/shared/workbench/model.ts'
-import type { WorkbenchSnapshot } from '../src/shared/workbench/model.ts'
+import { initialWorkbench, widgetRegistry, WORKBENCH_KEY } from '../tests/fixtures/workbench.ts'
+import type { WorkbenchSnapshot } from '../tests/fixtures/workbench.ts'
 import { parseWorkbench, serializeWorkbench } from '../src/shared/workbench/codec.ts'
 import { moveView } from '../src/shared/workbench/commands.ts'
 import { settle } from './freeform-smoke.ts'
@@ -15,6 +15,7 @@ import { workbenchCompositionSmoke } from './workbench-composition-smoke.ts'
 const canonicalVersion = (JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }).version
 const profile = await mkdtemp(join(tmpdir(), 'geppio-smoke-corrections-'))
 const env: Record<string, string> = Object.fromEntries(Object.entries(process.env).filter((item): item is [string, string] => item[1] !== undefined))
+env.GEPPIO_TEST_DEMO_WIDGETS = '1'
 delete env.ELECTRON_RUN_AS_NODE; delete env.NODE_OPTIONS; delete env.ELECTRON_RENDERER_URL
 env.GEPPIO_TEST_USER_DATA = profile; env.NODE_ENV = 'production'
 await mkdir('.local/diagnostics/corrections-alpha13', { recursive: true })

@@ -29,7 +29,6 @@ export function Settings({ plugins, close, tx, expanded, setExpanded, theme, tog
       {tx.previous !== null && <button className="ui-button tool-button" disabled={tx.editing} onClick={() => { tx.adoptPrevious(); close(); }}>{t("Pr\u00E9via: layout livre anterior")}</button>}
       <button className="ui-button tool-button" onClick={() => { tx.resetPreview(); close(); }}>{t("Pr\u00E9via da composi\u00E7\u00E3o inicial")}</button>
       <label className="import-layout">{t("Importar layout")}<input type="file" accept=".json,application/json" disabled={tx.editing} onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; void tx.importFile(file); close(); }}/></label>
-      <p>{t('As apresentações de Propriedades estão nos controles visíveis junto ao nome do projeto.')}</p>
     </section><PluginSettings plugins={plugins}/></div>
   </dialog>;
 }

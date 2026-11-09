@@ -2,6 +2,12 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.20] — 2026-11-09
+
+- Retire the seven synthetic host widgets from normal startup, widget selection and built-in composition restoration. Keep empty regions and installed-plugin placement available.
+- Validate older layouts before retiring demo references into a bounded, typed recovery archive; preserve plugins, custom bars, saved compositions and original bytes until explicit confirmation. Saved widget associations cannot reactivate demos.
+- Isolate synthetic geometry fixtures in disposable test profiles, retaining four-edge Docked and Floating coverage. Add fresh/alpha.19 upgrade, restart, composition and reset regressions.
+
 ## [0.1.0-alpha.19] — 2026-11-09
 
 - Extend host Main presentation capabilities to Panorama, Fila de trabalho, Propriedades and Atividade. Select mode and edge as one Edit intention, with anchored edge occupancy guarded at selection, restoration and persistence boundaries (Issue #11).

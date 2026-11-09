@@ -8,6 +8,7 @@ import { defaultChrome, parseChrome } from './chrome.ts'
 import type { WorkbenchChrome } from './chrome.ts'
 import { parsePresentations, validatePresentationEdges } from './presentations.ts'
 import type { Presentations } from './presentations.ts'
+import { retireDemoViews } from './retirement.ts'
 
 const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value)
 const identifier = (value: unknown): value is string => typeof value === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,159}$/.test(value)
@@ -124,9 +125,24 @@ export function parseWorkbench(raw: string, registry: Registry): WorkbenchSnapsh
     if (order.some(id => !known(id))) throw new Error('Invalid composition order')
     organization.compositionOrder = order
   }
-  const result = { ...layout, organization }
+  const result: WorkbenchSnapshot = { ...layout, organization }
   validatePresentationEdges(result)
-  return result
+  if (data.retiredDemos !== undefined) {
+    const archive = data.retiredDemos
+    if (!object(archive)) throw new Error('Invalid retired demo archive')
+    const views = parseViews(archive.views, registry)
+    const bars = parseBars(list(archive.bars, LIMITS.savedBars + 1).map(item => {
+      if (!object(item)) throw new Error('Invalid retired bar')
+      return { ...item, name: 'Retired demos', userNamed: false, icon: 'home', archived: item.id !== HOME }
+    }), registry)
+    if (views.some(view => !registry.get(view.typeId)?.fixture) || bars.some(bar => bar.members.some(id => !registry.get(id)?.fixture))) throw new Error('Invalid retired demo owner')
+    const presentations = parsePresentations(archive.presentations, views, registry)
+    const saved = parseDocument({ ...layout, reference: archive.reference, placements: archive.placements }, views, registry, bars, presentations)
+    validatePresentationEdges({ ...saved, organization: { ...organization, views, bars, presentations } })
+    result.retiredDemos = { reference: saved.reference, placements: saved.placements, views,
+      bars: bars.map(({ id, members, positions }) => ({ id, members, positions })), presentations }
+  }
+  return retireDemoViews(result, registry)
 }
 export function serializeWorkbench(snapshot: WorkbenchSnapshot, registry: Registry) {
   // Persist only the typed document. Session slots/history/preview state never
@@ -137,7 +153,7 @@ export function serializeWorkbench(snapshot: WorkbenchSnapshot, registry: Regist
   const sidebarHeight = Math.max(source.reference.sidebar.height, ...source.placements.filter(p => p.region === 'sidebar').map(p => p.y + p.height))
   const layout = { ...source, reference: { ...source.reference, sidebar: { width: sidebarWidth, height: sidebarHeight } },
     placements: source.placements.map(p => p.region === 'sidebar' ? { ...p, width: sidebarWidth } : p) }
-  const raw = JSON.stringify({ schemaVersion: 2, kind: 'geppio-workbench', layout, organization })
+  const raw = JSON.stringify({ schemaVersion: 2, kind: 'geppio-workbench', layout, organization, ...(snapshot.retiredDemos ? { retiredDemos: snapshot.retiredDemos } : {}) })
   parseWorkbench(raw, registry)
   return raw
 }

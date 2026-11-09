@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import type { Locator, Page } from 'playwright'
 import { writeFile } from 'node:fs/promises'
-import { initialWorkbench } from '../src/shared/workbench/model.ts'
-import type { WorkbenchSnapshot } from '../src/shared/workbench/model.ts'
+import { initialWorkbench } from '../tests/fixtures/workbench.ts'
+import type { WorkbenchSnapshot } from '../tests/fixtures/workbench.ts'
 import type { Region } from '../src/shared/freeform/types.ts'
 import { settle } from './freeform-smoke.ts'
 

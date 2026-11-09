@@ -4,9 +4,10 @@ import { settleSnapshot } from '../../../shared/freeform/settlement.ts'
 import { convertHistorical, importFreeform } from '../../../shared/freeform/migration.ts'
 import type { HistoricalChoice } from '../../../shared/freeform/storage.ts'
 import type { Snapshot } from '../../../shared/freeform/types.ts'
-import { adoptLayout, initialWorkbench, widgetRegistry, WORKBENCH_KEY } from '../../../shared/workbench/model.ts'
+import { adoptLayout, widgetRegistry, WORKBENCH_KEY } from '../../../shared/workbench/model.ts'
 import type { Composition, LocalSessionState, Registry, SessionDraft, SessionSlot, WorkbenchSnapshot } from '../../../shared/workbench/model.ts'
 import { parseWorkbench, serializeWorkbench } from '../../../shared/workbench/codec.ts'
+import { resetWorkbench, retireDemoViews } from '../../../shared/workbench/retirement.ts'
 import { readWorkbench, writeWorkbench } from '../../../shared/workbench/storage.ts'
 import { EditHistory, formatSignature } from '../../../shared/workbench/history.ts'
 import { compositionScene, systemCompositions } from '../../../shared/workbench/compositions.ts'
@@ -39,7 +40,7 @@ export function useTransaction(registry: Registry = widgetRegistry(), localState
   function current(): SessionDraft { return { snapshot: live.current, slots: slotsRef.current, formatId: formatId.current, formatMode: formatMode.current, formatSource: formatSource.current, ...(localOwner.current ? { localState: structuredClone(localOwner.current.read()) } : {}) } }
   function refresh() { notify(value => value + 1) }
   function put(next: Snapshot | WorkbenchSnapshot) {
-    const value: WorkbenchSnapshot = 'organization' in next ? next as WorkbenchSnapshot : { ...next, organization: live.current.organization }
+    const value: WorkbenchSnapshot = 'organization' in next ? next as WorkbenchSnapshot : { ...next, retiredDemos: live.current.retiredDemos, organization: live.current.organization }
     try { validatePresentationEdges(value) } catch { setMessage('Borda de apresentação ocupada. Mova o outro painel antes de restaurar esta presença.'); return }
     epoch.current++; live.current = value; setSnapshot(value)
   }
@@ -92,7 +93,7 @@ export function useTransaction(registry: Registry = widgetRegistry(), localState
   function preview(next: Snapshot, text: string) {
     history.current.clear(); checkpoint.current = { ...current(), snapshot: structuredClone(committed.current), slots: [], formatId: null }
     formatBaseline.current = formatSignature(committed.current)
-    put(settleSnapshot('organization' in next ? next : adoptLayout(next))); editingRef.current = true; setEditing(true); setMessage(text)
+    put(settleSnapshot(retireDemoViews('organization' in next ? next as WorkbenchSnapshot : adoptLayout(next), registry))); editingRef.current = true; setEditing(true); setMessage(text)
   }
   async function importFile(file?: File) {
     if (!file || editingRef.current) return
@@ -101,13 +102,13 @@ export function useTransaction(registry: Registry = widgetRegistry(), localState
     try {
       const text = await file.text(); if (ticket !== epoch.current) return
       let next: WorkbenchSnapshot
-      try { next = parseWorkbench(text, registry) } catch { next = adoptLayout(importFreeform(text)) }
+      try { next = parseWorkbench(text, registry) } catch { next = retireDemoViews(adoptLayout(importFreeform(text)), registry) }
       preview(next, 'Composição importada na prévia. Salvar adota sem alterar originais.')
     } catch { if (ticket === epoch.current) setMessage('Arquivo incompatível. Dados anteriores preservados.') }
   }
   function withOrganization(next: Snapshot): WorkbenchSnapshot {
-    const value = { ...next, organization: ('organization' in next ? next as WorkbenchSnapshot : live.current).organization }
-    const composition = [...systemCompositions(), ...live.current.organization.compositions].find(item => item.id === formatId.current)
+    const value = { retiredDemos: live.current.retiredDemos, ...next, organization: ('organization' in next ? next as WorkbenchSnapshot : live.current).organization }
+    const composition = [...systemCompositions(window.geppio?.demoFixtures), ...live.current.organization.compositions].find(item => item.id === formatId.current)
     return composition ? compositionScene({ ...live.current, organization: value.organization }, value, composition.scopes) : value
   }
   return { snapshot, live, editing, recovery, message, setMessage, put, begin, cancel, action, slots, currentSlots: () => slotsRef.current,
@@ -173,7 +174,7 @@ export function useTransaction(registry: Registry = widgetRegistry(), localState
       if (!next) { setMessage('Barra incompatível ou sem espaço. Os dados anteriores foram preservados.'); return false }
       return commit(next, false, true, 'Barra salva.')
     },
-    resetPreview() { preview(initialWorkbench(), 'Composição inicial na prévia. Salvar confirma; Cancelar preserva os dados anteriores.') },
+    resetPreview() { preview(resetWorkbench(live.current, window.geppio?.demoFixtures), 'Composição inicial na prévia. Salvar confirma; Cancelar preserva os dados anteriores.') },
     adoptPrevious() { try { preview(adoptLayout(importFreeform(initial.previous!)), 'Composição livre anterior na prévia; Salvar adota sem alterar o original.') } catch { setMessage('Composição anterior inválida; bytes preservados.') } },
     previous: initial.previous, importFile,
     historical(choice: HistoricalChoice) {

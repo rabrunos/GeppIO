@@ -4,6 +4,7 @@ import { FREEFORM_KEY } from '../freeform/policy.ts'
 import { adoptLayout, initialWorkbench, WORKBENCH_KEY } from './model.ts'
 import type { Registry, WorkbenchSnapshot } from './model.ts'
 import { parseWorkbench, serializeWorkbench } from './codec.ts'
+import { retireDemoViews } from './retirement.ts'
 
 export function readWorkbench(storage: LayoutStorage, registry: Registry) {
   const legacy = readFreeform(storage)
@@ -11,7 +12,7 @@ export function readWorkbench(storage: LayoutStorage, registry: Registry) {
   try {
     raw = storage.getItem(WORKBENCH_KEY); previous = storage.getItem(FREEFORM_KEY)
     if (raw !== null) return { ...legacy, snapshot: parseWorkbench(raw, registry), raw, previous, recovery: false, message: 'Composição protegida.' }
-    return { ...legacy, snapshot: previous === null && !legacy.recovery ? initialWorkbench() : adoptLayout(legacy.snapshot), raw, previous, recovery: legacy.recovery || previous !== null,
+    return { ...legacy, snapshot: previous === null && !legacy.recovery ? initialWorkbench([...registry.values()].some(type => type.fixture && !type.retired)) : retireDemoViews(adoptLayout(legacy.snapshot), registry), raw, previous, recovery: legacy.recovery || previous !== null,
       message: previous !== null ? 'Composição anterior preservada. Adote uma prévia em Configurações.' : legacy.message }
   } catch {
     return { ...legacy, snapshot: initialWorkbench(), raw, previous, recovery: true,

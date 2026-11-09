@@ -327,12 +327,26 @@ atomically. Pointer drops and host catalog/destination controls share the same e
 All fixture frames have one stable React parent. Per-frame CSS clipping maps their region origin and
 scroll offsets into Work Area coordinates; moving between regions does not change component keys or
 portal roots. Offscreen frames remain mounted with content-visibility:auto and inert focus handling.
-There are three constant-size scroll worlds, not empty cells. The host has seven synthetic types,
-initially four Main/two Sidebar/one Bottom. Plugin widgets are integrated through the host
+There are three constant-size scroll worlds, not empty cells. Since alpha.20 normal startup
+and reset have empty regions, and the catalog excludes the seven retired synthetic types.
+Their compatibility metadata remains in the registry; only explicit disposable-profile test
+fixtures activate the old four Main/two Sidebar/one Bottom scene. Plugin widgets use the host
 catalog/placement layer as Main-only single-view cards; `usePlugins` remains App-owned and
 geometry never manages Workers. Host types include card/seamless appearance infrastructure,
 but current registered types are card and manifest/API v1 does not expose appearance, regions,
 category, multi-area presence or rail contributions to authors.
+
+Alpha.20 validates the complete original workbench envelope before retiring demo views,
+placements, bar memberships/positions and presentation preferences into an optional typed
+`retiredDemos` archive in that same envelope. Its reference geometry remains independent of
+the active scene. The archive is validated on every read/write and shares the existing 64 KiB
+bound; startup does not write bytes. Active plugin geometry, custom bar identities/names,
+composition records/favorites/order and plugin installation/data stores remain intact.
+Saved compositions retain recoverable associations, but their normal previews/restoration
+filter retired types; built-in presets keep format slots without demo associations. Reset
+keeps user bars/compositions and the archive. Historical codecs/bytes and explicit adoption
+remain available; their previews also retire demos. Unknown owners, malformed associations,
+missing plugins, quota and stale-byte conflicts retain the existing recovery/write refusal.
 
 ### Direct manipulation and bounded search
 

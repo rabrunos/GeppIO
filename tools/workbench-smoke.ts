@@ -3,11 +3,12 @@ import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import assert from 'node:assert/strict'
-import { WORKBENCH_KEY } from '../src/shared/workbench/model.ts'
+import { WORKBENCH_KEY } from '../tests/fixtures/workbench.ts'
 import { settle as settleDesktop } from './freeform-smoke.ts'
 const profile = await mkdtemp(join(tmpdir(), 'geppio-smoke-alpha13-functional-'))
 await mkdir('.local/diagnostics', { recursive: true })
 const env: Record<string, string> = { ...Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined)), GEPPIO_TEST_USER_DATA: profile, NODE_ENV: 'production' }
+env.GEPPIO_TEST_DEMO_WIDGETS = '1'
 delete env.ELECTRON_RUN_AS_NODE; delete env.NODE_OPTIONS; delete env.ELECTRON_RENDERER_URL
 const app = await electron.launch({ args: ['.'], env })
 const appProcess = app.process()

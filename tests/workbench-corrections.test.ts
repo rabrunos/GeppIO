@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { initialWorkbench, widgetRegistry, constraintsForViews, LIMITS } from '../src/shared/workbench/model.ts'
-import type { LocalSessionState, UserBar, SessionSlot } from '../src/shared/workbench/model.ts'
+import { initialWorkbench, widgetRegistry, constraintsForViews, LIMITS } from './fixtures/workbench.ts'
+import type { LocalSessionState, UserBar, SessionSlot } from './fixtures/workbench.ts'
 import { addWidget, updateBar, moveView } from '../src/shared/workbench/commands.ts'
 import { parseWorkbench, serializeWorkbench } from '../src/shared/workbench/codec.ts'
 import { projectRegion } from '../src/shared/freeform/projection.ts'
@@ -10,7 +10,7 @@ import { reflow } from '../src/shared/freeform/reflow.ts'
 import { EditHistory, formatSignature } from '../src/shared/workbench/history.ts'
 import { reduceNotifications } from '../src/shared/workbench/notifications.ts'
 import { fillReservation } from '../src/shared/workbench/slots.ts'
-import { captureComposition } from '../src/shared/workbench/compositions.ts'
+import { captureComposition } from './fixtures/compositions.ts'
 
 const registry = widgetRegistry()
 const bar = (index: number, archived = false): UserBar => ({ id: `bar:${index}`, name: `Literal ${index}`, userNamed: true, icon: 'widgets', archived, members: [], positions: {} })

@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict'
 import { writeFile } from 'node:fs/promises'
 import type { Page } from 'playwright'
-import { initialWorkbench, WORKBENCH_KEY } from '../src/shared/workbench/model.ts'
-import type { Composition, WorkbenchSnapshot } from '../src/shared/workbench/model.ts'
+import { initialWorkbench, WORKBENCH_KEY } from '../tests/fixtures/workbench.ts'
+import type { Composition, WorkbenchSnapshot } from '../tests/fixtures/workbench.ts'
 import { parseWorkbench } from '../src/shared/workbench/codec.ts'
-import { widgetRegistry } from '../src/shared/workbench/model.ts'
+import { widgetRegistry } from '../tests/fixtures/workbench.ts'
 import { settle } from './freeform-smoke.ts'
 import { dropDriver, near } from './workbench-drop-smoke.ts'
 

@@ -36,7 +36,8 @@ not explicitly closed by the owner remain labelled provisional in the specificat
 The alpha.13/alpha.14 workbench adds host-owned bars, catalog placement, compositions,
 reservations, checkpoints and session undo/redo. Individual widget movement/resize requires
 Edit mode; adjacent-pair resize also works in normal mode through its own validated commit.
-The host has seven synthetic widget types (initially four Main, two Sidebar, one Bottom).
+Since alpha.20, normal startup and built-in compositions have empty regions. Seven retired
+synthetic types remain compatibility identities and opt-in disposable-profile test fixtures.
 Local plugin contributions use Main-only, single-view declarative cards; host metadata is not
 automatically an author-facing SDK capability. Project names, Git indicators, avatar and the
 presentation test panel do not implement filesystem projects, Git, accounts or a terminal.

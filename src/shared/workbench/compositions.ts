@@ -6,16 +6,17 @@ import type { Composition, FormatSlot, Registry, SessionSlot, WorkbenchSnapshot 
 import { fitTargets } from './commands.ts'
 import { applyChrome } from './chrome.ts'
 import type { ChromePatch } from './chrome.ts'
+import { availableComposition } from './retirement.ts'
 
-export function systemCompositions(): Composition[] {
-  const initial = initialWorkbench()
+export function systemCompositions(demoFixtures = false): Composition[] {
+  const initial = initialWorkbench(demoFixtures)
   return [['default', 'Padrão'], ['focus', 'Foco'], ['balanced', 'Equilibrado']].map(([id, name]) => {
     const focus = id === 'focus', ids = focus ? ['summary', 'queue'] : ['summary', 'chart'], width = initial.reference.main.width, height = initial.reference.main.height
     const format: FormatSlot[] = ids.map((widget, i) => ({ id: `format:${id}:${i}`, region: widget === 'chart' ? 'bottom' : 'main', x: focus ? i * (width + POLICY.gap) / 2 : 0, y: 0,
       width: widget === 'chart' ? initial.reference.bottom.width : focus ? (width - POLICY.gap) / 2 : width, height: widget === 'chart' ? initial.reference.bottom.height : height }))
     const placements = ids.map((widget, i) => { const slot = format[i]!; return { id: widget, region: slot.region, x: slot.x, y: slot.y, width: slot.width, height: slot.height, preferred: { width: slot.width, height: slot.height } } })
     return { id: `system:${id}`, name: name!, system: true, scopes: (focus ? ['main'] : ['main', 'bottom']) as Region[], reference: initial.reference,
-      views: initial.organization.views.filter(view => ids.includes(view.id)), placements, mode: 'format-widgets' as const, format,
+      views: initial.organization.views.filter(view => ids.includes(view.id)), placements: demoFixtures ? placements : [], mode: 'format-widgets' as const, format,
       chrome: { sidebar: { size: id === 'balanced' ? 238 : 283 }, ...(!focus ? { bottom: { size: id === 'balanced' ? 200 : 167 } } : {}) } }
   })
 }
@@ -94,6 +95,7 @@ export function reorderComposition(source: WorkbenchSnapshot, id: string, before
   return { ...source, organization: { ...source.organization, [favorites ? 'favorites' : 'compositionOrder']: next } }
 }
 export function applyComposition(source: WorkbenchSnapshot, registry: Registry, composition: Composition, mode: 'format' | 'widgets') {
+  composition = availableComposition(composition, registry)
   const next = compositionChrome(structuredClone(source), composition)
   if (mode === 'widgets') {
     if (composition.mode !== 'format-widgets') return null
