@@ -39,6 +39,14 @@ async function place(name: string) {
   await page.locator('.widget-browser-destination [data-widget-place="main"]').click(); await settle(page)
 }
 async function saved(name: string) { await widget(name).getByRole('status').filter({ hasText: /^Salvo\.$/ }).waitFor() }
+async function selectedTitle(name: string, title: string) {
+  // A previous record may still say Saved while the asynchronous New/Select event is queued.
+  // Wait for the selected model itself, never reuse the preceding record's acknowledgement.
+  await page.waitForFunction(({ name, title }) => {
+    const element = document.querySelector(`[data-plugin-widget="geppio.workspace-essentials:${name}"]`)
+    return element?.querySelector<HTMLInputElement>('input[aria-label="Título"]')?.value === title && element.querySelector('p')?.textContent === 'Salvo.'
+  }, { name, title })
+}
 async function fill(name: string, label: string, value: string) {
   await widget(name).getByRole('textbox', { name: label, exact: true }).fill(value)
   // Wait for the actual confirmed disk acknowledgement, never a fixed autosave delay.
@@ -54,9 +62,9 @@ async function compare() {
   await saved('notes'); await saved('scratch'); await saved('prompts'); await saved('checklist')
   assert.equal(await widget('notes').getByRole('textbox', { name: 'Título', exact: true }).inputValue(), 'Nota dois')
   assert.equal(await widget('notes').getByRole('textbox', { name: 'Texto da anotação', exact: true }).inputValue(), 'Segunda nota')
-  await widget('notes').getByRole('button', { name: 'Nota um', exact: true }).click(); await saved('notes')
+  await widget('notes').getByRole('button', { name: 'Nota um', exact: true }).click(); await selectedTitle('notes', 'Nota um')
   assert.equal(await widget('notes').getByRole('textbox', { name: 'Texto da anotação', exact: true }).inputValue(), note)
-  await widget('notes').getByRole('button', { name: 'Nota dois', exact: true }).click(); await saved('notes')
+  await widget('notes').getByRole('button', { name: 'Nota dois', exact: true }).click(); await selectedTitle('notes', 'Nota dois')
   assert.equal(await widget('scratch').getByRole('textbox').inputValue(), scratch)
   assert.equal(await widget('prompts').getByRole('textbox', { name: 'Título', exact: true }).inputValue(), 'Prompt piloto')
   assert.equal(await widget('prompts').getByRole('textbox', { name: 'Texto do prompt', exact: true }).inputValue(), prompt)
@@ -93,9 +101,9 @@ try {
   for (const name of ['notes', 'scratch', 'checklist', 'prompts']) await place(name)
   await page.locator('[data-catalog-type="plugin:local.counter:counter"]').click(); await page.locator('.widget-browser-destination [data-widget-place="main"]').click(); await conclude()
   await page.getByRole('button', { name: 'Incrementar', exact: true }).click(); await page.getByText('Cliques nesta ativação: 1', { exact: true }).waitFor(); evidence.legacyV1 = 'passed'
-  await widget('notes').getByRole('button', { name: 'Nova anotação', exact: true }).click(); await saved('notes')
+  await widget('notes').getByRole('button', { name: 'Nova anotação', exact: true }).click(); await selectedTitle('notes', 'Sem título')
   await fill('notes', 'Título', 'Nota um'); await fill('notes', 'Texto da anotação', note)
-  await widget('notes').getByRole('button', { name: 'Nova anotação', exact: true }).click(); await saved('notes')
+  await widget('notes').getByRole('button', { name: 'Nova anotação', exact: true }).click(); await selectedTitle('notes', 'Sem título')
   await fill('notes', 'Título', 'Nota dois'); await fill('notes', 'Texto da anotação', 'Segunda nota')
   await fill('scratch', 'Texto do rascunho', scratch)
   for (const text of ['Primeiro item', 'Segundo item']) { await fill('checklist', 'Novo item', text); await widget('checklist').getByRole('button', { name: 'Adicionar item', exact: true }).click(); await saved('checklist') }
@@ -106,15 +114,15 @@ try {
     await page.waitForFunction(checked => document.querySelector<HTMLInputElement>('[data-plugin-widget="geppio.workspace-essentials:checklist"] .plugin-check-item input')?.checked === checked && document.querySelector('[data-plugin-widget="geppio.workspace-essentials:checklist"] p')?.textContent === 'Salvo.', checked)
   }
   evidence.actionBurst = 'passed'
-  await widget('prompts').getByRole('button', { name: 'Novo prompt', exact: true }).click(); await saved('prompts')
+  await widget('prompts').getByRole('button', { name: 'Novo prompt', exact: true }).click(); await selectedTitle('prompts', 'Novo prompt')
   await fill('prompts', 'Título', 'Prompt piloto'); await fill('prompts', 'Texto do prompt', prompt)
   const priorField = await widget('prompts').getByRole('textbox', { name: 'Título', exact: true }).getAttribute('value')
   assert.equal(priorField, 'Prompt piloto')
   await widget('prompts').getByRole('button', { name: 'Novo prompt', exact: true }).click()
-  await page.waitForFunction(() => document.querySelector<HTMLInputElement>('[data-plugin-widget="geppio.workspace-essentials:prompts"] input[aria-label="Título"]')?.value === 'Novo prompt')
+  await selectedTitle('prompts', 'Novo prompt')
   await fill('prompts', 'Título', 'Segundo prompt'); await fill('prompts', 'Texto do prompt', 'Outra instrução salva')
   await widget('prompts').getByRole('button', { name: 'Prompt piloto', exact: true }).click()
-  await page.waitForFunction(() => document.querySelector<HTMLInputElement>('[data-plugin-widget="geppio.workspace-essentials:prompts"] input[aria-label="Título"]')?.value === 'Prompt piloto')
+  await selectedTitle('prompts', 'Prompt piloto')
   await saved('prompts'); evidence.multiplePrompts = 'passed'
   await page.evaluate(() => {
     const write = navigator.clipboard.writeText.bind(navigator.clipboard)
@@ -174,6 +182,7 @@ try {
   await writeFile(diagnostics + '/result.json', JSON.stringify(evidence, null, 2))
   console.log('PASS Workspace Essentials:', JSON.stringify(evidence))
 } catch (error) {
+  if (app) console.error('Disposable pilot surfaces:', await page.locator('[data-plugin-widget]').evaluateAll(nodes => nodes.map(node => ({ id: node.getAttribute('data-plugin-widget'), text: node.textContent?.slice(0, 512), fields: [...node.querySelectorAll('input,textarea')].map(field => ({ label: field.getAttribute('aria-label'), value: (field as HTMLInputElement).value.slice(0, 160) })) }))).catch(() => []))
   if (app) { await page.screenshot({ path: diagnostics + '/failure.png' }).catch(() => {}); await writeFile(diagnostics + '/failure.txt', String(error) + '\n' + errors.join('\n')) }
   await writeFile(diagnostics + '/result.json', JSON.stringify({ ...evidence, failure: String(error) }, null, 2)); throw error
 } finally {
