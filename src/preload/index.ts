@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { IDENTITY } from '../shared/identity.ts'
 import type { PluginBridge } from '../shared/plugins.ts'
 import type { WindowControls } from '../shared/window-controls.ts'
+import type { PluginDataBridge } from '../shared/plugin-data.ts'
 declare const __APP_VERSION__: string
 const plugins: PluginBridge = Object.freeze({
   list: () => ipcRenderer.invoke('plugins:list'),
@@ -14,5 +15,11 @@ const windowControls: WindowControls = Object.freeze({
   maximize: () => ipcRenderer.invoke('window:maximize'),
   close: () => ipcRenderer.invoke('window:close')
 })
-contextBridge.exposeInMainWorld('geppio', Object.freeze({ name: IDENTITY.name, version: __APP_VERSION__, platform: process.platform, plugins, windowControls,
+const pluginData = Object.freeze<PluginDataBridge>({
+  begin: (id, installation) => ipcRenderer.invoke('plugin-data:begin', id, installation),
+  read: token => ipcRenderer.invoke('plugin-data:read', token),
+  write: (token, expectedRevision, document) => ipcRenderer.invoke('plugin-data:write', token, expectedRevision, document),
+  end: token => ipcRenderer.invoke('plugin-data:end', token)
+})
+contextBridge.exposeInMainWorld('geppio', Object.freeze({ name: IDENTITY.name, version: __APP_VERSION__, platform: process.platform, plugins, pluginData, windowControls,
   demoFixtures: process.argv.includes('--geppio-demo-fixtures') }))

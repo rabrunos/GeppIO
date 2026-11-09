@@ -54,15 +54,40 @@ pnpm test:desktop
 Esses comandos não representam resultados já obtidos nesta máquina. Evidências por commit,
 limites dos testes e aceites estão nas issues e no [guia de validação](docs/development/testing.md).
 
+## Workspace Essentials local
+
+Execute `pnpm plugins:build` e abra o aplicativo com `pnpm start` após `pnpm build`.
+Abra o menu do perfil e **Configurações > Desenvolvimento e recuperação > Plugins > Instalar
+pasta local**. Selecione `.local/plugin-packages/workspace-essentials` e clique **Ativar** em
+**Workspace Essentials**. O menu **Plugins** do cabeçalho oferece o mesmo gerenciamento.
+Entre em **Editar layout**, escolha cada widget no catálogo, selecione **Principal** e conclua.
+Ativar não adiciona widgets automaticamente; Sidebar e Bottom não são destinos deste piloto.
+
+- **Anotações:** use **Nova anotação**, edite título/texto e selecione outra anotação na lista.
+- **Rascunho:** digite o texto; o autosave agrupa alterações por 500 ms. Aguarde **Salvo.**
+- **Checklist:** escreva em **Novo item**, clique **Adicionar item** e marque a conclusão.
+- **Prompts salvos:** use **Novo prompt**, edite título/texto e clique **Copiar prompt**.
+  Se a política de clipboard impedir a cópia, selecione o texto e copie manualmente.
+
+Os dados confirmados voltam ao reabrir, reiniciar e desativar/reativar a mesma instalação.
+Remover um widget da Main preserva seus dados. Desinstalar também mantém o arquivo recuperável,
+mas uma reinstalação recebe outra identidade e não herda os dados antigos. Não há transferência
+ou exclusão automática. Em falha, o texto pendente continua disponível na ativação: tente salvar
+novamente ou copie-o antes de fechar. Bytes inválidos/incompatíveis são preservados e bloqueiam
+gravação; consulte [retenção e recuperação](docs/architecture/plugin-data.md).
+São dados locais comuns, sem criptografia de credenciais ou isolamento contra plugins hostis.
+
+Teste focado em perfil descartável: `pnpm test:essentials`. O contrato v1 de Counter/Pulse permanece.
+
 ## O que existe no workbench
 
 Cabeçalho fixo, barra contextual, Sidebar, Main, Bottom e barra de status compõem o shell.
 Minimizar, maximizar e fechar operam a janela Electron real; maximizar a janela não maximiza
 um widget dentro da Main. Tema claro/escuro, idioma e movimento reduzido fazem parte do host.
 
-O registro nativo atual tem sete tipos sintéticos: **Panorama**, **Fila de trabalho**,
-**Biblioteca**, **Ideias em aberto**, **Atividade**, **Propriedades** e **Ritmo**. A composição
-inicial contém quatro widgets na Main, dois na Sidebar e um na Bottom. Eles exercitam leitura,
+O registro de compatibilidade preserva sete tipos sintéticos: **Panorama**, **Fila de trabalho**,
+**Biblioteca**, **Ideias em aberto**, **Atividade**, **Propriedades** e **Ritmo**. Eles ficam
+fora do catálogo e do perfil inicial normal; fixtures descartáveis exercitam leitura,
 formulários, layout e interação. Biblioteca não explora arquivos; Ritmo não mede recursos;
 Fila e Atividade não consultam tarefas ou Git. O nome do projeto é metadado local renomeável;
 `main`, `Clean`, caminho, abrir no Explorer e exportar configuração são demonstrações.

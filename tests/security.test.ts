@@ -18,10 +18,10 @@ test('production script CSP is not the development inline-script policy', () => 
   assert.match(PRODUCTION_CSP, /connect-src 'none'/)
   assert.ok(!PRODUCTION_CSP.includes('unsafe-eval'))
 })
-test('static security regression: renderer has only fixed plugin management and authorized window chrome', () => {
+test('static security regression: renderer has only fixed management, activation-bound data and authorized window chrome', () => {
   const preload = readFileSync('src/preload/index.ts', 'utf8'), main = readFileSync('src/main/index.ts', 'utf8')
   assert.ok(!/child_process|node:fs|sendSync|\.send\(/.test(preload))
-  assert.deepEqual([...preload.matchAll(/ipcRenderer.invoke\('([^']+)'/g)].map(match => match[1]), ['plugins:list', 'plugins:install', 'plugins:set-enabled', 'plugins:remove', 'window:minimize', 'window:maximize', 'window:close'])
+  assert.deepEqual([...preload.matchAll(/ipcRenderer.invoke\('([^']+)'/g)].map(match => match[1]), ['plugins:list', 'plugins:install', 'plugins:set-enabled', 'plugins:remove', 'window:minimize', 'window:maximize', 'window:close', 'plugin-data:begin', 'plugin-data:read', 'plugin-data:write', 'plugin-data:end'])
   assert.match(main, /event.senderFrame !== event.sender.mainFrame/)
   assert.match(main, /sandbox: true/); assert.match(main, /contextIsolation: true/)
   assert.match(main, /nodeIntegration: false/); assert.match(main, /webviewTag: false/)

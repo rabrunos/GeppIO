@@ -4,7 +4,9 @@ This is a selected control map, not a security certification or a list of claime
 
 | Exposure | Control / implementation | Check and limitation |
 | --- | --- | --- |
-| Renderer reaches native authority | `nodeIntegration: false`, `nodeIntegrationInWorker: false`, `contextIsolation: true`, sandbox enabled; four fixed plugin-management operations and three fixed host window-chrome actions | Exact owning-window/main-frame URL checks, zero window-action arguments, source assertions and desktop renderer/Worker absence of `require`/`process`; Workers have no bridge |
+| Renderer reaches native authority | `nodeIntegration: false`, `nodeIntegrationInWorker: false`, `contextIsolation: true`, sandbox enabled; four fixed plugin-management, four fixed activation-bound data operations and three fixed host window-chrome actions | Exact owning-window/main-frame URL checks, zero window-action arguments, source assertions and desktop renderer/Worker absence of `require`/`process`; Workers have no bridge |
+| API 2 ordinary plugin data | Installation UUID and owner/document-bound revocable channel, schema/size/depth/rate bounds, serialized CAS and temporary-file replacement; malformed bytes retained | `tests/plugin-data.test.ts`, runtime tests and `pnpm test:essentials`; [retention/recovery](plugin-data.md), no hostile Worker/same-user disk isolation or credential vault |
+| API 2 text and prompt copy | Literal host controls, exact owning-widget events, bounded queues; user click copies the current field draft through browser clipboard with failure feedback | Independent pilot smoke including immediate edit/copy and denied clipboard; global permission policy unchanged, no Worker clipboard bridge |
 | Trusted local plugin package input | Native directory picker, bounded manifest/files, no links/traversal, managed copies and inspected JS snapshots, main-frame IPC validation | `tests/plugins.test.ts` and desktop installation/failure cases; not safe for hostile third-party packages or same-user disk attacks |
 | Plugin lifecycle/contributions | Worker-bound identity, literal declarative UI, timeout/terminate, bounded events/message rate | `tests/plugin-runtime.test.ts` and real desktop activation/actions/disposal/restart; no OS resource/storage/session isolation |
 | External page/new window/navigation | Reject window-open, navigation away and attached webviews; production web requests restricted; permissions and downloads denied | Source controls plus actual desktop smoke; a future remote surface requires separate tests |
@@ -21,8 +23,9 @@ No arbitrary content injection, safe-storage credential service, PTY, general lo
 
 Disabling a plugin clears its runtime publications and terminates its Worker; the host may retain
 the saved widget presence and position as paused. Removing only a presence does not stop an enabled
-Worker. These layout/lifecycle distinctions do not grant plugin-owned persistence, credential access
-or a cross-plugin capability broker; see [the current runtime contract](plugins.md).
+Worker. Ordinary plugin persistence requires explicit API 2 opt-in and its separate channel;
+these layout/lifecycle distinctions grant no credential access or cross-plugin capability broker.
+See [the current runtime contract](plugins.md).
 
 The owner explicitly authorized minimize/maximize/close for the alpha.13 frameless header.
 `window-controls.ts` validates the fixed host request; Main resolves the sender's own window.

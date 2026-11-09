@@ -2,6 +2,13 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.21] — 2026-11-09
+
+- Add the independently built first-party Workspace Essentials trusted-local package: titled notes, scratchpad, ordered checklist and saved prompts, explicitly placed in Main through the existing plugin flow.
+- Opt in to API 2 literal text fields/lists/actions, validated owning-widget events and user-initiated host clipboard writes. Keep the exact API 1 facade and Counter/Pulse behavior.
+- Persist bounded, versioned ordinary plugin data separately from layout/preferences using installation-bound, revocable activation channels, serialized revision-checked writes and atomic replacement. Preserve malformed bytes, confirmed data and pending text on failure.
+- Retain recoverable data on view removal, disable and uninstall; fresh installations cannot inherit it by claiming a manifest ID. Add focused boundary/failure tests and an independent disposable-profile pilot smoke before the existing desktop chain.
+
 ## [0.1.0-alpha.20] — 2026-11-09
 
 - Retire the seven synthetic host widgets from normal startup, widget selection and built-in composition restoration. Keep empty regions and installed-plugin placement available.

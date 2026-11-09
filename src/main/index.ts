@@ -47,6 +47,11 @@ async function createWindow(): Promise<void> {
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   win.webContents.on('will-navigate', event => event.preventDefault())
   win.webContents.on('will-attach-webview', event => event.preventDefault())
+  const owner = win.webContents.id
+  const revokeData = () => plugins.revokeOwner(owner)
+  win.webContents.on('did-start-navigation', (_event, _url, _inPlace, mainFrame) => { if (mainFrame) revokeData() })
+  win.webContents.on('render-process-gone', revokeData)
+  win.webContents.on('destroyed', revokeData)
   win.once('ready-to-show', () => win.show())
   await win.loadURL(devURL ?? `${IDENTITY.protocol}://${IDENTITY.host}/index.html`)
 }
@@ -61,6 +66,24 @@ app.whenReady().then(async () => {
     await dialog.showMessageBox({ type: 'warning', title: IDENTITY.name, message: 'Não foi possível migrar o layout anterior. Os dados foram preservados.', detail: 'Feche a versão anterior e consulte o procedimento de recuperação em docs/development/renaming.md. Não salve um layout substituto antes de recuperar o rascunho desejado.' })
   }
   // Explicit operations only; no IPC channel name or filesystem path comes from the renderer.
+  for (const operation of ['begin', 'read', 'write', 'end'] as const) {
+    ipcMain.handle('plugin-data:' + operation, async (event, ...args: unknown[]): Promise<PluginResult<unknown>> => {
+      const win = BrowserWindow.fromWebContents(event.sender), frame = event.senderFrame
+      if (!win || frame !== event.sender.mainFrame || frame?.url !== (devURL ?? `${IDENTITY.protocol}://${IDENTITY.host}/index.html`)) return { ok: false, error: 'Origem de dados inválida.' }
+      const owner = event.sender.id
+      try {
+        if (operation === 'begin' && args.length === 2 && pluginId(args[0]) && typeof args[1] === 'string' && /^[a-f0-9-]{36}$/.test(args[1])) {
+          const token = await plugins.beginData(owner, args[0], args[1])
+          if (event.sender.isDestroyed() || event.sender.mainFrame !== frame) { plugins.endData(owner, token); throw new Error('Documento de ativação expirado.') }
+          return { ok: true, value: token }
+        }
+        if (operation === 'end' && args.length === 1) { plugins.endData(owner, args[0]); return { ok: true, value: null } }
+        if (operation === 'read' && args.length === 1) return { ok: true, value: await plugins.dataOperation(owner, args[0], 'read') }
+        if (operation === 'write' && args.length === 3) return { ok: true, value: await plugins.dataOperation(owner, args[0], 'write', args[1], args[2]) }
+        return { ok: false, error: 'Operação de dados inválida.' }
+      } catch (error) { return { ok: false, error: error instanceof Error && !('code' in error) && !(error instanceof SyntaxError) ? error.message.slice(0, 512) : 'Falha ao salvar dados. Rascunho e dados confirmados preservados.' } }
+    })
+  }
   for (const operation of ['minimize', 'maximize', 'close'] as const) {
     ipcMain.handle('window:' + operation, (event, ...args: unknown[]): boolean => {
       const win = BrowserWindow.fromWebContents(event.sender)

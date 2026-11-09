@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react'
 import { MotionConfig } from 'motion/react'
 import { PlusIcon } from '@heroicons/react/24/outline'
 import { usePlugins } from './Plugins.tsx'
+import { PluginSurface } from './PluginSurface.tsx'
 import { constraintsFor, EXPANSION_KEY } from '../../shared/freeform/policy.ts'
 import { projectRegion } from '../../shared/freeform/projection.ts'
 import { REGIONS } from '../../shared/freeform/types.ts'
@@ -260,5 +261,7 @@ function WorkbenchMoveIcon() { return <svg className="icon" viewBox="0 0 24 24" 
 function WorkbenchEmptyIcon() { return <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="3.75" y="3.75" width="6" height="6" rx="1.5" /><rect x="14.25" y="3.75" width="6" height="6" rx="1.5" /><rect x="3.75" y="14.25" width="6" height="6" rx="1.5" /><rect x="14.25" y="14.25" width="6" height="6" rx="1.5" /></svg> }
 function PluginBody({ definition, plugins, preview = false }: { definition: WidgetType; plugins: ReturnType<typeof usePlugins>; preview?: boolean }) {
   const { t } = useLocale(), content = plugins.views.find(view => view.plugin.manifest.id === definition.pluginId)?.widgets[definition.widgetId!]
-  return <div className="host-plugin-content" data-plugin-widget={!preview && content ? `${definition.pluginId}:${definition.widgetId}` : undefined}><p>{content?.text ?? t('Plugin desativado ou aguardando publicação.')}</p>{content?.action && <button className="ui-button tool-button" onClick={preview ? undefined : () => plugins.action(definition.pluginId!, definition.widgetId!, content.action!.id)}>{content.action.label}</button>}</div>
+  const runtime = plugins.views.find(view => view.plugin.manifest.id === definition.pluginId)
+  const api2 = runtime?.plugin.manifest.apiVersion === 2
+  return <div className="host-plugin-content" data-plugin-widget={!preview && content ? `${definition.pluginId}:${definition.widgetId}` : undefined}>{content && api2 ? <PluginSurface view={content} preview={preview} paused={runtime?.status !== 'active'} send={event => plugins.widgetEvent(definition.pluginId!, definition.widgetId!, event)} /> : <><p>{content?.text ?? t('Plugin desativado ou aguardando publicação.')}</p>{content?.action && <button className="ui-button tool-button" onClick={preview ? undefined : () => plugins.action(definition.pluginId!, definition.widgetId!, content.action!.id)}>{content.action.label}</button>}</>}</div>
 }

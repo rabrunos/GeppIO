@@ -43,7 +43,9 @@ for category, appearance, regions or multi-area presence does not imply matching
 manifest fields. Likewise, compact-rail actions, widget tab groups and general presentations
 are not available SDK contributions. Hiding/removing a view does not dispose its Worker;
 disabling the package does, and reactivation restarts its state. Managed package/enabled
-preferences persist independently of layout; generic plugin-owned state storage remains #23.
+preferences persist independently of layout. Alpha.21 adds opt-in API 2 ordinary plugin data under
+Issue #23; see [the data/surface contract](plugin-data.md). The native data bridge is fixed and
+activation-bound; API 1 keeps its exact facade and reset behavior.
 
 The renderer owns visual state. Pure modules in `src/shared/freeform/` own continuous CSS-pixel
 geometry, region constraints, bounded contact reflow, reversible interval projection and independent

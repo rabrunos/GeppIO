@@ -511,6 +511,22 @@ Measure memory/CPU during representative interaction and repeated opens/closes; 
 and workload. Alpha.2 has real Workers for trusted test logic, but no web embeddings or terminal
 processes. A fixture/sample result cannot certify future plugin costs or OS resource isolation.
 
+## Workspace Essentials pilot (alpha.21)
+
+`pnpm test:essentials` is an independent built-Electron smoke with its own disposable profile.
+It runs first in `pnpm test:desktop` so its result is recorded before any archived-bar assertion.
+It uses real native package install/enable, explicit Main placement of all four widgets, literal
+edits, clipboard verification (including immediate edit/copy), process restart/value comparison,
+disable/re-enable, removal/reopening of a view, native storage failure with retained text/retry,
+and unchanged API 1 Counter/Pulse. Diagnostics stay in ignored `.local/diagnostics/`.
+The archived-bar assertion is preserved; report its actual result separately from this pilot.
+
+`tests/plugin-data.test.ts` covers identity/owner/channel binding, reinstall retention separation,
+stale navigation/queued activations, bounded/invalid documents, corrupt/unsupported bytes,
+concurrent CAS writes, disk replacement failure and rollback. Runtime tests cover owning controls,
+queue/rate bounds, stale data responses, revocation and API 1 refusal. These tests do not certify
+hostile-code isolation, power-loss durability, physical Windows UX or Linux application support.
+
 ## Completion standard
 
 Report passed/failed/blocked/not_run for each selected layer, the actual command/environment and

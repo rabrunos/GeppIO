@@ -91,7 +91,11 @@ Main stores managed trusted plugin copies and installation/enabled preferences u
 and recovery settings; do not add core imports. Manifest v1 contributions normalize to Main-only,
 single-view cards. Moving/removing a presence does not dispose its Worker; disabling does, and an
 existing placement can remain as a paused placeholder. Counter state resets on activation.
-Layout persistence does not provide plugin-owned storage. The plugin SDK exposes no filesystem,
+Layout persistence does not provide plugin-owned storage. API 2 Workspace Essentials uses a
+separate installation-bound profile store; see [data retention/recovery](../architecture/plugin-data.md).
+Build it with `pnpm plugins:build`, install `.local/plugin-packages/workspace-essentials`, enable,
+then place each selected widget explicitly in Main. `pnpm test:essentials` uses a disposable profile.
+The plugin SDK exposes no filesystem,
 process, PTY, remote-network, secret or cross-plugin authority. Workers share origin/storage authority;
 they are not an untrusted community sandbox. See [plugin boundaries](../architecture/plugins.md).
 

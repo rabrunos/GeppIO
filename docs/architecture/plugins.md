@@ -1,4 +1,12 @@
-# Plugin boundary — trusted local v1 and future design
+# Plugin boundary — trusted local v1/v2 and future design
+
+## API 2 pilot (alpha.21)
+
+Workspace Essentials opts in through `apiVersion: 2` to bounded literal text fields/lists/actions
+and installation-bound ordinary data. The exact v1 facade below stays supported. See
+[API 2 data/surface contract and recovery](plugin-data.md) for limits, revocation, replacement,
+retention and shared-origin trust limitations. No generic filesystem, credentials, community
+execution or general SDK expansion follows from this first-party trusted-local pilot.
 
 ## Implemented experimental runtime (Issue #21)
 
@@ -10,7 +18,7 @@ for enabled IDs/revisions. Source edits do not mutate installed packages; remove
 Invalid installed packages appear as recoverable inventory errors; corrupt preference bytes are
 preserved and management is blocked. No package is executed in Main/preload.
 
-`plugin.json` has exactly `schemaVersion: 1`, `apiVersion: 1`, `id`, `name`, SemVer `version`,
+For API 1, `plugin.json` has exactly `schemaVersion: 1`, `apiVersion: 1`, `id`, `name`, SemVer `version`,
 relative `.js` `entry`, and `widgets: [{ id, title, surface: 'declarative' }]` (zero to eight).
 IDs and relative paths are bounded; traversal, links/junctions, unknown manifest fields, duplicate
 widget IDs and unsupported file types are rejected. Limits: 32 installations, 64 package entries,
@@ -50,7 +58,7 @@ Reload/process exit forcibly terminates Workers; dispose is
 best effort during explicit disable/remove, not guaranteed on process exit. Enabled preference
 survives a runtime failure; retry is explicit in Settings, or occurs on restart. Sessions retain
 only eight recent events and widget state is reset on activation. Package revision changes invalidate
-old asset URLs. Manifest/API compatibility is exact v1; no upgrades or dependency resolver are present.
+old asset URLs. API 1 compatibility stays exact; API 2 is opt-in. No upgrades or dependency resolver are present.
 
 This is not a community sandbox: Workers share browser origin/storage authority, installed scripts
 can reference other enabled local modules, and there are no per-plugin sessions/storage grants,

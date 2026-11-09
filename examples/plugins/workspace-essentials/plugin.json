@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "apiVersion": 2,
+  "id": "geppio.workspace-essentials",
+  "name": "Workspace Essentials",
+  "version": "1.0.0",
+  "entry": "entry.js",
+  "widgets": [
+    { "id": "notes", "title": "Anotações", "surface": "declarative" },
+    { "id": "scratch", "title": "Rascunho", "surface": "declarative" },
+    { "id": "checklist", "title": "Checklist", "surface": "declarative" },
+    { "id": "prompts", "title": "Prompts salvos", "surface": "declarative" }
+  ]
+}

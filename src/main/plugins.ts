@@ -4,6 +4,9 @@ import { randomUUID } from 'node:crypto'
 import { PLUGIN_LIMITS, parseManifest, packagePath, pluginId, isRecord } from '../shared/plugins.ts'
 import type { PluginInventory, PluginManifest, InstalledPlugin } from '../shared/plugins.ts'
 import { IDENTITY } from '../shared/identity.ts'
+import { PluginDataStore } from './plugin-data.ts'
+import { DATA_LIMITS, dataRevision, parseDataDocument } from '../shared/plugin-data.ts'
+import type { DataSnapshot } from '../shared/plugin-data.ts'
 
 interface Package { manifest: PluginManifest; files: Map<string, Uint8Array> }
 interface State { schemaVersion: 1; plugins: Record<string, { enabled: boolean; revision: string }> }
@@ -44,7 +47,49 @@ export class PluginStore {
   private queue: Promise<unknown> = Promise.resolve()
   private packages = new Map<string, Package>()
   private readonly root: string
-  constructor(root: string) { this.root = resolve(root) }
+  private readonly data: PluginDataStore
+  private channels = new Map<string, { id: string; installation: string; owner: number; started: number; requests: number }>()
+  private dataPending = 0
+  private generations = new Map<number, number>()
+  constructor(root: string) { this.root = resolve(root); this.data = new PluginDataStore(join(this.root, '..', 'plugin-data')) }
+  revokeOwner(owner: number): void { this.generations.set(owner, (this.generations.get(owner) ?? 0) + 1); for (const [token, channel] of this.channels) if (channel.owner === owner) this.channels.delete(token) }
+  endData(owner: number, token: unknown): void {
+    if (typeof token !== 'string' || this.channels.get(token)?.owner !== owner) throw new Error('Canal de dados inválido.')
+    this.channels.delete(token)
+  }
+  beginData(owner: number, id: string, installation: string): Promise<string> {
+    const generation = this.generations.get(owner) ?? 0
+    return this.serial(async () => {
+      await this.load()
+      if ((this.generations.get(owner) ?? 0) !== generation) throw new Error('Documento de ativação expirado.')
+      const item = this.state.plugins[id], pkg = this.packages.get(id)
+      if (!pluginId(id) || !item?.enabled || item.revision !== installation || pkg?.manifest.apiVersion !== 2) throw new Error('Instalação não habilitada para dados v2.')
+      for (const [token, channel] of this.channels) if (channel.owner === owner && channel.id === id) this.channels.delete(token)
+      const token = randomUUID()
+      this.channels.set(token, { id, installation, owner, started: Date.now(), requests: 0 }); return token
+    })
+  }
+  private dataChannel(owner: number, token: unknown) {
+    const channel = typeof token === 'string' ? this.channels.get(token) : undefined
+    const item = channel ? this.state.plugins[channel.id] : undefined
+    if (!channel || channel.owner !== owner || !item?.enabled || item.revision !== channel.installation || this.packages.get(channel.id)?.manifest.apiVersion !== 2) throw new Error('Ativação de dados expirada ou inválida.')
+    return channel
+  }
+  dataOperation(owner: number, token: unknown, operation: 'read' | 'write', expectedRevision?: unknown, input?: unknown): Promise<DataSnapshot> {
+    let document
+    try {
+      const channel = this.dataChannel(owner, token)
+      if (Date.now() - channel.started >= 1000) { channel.started = Date.now(); channel.requests = 0 }
+      if (++channel.requests > DATA_LIMITS.rate || this.dataPending >= DATA_LIMITS.queue) throw new Error('Limite de solicitações de dados atingido. Rascunho preservado.')
+      if (operation === 'write') { if (!dataRevision(expectedRevision)) throw new Error('Revisão inválida.'); document = parseDataDocument(input) }
+    } catch (error) { return Promise.reject(error) }
+    this.dataPending++
+    return this.serial(async () => {
+      const channel = this.dataChannel(owner, token)
+      if (operation === 'read') { const result = await this.data.read(channel.id, channel.installation); this.dataChannel(owner, token); return result }
+      return this.data.write(channel.id, channel.installation, expectedRevision as number, document!, () => { this.dataChannel(owner, token) })
+    }).finally(() => { this.dataPending-- })
+  }
   private async directory(path: string): Promise<void> {
     await mkdir(path, { recursive: true })
     const stat = await lstat(path)
@@ -122,6 +167,7 @@ export class PluginStore {
       if (!pluginId(id) || typeof enabled !== 'boolean' || !this.state.plugins[id]) throw new Error('Plugin ou operação inválida.')
       if (enabled) { const inventory = await this.inventory(); if (!inventory.plugins.some(item => item.manifest.id === id)) throw new Error('Pacote inválido; não pode ser ativado.') }
       await this.save({ ...this.state, plugins: { ...this.state.plugins, [id]: { ...this.state.plugins[id], enabled } } })
+      if (!enabled) for (const [token, channel] of this.channels) if (channel.id === id) this.channels.delete(token)
       return this.inventory()
     })
   }
@@ -137,6 +183,7 @@ export class PluginStore {
       try { await this.save({ ...this.state, plugins }) }
       catch (error) { if (moved) await rename(tombstone, destination); throw error }
       this.packages.delete(id)
+      for (const [token, channel] of this.channels) if (channel.id === id) this.channels.delete(token)
       if (moved) await rm(tombstone, { recursive: true, force: true })
       return this.inventory()
     })

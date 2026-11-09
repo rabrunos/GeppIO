@@ -13,7 +13,7 @@ export function usePlugins() {
   const locked = useRef(true)
   useEffect(() => {
     let mounted = true
-    const host = new PluginRuntime(() => new Worker(new URL('./plugin-worker.ts', import.meta.url), { type: 'module' }), values => { if (mounted) setViews(values) })
+    const host = new PluginRuntime(() => new Worker(new URL('./plugin-worker.ts', import.meta.url), { type: 'module' }), values => { if (mounted) setViews(values) }, undefined, window.geppio?.pluginData)
     runtime.current = host
     void (async () => {
       try {
@@ -49,7 +49,8 @@ export function usePlugins() {
     toggle: (view: RuntimePlugin) => { if (bridge) void manage(() => bridge.setEnabled(view.plugin.manifest.id, view.status === 'error' || !view.plugin.enabled), view.plugin.manifest.id) },
     remove: (id: string) => { if (bridge) void manage(() => bridge.remove(id), id) },
     removeInvalid: (id: string) => { if (bridge) void manage(() => bridge.remove(id), id) },
-    action: (id: string, widgetId: string, actionId: string) => { void runtime.current?.action(id, widgetId, actionId) }
+    action: (id: string, widgetId: string, actionId: string) => { void runtime.current?.action(id, widgetId, actionId) },
+    widgetEvent: (id: string, widgetId: string, event: import('../../shared/plugin-surface.ts').WidgetEvent) => runtime.current?.widgetEvent(id, widgetId, event) ?? Promise.resolve(false)
   }
 }
 type Plugins = ReturnType<typeof usePlugins>

@@ -60,7 +60,7 @@ export function widgetRegistry(plugins: readonly InstalledPlugin[] = [], demoFix
     id: `plugin:${plugin.manifest.id}:${widget.id}`, owner: `plugin:${plugin.manifest.id}`, pluginId: plugin.manifest.id, widgetId: widget.id,
     title: widget.title, category: 'Plugins', description: plugin.manifest.name,
     appearance: 'card', presence: 'single-view', constraint: {
-      min: { width: 180, height: 112 }, default: { width: 310, height: 160 }, max: { width: POLICY.maxSize, height: POLICY.maxSize },
+      min: { width: 180, height: 112 }, default: plugin.manifest.apiVersion === 2 ? { width: 360, height: 360 } : { width: 310, height: 160 }, max: { width: POLICY.maxSize, height: POLICY.maxSize },
       regions: ['main'], resizeX: true, resizeY: true, overflow: 'auto', responsive: 'region'
     }
   })

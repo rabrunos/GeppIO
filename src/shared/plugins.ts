@@ -4,7 +4,7 @@ import type { WidgetView } from '../../sdk/plugin.d.ts'
 export const PLUGIN_LIMITS = Object.freeze({ manifestBytes: 16 * 1024, fileBytes: 512 * 1024, packageBytes: 2 * 1024 * 1024, files: 64, plugins: 32, widgets: 8, timeoutMs: 3000 })
 export interface PluginManifest {
   schemaVersion: 1
-  apiVersion: 1
+  apiVersion: 1 | 2
   id: string
   name: string
   version: string
@@ -33,7 +33,7 @@ export function parseManifest(text: string): PluginManifest {
   if (new TextEncoder().encode(text).byteLength > PLUGIN_LIMITS.manifestBytes) throw new Error('Manifesto maior que 16 KiB.')
   let value: unknown
   try { value = JSON.parse(text) } catch (error) { throw new Error('Manifesto JSON inválido.', { cause: error }) }
-  if (!isRecord(value) || !exact(value, ['schemaVersion', 'apiVersion', 'id', 'name', 'version', 'entry', 'widgets']) || value.schemaVersion !== 1 || value.apiVersion !== 1 || !pluginId(value.id) || !boundedText(value.name, 80)
+  if (!isRecord(value) || !exact(value, ['schemaVersion', 'apiVersion', 'id', 'name', 'version', 'entry', 'widgets']) || value.schemaVersion !== 1 || ![1, 2].includes(value.apiVersion as number) || !pluginId(value.id) || !boundedText(value.name, 80)
     || !boundedText(value.version, 64) || !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[a-zA-Z-][a-zA-Z0-9-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][a-zA-Z0-9-]*))*)?(?:\+[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*)?$/.test(value.version)
     || !packagePath(value.entry) || !value.entry.endsWith('.js') || !Array.isArray(value.widgets) || value.widgets.length > PLUGIN_LIMITS.widgets) throw new Error('Manifesto inválido ou API incompatível.')
   const ids = new Set<string>()

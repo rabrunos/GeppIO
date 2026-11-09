@@ -15,7 +15,7 @@ async function fixture() {
 }
 test('versioned manifests reject paths, IDs, schemas, duplicate widgets and unknown capabilities', () => {
   assert.equal(parseManifest(JSON.stringify(manifest)).widgets.length, 0)
-  for (const override of [{ id: '../escape' }, { id: 'CON' }, { id: 'con.foo' }, { id: 'constructor' }, { entry: '../entry.js' }, { entry: 'C:/entry.js' }, { entry: 'nested\\entry.js' }, { entry: 'nested//entry.js' }, { entry: 'nul.js' }, { entry: 'entry.' }, { version: '01.0.0' }, { version: '1.0.0-01' }, { apiVersion: 2 }, { schemaVersion: 2 }, { permissions: ['filesystem'] }, { widgets: [{ id: 'same', title: 'A', surface: 'declarative' }, { id: 'same', title: 'B', surface: 'declarative' }] }, { widgets: [{ id: 'a', title: 'A', surface: 'html' }] }]) assert.throws(() => parseManifest(JSON.stringify({ ...manifest, ...override })))
+  for (const override of [{ id: '../escape' }, { id: 'CON' }, { id: 'con.foo' }, { id: 'constructor' }, { entry: '../entry.js' }, { entry: 'C:/entry.js' }, { entry: 'nested\\entry.js' }, { entry: 'nested//entry.js' }, { entry: 'nul.js' }, { entry: 'entry.' }, { version: '01.0.0' }, { version: '1.0.0-01' }, { apiVersion: 3 }, { schemaVersion: 2 }, { permissions: ['filesystem'] }, { widgets: [{ id: 'same', title: 'A', surface: 'declarative' }, { id: 'same', title: 'B', surface: 'declarative' }] }, { widgets: [{ id: 'a', title: 'A', surface: 'html' }] }]) assert.throws(() => parseManifest(JSON.stringify({ ...manifest, ...override })))
   assert.throws(() => parseManifest(' '.repeat(PLUGIN_LIMITS.manifestBytes + 1)))
   assert.throws(() => parseWidgetView({ text: 'x', html: '<script>' }))
   assert.throws(() => parseWidgetView({ text: 'x', action: { id: '../x', label: 'X' } }))
