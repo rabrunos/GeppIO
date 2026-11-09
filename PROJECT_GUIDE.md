@@ -38,7 +38,8 @@ reservations, checkpoints and session undo/redo. Individual widget movement/resi
 Edit mode; adjacent-pair resize also works in normal mode through its own validated commit.
 Since alpha.20, normal startup and built-in compositions have empty regions. Seven retired
 synthetic types remain compatibility identities and opt-in disposable-profile test fixtures.
-Local plugin contributions use Main-only, single-view declarative cards; host metadata is not
+API 1 plugin contributions use Main-only, single-view declarative cards. The host also permits
+Workspace Essentials notes/checklist/prompts in Sidebar since alpha.22; host metadata is not
 automatically an author-facing SDK capability. Project names, Git indicators, avatar and the
 presentation test panel do not implement filesystem projects, Git, accounts or a terminal.
 

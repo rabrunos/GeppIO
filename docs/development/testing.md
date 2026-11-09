@@ -513,6 +513,15 @@ processes. A fixture/sample result cannot certify future plugin costs or OS reso
 
 ## Workspace Essentials pilot (alpha.21)
 
+Alpha.22 adds `pnpm test:sidebar`, an independent built-Electron disposable-profile smoke
+with the real installed Workspace Essentials package. It covers packed Home/custom bars,
+insertion feedback/reorder/end insertion, resize/pairs, removal, scrolling, narrow widths,
+eligible and rejected moves, checkpoints, Cancel, undo/redo and process restart/content
+retention. An older gapped envelope is loaded with storage spies and byte comparison.
+Run it separately from `pnpm test:desktop` so an archived-bar restore failure is reported
+independently. Pure stack/eligibility/legacy/negative/history coverage lives in
+`tests/sidebar-stack.test.ts`. Automation does not establish owner mouse/DPI acceptance.
+
 `pnpm test:essentials` is an independent built-Electron smoke with its own disposable profile.
 It runs first in `pnpm test:desktop` so its result is recorded before any archived-bar assertion.
 It uses real native package install/enable, explicit Main placement of all four widgets, literal

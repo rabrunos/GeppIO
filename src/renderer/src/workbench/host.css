@@ -58,6 +58,11 @@
 .plugin-check-item { display: flex; align-items: flex-start; gap: 6px; }
 .plugin-check-item input { margin-top: 3px; }
 .plugin-surface-actions { display: flex; flex-wrap: wrap; gap: 5px; }
+.plugin-surface-v2 fieldset { margin-inline: 0; }
+.plugin-surface-v2 legend { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+.plugin-surface-v2 button { min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+.plugin-check-item input { flex: none; }
+.sidebar-insertion { position: absolute; height: 3px; translate: 0 -5px; background: var(--color-accent); border-radius: 2px; pointer-events: none; z-index: 65; }
 .host-format-slot { position: absolute; pointer-events: auto; z-index: 15; }
 .host-format-slot[data-owner-region="bottom"] { z-index: 35; }
 .host-region-empty { position: absolute; inset: 0; }

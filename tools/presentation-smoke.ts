@@ -46,14 +46,54 @@ async function seed(snapshot = initialWorkbench(), theme = 'dark') {
 }
 async function begin() { if (await page.getByTestId('edit-layout').count()) { await page.getByTestId('edit-layout').click(); await settle(page) } }
 async function conclude() { await page.getByTestId('conclude-layout').click(); await page.getByTestId('edit-layout').waitFor(); await settle(page) }
+async function hoverHeading(id: Id = 'properties') {
+  const heading = frame(id).locator('.widget-heading'), box = await heading.boundingBox(); assert.ok(box)
+  await page.mouse.move(box.x + Math.min(40, box.width / 2), box.y + (box.width <= 32 ? Math.min(40, box.height / 2) : box.height / 2))
+}
 async function reveal(id: Id = 'properties') {
-  await frame(id).hover(); await page.waitForTimeout(180); await settle(page)
+  await page.evaluate(() => {
+    const host = window as Window & { presentationPointerEvents?: unknown[] }
+    if (host.presentationPointerEvents) return
+    const events = host.presentationPointerEvents = [] as unknown[]
+    const record = (value: object) => { events.push({ time: performance.now(), ...value }); if (events.length > 40) events.shift() }
+    for (const type of ['focus', 'blur']) window.addEventListener(type, () => record({ type, focused: document.hasFocus() }))
+    for (const type of ['pointerover', 'pointerout']) document.addEventListener(type, event => {
+      const frame = (event.target as Element).closest<HTMLElement>('[data-widget-id]')
+      if (frame) record({ type, id: frame.dataset.widgetId, open: frame.dataset.panelOpen, x: (event as PointerEvent).clientX, y: (event as PointerEvent).clientY })
+    }, true)
+    const area = document.querySelector('[data-surface="main"]')
+    if (area) new ResizeObserver(() => { const r = area.getBoundingClientRect(); record({ type: 'main-size', width: r.width, height: r.height }) }).observe(area)
+  })
+  // Restart can leave the native pointer at the trigger's previous position.
+  // Enter from outside and wait for the actual reveal, retaining native hover.
+  await page.mouse.move(10, 65)
+  const box = await frame(id).boundingBox(); assert.ok(box)
+  const point = { x: box.x + Math.min(40, box.width / 2), y: box.y + Math.min(40, box.height / 2) }
+  assert.equal(await page.evaluate(point => document.elementFromPoint(point.x, point.y)?.closest<HTMLElement>('[data-widget-id]')?.dataset.widgetId, point), id)
+  // A fixed point in the trigger stays inside its expanded panel. Locator hover
+  // can relocate toward the moving header while it expands, leaving the panel.
+  await page.mouse.move(point.x, point.y)
+  await page.waitForFunction(id => document.querySelector(`[data-widget-id="${id}"]`)?.getAttribute('data-panel-open') === 'true', id)
+  await settle(page)
   assert.equal(await frame(id).getAttribute('data-panel-open'), 'true')
 }
-async function select(id: Id, mode: Presentation, anchor: Edge | null = 'bottom', persist = true, refusal = false) {
-  await begin(); await frame(id).hover()
-  if (await selected(id) === 'overlay') await reveal(id)
+async function openPresentationMenu(id: Id = 'properties') {
+  // Reveal the hover controls at the header's actual hit area before moving to
+  // the selector; a center hover can be lost as Edit changes the panel budget.
+  await hoverHeading(id)
+  await page.waitForFunction(id => {
+    const controls = document.querySelector(`[data-widget-id="${id}"] .widget-local-controls`)
+    return controls && getComputedStyle(controls).pointerEvents === 'auto'
+  }, id)
+  // Keep the already revealed, keyboard-reachable controls focused while the
+  // native pointer relocates from the header to the menu button.
+  await selector(id).focus()
   await selector(id).click()
+}
+async function select(id: Id, mode: Presentation, anchor: Edge | null = 'bottom', persist = true, refusal = false) {
+  await begin()
+  if (await selected(id) === 'overlay') await reveal(id)
+  await openPresentationMenu(id)
   const labels = { normal: 'Normal', docked: 'Encaixado', overlay: 'Flutuante' }, anchors = { top: 'Topo', bottom: 'Embaixo', left: 'Esquerda', right: 'Direita' }
   assert.equal(await page.getByRole('menuitemradio', { name: labels[(await selected(id)) as Presentation], exact: true }).getAttribute('aria-checked'), 'true')
   await page.getByRole('menuitemradio', { name: labels[mode], exact: true }).click()
@@ -159,7 +199,9 @@ async function sharedStripScene(theme: string) {
   }
   await sampleSidebar(theme, 'collapse')
   const closed = await bounds()
-  await page.locator('.sidebar-rail-primary').hover(); await page.waitForTimeout(180); await settle(page)
+  await page.locator('[data-bar-id="home"]').hover()
+  await page.waitForFunction(() => document.querySelector('.workbench')?.getAttribute('data-sidebar-mode') === 'peek')
+  await settle(page)
   for (const id of ['properties', 'activity'] as const) {
     const r = closed.panels[id]!, point = { x: r.x + (id === 'properties' ? 15 : 55), y: r.y + (id === 'properties' ? 80 : 15) }
     const hit = await page.evaluate(point => {
@@ -236,7 +278,7 @@ try {
     g = await assertBounds(); for (const id of ids) assert.equal(g.panels[id]!.open, 'true')
     assert.ok(Math.abs(g.panels.properties!.bottom - (g.panels.queue!.y - 10)) < 1)
     await page.screenshot({ path: `${directory}/${theme}-four-open.png` })
-    await begin(); await frame('properties').hover(); await selector('properties').click(); await page.getByRole('menuitemradio', { name: 'Encaixado', exact: true }).click()
+    await begin(); await openPresentationMenu('properties'); await page.getByRole('menuitemradio', { name: 'Encaixado', exact: true }).click()
     assert.equal(await page.getByRole('menuitemradio', { name: 'Topo · Ocupado', exact: true }).isDisabled(), true)
     await page.mouse.click(10, 65); await conclude()
     const sidebarIntent = (await stored()).organization.presentations
@@ -288,7 +330,7 @@ try {
       const shown = await assertBounds(); assert.deepEqual(shown.port, closed.port); assert.deepEqual(shown.reservations, closed.reservations)
       await input.focus(); await page.mouse.move(10, 65); await page.waitForTimeout(650)
       assert.equal(await frame().getAttribute('data-panel-open'), 'true', 'Focus retains panel')
-      await begin(); await reveal(); await selector().click(); await page.getByRole('menuitemradio', { name: 'Flutuante', exact: true }).click()
+      await begin(); await reveal(); await openPresentationMenu(); await page.getByRole('menuitemradio', { name: 'Flutuante', exact: true }).click()
       await page.getByRole('menuitemradio', { name: 'Sem âncora', exact: true }).hover(); await page.waitForTimeout(420)
       assert.equal(await frame().getAttribute('data-panel-open'), 'true', 'Top-layer menu retains panel')
       assert.equal(await input.getAttribute('data-identity-proof'), 'mounted')
@@ -356,7 +398,7 @@ try {
   for (const id of ids) freePeers = changePresentation(freePeers, { presentation: 'overlay', anchor: null, position: { x: 10000, y: 10000 } }, registry, id)
   await seed(freePeers); const freePeerBytes = await raw(); await resize(1000, 720); await begin()
   for (const id of ids) {
-    await page.mouse.move(500, 80); await page.waitForTimeout(450); await frame(id).hover(); await selector(id).click()
+    await page.mouse.move(500, 80); await page.waitForTimeout(450); await openPresentationMenu(id)
     assert.ok(await page.getByRole('menuitemradio', { name: 'Flutuante', exact: true }).isVisible())
     await page.mouse.click(500, 80)
   }
@@ -412,6 +454,7 @@ try {
   assert.deepEqual(errors, [])
   console.log(`Presentation smoke passed: four edges, free/anchored Floating, exact returns/refusal, restart, history, guards and both themes (${directory})`)
 } catch (error) {
-  if (page && !page.isClosed()) { await page.screenshot({ path: `${directory}/failure.png` }).catch(() => {}); await writeFile(`${directory}/failure.json`, JSON.stringify({ error: String(error), errors, geometry: await bounds().catch(() => null) }, null, 2)) }
+  if (page && !page.isClosed()) { await page.screenshot({ path: `${directory}/failure.png` }).catch(() => {}); await writeFile(`${directory}/failure.json`, JSON.stringify({ error: String(error), errors, geometry: await bounds().catch(() => null), pointer: await page.evaluate(() => ({ focused: document.hasFocus(), events: (window as Window & { presentationPointerEvents?: unknown[] }).presentationPointerEvents,
+    frames: [...document.querySelectorAll<HTMLElement>('[data-widget-id]')].map(frame => ({ id: frame.dataset.widgetId, hovered: frame.matches(':hover'), open: frame.dataset.panelOpen, controls: frame.querySelector('.widget-local-controls') ? getComputedStyle(frame.querySelector('.widget-local-controls')!).pointerEvents : null })) })) }, null, 2)) }
   throw error
 } finally { if (application) await application.close(); await rm(profile, { recursive: true, force: true }) }

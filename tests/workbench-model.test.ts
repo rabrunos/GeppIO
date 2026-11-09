@@ -174,7 +174,8 @@ test('Sidebar swaps use the active bar positions and preserve other memberships 
   assert.equal(activePlacements(swapped).find(p => p.id === 'summary')!.y, 0)
   const other = { ...swapped, organization: { ...swapped.organization, activeBar: 'bar:other' } }
   const retained = activePlacements(other).find(p => p.region === 'sidebar')!
-  assert.equal(retained.y, 700)
+  assert.equal(retained.y, 0, 'Each bar projects its own top-packed stack')
+  assert.equal(other.organization.bars[1]!.positions!['host:notes'], 700, 'Projection preserves the saved recovery source')
   assert.equal(other.organization.views.find(view => view.id === retained.id)!.modelId, 'model:host:notes')
   assert.doesNotThrow(() => serializeWorkbench(swapped, registry))
   assert.equal(snapshot.organization.views.length, 7)

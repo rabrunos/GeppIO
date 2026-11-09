@@ -3,28 +3,50 @@ import { constraintInRegion, constraintsFor, POLICY } from '../freeform/policy.t
 import { projectRegion } from '../freeform/projection.ts'
 import { transfer } from '../freeform/transfer.ts'
 import type { Placement, Region, Size, Surface } from '../freeform/types.ts'
-import { HOME, LIMITS, activePlacements, constraintsForViews, evaluatePlacement, modelId } from './model.ts'
+import { HOME, LIMITS, activePlacements, constraintsForViews, evaluatePlacement, modelId, sidebarInsertion } from './model.ts'
 import type { Registry, UserBar, WorkbenchSnapshot } from './model.ts'
 import { panelIds, validatePresentationEdges } from './presentations.ts'
 
-/** Shared Sidebar heights may push later members in another bar, without gravity
- * or membership changes. Work is bounded by 100 bars and 16 view records.
+/** Repack every bar after explicit intentions, preserving each bar's stable order.
+ * Projection uses the same rule without changing saved bytes.
  */
-export function reconcileBarHeights(source: WorkbenchSnapshot, preserve = source.organization.activeBar): WorkbenchSnapshot | null {
+export function reconcileBarHeights(source: WorkbenchSnapshot): WorkbenchSnapshot | null {
   const bars: UserBar[] = []
   for (const bar of source.organization.bars) {
-    if (bar.id === preserve) { bars.push(bar); continue }
     const placements = activePlacements({ ...source, organization: { ...source.organization, activeBar: bar.id } }).filter(p => p.region === 'sidebar').sort((a, b) => a.y - b.y)
-    const positions = { ...bar.positions }; let end = -POLICY.gap, changed = false
+    const positions = { ...bar.positions }; let end = -POLICY.gap
     for (const p of placements) {
-      const y = Math.max(p.y, end + POLICY.gap), typeId = source.organization.views.find(view => view.id === p.id)!.typeId
+      const y = end + POLICY.gap, typeId = source.organization.views.find(view => view.id === p.id)!.typeId
       if (y + p.height > POLICY.maxCoordinate) return null
-      if (y !== p.y) { positions[typeId] = y; changed = true }
+      positions[typeId] = y
       end = y + p.height
     }
-    bars.push(changed ? { ...bar, positions } : bar)
+    bars.push({ ...bar, positions })
   }
-  return { ...source, organization: { ...source.organization, bars } }
+  const next = { ...source, organization: { ...source.organization, bars } }
+  const active = activePlacements(next).filter(p => p.region === 'sidebar')
+  return { ...next, placements: next.placements.map(p => active.find(q => q.id === p.id) ?? p),
+    reference: { ...next.reference, sidebar: { ...next.reference.sidebar, height: Math.max(next.reference.sidebar.height, ...active.map(p => p.y + p.height)) } } }
+}
+
+function insertSidebar(source: WorkbenchSnapshot, registry: Registry, id: string, target: Surface, y?: number, size?: Size): WorkbenchSnapshot | null {
+  if (y !== undefined && !Number.isFinite(y)) return null
+  const next = structuredClone(source), placement = next.placements.find(p => p.id === id)!
+  const typeId = next.organization.views.find(view => view.id === id)!.typeId
+  const c = constraintInRegion(registry.get(typeId)!.constraint, 'sidebar')
+  if (size && (size.width < c.min.width || size.width > c.max.width)) return null
+  const insertion = sidebarInsertion(source, id, y)
+  Object.assign(placement, { region: 'sidebar', x: 0, width: target.width, height: size?.height ?? placement.height })
+  const ordered = [...insertion.peers]; ordered.splice(insertion.index, 0, placement)
+  const bar = next.organization.bars.find(bar => bar.id === next.organization.activeBar)!
+  bar.members = ordered.map(p => next.organization.views.find(view => view.id === p.id)!.typeId)
+  let end = 0; bar.positions = {}
+  for (const p of ordered) { bar.positions[next.organization.views.find(view => view.id === p.id)!.typeId] = end; end += p.height + POLICY.gap }
+  placement.y = bar.positions[typeId]!
+  placement.preferred = { width: placement.width, height: placement.height }
+  next.reference.sidebar = { width: target.width, height: Math.max(target.height, end - POLICY.gap) }
+  if (target.width < c.min.width || target.width > c.max.width || !validLayout(activePlacements(next).filter(p => p.region === 'sidebar'), target, constraintsFor(target, constraintsForViews(next, registry)))) return null
+  return reconcileBarHeights(next)
 }
 
 export function addWidget(source: WorkbenchSnapshot, registry: Registry, typeId: string, surface: Surface,
@@ -55,10 +77,11 @@ export function addWidget(source: WorkbenchSnapshot, registry: Registry, typeId:
     bar.positions ??= {}
     bar.positions[typeId] ??= at?.y ?? Math.max(0, ...peers.map(p => p.y + p.height + POLICY.gap))
     if (!bar.members.includes(typeId)) bar.members.push(typeId)
-    if (existing?.region === 'sidebar' && !slotSize) return next
+    if (existing?.region === 'sidebar' && !slotSize) return insertSidebar(next, registry, existing.id, surface, at?.y)
   }
   if (!existing || slotSize) next.placements.push({ id: view.id, region: surface.region, x: slotSize ? at?.x ?? 0 : 0, y: slotSize ? at?.y ?? 0 : 0,
     ...(slotSize ?? type.constraint.default), preferred: { ...(slotSize ?? type.constraint.default) } })
+  if (surface.region === 'sidebar') return insertSidebar(next, registry, view.id, surface, at?.y, slotSize)
   if (slotSize) {
     // A reserved rectangle is an explicit placement/size intention, not a move
     // pretending to resize its default seed. The solver's move invariant stays intact.
@@ -86,7 +109,7 @@ function transferActive(source: WorkbenchSnapshot, registry: Registry, id: strin
     }
     result.reference.sidebar.height = Math.max(result.reference.sidebar.height, ...placements.filter(p => p.region === 'sidebar').map(p => p.y + p.height))
   }
-  return result
+  return reconcileBarHeights(result)
 }
 /** Movement changes only the source association and the chosen destination bar. */
 export function moveView(source: WorkbenchSnapshot, registry: Registry, id: string, target: Surface, at?: { x: number; y: number }, sourceBar = source.organization.activeBar, slotSize?: Size, disabled?: ReadonlySet<string>): WorkbenchSnapshot | null {
@@ -107,11 +130,10 @@ export function moveView(source: WorkbenchSnapshot, registry: Registry, id: stri
     next.placements = next.placements.filter(p => p.id !== id)
     if (!destination.members.includes(type.id)) destination.members.push(type.id)
     destination.positions ??= {}; destination.positions[type.id] ??= Math.max(0, ...activePlacements(next).filter(p => p.region === 'sidebar' && p.id !== otherSidebar.id).map(p => p.y + p.height + POLICY.gap))
-    return slotSize ? exactPlacement(next, registry, otherSidebar.id, target, at, slotSize) : next
+    return insertSidebar(next, registry, otherSidebar.id, target, at?.y, slotSize)
   }
-  if (slotSize && target.region === 'sidebar' && !destination.members.includes(type.id)) destination.members.push(type.id)
+  if (target.region === 'sidebar') return insertSidebar(next, registry, id, target, at?.y, slotSize)
   const moved = slotSize ? exactPlacement(next, registry, id, target, at, slotSize) : transferActive(next, registry, id, target, at)
-  if (moved && target.region === 'sidebar' && !destination.members.includes(type.id)) destination.members.push(type.id)
   return moved
 }
 /** An explicit rectangle never goes through default-size insertion or solver resize. */

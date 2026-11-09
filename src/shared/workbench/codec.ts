@@ -82,7 +82,7 @@ function parseDocument(value: unknown, views: View[], registry: Registry, bars?:
   }
   if (bars) for (const bar of bars) {
     if (bar.members.some(typeId => !views.some(view => view.typeId === typeId && layout.placements.some(p => p.id === view.id && p.region === 'sidebar')))) throw new Error('Missing Sidebar membership view')
-    const sidebar = activePlacements({ ...layout, organization: { views, bars, activeBar: bar.id } } as WorkbenchSnapshot).filter(p => p.region === 'sidebar')
+    const sidebar = activePlacements({ ...layout, organization: { views, bars, activeBar: bar.id } } as WorkbenchSnapshot, false).filter(p => p.region === 'sidebar')
     if (sidebar.some((p, index) => p.y + p.height > POLICY.maxCoordinate || sidebar.slice(index + 1).some(q => collides(p, q)))) throw new Error('Invalid bar clearance')
   }
   return layout

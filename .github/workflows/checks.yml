@@ -30,6 +30,8 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Check structure, types, lint, tests and build
         run: pnpm check
+      - name: Focused Sidebar stack smoke in an isolated profile
+        run: pnpm test:sidebar
       - name: Built desktop smoke in an isolated profile
         run: pnpm test:desktop
   secrets:

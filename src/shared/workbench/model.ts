@@ -61,7 +61,9 @@ export function widgetRegistry(plugins: readonly InstalledPlugin[] = [], demoFix
     title: widget.title, category: 'Plugins', description: plugin.manifest.name,
     appearance: 'card', presence: 'single-view', constraint: {
       min: { width: 180, height: 112 }, default: plugin.manifest.apiVersion === 2 ? { width: 360, height: 360 } : { width: 310, height: 160 }, max: { width: POLICY.maxSize, height: POLICY.maxSize },
-      regions: ['main'], resizeX: true, resizeY: true, overflow: 'auto', responsive: 'region'
+      regions: plugin.manifest.id === 'geppio.workspace-essentials' && ['notes', 'checklist', 'prompts'].includes(widget.id) ? ['main', 'sidebar'] : ['main'],
+      ...(plugin.manifest.id === 'geppio.workspace-essentials' && ['notes', 'checklist', 'prompts'].includes(widget.id) ? { regionMin: { sidebar: { width: 150, height: 112 } } } : {}),
+      resizeX: true, resizeY: true, overflow: 'auto', responsive: 'region'
     }
   })
   return new Map(entries.map(type => [type.id, Object.freeze(type)]))
@@ -110,17 +112,28 @@ export function initialWorkbench(demoFixtures = false) {
   }
   return snapshot
 }
-export function activePlacements(snapshot: WorkbenchSnapshot) {
+export function activePlacements(snapshot: WorkbenchSnapshot, packed = true) {
   const bar = snapshot.organization.bars.find(bar => bar.id === snapshot.organization.activeBar), sidebar: Placement[] = []
   let bottom = 0
   for (const typeId of bar?.members ?? []) {
     const view = snapshot.organization.views.find(view => view.typeId === typeId && snapshot.placements.some(p => p.id === view.id && p.region === 'sidebar'))
     const placement = snapshot.placements.find(p => p.id === view?.id)
     if (!placement) continue
-    const y = bar?.positions?.[typeId] ?? bottom
-    sidebar.push({ ...placement, y }); bottom = Math.max(bottom, y + placement.height + POLICY.gap)
+    const y = bar?.positions?.[typeId] ?? placement.y
+    sidebar.push({ ...placement, y })
   }
+  // Saved free positions determine a stable per-bar order, never empty bands.
+  // This projection does not mutate the recovery source or write on startup.
+  sidebar.sort((a, b) => a.y - b.y)
+  if (packed) for (const p of sidebar) { p.x = 0; p.y = bottom; bottom += p.height + POLICY.gap }
   return [...snapshot.placements.filter(p => p.region !== 'sidebar'), ...sidebar]
+}
+
+/** Insertion uses peer midpoints; the same rule drives commands and drag feedback. */
+export function sidebarInsertion(snapshot: WorkbenchSnapshot, id: string | null, y = Infinity) {
+  const peers = activePlacements(snapshot).filter(p => p.region === 'sidebar' && p.id !== id)
+  const found = peers.findIndex(p => y < p.y + p.height / 2), index = found < 0 ? peers.length : found
+  return { peers, index, y: index < peers.length ? peers[index]!.y : peers.length ? peers.at(-1)!.y + peers.at(-1)!.height + POLICY.gap : 0 }
 }
 export function evaluatePlacement(snapshot: WorkbenchSnapshot, registry: Registry, typeId: string, region: Region,
   operation: 'catalog' | 'move' | 'swap' | 'restore', ignored: readonly string[] = [], disabled: ReadonlySet<string> = new Set()) {

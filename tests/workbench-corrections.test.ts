@@ -79,7 +79,7 @@ test('Sidebar exact drop binds only its owning bar and reuses an existing shared
   assert.ok(filled); assert.equal(new Set(filled.snapshot.placements.map(p => p.id)).size, filled.snapshot.placements.length)
   assert.deepEqual(filled.snapshot.organization.bars[0]!.members, source.organization.bars[0]!.members)
   assert.deepEqual(filled.snapshot.organization.bars[1]!.members, ['host:notes'])
-  assert.equal(filled.snapshot.organization.bars[1]!.positions!['host:notes'], 30)
+  assert.equal(filled.snapshot.organization.bars[1]!.positions!['host:notes'], 0, 'Sidebar reservations retain height and owning bar while top-packing')
   assert.equal(fillReservation({ ...source, organization: { ...source.organization, activeBar: 'home' } }, registry, [slot], slot.id, surface, { kind: 'catalog', typeId: 'host:summary' }), null)
   const otherBar = { ...source, placements: [], organization: { ...source.organization, activeBar: 'home' } }
   assert.deepEqual(captureComposition(otherBar, 'Other bar', 'format', ['sidebar'], undefined, [slot]).format, [], 'Capturing another bar cannot adopt its hidden reservation')

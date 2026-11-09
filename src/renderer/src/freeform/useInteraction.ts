@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import type { KeyboardEvent, PointerEvent } from 'react'
 import { candidate } from '../../../shared/freeform/geometry.ts'
 import { constraintsFor, POLICY } from '../../../shared/freeform/policy.ts'
-import { activePlacements, constraintsForViews, widgetRegistry } from '../../../shared/workbench/model.ts'
+import { activePlacements, constraintsForViews, sidebarInsertion, widgetRegistry } from '../../../shared/workbench/model.ts'
 import type { Registry, WorkbenchSnapshot } from '../../../shared/workbench/model.ts'
 import { reflow } from '../../../shared/freeform/reflow.ts'
 import type { Result } from '../../../shared/freeform/reflow.ts'
@@ -34,6 +34,7 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
   const [heldExtent, setHeldExtent] = useState<{ region: Region; width: number; height: number } | null>(null)
   const [catalogDrag, setCatalogDrag] = useState<{ typeId: string; targets: Region[]; over: Region | null } | null>(null)
   const [frameDrop, setFrameDrop] = useState<{ targets: Region[]; over: Region | null } | null>(null)
+  const [sidebarInsert, setSidebarInsert] = useState<number | null>(null)
   const frameTargets = useRef<Region[]>([])
   const catalogGesture = useRef<{ typeId: string; x: number; y: number; left: number; top: number; pointer: number; target: HTMLElement; targets: Region[]; started: number; lifted: boolean; suppress: boolean } | null>(null)
   const catalogPointer = useRef({ x: 0, y: 0 }), suppressCatalogClick = useRef(false)
@@ -51,6 +52,7 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
     rejection.current?.cancel(); rejection.current = null
     if (dwell.current) { if (dwell.current.timer) clearTimeout(dwell.current.timer); dwell.current.element.removeAttribute('data-drag-hover'); dwell.current = null }
     setGestureLabel(null)
+    setSidebarInsert(null)
     setFrameDrop(null); frameTargets.current = []
     if (catalogGesture.current) {
       const entry = catalogGesture.current; catalogGesture.current = null; setCatalogDrag(null)
@@ -143,7 +145,7 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
     return targets.find(region => {
       const element = surfaces.ports[region].current, rect = element?.getBoundingClientRect()
       const clip = region === 'sidebar' ? surfaces.scroller(region)?.getBoundingClientRect() : rect
-      return rect && clip && x >= rect.left && x <= rect.right && y >= Math.max(rect.top, clip.top) && y <= Math.min(rect.bottom, clip.bottom)
+      return rect && clip && x >= rect.left && x <= rect.right && y >= Math.max(rect.top, clip.top) && y <= (region === 'sidebar' ? clip.bottom : Math.min(rect.bottom, clip.bottom))
     }) ?? null
   }
   // The picture's RAF reads target geometry before writing its transform. Pointer
@@ -160,7 +162,13 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
       const targets = frameTargets.current; over = targetRegion(pointer.x, pointer.y, targets)
       setFrameDrop(previous => previous?.targets === targets && previous.over === over ? previous : { targets, over })
     }
-    if (over !== 'sidebar') return false
+    if (over !== 'sidebar' || slotHover.current) { setSidebarInsert(null); return false }
+    const rect = surfaces.ports.sidebar.current?.getBoundingClientRect()
+    if (rect) {
+      const baseline = gesture.current?.snapshot ?? tx.live.current
+      const source = { ...baseline, organization: { ...baseline.organization, activeBar: tx.live.current.organization.activeBar } }
+      setSidebarInsert(sidebarInsertion(source, gesture.current?.id ?? null, pointer.y - rect.top).y)
+    }
     const owner = latest.current.surfaces.scroller('sidebar'), box = owner?.getBoundingClientRect()
     if (!owner || !box) return false
     const previous = owner.scrollTop, delta = pointer.y < box.top + 28 ? -7 : pointer.y > box.bottom - 28 ? 7 : 0
@@ -210,7 +218,7 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
         if (slot) accepted = !!currentCatalog.current?.reservation(slot.id, { kind: 'catalog', typeId }, null, true)
         else if (region) {
           const rect = surfaces.ports[region].current!.getBoundingClientRect(), scroller = surfaces.scroller(region)
-          accepted = !!catalog?.commit(typeId, region, { x: event.clientX - rect.left + (scroller?.scrollLeft ?? 0), y: event.clientY - rect.top + (scroller?.scrollTop ?? 0) })
+          accepted = !!catalog?.commit(typeId, region, { x: event.clientX - rect.left + (scroller?.scrollLeft ?? 0), y: event.clientY - rect.top + (region === 'sidebar' ? 0 : scroller?.scrollTop ?? 0) })
         }
         end(!accepted, false)
         const destination = accepted && region ? destinationId(tx.live.current, typeId, region) : undefined
@@ -236,13 +244,23 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
   function apply(snapshot: WorkbenchSnapshot, p: Placement, dx: number, dy: number, kind: Gesture['kind']) {
     if (!feasible[p.region]) return
     if (p.region === 'sidebar' && gesture.current && gesture.current.sourceBar !== tx.live.current.organization.activeBar) return
+    if (p.region === 'sidebar') {
+      // Movement commits at release; only the insertion line follows the pointer.
+      if (kind === 'move') return
+      const c = constraintsFor(surface('sidebar'), baseConstraints)[p.id]!
+      const height = Math.max(c.min.height, Math.min(c.max.height, p.height + (kind.includes('n') ? -dy : dy)))
+      const next = reconcileBarHeights({ ...snapshot, placements: snapshot.placements.map(q => q.id === p.id ? { ...q, height, preferred: { width: q.width, height } } : q) })
+      if (!next) { setBlocked(p.id); return }
+      if (gesture.current) gesture.current.preview = next
+      tx.put(next); setBlocked(null); return
+    }
     // Opt-in, bounded browser-only diagnostics. No bridge, storage or user telemetry.
     const profiling = performance.getEntriesByName('geppio:profile').length > 0, started = profiling ? performance.now() : 0
     const tracing = performance.getEntriesByName('geppio:anchors').length > 0
     const attempts: unknown[] = []
     let s = surface(p.region)
     const panels = panelIds(snapshot)
-    const peers = (p.region === 'sidebar' ? activePlacements(snapshot) : snapshot.placements).filter(q => q.region === p.region && !panels.has(q.id))
+    const peers = snapshot.placements.filter(q => q.region === p.region && !panels.has(q.id))
     function solve(at: Surface, budget?: { probes: number; states: number }): Result {
       const cs = constraintsFor(at, baseConstraints)
       const adapted = p.region === 'main' && snapshot.reference.main.height !== at.height ? projectRegion({ ...snapshot, placements: peers }, 'main', at, at.expanded, baseConstraints) : null
@@ -277,19 +295,8 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
         measurement: surfaces.measures[p.region], attempts, probes: result.probes, states: result.states } })
     }
     if (result.status === 'blocked') { setBlocked(p.id); tx.setMessage('Sem espaço para os mínimos deste widget. A última prévia válida foi mantida.'); return }
-    let next = { ...snapshot, organization: { ...tx.live.current.organization, bars: tx.live.current.organization.bars.map(bar => bar.id === tx.live.current.organization.activeBar ? { ...bar, members: [...bar.members], positions: { ...bar.positions } } : bar) }, reference: { ...snapshot.reference, [p.region]: { width: s.width,
-      height: p.region === 'sidebar' ? Math.max(s.height, ...result.placements.map(q => q.y + q.height)) : s.height } },
+    const next = { ...snapshot, organization: { ...tx.live.current.organization, bars: tx.live.current.organization.bars.map(bar => bar.id === tx.live.current.organization.activeBar ? { ...bar, members: [...bar.members], positions: { ...bar.positions } } : bar) }, reference: { ...snapshot.reference, [p.region]: { width: s.width, height: s.height } },
       placements: snapshot.placements.map(q => result.placements.find(next => next.id === q.id) ?? q) }
-    if (p.region === 'sidebar') {
-      const bar = next.organization.bars.find(bar => bar.id === next.organization.activeBar)!
-      bar.positions ??= {}
-      for (const placement of result.placements) bar.positions[next.organization.views.find(view => view.id === placement.id)!.typeId] = placement.y
-      bar.members.sort((a, b) => (bar.positions![a] ?? 0) - (bar.positions![b] ?? 0))
-      const reconciled = reconcileBarHeights(next)
-      if (!reconciled) { setBlocked(p.id); return }
-      next = reconciled
-      next.reference.sidebar.height = Math.max(next.reference.sidebar.height, ...next.placements.filter(p => p.region === 'sidebar').map(p => p.y + p.height))
-    }
     if (gesture.current) gesture.current.preview = next
     tx.put(next)
     setBlocked(null); tx.setMessage('Prévia válida. Ao soltar, posições e tamanhos serão mantidos para o próximo gesto. Salve ou cancele.')
@@ -395,14 +402,15 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
       visual.release(accepted, accepted ? destinationId(tx.live.current, typeId, region) : undefined)
       return
     }
-    if (!cancel && a.kind === 'move' && a.original.region === 'sidebar' && a.sourceBar !== tx.live.current.organization.activeBar) {
+    if (!cancel && a.kind === 'move' && visual.active() && a.original.region === 'sidebar' && targetRegion(e.clientX, e.clientY, ['sidebar']) === 'sidebar') {
       const owner = surfaces.scroller('sidebar')!, box = owner.getBoundingClientRect(), bar = tx.live.current.organization.activeBar
       const source = { ...a.snapshot, organization: { ...a.snapshot.organization, activeBar: bar } }
       const inside = e.clientX >= box.left && e.clientX <= box.right && e.clientY >= box.top && e.clientY <= box.bottom
       end(true, false)
-      const result = inside ? moveView(source, registry, a.id, surface('sidebar'), { x: 0, y: e.clientY - box.top + owner.scrollTop }, a.sourceBar) : null
-      if (result) tx.action(settleSnapshot(result))
-      else tx.put({ ...a.source, organization: { ...a.source.organization, activeBar: bar } })
+      const rect = surfaces.ports.sidebar.current!.getBoundingClientRect()
+      const result = inside ? moveView(source, registry, a.id, surface('sidebar'), { x: 0, y: e.clientY - rect.top }, a.sourceBar) : null
+      if (result) { tx.action(settleSnapshot(result)); tx.setMessage('Widget inserido na barra lateral. Salve ou cancele.') }
+      else { tx.put({ ...a.source, organization: { ...a.source.organization, activeBar: bar } }); tx.setMessage('Destino incompatível. A composição anterior foi preservada.') }
       visual.release(!!result, result ? destinationId(result, a.source.organization.views.find(v => v.id === a.id)!.typeId, 'sidebar') : undefined)
       return
     }
@@ -416,7 +424,7 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
         end(true, false)
         const s = surface(region), result = feasible[region] ? moveView(a.snapshot, registry, a.id, s, {
           x: e.clientX - r.left + (surfaces.ports[region].current?.scrollLeft ?? 0),
-          y: e.clientY - r.top + (surfaces.ports[region].current?.scrollTop ?? 0) }, a.sourceBar) : null
+          y: e.clientY - r.top + (region === 'sidebar' ? 0 : surfaces.ports[region].current?.scrollTop ?? 0) }, a.sourceBar) : null
         if (result) { tx.action(settleSnapshot(result)); tx.setMessage(`Widget transferido para ${REGION_LABELS[region]}. Salve ou cancele.`) }
         else { setBlocked(a.id); tx.setMessage('Transferência incompatível ou sem espaço. A composição anterior foi restaurada.') }
         visual.release(!!result, result ? destinationId(result, a.source.organization.views.find(v => v.id === a.id)!.typeId, region) : undefined)
@@ -463,7 +471,7 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
       onPointerUp: (e: PointerEvent<HTMLElement>) => finish(e), onPointerCancel: (e: PointerEvent<HTMLElement>) => finish(e, true),
       onLostPointerCapture: (e: PointerEvent<HTMLElement>) => finish(e, true), onKeyDown: (e: KeyboardEvent<HTMLElement>) => keyboard(e, p, kind) }
   }
-  return { selected, setSelected, blocked, heldExtent, handlers, catalogHandlers, catalogDrag, frameDrop, gestureLabel, visual,
+  return { selected, setSelected, blocked, heldExtent, handlers, catalogHandlers, catalogDrag, frameDrop, sidebarInsert, gestureLabel, visual,
     catalogSurfaceKey: REGIONS.map(region => `${surfaces.measures[region].width},${surfaces.measures[region].height}`).join(';') + expanded + JSON.stringify(tx.slots),
     canCatalogPlace: (typeId: string, region: Region) => !!currentCatalog.current?.available(typeId, region),
     activeId: gesture.current?.id ?? null,

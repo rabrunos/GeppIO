@@ -279,6 +279,37 @@ export async function freeformCorrectionSmoke(page: Page, dev: boolean, resizeWi
       await settle(page); await settle(page)
     }
     const old = await rect(page, 'chart')
+    if (vertical) {
+      // Sidebar now chooses an insertion index, retaining a packed top edge.
+      // Main/Bottom below keep their original opposite-edge/settlement checks.
+      const neighbor = await rect(page, 'summary')
+      if (kind === 'move') {
+        await drag(page, 'chart', kind, 0, 30)
+        near((await rect(page, 'chart')).y, old.y, 'Sidebar sub-midpoint drag does not create a gap')
+        await drag(page, 'chart', kind, 0, 450)
+        near((await rect(page, 'summary')).y, 0, 'Sidebar reorder packs the new first widget')
+        near((await rect(page, 'chart')).y, neighbor.height + 10, 'Sidebar reorder inserts after the peer')
+      } else {
+        await trace(page, 'chart')
+        const delta = kind === 'n' ? -30 : 30
+        await drag(page, 'chart', kind, 0, delta)
+        const changed = await rect(page, 'chart'), frames = await stopTrace(page)
+        near(changed.y, old.y, `Sidebar ${kind} retains its stack position`)
+        near(changed.height, old.height + 30, `Sidebar ${kind} edits individual height`)
+        assert.ok(frames.length >= 4, 'Sidebar resize requires actual intermediate frames')
+        for (const frame of frames) {
+          const ordered = [...frame.peers].sort((a, b) => a.y - b.y)
+          let end = 0
+          for (const p of ordered) { near(p.y, end, 'Every Sidebar resize frame stays packed'); end += p.height + 10 }
+          assert.ok(validLayout(frame.peers, frame.surface, constraintsFor(frame.surface)))
+        }
+        await drag(page, 'chart', kind, 0, -delta)
+        near((await rect(page, 'chart')).height, old.height, 'Sidebar independent reverse gesture restores requested height')
+        near((await rect(page, 'summary')).y, neighbor.y, 'Sidebar neighbors follow the restored stack height')
+      }
+      near((await rect(page, 'chart')).width, old.width, 'Sidebar keeps its usable width')
+      continue
+    }
     if (kind !== 'move') await trace(page, 'chart')
     const delta = negative ? -30 : 30
     await drag(page, 'chart', kind, vertical ? 0 : delta, vertical ? delta : 0)

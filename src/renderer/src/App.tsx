@@ -220,7 +220,7 @@ function Workbench({ plugins }: { plugins: ReturnType<typeof usePlugins> }) {
           <div className="region-splitter presentation-splitter" role="separator" tabIndex={0} aria-label={t(isHorizontal ? 'Altura de {0}' : 'Largura de {0}', t(name))} aria-orientation={isHorizontal ? 'horizontal' : 'vertical'} aria-controls={state.viewId + '-presentation'} aria-expanded={geometry.shown} aria-valuemin={isHorizontal ? 220 : 240} aria-valuemax={isHorizontal ? fullMain.height : fullMain.width} aria-valuenow={isHorizontal ? rect.height : rect.width} data-panel-edge={state.anchor} data-active={panelUI.preview?.id === state.viewId ? '' : undefined} {...ui.handlers()} />
         </div>
       })}
-      <div className="freeform-layer">{tx.snapshot.organization.views.map(record => {
+      <div className="freeform-layer">{interaction.sidebarInsert !== null && <div className="sidebar-insertion" data-sidebar-insertion="" aria-hidden="true" style={{ left: surfaces.measures.sidebar.left, top: surfaces.measures.sidebar.top + Math.max(0, Math.min(surfaces.measures.sidebar.height, interaction.sidebarInsert - surfaces.measures.sidebar.scrollTop)), width: surfaces.measures.sidebar.width }} />}{tx.snapshot.organization.views.map(record => {
         const definition = registry.get(record.typeId), current = view.placements.find(p => p.id === record.id)
         if (current) frames.current.set(record.id, current)
         const placement = current ?? frames.current.get(record.id)

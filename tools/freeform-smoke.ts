@@ -456,10 +456,10 @@ export async function freeformSmoke(page: Page, resizeWindow: (width: number, he
   assert.equal((await rect(page, 'properties')).region, 'sidebar'); near((await rect(page, 'properties')).width, await page.locator('[data-surface="sidebar"]').evaluate(e => e.clientWidth))
   assert.equal(await form.getAttribute('data-mounted-proof'), 'same')
   const sideBefore = await rect(page, 'properties')
-  near(sideBefore.y, 25, 'Empty Sidebar keeps its real usable area; transfer uses the requested CSS-pixel destination')
+  near(sideBefore.y, 0, 'Empty Sidebar inserts the first widget at its existing top inset')
   await drag(page, 'properties', 's', 0, 13.25); near((await rect(page, 'properties')).height, sideBefore.height + 13.25)
   await drag(page, 'properties', 'move', 50, 13.125)
-  near((await rect(page, 'properties')).x, 0); near((await rect(page, 'properties')).y, sideBefore.y + 13.125)
+  near((await rect(page, 'properties')).x, 0); near((await rect(page, 'properties')).y, 0, 'Moving a lone Sidebar widget cannot create a gap')
   await resizeRegion(page, 'sidebar', 280); near((await rect(page, 'properties')).width, await page.locator('[data-surface="sidebar"]').evaluate(e => e.clientWidth))
   // One Sidebar scroll owner, with explicit overflowing widget content. The new
   // rail does not manufacture overflow from the superseded navigation fixture.
@@ -536,10 +536,14 @@ export async function freeformSmoke(page: Page, resizeWindow: (width: number, he
   const farSidebar = structuredClone(DEFAULT_FREEFORM), sideWidth = await page.locator('[data-surface="sidebar"]').evaluate(e => e.clientWidth)
   farSidebar.reference.sidebar = { width: sideWidth, height: 1210.125 }
   farSidebar.placements = farSidebar.placements.map(p => p.id === 'properties' ? { ...p, region: 'sidebar', x: 0, y: 900.125, width: sideWidth, height: 310 } : p)
+  const beforeGapPreview = await page.evaluate(key => localStorage.getItem(key), FREEFORM_KEY)
   await preview(page, farSidebar)
   await page.locator('[data-region="sidebar"]').evaluate(e => { e.scrollTop = e.scrollHeight }); await settle(page)
   await drag(page, 'properties', 'move', 0, -57.25)
-  near((await rect(page, 'properties')).y, 842.875, 'Sidebar contraction cannot feed scroll clamping back into pointer delta')
+  near((await rect(page, 'properties')).y, 0, 'Old Sidebar gaps project to the top and cannot return through a drag')
+  near((await rect(page, 'properties')).height, 310, 'Old Sidebar height is retained')
+  assert.equal(await page.locator('[data-region="sidebar"]').evaluate(e => e.scrollTop), 0, 'Historical gaps do not manufacture overflow')
+  assert.equal(await page.evaluate(key => localStorage.getItem(key), FREEFORM_KEY), beforeGapPreview, 'Gap projection and drag preview never write the saved source')
   await preview(page, DEFAULT_FREEFORM); await page.getByTestId('conclude-layout').click(); await page.getByTestId('edit-layout').waitFor()
   // Cooperative Save queue + Cancel, quota failure and byte-CAS conflicts.
   const stable = await page.evaluate(key => localStorage.getItem(key), FREEFORM_KEY)

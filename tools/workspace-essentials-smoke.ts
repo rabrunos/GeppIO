@@ -35,7 +35,7 @@ async function install(folder: string, plugin: string) {
 async function conclude() { await page.getByTestId('conclude-layout').click(); await page.getByTestId('edit-layout').waitFor(); await settle(page) }
 async function place(name: string) {
   await page.locator(`[data-catalog-type="plugin:${id}:${name}"]`).click()
-  assert.equal(await page.locator('.widget-browser-destination [data-widget-place="sidebar"]').isEnabled(), false)
+  assert.equal(await page.locator('.widget-browser-destination [data-widget-place="sidebar"]').isEnabled(), name !== 'scratch')
   await page.locator('.widget-browser-destination [data-widget-place="main"]').click(); await settle(page)
 }
 async function saved(name: string) { await widget(name).getByRole('status').filter({ hasText: /^Salvo\.$/ }).waitFor() }

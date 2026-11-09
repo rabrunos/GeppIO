@@ -1,5 +1,27 @@
 # Region-aware continuous widget geometry
 
+## Sidebar stack — Issue #41 / alpha.22
+
+Home and every custom Sidebar bar share `activePlacements`' top-packed projection.
+Saved per-bar vertical positions determine stable initial order (ties retain membership order;
+absent positions use the view's saved y). The first widget starts at the existing content inset,
+with 10px gaps and full usable inner width. Heights remain individual; vertical overflow scrolls.
+Main and Bottom retain their existing geometry.
+
+Edit drag feedback uses peer midpoints to show an insertion line. Release commits the order;
+dropping below all peers appends without creating a gap. Add, remove, height resize, pair resize
+and region/bar transfer use the same stack projection. Explicit intentions reconcile shared
+heights across bars while preserving each bar's order. Normal-mode pair resize retains its
+guarded transaction. Save advances the Cancel checkpoint; Conclude saves and exits; undo/redo
+continue to operate on whole intentions.
+
+Loading an older free-position Sidebar only projects its order and packed geometry. It does not
+rewrite the envelope or historical keys. Saved identities, heights, bar membership and recovery
+sources remain available. Explicit Save uses the existing expected-byte/Web Lock validation.
+The codec still validates raw stored per-bar clearance before projection, so packing does not
+hide corrupt overlaps. Host placement declarations enable only the three selected Workspace
+Essentials text widgets in Sidebar; this is not a public manifest capability.
+
 ## Four-edge host presentations — Issue #11 / alpha.19
 
 Panorama, Fila de trabalho, Propriedades and Atividade declare Normal/Docked/Floating

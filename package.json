@@ -1,6 +1,6 @@
 {
   "name": "geppio",
-  "version": "0.1.0-alpha.21",
+  "version": "0.1.0-alpha.22",
   "private": true,
   "license": "UNLICENSED",
   "description": "GeppIO — a local desktop workbench, Windows first.",
@@ -24,6 +24,7 @@
     "plugins:build": "node --experimental-strip-types tools/build-plugins.ts",
     "test:desktop": "pnpm test:essentials && node --experimental-strip-types tools/demo-retirement-smoke.ts && node --experimental-strip-types tools/identity-smoke.ts && node --experimental-strip-types tools/desktop-smoke.ts && pnpm test:workbench && pnpm test:presentations",
     "test:essentials": "node --experimental-strip-types tools/workspace-essentials-smoke.ts",
+    "test:sidebar": "node --experimental-strip-types tools/sidebar-stack-smoke.ts",
     "test:presentations": "node --experimental-strip-types tools/presentation-smoke.ts",
     "test:workbench": "node --experimental-strip-types tools/workbench-smoke.ts && node --experimental-strip-types tools/workbench-organization-smoke.ts && node --experimental-strip-types tools/workbench-plugins-smoke.ts && node --experimental-strip-types tools/workbench-corrections-smoke.ts",
     "test:desktop:dev": "node --experimental-strip-types tools/identity-smoke.ts --dev && node --experimental-strip-types tools/desktop-smoke.ts --dev",

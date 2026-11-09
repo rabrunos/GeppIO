@@ -2,6 +2,13 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.22] — 2026-11-09
+
+- Stack Sidebar widgets from the existing top inset in Home and custom bars, preserving individual heights, usable width, normal gaps and vertical scrolling.
+- Preview drag insertion and commit stable per-bar ordering on release; keep additions, removals, resizing and eligible moves packed within the existing Edit/checkpoint/history transactions.
+- Derive older Sidebar ordering from saved vertical positions without startup writes, retaining the existing guarded layout save and recovery format.
+- Enable host-owned Main/Sidebar eligibility for installed Workspace Essentials notes, checklist and prompts, with responsive text controls; scratch remains Main-only. No plugin API, installation identity or clipboard changes.
+
 ## [0.1.0-alpha.21] — 2026-11-09
 
 - Add the independently built first-party Workspace Essentials trusted-local package: titled notes, scratchpad, ordered checklist and saved prompts, explicitly placed in Main through the existing plugin flow.

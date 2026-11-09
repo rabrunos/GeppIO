@@ -3,7 +3,12 @@
 Alpha.21 / Issues #23, #12 and #5 adds an opt-in pilot contract, not a general SDK or community
 sandbox. The independently built first-party Workspace Essentials package uses the existing native
 directory installation, enablement and Worker contribution path. Anotações, Rascunho, Checklist and
-Prompts salvos require explicit Main placement. Fresh profiles remain empty; each type is single-view.
+Prompts salvos require explicit placement. Since alpha.22 / Issue #41, the shared host registry
+allows Anotações, Checklist and Prompts salvos in Main and Sidebar; Rascunho stays Main-only.
+Their Sidebar useful minimum is 150px, following the inner panel width with wrapped controls.
+Existing installation UUIDs, runtime identity and data stay unchanged through placement and
+restart; no reinstall or manifest migration is required. Fresh profiles remain empty; each type
+is single-view. Shared Sidebar membership still prevents a move that would strand another bar.
 
 ## Author and renderer boundary
 
