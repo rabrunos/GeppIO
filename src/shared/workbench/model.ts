@@ -10,6 +10,7 @@ export interface WidgetType {
   appearance: 'card' | 'seamless'; presence: 'single-view' | 'multiple-areas';
   constraint: Constraint; fixture?: string; widgetId?: string; pluginId?: string; retired?: boolean
   presentations?: Partial<Record<Region, readonly Presentation[]>>
+  maximize?: boolean
 }
 export type Registry = ReadonlyMap<string, WidgetType>
 export interface View { id: string; typeId: string; modelId: string }
@@ -59,6 +60,7 @@ export function widgetRegistry(plugins: readonly InstalledPlugin[] = [], demoFix
   for (const plugin of plugins) for (const widget of plugin.manifest.widgets) entries.push({
     id: `plugin:${plugin.manifest.id}:${widget.id}`, owner: `plugin:${plugin.manifest.id}`, pluginId: plugin.manifest.id, widgetId: widget.id,
     title: widget.title, category: 'Plugins', description: plugin.manifest.name,
+    ...(plugin.manifest.id === 'geppio.workspace-essentials' && ['notes', 'scratch', 'checklist', 'prompts'].includes(widget.id) ? { maximize: true } : {}),
     appearance: 'card', presence: 'single-view', constraint: {
       min: { width: 180, height: 112 }, default: plugin.manifest.apiVersion === 2 ? { width: 360, height: 360 } : { width: 310, height: 160 }, max: { width: POLICY.maxSize, height: POLICY.maxSize },
       regions: (plugin.manifest.id === 'geppio.workspace-essentials' && ['notes', 'checklist', 'prompts'].includes(widget.id)) || (plugin.manifest.id === 'geppio.time-tracker' && ['timer', 'reports'].includes(widget.id)) ? ['main', 'sidebar', 'bottom'] : ['main'],

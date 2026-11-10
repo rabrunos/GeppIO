@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { MotionConfig } from 'motion/react'
-import { PlusIcon } from '@heroicons/react/24/outline'
+import { PlusIcon, ArrowsPointingOutIcon, ArrowsPointingInIcon } from '@heroicons/react/24/outline'
 import { usePlugins } from './Plugins.tsx'
 import { PluginSurface } from './PluginSurface.tsx'
 import { BottomPluginSurface } from './BottomPluginSurface.tsx'
+import { maximizableSurface } from '../../shared/workbench/maximize.ts'
 import { constraintsFor, EXPANSION_KEY } from '../../shared/freeform/policy.ts'
 import { projectRegion } from '../../shared/freeform/projection.ts'
 import { REGIONS } from '../../shared/freeform/types.ts'
@@ -85,6 +86,12 @@ function Workbench({ plugins }: { plugins: ReturnType<typeof usePlugins> }) {
   const [removing, setRemoving] = useState<string | null>(null), [swapSelection, setSwapSelection] = useState<string | null>(null)
   const [selectedViews, setSelectedViews] = useState<string[]>([])
   const [pairPreview, setPairPreview] = useState<WorkbenchSnapshot | null>(null)
+  const [maximized, setMaximized] = useState<string | null>(null)
+  const maximizedType = tx.snapshot.organization.views.find(view => view.id === maximized)?.typeId
+  const maximizedOwner = maximizedType && registry.get(maximizedType)?.owner
+  const maximizedSurface = !tx.editing && !tx.recovery && maximized && maximizableSurface(tx.snapshot, registry, maximized)
+    && !disabledOwners().has(maximizedOwner ?? '') ? maximized : null
+  useEffect(() => { if (maximized && !maximizedSurface) setMaximized(null) }, [maximized, maximizedSurface])
   const [showFeedback, setShowFeedback] = useState(false), initialMessage = useRef(tx.message)
   const fullMain = { width: surfaces.measures.main.ownerWidth ?? 0, height: surfaces.measures.main.ownerHeight ?? 0 }
   const activePanels = panelIds(tx.snapshot), panelActive = activePanels.size > 0
@@ -143,7 +150,7 @@ function Workbench({ plugins }: { plugins: ReturnType<typeof usePlugins> }) {
   useEffect(() => { surfaces.measure() }, [regions.sidebarMode, tx.editing, editorOpen])
   function toggleExpansion(next: boolean) { interaction.end(true); setExpanded(next); try { localStorage.setItem(EXPANSION_KEY, String(next)) } catch { tx.setMessage(t('Preferência alterada somente nesta sessão.')) } }
   function toggleTheme() { tx.changeLocal({ theme: theme === 'dark' ? 'light' : 'dark' }) }
-  function begin() { interaction.end(false); setWidgetsRequest(value => value + 1); if (tx.editing) { setEditorOpen(true); return }; tx.begin(panelActive ? tx.snapshot : view) }
+  function begin() { setMaximized(null); interaction.end(false); setWidgetsRequest(value => value + 1); if (tx.editing) { setEditorOpen(true); return }; tx.begin(panelActive ? tx.snapshot : view) }
   function confirmLayout(conclude: boolean) {
     interaction.end(false)
     regions.commitKeyboard()
@@ -187,7 +194,7 @@ function Workbench({ plugins }: { plugins: ReturnType<typeof usePlugins> }) {
   }
   const picture = interaction.visual.picture
   const dropZones = interaction.catalogDrag ?? interaction.frameDrop
-  return <div className={'workbench ' + (regions.resizing ? 'is-resizing' : '')} data-theme={theme} data-sidebar-mode={regions.sidebarMode} data-active-bar={tx.snapshot.organization.activeBar} data-bottom-mode={regions.collapsed.bottom ? 'hidden' : 'docked'}
+  return <div className={'workbench ' + (regions.resizing ? 'is-resizing' : '')} data-maximized-surface={maximizedSurface ?? undefined} data-theme={theme} data-sidebar-mode={regions.sidebarMode} data-active-bar={tx.snapshot.organization.activeBar} data-bottom-mode={regions.collapsed.bottom ? 'hidden' : 'docked'}
     data-sidebar-presentation={regions.floating ? 'floating' : 'docked'} data-layout-editing={tx.editing ? '' : undefined} data-widget-catalog-open={tx.editing && editorOpen} data-resize-axis={regions.resizing === 'sidebar' ? 'x' : 'y'}
     style={{ '--sidebar-width': regions.contentWidth + 'px', '--bottom-height': regions.contentHeight + 'px', '--sidebar-track': (48 + regions.sidebar) + 'px', '--bottom-track': regions.bottom + 'px' } as CSSProperties}
     onClickCapture={event => {
@@ -231,10 +238,12 @@ function Workbench({ plugins }: { plugins: ReturnType<typeof usePlugins> }) {
         const panelFrame = !!geometry, ui = panelUI.for(state, geometry)
         const panelShown = !!geometry?.shown && (state.presentation !== 'overlay' || ui.revealed)
         const rect = geometry && (panelShown ? geometry.expanded : geometry.collapsed)
-        const rendered = rect ? { ...placement, ...rect } : displayed[placement.region].placements.find(p => p.id === placement.id) ?? placement
-        return <WidgetFrame presentation={definition.presentations?.main && placement.region === 'main' ? { mode: state.presentation, open: !panelFrame || panelShown, anchor: state.anchor, gesture: panelUI.preview?.id === record.id, freeHandlers: panelFrame && state.presentation === 'overlay' && state.anchor === null ? ui.handlers(true) : undefined, compactHandlers: panelFrame && state.presentation === 'docked' && !panelShown ? ui.handlers(false, true) : undefined } : undefined} key={record.id} placement={rendered} space={panelFrame ? 'viewport' : 'content'} definition={definition} measurement={surfaces.measures[placement.region]} constraint={constraintsFor({ ...surfaces.measures[placement.region], region: placement.region, expanded }, constraints)[record.id]!}
+        const isMaximized = maximizedSurface === record.id, hiddenByMaximize = !!maximizedSurface && placement.region === 'main' && !isMaximized
+        const rendered = isMaximized ? { ...placement, x: 0, y: 0, width: fullMain.width, height: fullMain.height } : rect ? { ...placement, ...rect } : displayed[placement.region].placements.find(p => p.id === placement.id) ?? placement
+        const maxAction = !tx.editing && !tx.recovery && !hiddenByMaximize && !disabled.has(definition.owner) && maximizableSurface(tx.snapshot, registry, record.id) ? <button className="ui-button ui-icon-button widget-maximize" aria-label={t(isMaximized ? 'Restaurar {0}' : 'Maximizar {0}', definition.title)} title={t(isMaximized ? 'Restaurar {0}' : 'Maximizar {0}', definition.title)} onClick={() => setMaximized(isMaximized ? null : record.id)}>{isMaximized ? <ArrowsPointingInIcon className="icon" /> : <ArrowsPointingOutIcon className="icon" />}</button> : undefined
+        return <WidgetFrame surfaceActions={maxAction} presentation={definition.presentations?.main && placement.region === 'main' ? { mode: state.presentation, open: !panelFrame || panelShown, anchor: state.anchor, gesture: panelUI.preview?.id === record.id, freeHandlers: panelFrame && state.presentation === 'overlay' && state.anchor === null ? ui.handlers(true) : undefined, compactHandlers: panelFrame && state.presentation === 'docked' && !panelShown ? ui.handlers(false, true) : undefined } : undefined} key={record.id} placement={rendered} space={panelFrame || isMaximized ? 'viewport' : 'content'} definition={definition} measurement={surfaces.measures[placement.region]} constraint={constraintsFor({ ...surfaces.measures[placement.region], region: placement.region, expanded }, constraints)[record.id]!}
           hover={panelFrame ? ui.hover : undefined} blur={panelFrame ? ui.blur : undefined} editControls={tx.editing && (panelFrame || feasible[placement.region])} controls={<PresentationControls state={state} tx={tx} definition={definition} region={placement.region} hold={ui.hold} bounds={{ size: fullMain, expanded, scrollbar: mainScrollbar }} />}
-          editing={tx.editing && feasible[placement.region] && !panelFrame} inactive={(placement.region === 'sidebar' && regions.sidebarMode === 'hidden') || (placement.region === 'bottom' && regions.collapsed.bottom)} ghosted={!!picture && record.id === picture.viewId && (!picture.catalog || picture.released) && (!picture.sourceBar || picture.released || picture.sourceBar === tx.snapshot.organization.activeBar)} withheld={(tx.recovery && !tx.editing) || !current || (!shown && !panelFrame && interaction.movingId !== record.id)} unavailable={placement.region === 'bottom' && !feasible.bottom}
+          editing={tx.editing && feasible[placement.region] && !panelFrame} inactive={(placement.region === 'sidebar' && regions.sidebarMode === 'hidden') || (placement.region === 'bottom' && regions.collapsed.bottom)} ghosted={!!picture && record.id === picture.viewId && (!picture.catalog || picture.released) && (!picture.sourceBar || picture.released || picture.sourceBar === tx.snapshot.organization.activeBar)} withheld={hiddenByMaximize || (tx.recovery && !tx.editing) || !current || (!isMaximized && !shown && !panelFrame && interaction.movingId !== record.id)} unavailable={placement.region === 'bottom' && !feasible.bottom}
           interaction={interaction} swapping={swapping} motionRevision={tx.motionRevision} motion={tx.motion} remove={() => setRemoving(record.id)} swapSelected={selectedViews.includes(record.id)} swapAvailable={selectedViews.length >= 2} swap={() => { if (swapSelection && swapSelection !== record.id) { const next = swapViews(view, registry, swapSelection, record.id); if (next) tx.action(next); else tx.setMessage(t('Troca incompatível ou sem espaço.')); setSwapSelection(null) } else setSwapSelection(record.id) }}
           wheel={(dx, dy) => { const element = surfaces.scroller(placement.region); if (!element) return; if (placement.region === 'main' && expanded) element.scrollLeft += dx; if (placement.region === 'sidebar') element.scrollTop += dy }}>
           {definition.widgetId ? <PluginBody definition={definition} plugins={plugins} region={placement.region} /> : undefined}

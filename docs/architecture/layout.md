@@ -1,5 +1,17 @@
 # Region-aware continuous widget geometry
 
+## Transient Main maximize — Issue #25 / alpha.26
+
+Known Workspace Essentials types declare optional host maximize eligibility in
+Normal Main. One surface identity fills the native usable Main viewport through
+the existing `projectFrame(..., 'viewport')` path. Other Main frames are hidden
+but stay mounted, including plugin models/Workers; Sidebar, Bottom and window
+chrome remain available. The maximized identity is renderer state, never saved
+geometry, history or composition data. Restore reuses ordinary stable-source
+projection; entering Edit, recovery or losing an eligible active owner clears it.
+Docked/Floating preferences and lifecycle remain independent. The surface-based
+entry point can accept a future compatible group without another layout engine.
+
 ## Sidebar stack — Issue #41 / alpha.22
 
 Home and every custom Sidebar bar share `activePlacements`' top-packed projection.

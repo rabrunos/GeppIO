@@ -2,6 +2,11 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.26] — 2026-11-09
+
+- Add optional host-owned Main maximize/restore to Workspace Essentials Normal surfaces. One transient surface fills usable Main through the shared viewport frame projection; peer content/Workers stay mounted, Sidebar/Bottom/window chrome stay accessible.
+- Preserve saved geometry bytes, normal viewport projection and Docked/Floating behavior. Restore on entering Edit or target unavailability; controls support ordinary focus and keyboard activation.
+
 ## [0.1.0-alpha.25] — 2026-11-09
 
 - Add an independently installable trusted-local Time Tracker with one timestamp-based timer and a shared local report of daily totals and paginated sessions. Explicit placement supports Main, Sidebar and Bottom; compact summaries retain start/pause controls.

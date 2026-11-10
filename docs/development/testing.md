@@ -53,6 +53,17 @@ Evidence and remaining decisions belong in the live Issues, not a tracked last-r
 
 ## Layers
 
+`pnpm test:maximize` (also in desktop) checks real Workspace Essentials with a
+disposable Windows profile: exact saved layout bytes and same-viewport geometry,
+retained mounted content/Workers, native resize during maximize, automatic Edit
+restore, ineligible timer/regions, collapse/reopen of peer regions and owner
+unavailability. `pnpm test:maximize --scale125` explicitly repeats at automated
+DPR 1.25; physical Windows DPI and owner acceptance remain separate.
+Mouse walkthrough: in normal use click the outward-arrows action on Rascunho in
+Principal. Main peers leave view; use Sidebar/Bottom normally. Click inward arrows
+to restore, or enter Edit to restore first. The same action is keyboard-focusable
+and activates with Space/Enter.
+
 `pnpm test:time-tracker` is the focused disposable-profile Windows check, also in
 `pnpm test:desktop`. Build packages/application first. It installs both real
 packages and checks eligible type counts Main/Sidebar/Bottom = 6/5/5, explicit

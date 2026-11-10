@@ -1,5 +1,6 @@
 /** Native host UI phrases. User content and plugin publications never enter this catalogue. */
 export const appMessages: Readonly<Record<string, string>> = {
+  'Maximizar {0}': 'Maximize {0}', 'Restaurar {0}': 'Restore {0}',
   'Limite de {0} barras personalizadas ativas. Arquive uma para liberar espaço.': 'Limit of {0} active custom bars. Archive one to make room.',
   'Desfazer': 'Undo', 'Refazer': 'Redo', 'Editar layout': 'Edit layout', 'Perfil': 'Profile', 'Local': 'Local',
   'Aplicar formato de {0}': 'Apply format from {0}', 'Restaurar widgets de {0}': 'Restore widgets from {0}',
