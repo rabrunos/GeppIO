@@ -116,13 +116,24 @@ try {
       return { before, after: window.getContentSize() }
     }, { width, height })
     // Forced Chromium DPR can differ from Windows DIP coordinates; retain the observed conversion.
-    await page.waitForFunction(({ content, viewport }) => Math.abs(innerWidth - content.after[0]! * viewport.width / content.before[0]!) <= 2
-      && Math.abs(innerHeight - content.after[1]! * viewport.height / content.before[1]!) <= 2, { content, viewport })
+    try {
+      await page.waitForFunction(({ content, viewport }) => Math.abs(innerWidth - content.after[0]! * viewport.width / content.before[0]!) <= 2
+        && Math.abs(innerHeight - content.after[1]! * viewport.height / content.before[1]!) <= 2, { content, viewport })
+    } catch (error) {
+      const native = await application!.evaluate(({ BrowserWindow, screen }) => { const w = BrowserWindow.getAllWindows()[0]!; return { size: w.getSize(), content: w.getContentSize(), bounds: w.getBounds(), maximized: w.isMaximized(), minimized: w.isMinimized(), zoom: w.webContents.getZoomFactor(), scale: screen.getDisplayMatching(w.getBounds()).scaleFactor } })
+      const actual = await page.evaluate(() => ({ width: innerWidth, height: innerHeight, dpr: devicePixelRatio, visibility: document.visibilityState }))
+      await writeFile('.local/diagnostics/native-resize-failure.json', JSON.stringify({ requested: { width, height }, viewport, content, native, actual }, null, 2))
+      console.error('Native resize evidence:', { requested: { width, height }, viewport, content, native, actual }); throw error
+    }
     await page.waitForFunction(() => {
       const port = document.querySelector<HTMLElement>('[data-surface="main"]')!
       return Math.abs(Number(port.dataset.usableWidth) - port.clientWidth) < .1 && Math.abs(Number(port.dataset.usableHeight) - port.clientHeight) < .1
     })
   }
+  if (process.argv.includes('--native-resize-only')) {
+    for (let cycle = 0; cycle < 3; cycle++) for (const [width, height] of [[1280, 900], [1000, 720], [1800, 980], [0, 0], [1280, 900], [1800, 980]]) await resizeWindow(width!, height!)
+    console.log('PASS focused native window resize: viewport conversion, maximize/restore and repeated real window sizes')
+  } else {
   await freeformCorrectionSmoke(page, process.argv.includes('--dev'), resizeWindow)
   await freeformSmoke(page, resizeWindow, process.argv.includes('--dev'))
   await beginEdit(page)
@@ -298,6 +309,7 @@ try {
   console.log(JSON.stringify({ result: 'passed', mode: devServer ? 'development renderer / built Main' : 'built production preview', platform: process.platform, checks: ['regions', 'fixtures', 'renderer and Worker boundary', 'concurrent inventory reads', 'cancel edit', 'save', 'panel', 'theme', 'reload', 'independent package installation', 'duplicate ID', 'widget actions', 'zero-widget pulse', 'repeated lifecycle', 'full process restart', 'enabled/disabled persistence', 'bad manifest and missing entry', 'activation/import/contribution/instance/action/disposal/background/rejection failures', 'infinite-loop timeout', 'removal persistence', 'invalid IPC ID', 'Settings Escape preserves layout edit'] }, null, 2))
   console.log('Process metrics after plugin removal (observed sample, not a plugin performance budget):')
   console.log(JSON.stringify(await application!.evaluate(({ app }) => app.getAppMetrics().map(metric => ({ type: metric.type, cpu: metric.cpu, memory: metric.memory }))), null, 2))
+  }
 } catch (error) {
   console.error('Original desktop smoke failure:', error)
   if (application) {

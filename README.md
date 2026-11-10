@@ -102,13 +102,15 @@ cabeçalho de outro widget compatível. Também é possível clicar **Abas** e e
 Amplie um alvo pequeno antes de agrupar. No grupo, troque de aba pelo título; em Editar,
 use as setas para reordenar ou **Separar aba** para voltar a um frame próprio, quando houver espaço.
 **Salvar edição**, **Concluir**, **Cancelar** e desfazer/refazer preservam o contrato de edição.
-Grupos ficam na Main; separe as abas antes de mover um membro para outra região ou converter
-o grupo em espaços reservados de um formato.
+Grupos seguem a geometria da área do seu quadro. Separe uma aba para movê-la sozinha;
+separe todas antes de converter o grupo em espaços reservados de um formato.
 
 No uso normal, o botão **Maximizar** de um widget compatível ou grupo ocupa a Main útil,
 mantendo Sidebar e Bottom acessíveis. **Restaurar** retorna à disposição anterior.
-As abas continuam disponíveis durante a maximização. O conteúdo permanece montado;
-apenas a apresentação maximizada é temporária. Testes focados: `pnpm test:maximize`,
+As abas continuam disponíveis durante a maximização. O conteúdo permanece montado e
+o quadro cresce sobre os demais widgets, com um blur leve somente na Main durante
+a transição. Restaurar faz o caminho inverso. Movimento reduzido usa a mudança direta.
+A apresentação maximizada é temporária. Testes focados: `pnpm test:maximize`,
 `pnpm test:alignment` e `pnpm test:groups`; acrescente `--scale125` para DPR automatizado 1,25.
 
 Grupos de abas compatíveis funcionam em Main, Bottom e nas barras principal e personalizadas da Sidebar. Em Editar layout, arraste o quadro inteiro para outra área: a prévia informa quantas abas vão e quantas ficam. A transferência preserva a ordem e só acontece se as duas partes forem válidas e houver espaço. Use o controle Abas para agrupar e Separar aba para destacar o membro selecionado.

@@ -42,6 +42,7 @@
 .widget-surface-actions .ui-icon-button { display: grid; width: 24px; height: 24px; border: 1px solid var(--color-border); border-radius: 5px; background: var(--color-surface); }
 .widget-frame:has(> .widget-surface-actions) > .widget-heading { padding-right: 42px; }
 .workbench[data-maximized-surface] .presentation-trigger-area { display: none; }
+.maximize-backdrop { position: absolute; z-index: 21; backdrop-filter: blur(0px); }
 .widget-grip.layout-widget-grip { padding: 0; width: 24px; height: 24px; flex: none; min-width: 0; }
 .widget-content { padding: 0; }
 .host-overlay-grip { position: absolute; top: 5px; left: 5px; width: 25px; height: 25px; min-width: 0; display: grid; place-items: center; padding: 3px; z-index: 5; border: 1px solid var(--color-accent-border); background: var(--color-accent-soft); color: var(--color-accent); border-radius: 7px; opacity: .75; }

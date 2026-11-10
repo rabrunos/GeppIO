@@ -65,17 +65,28 @@ presentation are not inputs; callers supply only the current bounded placements.
 The renderer uses the stable gesture snapshot and paints clipped, pointer-inert
 guides. Cancel/drop, invalid candidates and viewport cancellation clear them.
 
-## Transient Main maximize — Issue #25 / alpha.26
+## Transient Main maximize — Issue #25 / alpha.31
 
 Known Workspace Essentials types declare optional host maximize eligibility in
 Normal Main. One surface identity fills the native usable Main viewport through
-the existing `projectFrame(..., 'viewport')` path. Other Main frames are hidden
-but stay mounted, including plugin models/Workers; Sidebar, Bottom and window
+the existing `projectFrame(..., 'viewport')` path. Other Main frames remain visible
+behind it and inert, including their mounted plugin models/Workers; Sidebar, Bottom and window
 chrome remain available. The maximized identity is renderer state, never saved
 geometry, history or composition data. Restore reuses ordinary stable-source
 projection; entering Edit, recovery or losing an eligible active owner clears it.
 Docked/Floating preferences and lifecycle remain independent. Compatible group
 frames use this same surface entry point and keep their tab chrome accessible.
+
+The renderer presentation owns a serial and expanding/expanded/restoring phase.
+`WidgetFrame` reuses its WAAPI frame motion with theme region timing, animating
+translation and dimensions without scaling text. Reversal reads the actual
+interrupted frame, stale completions cannot clear a newer transition, and a
+viewport change settles immediately through the current projection. Hidden group
+members follow the same motion without remounting. A separate Main-bounded input
+guard ramps backdrop blur from 0 to 2px during expansion and reverses it during
+restore; the sharp moving frame stays above it. Blur clears at rest. Reduced
+motion uses the direct geometry transition. Main pair controls and presentation
+triggers cannot act behind the expanded frame; peer regions remain available.
 
 ## Sidebar stack — Issue #41 / alpha.22
 

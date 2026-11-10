@@ -2,6 +2,13 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.31] — 2026-11-10
+
+- Animate the existing compatible widget/group frame between its projected normal rectangle and usable Main using shared frame motion and theme timing.
+- Keep Main peers visible behind a sharp raised frame with a subtle Main-only transition blur and input guard. Preserve mounted content, tabs and Workers.
+- Reverse interrupted transitions from their actual on-screen rectangle, follow viewport changes, clear on Edit/unavailability and respect reduced motion without persisting presentation geometry.
+- Add bounded native window/viewport conversion diagnostics and an isolated resize probe while retaining the complete desktop path and original tolerance.
+
 ## [0.1.0-alpha.30] — 2026-11-10
 
 - Extend compatible Normal tab groups to Sidebar Home/custom bars and Bottom with regional aggregate minima, stable content identities and ordinary placement.

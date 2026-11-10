@@ -15,9 +15,12 @@ import { projectFrame } from './frame-layout.ts'
 import type { FrameSpace } from './frame-layout.ts'
 import { WorkbenchIcon } from '../workbench/WorkbenchIcon.tsx'
 import type { useSwap } from '../workbench/useSwap.ts'
+import { frameMotionTiming } from '../workbench/MaximizePresentation.tsx'
+import type { MaximizeState } from '../workbench/MaximizePresentation.tsx'
 
 const LABELS: Record<Direction, string> = { n: 'borda superior', e: 'borda direita', s: 'borda inferior', w: 'borda esquerda', ne: 'canto superior direito', nw: 'canto superior esquerdo', se: 'canto inferior direito', sw: 'canto inferior esquerdo' }
-export const WidgetFrame = memo(function WidgetFrame({ placement: p, measurement: m, space = 'content', constraint, editing, interaction, withheld, unavailable, wheel, definition, children, remove, swap, swapSelected, swapAvailable, motionRevision, motion, ghosted, swapping, inactive, presentation, controls, surfaceActions, organizationActions, tabs, groupMember, groupHost, surfaceId, contentHidden, contentId, labelledBy, headingTitle, removeTitle, editControls = editing, hover, blur }: {
+export const WidgetFrame = memo(function WidgetFrame({ placement: p, measurement: m, space = 'content', constraint, editing, interaction, withheld, unavailable, wheel, definition, children, remove, swap, swapSelected, swapAvailable, motionRevision, motion, ghosted, swapping, inactive, presentation, controls, surfaceActions, organizationActions, tabs, groupMember, groupHost, surfaceId, contentHidden, contentId, labelledBy, headingTitle, removeTitle, editControls = editing, hover, blur, maximizeMotion, backgroundInert }: {
+  maximizeMotion?: MaximizeState & { settled?(): void }; backgroundInert?: boolean;
   organizationActions?: ReactNode; tabs?: ReactNode; groupMember?: boolean; groupHost?: boolean; surfaceId?: string; contentHidden?: boolean; contentId?: string; labelledBy?: string; headingTitle?: string; removeTitle?: string;
   surfaceActions?: ReactNode;
   controls?: ReactNode; editControls?: boolean; hover?(inside: boolean): void; blur?(): void;
@@ -26,17 +29,37 @@ export const WidgetFrame = memo(function WidgetFrame({ placement: p, measurement
   wheel(dx: number, dy: number): void; definition: WidgetType; children?: ReactNode; remove(): void; swap(): void; swapSelected: boolean; swapAvailable: boolean; motionRevision: number; motion: { duration: number; entering: boolean }; ghosted: boolean; swapping: ReturnType<typeof useSwap>
 }) {
   const { t } = useLocale(), title = headingTitle ?? (definition.owner === 'host' ? t(definition.title) : definition.title)
-  const frame = useRef<HTMLElement>(null), previous = useRef<{ left: number; top: number; width: number; height: number; open?: boolean; revision: number; visible: boolean; mode?: string } | null>(null), flight = useRef<Animation | null>(null)
+  const frame = useRef<HTMLElement>(null), previous = useRef<{ left: number; top: number; width: number; height: number; open?: boolean; revision: number; visible: boolean; mode?: string; maximize?: number } | null>(null), flight = useRef<Animation | null>(null)
   const { left, top, outside, clipPath, available } = projectFrame(p, m, space)
   const visible = !withheld && !unavailable && available
   const focusInside = frame.current?.querySelector('.widget-content')?.contains(document.activeElement)
   useLayoutEffect(() => {
-    const before = previous.current; previous.current = { left, top, width: p.width, height: p.height, open: presentation?.open, revision: motionRevision, visible, mode: presentation?.mode }
+    const before = previous.current; previous.current = { left, top, width: p.width, height: p.height, open: presentation?.open, revision: motionRevision, visible, mode: presentation?.mode, maximize: maximizeMotion?.serial }
     if (before?.mode !== presentation?.mode || presentation?.gesture) { flight.current?.cancel(); return }
     const changed = before && Math.abs(before.left - left) + Math.abs(before.top - top) >= .2
     const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches
     const reveal = before && presentation?.mode === 'overlay' && before.open !== presentation.open
     const geometryChanged = changed || (before && (before.width !== p.width || before.height !== p.height))
+    if (maximizeMotion) {
+      // All keyed members follow this same frame, including currently hidden
+      // tabs. A visibility change must not restart or replace their content.
+      if (maximizeMotion.phase === 'expanded') { flight.current?.cancel(); return }
+      if (before?.maximize === maximizeMotion.serial) {
+        if (geometryChanged) { flight.current?.cancel(); maximizeMotion.settled?.() }
+        return
+      }
+      const node = frame.current
+      if (!before || !node || !available || reduced || !geometryChanged) { flight.current?.cancel(); maximizeMotion.settled?.(); return }
+      const style = getComputedStyle(node), matrix = new DOMMatrixReadOnly(style.transform), running = flight.current?.playState === 'running'
+      const width = running ? parseFloat(style.width) : before.width, height = running ? parseFloat(style.height) : before.height
+      flight.current?.cancel()
+      const animation = node.animate([{ transform: `translate(${before.left + matrix.e - left}px, ${before.top + matrix.f - top}px)`, width: width + 'px', height: height + 'px' },
+        { transform: 'translate(0,0)', width: p.width + 'px', height: p.height + 'px' }], frameMotionTiming(node))
+      flight.current = animation
+      void animation.finished.then(() => maximizeMotion.settled?.(), () => {})
+      return
+    }
+    if (before?.maximize !== undefined) { flight.current?.cancel(); return }
     // Viewport tracks are already animated by the host. Every widget follows the
     // measured frame directly; a second left/width animation would lag behind it.
     if (before?.revision === motionRevision && geometryChanged && !reveal) flight.current?.cancel()
@@ -57,17 +80,25 @@ export const WidgetFrame = memo(function WidgetFrame({ placement: p, measurement
     flight.current?.cancel()
     flight.current = frame.current.animate([{ transform: `translate(${before.left + matrix.e - left}px, ${before.top + matrix.f - top}px)`, width: width + 'px', height: height + 'px' },
       { transform: 'translate(0,0)', width: p.width + 'px', height: p.height + 'px' }], { duration, easing: reveal ? style.getPropertyValue('--region-easing').trim() : 'cubic-bezier(.2,.8,.2,1)' })
-  }, [left, top, p.width, p.height, motionRevision, visible, ghosted, presentation?.mode, presentation?.open, presentation?.gesture])
+  }, [left, top, p.width, p.height, motionRevision, visible, ghosted, presentation?.mode, presentation?.open, presentation?.gesture, maximizeMotion?.serial, maximizeMotion?.phase])
   useLayoutEffect(() => () => flight.current?.cancel(), [])
+  useLayoutEffect(() => {
+    if (!maximizeMotion) return
+    const preference = matchMedia('(prefers-reduced-motion: reduce)')
+    const direct = () => { if (preference.matches) { flight.current?.cancel(); maximizeMotion.settled?.() } }
+    preference.addEventListener('change', direct)
+    return () => preference.removeEventListener('change', direct)
+  }, [maximizeMotion?.serial])
   useLayoutEffect(() => {
     if (presentation?.open === false && focusInside) (document.querySelector<HTMLElement>(`[aria-controls="${CSS.escape(p.id)}-presentation"]`) ?? frame.current)?.focus({ preventScroll: true })
   }, [presentation?.open])
   return <section id={presentation ? p.id + '-presentation' : undefined} data-group-host={groupHost || undefined} data-group-member={groupMember || undefined} data-presentation={presentation?.mode} data-panel-open={presentation?.open} data-panel-anchor={presentation?.anchor ?? 'free'} className={'widget widget-frame ' + (editing ? 'editing ' : '') + (editing && interaction.selected === p.id ? 'selected ' : '') + (editing && interaction.blocked === p.id ? 'invalid' : '')}
     ref={frame} onPointerEnter={() => hover?.(true)} onPointerLeave={() => hover?.(false)} onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget)) blur?.() }} data-widget-appearance={definition.appearance} data-model-id={`model:${definition.id}`} data-swap-selected={swapSelected ? '' : undefined}
-    tabIndex={presentation ? -1 : undefined} hidden={!visible} inert={withheld || unavailable || inactive || (outside && interaction.activeId !== p.id)} data-widget={withheld ? undefined : surfaceId ?? p.id} data-owner-region={p.region} data-layout-keyboard={import.meta.env.DEV}
+    tabIndex={presentation ? -1 : undefined} hidden={!visible} inert={backgroundInert || withheld || unavailable || inactive || (outside && interaction.activeId !== p.id)} data-widget={withheld ? undefined : surfaceId ?? p.id} data-owner-region={p.region} data-layout-keyboard={import.meta.env.DEV}
+    data-maximize-frame={maximizeMotion?.phase} data-maximize-background={backgroundInert || undefined}
     data-widget-id={p.id} data-panel-gesture={presentation?.gesture || undefined} data-swap-over={swapping.preview?.target === p.id ? '' : undefined}
     data-x={p.x} data-y={p.y} data-w={p.width} data-h={p.height} data-preferred-w={p.preferred.width} data-preferred-h={p.preferred.height}
-    style={{ left, top, width: p.width, height: p.height, opacity: ghosted ? 0 : undefined, clipPath }}
+    style={{ left, top, width: p.width, height: p.height, opacity: ghosted ? 0 : undefined, clipPath, zIndex: maximizeMotion ? groupMember ? 23 : 22 : undefined }}
     onWheel={e => {
       if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) wheel(e.deltaX || e.deltaY, 0)
       else if (p.region === 'sidebar') {

@@ -67,8 +67,21 @@ retained mounted content/Workers, native resize during maximize, automatic Edit
 restore, ineligible timer/regions, collapse/reopen of peer regions and owner
 unavailability. `pnpm test:maximize --scale125` explicitly repeats at automated
 DPR 1.25; physical Windows DPI and owner acceptance remain separate.
+Alpha.31 also observes intermediate native frame dimensions and Main-only blur
+through RAF samples tied to the presentation phase, checking reverse restore,
+sharp content, visible/inert peers, both themes, reduced motion and fast keyboard
+interruption. The observer waits for the actual expanded/restored state rather
+than a screenshot delay. Layout bytes, mount proofs and Worker identities remain
+independent assertions.
+
+`node --experimental-strip-types tools/desktop-smoke.ts --native-resize-only`
+isolates the existing real window-size/maximize/restore conversion checks in a
+disposable profile. The ordinary desktop path still runs every scenario. A
+conversion failure records requested sizes, before/after native content sizes,
+actual CSS viewport/DPR, native scale/zoom and window state in ignored diagnostics;
+it does not relax the original conversion tolerance or alter product behavior.
 Mouse walkthrough: in normal use click the outward-arrows action on Rascunho in
-Principal. Main peers leave view; use Sidebar/Bottom normally. Click inward arrows
+Principal. The frame grows above Main peers; use Sidebar/Bottom normally. Click inward arrows
 to restore, or enter Edit to restore first. The same action is keyboard-focusable
 and activates with Space/Enter.
 
