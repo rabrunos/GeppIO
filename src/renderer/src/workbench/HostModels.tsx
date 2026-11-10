@@ -5,8 +5,8 @@ import type { LocalSessionState } from '../../../shared/workbench/model.ts'
 type PropertiesModel = LocalSessionState['properties']
 const initial: PropertiesModel = { name: 'Meu espaço de trabalho', density: 'compact', details: true }
 const HostModels = createContext({ properties: initial, updateProperties(_patch: Partial<PropertiesModel>) {}, replaceProperties(_value: PropertiesModel) {}, registerHistory(_handler: ((value: PropertiesModel) => void) | null) {} })
-/** Native model identity is independent of placement. Editing can record typed
- * reversible values; another view/preview reads this store and executes nothing.
+/** Native model identity is independent of placement and locked content. Existing
+ * transaction snapshots retain reversible state; views/previews share this store.
  */
 export function HostModelsProvider({ children }: { children: ReactNode }) {
   const [properties, setProperties] = useState(initial)

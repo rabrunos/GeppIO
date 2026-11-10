@@ -20,7 +20,7 @@ try {
   await page.evaluate(() => localStorage.setItem('geppio.locale', 'pt-BR')); await page.reload(); await page.getByTestId('edit-layout').waitFor(); await page.bringToFront()
   const settle = () => settleDesktop(page)
   const order = () => page.locator('.sidebar-rail [data-bar-id]').evaluateAll(nodes => nodes.map(node => node.getAttribute('data-bar-id')))
-  const input = page.getByRole('textbox', { name: 'Nome de exemplo', exact: true })
+  const input = page.getByRole('textbox', { name: 'Nome de exemplo', exact: true, includeHidden: true })
   await input.fill('Nome literal Ω'); await input.evaluate(node => node.setAttribute('data-proof', 'organization'))
   async function create(name: string, widgets: string[]) {
     await page.getByRole('button', { name: 'Nova barra', exact: true }).click()

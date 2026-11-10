@@ -88,6 +88,18 @@ restore; the sharp moving frame stays above it. Blur clears at rest. Reduced
 motion uses the direct geometry transition. Main pair controls and presentation
 triggers cannot act behind the expanded frame; peer regions remain available.
 
+## Widget content interaction during Edit — Issue #2 / alpha.32
+
+The common `WidgetFrame` content boundary receives the transaction's editing flag,
+independently of frame eligibility, group carrier/member status or options-panel
+visibility. Native `inert` removes body controls from pointer/focus/keyboard input;
+an inline pointer guard also overrides the virtual member's ordinary pointer path.
+The content remains mounted and visible. Headers, tabs and layout controls remain
+outside that boundary. Render-time body-focus capture routes focus to the usable
+Save control before it can be orphaned by inertness. Exiting the transaction
+restores interaction without recreating content. Existing normal draft/blur saves,
+Worker publications and timestamp-based timing are not canceled or permission-gated.
+
 ## Sidebar stack — Issue #41 / alpha.22
 
 Home and every custom Sidebar bar share `activePlacements`' top-packed projection.

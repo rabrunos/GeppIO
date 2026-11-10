@@ -19,7 +19,8 @@ import { frameMotionTiming } from '../workbench/MaximizePresentation.tsx'
 import type { MaximizeState } from '../workbench/MaximizePresentation.tsx'
 
 const LABELS: Record<Direction, string> = { n: 'borda superior', e: 'borda direita', s: 'borda inferior', w: 'borda esquerda', ne: 'canto superior direito', nw: 'canto superior esquerdo', se: 'canto inferior direito', sw: 'canto inferior esquerdo' }
-export const WidgetFrame = memo(function WidgetFrame({ placement: p, measurement: m, space = 'content', constraint, editing, interaction, withheld, unavailable, wheel, definition, children, remove, swap, swapSelected, swapAvailable, motionRevision, motion, ghosted, swapping, inactive, presentation, controls, surfaceActions, organizationActions, tabs, groupMember, groupHost, surfaceId, contentHidden, contentId, labelledBy, headingTitle, removeTitle, editControls = editing, hover, blur, maximizeMotion, backgroundInert }: {
+export const WidgetFrame = memo(function WidgetFrame({ placement: p, measurement: m, space = 'content', constraint, editing, interaction, withheld, unavailable, wheel, definition, children, remove, swap, swapSelected, swapAvailable, motionRevision, motion, ghosted, swapping, inactive, presentation, controls, surfaceActions, organizationActions, tabs, groupMember, groupHost, surfaceId, contentHidden, contentId, labelledBy, headingTitle, removeTitle, editControls = editing, hover, blur, maximizeMotion, backgroundInert, contentLocked = false }: {
+  contentLocked?: boolean;
   maximizeMotion?: MaximizeState & { settled?(): void }; backgroundInert?: boolean;
   organizationActions?: ReactNode; tabs?: ReactNode; groupMember?: boolean; groupHost?: boolean; surfaceId?: string; contentHidden?: boolean; contentId?: string; labelledBy?: string; headingTitle?: string; removeTitle?: string;
   surfaceActions?: ReactNode;
@@ -92,6 +93,14 @@ export const WidgetFrame = memo(function WidgetFrame({ placement: p, measurement
   useLayoutEffect(() => {
     if (presentation?.open === false && focusInside) (document.querySelector<HTMLElement>(`[aria-controls="${CSS.escape(p.id)}-presentation"]`) ?? frame.current)?.focus({ preventScroll: true })
   }, [presentation?.open])
+  useLayoutEffect(() => {
+    // Capture body focus during render, before native inertness removes it.
+    // Accepted normal drafts/blur saves and background lifecycle stay intact.
+    if (contentLocked && (focusInside || document.activeElement === document.body)) {
+      const control = document.querySelector<HTMLElement>('[data-testid="save-layout"]:not(:disabled)') ?? document.querySelector<HTMLElement>('.widget-catalog-toggle:not(:disabled)')
+      control?.focus({ preventScroll: true })
+    }
+  }, [contentLocked])
   return <section id={presentation ? p.id + '-presentation' : undefined} data-group-host={groupHost || undefined} data-group-member={groupMember || undefined} data-presentation={presentation?.mode} data-panel-open={presentation?.open} data-panel-anchor={presentation?.anchor ?? 'free'} className={'widget widget-frame ' + (editing ? 'editing ' : '') + (editing && interaction.selected === p.id ? 'selected ' : '') + (editing && interaction.blocked === p.id ? 'invalid' : '')}
     ref={frame} onPointerEnter={() => hover?.(true)} onPointerLeave={() => hover?.(false)} onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget)) blur?.() }} data-widget-appearance={definition.appearance} data-model-id={`model:${definition.id}`} data-swap-selected={swapSelected ? '' : undefined}
     tabIndex={presentation ? -1 : undefined} hidden={!visible} inert={backgroundInert || withheld || unavailable || inactive || (outside && interaction.activeId !== p.id)} data-widget={withheld ? undefined : surfaceId ?? p.id} data-owner-region={p.region} data-layout-keyboard={import.meta.env.DEV}
@@ -113,7 +122,7 @@ export const WidgetFrame = memo(function WidgetFrame({ placement: p, measurement
     {surfaceActions && <div className="widget-surface-actions">{surfaceActions}</div>}
     {editControls && <div className="widget-local-controls">{controls}<button className="ui-button ui-icon-button layout-widget-remove" aria-label={t('Remover {0}', removeTitle ?? title)} onClick={remove}><XMarkIcon className="icon" /></button></div>}
     {editing && <button className="ui-button ui-icon-button widget-swap-control" hidden={!swapAvailable || !swapSelected} aria-label={t('Trocar widget de {0}', title)} title={t('Arraste sobre outro widget selecionado para trocar os espaços')} aria-pressed={swapSelected} onClick={swap} {...swapping.handlers(p.id)}><WorkbenchIcon name="move" /></button>}
-    <div className="widget-content" id={contentId} role={contentId ? 'tabpanel' : undefined} aria-labelledby={labelledBy} hidden={contentHidden} inert={presentation?.open === false || contentHidden}>{children ?? <WidgetContent id={definition.fixture ?? ''} />}</div>
+    <div className="widget-content" id={contentId} role={contentId ? 'tabpanel' : undefined} aria-labelledby={labelledBy} hidden={contentHidden} inert={contentLocked || presentation?.open === false || contentHidden} data-content-locked={contentLocked || undefined} style={{ pointerEvents: contentLocked ? 'none' : undefined }}>{children ?? <WidgetContent id={definition.fixture ?? ''} />}</div>
     {editing && DIRECTIONS.filter(d => allowsResize(d, constraint)).map(d => <button key={d} className={'resize-zone resize-' + d} data-resize={d}
       tabIndex={import.meta.env.DEV ? 0 : -1} aria-label={t('Redimensionar {0}: {1}', title, t(LABELS[d]))}
       title={t('Redimensionar pela {0}', t(LABELS[d])) + (import.meta.env.DEV ? t(' · use as setas') : '')} {...interaction.handlers(p, d)} />)}

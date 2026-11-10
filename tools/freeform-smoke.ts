@@ -405,15 +405,15 @@ export async function freeformSmoke(page: Page, resizeWindow: (width: number, he
   const world = await page.locator('[data-surface="main"] .placement-world').evaluate(e => (e as HTMLElement).style.width)
   near(Number.parseFloat(world), Math.max(...sparse.placements.map(p => p.id === 'chart' ? exact.x + exact.width : p.x + p.width)))
   await page.locator('[data-surface="main"]').evaluate(e => { e.scrollLeft = 600 }); await settle(page)
-  await beginEdit(page)
-  const form = page.getByRole('textbox', { name: 'Nome de exemplo', exact: true })
-  const modelCheckpoint = await form.inputValue()
-  // Type into the real visible control, then move it offscreen. An inert field
-  // cannot receive native input; directly assigning .value would bypass its model.
+  const form = page.getByRole('textbox', { name: 'Nome de exemplo', exact: true, includeHidden: true })
+  // Seed the real model in normal use; Edit now locks content rather than
+  // permitting a separate content edit in the layout transaction.
   await page.locator('[data-surface="main"]').evaluate((e, x) => { e.scrollLeft = x }, (await rect(page, 'properties')).x); await settle(page)
-  await form.fill('estado não salvo'); assert.equal(await form.inputValue(), 'estado não salvo')
+  await form.fill('estado normal preservado'); const modelCheckpoint = await form.inputValue()
   await form.evaluate(e => e.setAttribute('data-mounted-proof', 'same'))
   await page.locator('[data-surface="main"]').evaluate(e => { e.scrollLeft = 600 }); await settle(page)
+  await beginEdit(page)
+  assert.equal(await form.evaluate(e => e.closest<HTMLElement>('.widget-content')!.inert), true)
   const queue = await rect(page, 'queue')
   const scrollGrip = page.locator('[data-widget="queue"] .widget-grip'), scrollBox = await scrollGrip.boundingBox(); assert.ok(scrollBox)
   await page.mouse.move(scrollBox.x + scrollBox.width / 2, scrollBox.y + scrollBox.height / 2); await page.mouse.down()
@@ -603,13 +603,16 @@ export async function freeformPluginSmoke(page: Page) {
   // bar metadata must describe that layout instead of retaining Sidebar members.
   const fixtureOrganization = { ...current.organization, bars: adoptLayout(source).organization.bars, activeBar: 'home' }
   await preview(page, { ...source, organization: fixtureOrganization, placements: [...source.placements, ...contributions.map((p, i) => ({ ...p, x: 14500 + i * 400, y: 0 }))] } as WorkbenchSnapshot)
-  const form = page.getByRole('textbox', { name: 'Nome de exemplo', exact: true })
+  await page.getByTestId('conclude-layout').click(); await page.getByTestId('edit-layout').waitFor(); await settle(page)
+  const form = page.getByRole('textbox', { name: 'Nome de exemplo', exact: true, includeHidden: true })
   await page.locator('[data-surface="main"]').evaluate(e => { e.scrollLeft = e.scrollWidth }); await settle(page)
   await form.fill('formulário fora da tela')
+  await page.getByRole('button', { name: 'Incrementar', exact: true }).click(); await page.getByText('Cliques nesta ativação: 2', { exact: true }).waitFor()
+  await beginEdit(page)
+  assert.equal(await form.evaluate(e => e.closest<HTMLElement>('.widget-content')!.inert), true)
   await page.locator('[data-surface="main"]').evaluate(e => { e.scrollLeft = e.scrollWidth }); await settle(page)
   await expansion(page, false); await expansion(page, true)
   assert.equal(await form.inputValue(), 'formulário fora da tela'); assert.deepEqual(page.workers(), workers)
-  await page.getByRole('button', { name: 'Incrementar', exact: true }).click(); await page.getByText('Cliques nesta ativação: 2', { exact: true }).waitFor()
   await settings(page)
   const pulse = page.locator('[data-plugin="local.pulse"] p[role="status"]'), before = await pulse.textContent()
   await page.waitForFunction(before => document.querySelector('[data-plugin="local.pulse"] p[role="status"]')?.textContent !== before, before)
@@ -620,7 +623,11 @@ export async function freeformPluginSmoke(page: Page) {
   assert.equal((await rect(page, 'chart')).region, 'sidebar')
   assert.deepEqual(page.workers(), workers, 'eligible region transfer does not restart Workers')
   assert.equal(await form.inputValue(), 'formulário fora da tela')
-  await page.getByTestId('cancel-layout').click(); await expansion(page, false)
+  await page.getByTestId('cancel-layout').click()
+  // The offscreen content is now confirmed in normal use. Restore the caller's
+  // bounded fixture before disabling expansion and exercising later actions.
+  await preview(page, current); await page.getByTestId('conclude-layout').click(); await page.getByTestId('edit-layout').waitFor(); await settle(page)
+  await expansion(page, false)
   await writeFile(`.local/diagnostics/freeform-performance-${await page.evaluate(() => devicePixelRatio)}.json`, JSON.stringify(await page.evaluate(() => ({
     nodes: document.querySelectorAll('*').length, frames: document.querySelectorAll('[data-widget]').length, worlds: document.querySelectorAll('.placement-world').length,
     optimization: getComputedStyle(document.querySelector('[data-widget]')!).contentVisibility,

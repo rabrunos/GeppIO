@@ -41,9 +41,9 @@ async function groupDrag(source: string, destination: string, cancel = false, al
   await page.mouse.up(); await settle(page); assert.equal(await page.locator('.group-drag-hint,[data-group-target]').count(), 0)
 }
 async function compare() {
-  await group().getByRole('tab', { name: 'Anotações', exact: true }).click(); assert.equal(await widget('notes').getByRole('textbox', { name: 'Texto da anotação', exact: true }).inputValue(), 'Conteúdo real preservado nas abas á')
-  await group().getByRole('tab', { name: 'Checklist', exact: true }).click(); assert.equal(await widget('checklist').getByRole('checkbox', { name: 'Conferir grupo', exact: true }).isChecked(), true)
-  await group().getByRole('tab', { name: 'Prompts salvos', exact: true }).click(); assert.equal(await widget('prompts').getByRole('textbox', { name: 'Texto do prompt', exact: true }).inputValue(), 'Prompt literal <b>sem HTML</b>')
+  await group().getByRole('tab', { name: 'Anotações', exact: true }).click(); assert.equal(await widget('notes').getByRole('textbox', { name: 'Texto da anotação', exact: true, includeHidden: true }).inputValue(), 'Conteúdo real preservado nas abas á')
+  await group().getByRole('tab', { name: 'Checklist', exact: true }).click(); assert.equal(await widget('checklist').getByRole('checkbox', { name: 'Conferir grupo', exact: true, includeHidden: true }).isChecked(), true)
+  await group().getByRole('tab', { name: 'Prompts salvos', exact: true }).click(); assert.equal(await widget('prompts').getByRole('textbox', { name: 'Texto do prompt', exact: true, includeHidden: true }).inputValue(), 'Prompt literal <b>sem HTML</b>')
 }
 async function transfer(region: 'main' | 'sidebar' | 'bottom', cancel = false) {
   await page.bringToFront()
@@ -64,7 +64,7 @@ async function transfer(region: 'main' | 'sidebar' | 'bottom', cancel = false) {
 }
 async function compactCompare() {
   await group().getByRole('tab', { name: 'Anotações', exact: true }).click(); await widget('notes').getByText('Conteúdo real preservado nas abas á', { exact: true }).waitFor()
-  await group().getByRole('tab', { name: 'Checklist', exact: true }).click(); assert.equal(await widget('checklist').getByRole('checkbox', { name: 'Conferir grupo', exact: true }).isChecked(), true)
+  await group().getByRole('tab', { name: 'Checklist', exact: true }).click(); assert.equal(await widget('checklist').getByRole('checkbox', { name: 'Conferir grupo', exact: true, includeHidden: true }).isChecked(), true)
   await group().getByRole('tab', { name: 'Prompts salvos', exact: true }).click(); await widget('prompts').getByText('Prompt literal <b>sem HTML</b>', { exact: true }).waitFor()
 }
 try {

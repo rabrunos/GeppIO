@@ -600,6 +600,19 @@ hostile-code isolation, power-loss durability, physical Windows UX or Linux appl
 
 ## Completion standard
 
+`pnpm test:edit-lock` (`node --experimental-strip-types tools/edit-lock-smoke.ts`)
+is part of the desktop chain. Its disposable Windows profile uses real installed
+Essentials/Time Tracker widgets and an explicit existing host fixture. Native
+body clicks, focus attempts, typing, paste-key activation and sequential Tab
+navigation verify the common Edit lock with the options panel closed. Read-only
+inspection of inert content uses DOM access or includeHidden; content actions are
+seeded and exercised in normal mode. Accepted pending drafts, background timing,
+mount proofs and Worker identities are retained through Cancel/Conclude. The
+combined mouse flow aligns, groups, switches tabs, maximizes/restores, transfers
+and detaches a tab across regions, then saves/restarts. Real widgets all share
+regional eligibility; mixed five-member partitions remain controlled pure tests.
+Physical mouse/motion and display-DPI owner acceptance remain separate.
+
 `pnpm test:groups` (`node --experimental-strip-types tools/groups-smoke.ts`) checks
 real installed Essentials members and peer Time Tracker widgets in a disposable
 Windows profile. It exercises mouse align/group, cancel/history, tab reorder and

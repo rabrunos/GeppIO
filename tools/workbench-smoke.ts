@@ -22,7 +22,7 @@ try {
   await page.bringToFront()
   await page.evaluate(() => localStorage.setItem('geppio.locale', 'pt-BR')); await page.reload(); await page.getByTestId('edit-layout').waitFor()
   const settle = () => settleDesktop(page)
-  const input = page.getByRole('textbox', { name: 'Nome de exemplo', exact: true })
+  const input = page.getByRole('textbox', { name: 'Nome de exemplo', exact: true, includeHidden: true })
   await input.fill('estado preservado'); await input.evaluate(e => e.setAttribute('data-proof', 'same'))
   await page.getByTestId('edit-layout').click(); await settle()
   await page.locator('.widget-catalog-toggle').click(); await settle()

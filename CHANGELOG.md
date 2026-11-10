@@ -2,6 +2,12 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.32] — 2026-11-10
+
+- Keep every widget body visible and mounted but inert to mouse/keyboard input throughout Edit layout, including full/compact plugin surfaces, host fixtures and grouped members in all regions.
+- Route body focus to a usable layout control while keeping headers, tabs, grouping, navigation and transaction controls available even when the options panel is closed.
+- Preserve accepted normal drafts/saves, local identities, Workers and background timing; restore content interaction after Conclude or Cancel without remounting.
+
 ## [0.1.0-alpha.31] — 2026-11-10
 
 - Animate the existing compatible widget/group frame between its projected normal rectangle and usable Main using shared frame motion and theme timing.

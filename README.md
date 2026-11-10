@@ -115,6 +115,8 @@ A apresentação maximizada é temporária. Testes focados: `pnpm test:maximize`
 
 Grupos de abas compatíveis funcionam em Main, Bottom e nas barras principal e personalizadas da Sidebar. Em Editar layout, arraste o quadro inteiro para outra área: a prévia informa quantas abas vão e quantas ficam. A transferência preserva a ordem e só acontece se as duas partes forem válidas e houver espaço. Use o controle Abas para agrupar e Separar aba para destacar o membro selecionado.
 
+Durante **Editar layout**, o conteúdo dos widgets continua visível, mas fica bloqueado para mouse e teclado, mesmo com o painel de opções fechado. Use os cabeçalhos e controles para mover, redimensionar, agrupar e trocar abas. **Concluir** ou **Cancelar** libera o conteúdo novamente; rascunhos já aceitos e cronômetros continuam preservados. Teste focado: `pnpm test:edit-lock`.
+
 ## O que existe no workbench
 
 Cabeçalho fixo, barra contextual, Sidebar, Main, Bottom e barra de status compõem o shell.

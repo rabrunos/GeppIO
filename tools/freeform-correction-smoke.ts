@@ -243,17 +243,25 @@ export async function freeformCorrectionSmoke(page: Page, dev: boolean, resizeWi
     })
     near((await rect(page, 'properties')).x, before.x + 2, 'Batched discrete keyboard actions use successive drafts')
   }
-  // Real inputs and normal tabbing retain native focus/typing in both builds.
+  // Edit excludes body focus while keeping the real layout controls reachable.
   await preview(page, source)
-  const input = page.getByRole('textbox', { name: 'Nome de exemplo', exact: true })
-  await input.focus(); await page.keyboard.type('normal'); await page.keyboard.press('Shift+Tab')
+  const input = page.getByRole('textbox', { name: 'Nome de exemplo', exact: true, includeHidden: true })
+  const originalText = await input.inputValue()
+  await input.evaluate(node => (node as HTMLElement).focus()); await page.keyboard.insertText('blocked')
+  assert.equal(await input.inputValue(), originalText); assert.equal(await page.evaluate(() => !!document.activeElement?.closest('.widget-content')), false)
+  await page.locator('[data-widget="properties"] .widget-presentation-control').focus(); await page.keyboard.press('Tab')
   assert.equal(await page.evaluate(() => document.activeElement?.matches('.layout-widget-remove')), true, 'The approved removal control remains keyboard reachable in both builds')
   await page.keyboard.press('Shift+Tab')
   assert.equal(await page.evaluate(() => document.activeElement?.matches('.widget-presentation-control')), true, 'The local presentation selector precedes remove')
   await page.keyboard.press('Shift+Tab')
   assert.equal(await page.evaluate(() => document.activeElement?.matches('.widget-grip, .resize-zone')), dev)
-  await input.focus(); await page.keyboard.press('Tab')
+  // Confirm this visible fixture: Cancel would restore the preceding stack,
+  // whose Properties frame can be outside the expanded viewport.
+  await page.getByTestId('conclude-layout').click(); await page.getByTestId('edit-layout').waitFor(); await shellSettle(page)
+  await input.focus(); assert.equal(await input.evaluate(node => node === document.activeElement), true)
+  await page.keyboard.type('normal'); await page.keyboard.press('Tab')
   assert.equal(await page.evaluate(() => document.activeElement?.tagName), 'SELECT')
+  await preview(page, source)
   // The same boundaries apply to the axes allowed in the peer regions.
   await resizeRegion(page, 'sidebar', 290); await resizeRegion(page, 'bottom', 180)
   for (const region of ['sidebar', 'bottom'] as const) for (const kind of region === 'sidebar' ? ['move', 'n', 's'] : ['move', 'w', 'e']) {
