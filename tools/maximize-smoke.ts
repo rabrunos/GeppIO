@@ -13,7 +13,7 @@ const app = await electron.launch({ args: ['.', ...(scale === 1.25 ? ['--force-d
 try {
   const page = await app.firstWindow(), errors: string[] = []; page.on('pageerror', e => errors.push(e.message))
   const resize = async (width: number, height: number) => { await app.evaluate(({ BrowserWindow }, { width, height }) => { const w = BrowserWindow.getAllWindows()[0]!; w.setContentSize(width, height); w.show(); w.focus() }, { width, height }); await settle(page) }
-  await resize(1920, 1080); await page.getByTestId('edit-layout').waitFor(); await portugueseFixture(page)
+  await page.getByTestId('edit-layout').waitFor(); await resize(1920, 1080); await portugueseFixture(page)
   await page.getByRole('button', { name: 'Plugins', exact: true }).click(); const manager = page.getByRole('dialog', { name: 'Plugins', exact: true })
   for (const name of ['workspace-essentials', 'time-tracker']) {
     await app.evaluate(({ dialog }, path) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }) }, resolve('.local/plugin-packages/' + name))

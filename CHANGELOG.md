@@ -2,6 +2,12 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.27] — 2026-11-09
+
+- Show edge/center alignment guides during Normal Main drag in Edit, with 7 CSS-pixel entry, 14px release and deterministic ties. Resolve candidates and snap validation together in the shared freeform engine, retaining the ordinary solver result and operation budget when snapping fails.
+- Keep guide paint/pointer integration in the renderer and clear feedback at invalidation/cancel/drop. Preserve resize, Sidebar insertion, Bottom, settlement, history and saved-layout paths.
+- Wait for initial workbench readiness before the maximize smoke's first resize/settlement, correcting the alpha.26 Windows CI driver precondition without changing maximize behavior or assertions.
+
 ## [0.1.0-alpha.26] — 2026-11-09
 
 - Add optional host-owned Main maximize/restore to Workspace Essentials Normal surfaces. One transient surface fills usable Main through the shared viewport frame projection; peer content/Workers stay mounted, Sidebar/Bottom/window chrome stay accessible.

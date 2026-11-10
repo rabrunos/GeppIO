@@ -17,11 +17,14 @@ import type { Surfaces } from './useSurfaces.ts'
 import { useDragVisual } from '../workbench/DragLayer.tsx'
 import type { SlotIntention } from '../../../shared/workbench/slots.ts'
 import { panelIds } from '../../../shared/workbench/presentations.ts'
+import { alignedMove } from '../../../shared/freeform/alignment.ts'
+import type { AlignmentGuide, AlignmentLocks } from '../../../shared/freeform/alignment.ts'
 
 interface Gesture {
   id: string; pointer: number; kind: 'move' | Direction; x: number; y: number; original: Placement; sourceBar: string;
   snapshot: WorkbenchSnapshot; source: WorkbenchSnapshot; target: HTMLElement; scrollX: number; scrollY: number;
   clientX: number; clientY: number; time: number; last: string; extension: number; directionX: number; preview: WorkbenchSnapshot | null
+  alignment?: AlignmentLocks
 }
 export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surfaces: Surfaces, expanded: boolean, feasible: Record<Region, boolean>, registry: Registry = widgetRegistry(), catalog?: {
   select?(viewId: string): void; available(typeId: string, region: Region): boolean; commit(typeId: string, region: Region, at: { x: number; y: number }): boolean;
@@ -35,6 +38,7 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
   const [catalogDrag, setCatalogDrag] = useState<{ typeId: string; targets: Region[]; over: Region | null } | null>(null)
   const [frameDrop, setFrameDrop] = useState<{ targets: Region[]; over: Region | null } | null>(null)
   const [sidebarInsert, setSidebarInsert] = useState<number | null>(null)
+  const [alignmentGuides, setAlignmentGuides] = useState<AlignmentGuide[]>([])
   const frameTargets = useRef<Region[]>([])
   const catalogGesture = useRef<{ typeId: string; x: number; y: number; left: number; top: number; pointer: number; target: HTMLElement; targets: Region[]; started: number; lifted: boolean; suppress: boolean } | null>(null)
   const catalogPointer = useRef({ x: 0, y: 0 }), suppressCatalogClick = useRef(false)
@@ -53,6 +57,7 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
     if (dwell.current) { if (dwell.current.timer) clearTimeout(dwell.current.timer); dwell.current.element.removeAttribute('data-drag-hover'); dwell.current = null }
     setGestureLabel(null)
     setSidebarInsert(null)
+    setAlignmentGuides([])
     setFrameDrop(null); frameTargets.current = []
     if (catalogGesture.current) {
       const entry = catalogGesture.current; catalogGesture.current = null; setCatalogDrag(null)
@@ -261,6 +266,7 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
     let s = surface(p.region)
     const panels = panelIds(snapshot)
     const peers = snapshot.placements.filter(q => q.region === p.region && !panels.has(q.id))
+    let alignment: ReturnType<typeof alignedMove> | null = null
     function solve(at: Surface, budget?: { probes: number; states: number }): Result {
       const cs = constraintsFor(at, baseConstraints)
       const adapted = p.region === 'main' && snapshot.reference.main.height !== at.height ? projectRegion({ ...snapshot, placements: peers }, 'main', at, at.expanded, baseConstraints) : null
@@ -268,7 +274,10 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
       const source = adapted?.placements ?? peers
       // Responsive neighbor fitting cannot change a resize's stable opposite edges.
       const original = kind === 'move' ? source.find(q => q.id === p.id)! : p
-      const requested = candidate(original, dx, dy, kind, at, cs[p.id]!), result = reflow(source, p.id, requested, at, cs, kind, budget)
+      const requested = candidate(original, dx, dy, kind, at, cs[p.id]!)
+      const pointer = gesture.current, overMain = !pointer || targetRegion(pointer.clientX, pointer.clientY, ['main']) === 'main'
+      alignment = p.region === 'main' && kind === 'move' && pointer && overMain ? alignedMove(source, p.id, requested, at, cs, pointer.alignment, budget) : null
+      const result = alignment?.result ?? reflow(source, p.id, requested, at, cs, kind, budget)
       if (tracing) attempts.push({ source: original, requested, activeResult: result.placements.find(q => q.id === p.id), status: result.status, surface: at })
       return result
     }
@@ -294,6 +303,9 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
       performance.measure('geppio:anchor-solve', { start: performance.now(), detail: { kind, dx, dy, stable: p, reference: snapshot.reference[p.region],
         measurement: surfaces.measures[p.region], attempts, probes: result.probes, states: result.states } })
     }
+    const acceptedAlignment = alignment as ReturnType<typeof alignedMove> | null
+    setAlignmentGuides(result.status === 'valid' ? acceptedAlignment?.guides ?? [] : [])
+    if (gesture.current) gesture.current.alignment = result.status === 'valid' ? acceptedAlignment?.locks : undefined
     if (result.status === 'blocked') { setBlocked(p.id); tx.setMessage('Sem espaço para os mínimos deste widget. A última prévia válida foi mantida.'); return }
     const next = { ...snapshot, organization: { ...tx.live.current.organization, bars: tx.live.current.organization.bars.map(bar => bar.id === tx.live.current.organization.activeBar ? { ...bar, members: [...bar.members], positions: { ...bar.positions } } : bar) }, reference: { ...snapshot.reference, [p.region]: { width: s.width, height: s.height } },
       placements: snapshot.placements.map(q => result.placements.find(next => next.id === q.id) ?? q) }
@@ -471,7 +483,7 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
       onPointerUp: (e: PointerEvent<HTMLElement>) => finish(e), onPointerCancel: (e: PointerEvent<HTMLElement>) => finish(e, true),
       onLostPointerCapture: (e: PointerEvent<HTMLElement>) => finish(e, true), onKeyDown: (e: KeyboardEvent<HTMLElement>) => keyboard(e, p, kind) }
   }
-  return { selected, setSelected, blocked, heldExtent, handlers, catalogHandlers, catalogDrag, frameDrop, sidebarInsert, gestureLabel, visual,
+  return { selected, setSelected, blocked, heldExtent, handlers, catalogHandlers, catalogDrag, frameDrop, sidebarInsert, alignmentGuides, gestureLabel, visual,
     catalogSurfaceKey: REGIONS.map(region => `${surfaces.measures[region].width},${surfaces.measures[region].height}`).join(';') + expanded + JSON.stringify(tx.slots),
     canCatalogPlace: (typeId: string, region: Region) => !!currentCatalog.current?.available(typeId, region),
     activeId: gesture.current?.id ?? null,

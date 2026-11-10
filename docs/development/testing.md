@@ -53,6 +53,14 @@ Evidence and remaining decisions belong in the live Issues, not a tracked last-r
 
 ## Layers
 
+`pnpm test:alignment` and `pnpm test:alignment --scale125` exercise real Main
+mouse drag, snap entry/release, cancel/drop clearing, both themes and undo/restart
+with installed Workspace Essentials. Core alignment cases cover edges/centers,
+hysteresis/ties, dimensions, clearance, rejected snap fallback and narrow bounds.
+Mouse walkthrough: enter Edit, drag a Main move grip toward a peer edge or center,
+observe the guide, move more than 14 CSS pixels away to release it, then drop and
+Save/Conclude. Cancel/Escape removes the guide and restores the gesture baseline.
+
 `pnpm test:maximize` (also in desktop) checks real Workspace Essentials with a
 disposable Windows profile: exact saved layout bytes and same-viewport geometry,
 retained mounted content/Workers, native resize during maximize, automatic Edit

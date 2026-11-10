@@ -1,5 +1,18 @@
 # Region-aware continuous widget geometry
 
+## Main drag alignment — Issue #10 / alpha.27
+
+`shared/freeform/alignment.ts` owns same-edge, opposite-edge and center candidates,
+7px entry/14px release hysteresis in CSS pixels and distance/anchor/identity tie
+ordering. It first retains ordinary reflow, then tries snapping within the remaining
+solver budget. Invalid geometry, failed clearance or a peer moved off the guide
+falls back to that ordinary solution. A failed two-axis proposal tries the two
+individual axes in fixed x/y order, still inside that same budget, so one rejected
+axis cannot suppress a valid independent guide. Width/height stay unchanged. Membership and
+presentation are not inputs; callers supply only the current bounded placements.
+The renderer uses the stable gesture snapshot and paints clipped, pointer-inert
+guides. Cancel/drop, invalid candidates and viewport cancellation clear them.
+
 ## Transient Main maximize — Issue #25 / alpha.26
 
 Known Workspace Essentials types declare optional host maximize eligibility in
