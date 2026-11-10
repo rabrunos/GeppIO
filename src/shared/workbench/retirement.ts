@@ -35,6 +35,6 @@ export function availableComposition(source: Composition, registry: Registry): C
 export function resetWorkbench(source: WorkbenchSnapshot, demoFixtures = false): WorkbenchSnapshot {
   const initial = initialWorkbench(demoFixtures)
   return demoFixtures ? initial : { ...initial, retiredDemos: source.retiredDemos,
-    organization: { ...source.organization, chrome: initial.organization.chrome, presentations: initial.organization.presentations },
+    organization: { ...source.organization, ...(source.organization.groups ? { groups: undefined } : {}), chrome: initial.organization.chrome, presentations: initial.organization.presentations },
     placements: source.placements.filter(p => p.region === 'sidebar') }
 }

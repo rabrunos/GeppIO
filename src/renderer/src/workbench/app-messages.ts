@@ -1,5 +1,15 @@
 /** Native host UI phrases. User content and plugin publications never enter this catalogue. */
 export const appMessages: Readonly<Record<string, string>> = {
+  'Grupo de widgets': 'Widget group', 'Abas': 'Tabs', 'Abas do grupo': 'Group tabs', 'Agrupar': 'Group',
+  'Arrastar {0} para agrupar': 'Drag {0} to group', 'Arraste para agrupar. Clique para escolher o destino.': 'Drag to group. Click to choose the destination.',
+  'Solte aqui para agrupar': 'Drop here to group', 'Amplie o widget para caber as abas.': 'Enlarge the widget to fit the tabs.',
+  'Mover aba para a esquerda': 'Move tab left', 'Mover aba para a direita': 'Move tab right', 'Separar aba {0}': 'Detach tab {0}',
+  'Sem espaço para separar. Composição preservada.': 'No room to detach. Composition preserved.',
+  'Separe as abas antes de converter grupos em espaços reservados.': 'Detach tabs before converting groups into reserved slots.',
+  'Agrupando widgets': 'Grouping widgets',
+  'Widgets agrupados. Salve ou cancele.': 'Widgets grouped. Save or cancel.',
+  'Agrupamento incompatível ou sem espaço. Composição preservada.': 'Incompatible group or insufficient room. Composition preserved.',
+  'Agrupamento cancelado. Composição preservada.': 'Grouping canceled. Composition preserved.',
   'Maximizar {0}': 'Maximize {0}', 'Restaurar {0}': 'Restore {0}',
   'Limite de {0} barras personalizadas ativas. Arquive uma para liberar espaço.': 'Limit of {0} active custom bars. Archive one to make room.',
   'Desfazer': 'Undo', 'Refazer': 'Redo', 'Editar layout': 'Edit layout', 'Perfil': 'Profile', 'Local': 'Local',

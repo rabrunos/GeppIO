@@ -28,6 +28,7 @@ interface Gesture {
 }
 export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surfaces: Surfaces, expanded: boolean, feasible: Record<Region, boolean>, registry: Registry = widgetRegistry(), catalog?: {
   select?(viewId: string): void; available(typeId: string, region: Region): boolean; commit(typeId: string, region: Region, at: { x: number; y: number }): boolean;
+  group?(source: WorkbenchSnapshot, moving: string, target: string): WorkbenchSnapshot | null;
   reservationKey: string; reservation(id: string, intention: SlotIntention, baseline: WorkbenchSnapshot | null, commit: boolean): boolean
 }) {
   const baseConstraints = constraintsForViews(tx.snapshot, registry)
@@ -405,6 +406,16 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
   function finish(e: PointerEvent<HTMLElement>, cancel = false) {
     const a = gesture.current
     if (!a || a.pointer !== e.pointerId) return
+    if (!cancel && a.kind === 'move' && a.original.region === 'main' && visual.active()) {
+      const target = document.elementsFromPoint(e.clientX, e.clientY).map(node => node.closest<HTMLElement>('[data-group-target]')).find(Boolean)?.dataset.groupTarget
+      if (target && currentCatalog.current?.group) {
+        const result = currentCatalog.current.group(a.snapshot, a.id, target)
+        end(true, false)
+        if (result) { tx.action(settleSnapshot(result)); tx.setMessage('Widgets agrupados. Salve ou cancele.') }
+        else tx.setMessage('Agrupamento incompatível ou sem espaço. Composição preservada.')
+        visual.release(!!result, result ? target : undefined); return
+      }
+    }
     const slot = !cancel && a.kind === 'move' && visual.active() ? reservationAt(e.clientX, e.clientY) : null
     if (slot) {
       const intent = reservationIntent()!, region = slot.element.dataset.ownerRegion as Region

@@ -1,7 +1,7 @@
 import { POLICY } from '../freeform/policy.ts'
 import { collides } from '../freeform/geometry.ts'
 import type { Placement, Region, Size } from '../freeform/types.ts'
-import { initialWorkbench, LIMITS } from './model.ts'
+import { initialWorkbench, LIMITS, surfacePlacements } from './model.ts'
 import type { Composition, FormatSlot, Registry, SessionSlot, WorkbenchSnapshot } from './model.ts'
 import { fitTargets } from './commands.ts'
 import { applyChrome } from './chrome.ts'
@@ -61,7 +61,8 @@ export function captureComposition(snapshot: WorkbenchSnapshot, name: string, mo
   const format = [...placements, ...slots.filter(slot => scopes.includes(slot.region) && (!slot.sidebarBar || slot.sidebarBar === snapshot.organization.activeBar)).map(slot => projectSessionSlot(slot, snapshot.reference[slot.region]))]
   return { id: `composition:${crypto.randomUUID()}`, name, system: false, scopes, reference: structuredClone(snapshot.reference), mode,
     placements: mode === 'format-widgets' ? structuredClone(placements) : [],
-    views: mode === 'format-widgets' ? snapshot.organization.views.filter(view => placements.some(p => p.id === view.id)) : [],
+    views: mode === 'format-widgets' ? snapshot.organization.views.filter(view => surfacePlacements(snapshot).some(p => p.id === view.id && scopes.includes(p.region))) : [],
+    ...(mode === 'format-widgets' && scopes.includes('main') && snapshot.organization.groups ? { groups: structuredClone(snapshot.organization.groups) } : {}),
     format: format.map((p, i) => ({ id: `format:${i}`, region: p.region, x: p.x, y: p.y, width: p.width, height: p.height })), ...(chrome ? { chrome } : {}) }
 }
 export function favoriteComposition(source: WorkbenchSnapshot, id: string, favorite: boolean, makeDefault = false, replace?: string): WorkbenchSnapshot | null {
@@ -99,20 +100,22 @@ export function applyComposition(source: WorkbenchSnapshot, registry: Registry, 
   const next = compositionChrome(structuredClone(source), composition)
   if (mode === 'widgets') {
     if (composition.mode !== 'format-widgets') return null
+    if (composition.scopes.includes('main')) { if (composition.groups) next.organization.groups = structuredClone(composition.groups); else delete next.organization.groups }
     for (const view of composition.views) {
       if (!registry.has(view.typeId)) return null
       const existing = next.organization.views.find(item => item.id === view.id)
       if (existing && existing.typeId !== view.typeId) return null
       if (!existing) next.organization.views.push(structuredClone(view))
     }
-    const affected = new Set(composition.placements.map(p => p.id))
-    if (next.placements.some(p => affected.has(p.id) && !composition.scopes.includes(p.region))) return null
+    const affected = new Set(composition.views.map(view => view.id))
+    if (surfacePlacements(source).some(p => affected.has(p.id) && !composition.scopes.includes(p.region))) return null
     // Saved associations cannot evict an independent/unique presence from an
     // omitted region, even when its view identity differs from the saved one.
-    for (const target of composition.placements) {
-      const view = composition.views.find(view => view.id === target.id)!, type = registry.get(view.typeId)!
-      if (next.placements.some(p => !composition.scopes.includes(p.region) && next.organization.views.some(v => v.id === p.id && v.typeId === type.id)
-        && (type.presence === 'single-view' || p.region === target.region))) return null
+    for (const view of composition.views) {
+      const region = composition.placements.find(p => p.id === view.id)?.region ?? (composition.groups?.entries.some(group => group.members.includes(view.id)) ? 'main' : null)
+      const type = registry.get(view.typeId)!
+      if (!region || surfacePlacements(source).some(p => !composition.scopes.includes(p.region) && source.organization.views.some(v => v.id === p.id && v.typeId === type.id)
+        && (type.presence === 'single-view' || p.region === region))) return null
     }
     if (next.organization.views.length > POLICY.maxWidgets) return null
     return fitTargets(next, registry, composition.placements, composition.reference, composition.scopes)

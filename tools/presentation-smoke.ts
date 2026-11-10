@@ -32,6 +32,16 @@ const selected = (id: Id = 'properties') => frame(id).getAttribute('data-present
 async function launch(width = 2000, height = 1400) {
   application = await electron.launch({ args: ['.', ...(process.argv.includes('--scale125') ? ['--force-device-scale-factor=1.25'] : [])], env })
   page = await application.firstWindow(); page.on('pageerror', error => errors.push(error.message))
+  const installPanelEvidence = () => {
+    const trace: unknown[] = []; Object.assign(window, { panelGestureEvidence: trace })
+    for (const type of ['pointerdown', 'pointerup', 'pointercancel', 'gotpointercapture', 'lostpointercapture']) document.addEventListener(type, event => {
+      const pointer = event as PointerEvent, target = event.target instanceof Element ? event.target : null
+      trace.push({ time: performance.now(), type, target: target?.outerHTML.slice(0, 220) ?? 'document', point: [pointer.clientX, pointer.clientY], buttons: pointer.buttons,
+        capture: [...document.querySelectorAll<HTMLElement>('.presentation-splitter')].filter(node => node.hasPointerCapture(pointer.pointerId)).map(node => node.getAttribute('aria-label')) })
+      if (trace.length > 60) trace.shift()
+    }, true)
+  }
+  await page.addInitScript(installPanelEvidence); await page.evaluate(installPanelEvidence)
   await application.evaluate(({ BrowserWindow }, size) => { const window = BrowserWindow.getAllWindows()[0]!; window.setContentSize(size.width, size.height); window.show(); window.focus() }, { width, height })
   await page.getByTestId('edit-layout').waitFor(); await portugueseFixture(page); await page.bringToFront(); await settle(page)
 }
@@ -147,7 +157,22 @@ async function assertRailDivider(theme: string, state: 'docked' | 'collapsed' | 
   evidence.push({ theme, sidebar: state, divider: result })
 }
 async function sampleSidebar(theme: string, direction: 'collapse' | 'reopen') {
+  // The preceding overlap probe can leave a real hover reveal pending. Establish
+  // the compact-strip precondition before sampling the Sidebar transition, so
+  // this geometry assertion never mistakes a legitimate 260px reveal for 31px.
+  await page.mouse.move(500, 80)
+  await page.waitForFunction(() => ['properties', 'activity'].every(id => document.querySelector(`[data-widget-id="${id}"]`)?.getAttribute('data-panel-open') === 'false'))
+  await settle(page)
   await page.evaluate(() => {
+    const host = window as Window & { stripPointerEvidence?: unknown[] }
+    if (!host.stripPointerEvidence) {
+      const trace = host.stripPointerEvidence = [] as unknown[]
+      for (const type of ['pointerover', 'pointerout', 'pointerdown', 'pointerup', 'focusin']) document.addEventListener(type, event => {
+        const target = (event.target as Element).closest<HTMLElement>('[data-widget-id],[data-bar-id],.host-sidebar-content')
+        trace.push({ time: performance.now(), type, target: target?.dataset.widgetId ?? target?.dataset.barId ?? target?.className, x: (event as PointerEvent).clientX, y: (event as PointerEvent).clientY })
+        if (trace.length > 60) trace.shift()
+      }, true)
+    }
     const state = window as unknown as { sidebarSamples: unknown[]; samplingSidebar: boolean }
     state.sidebarSamples = []; state.samplingSidebar = true
     const start = performance.now()
@@ -159,7 +184,8 @@ async function sampleSidebar(theme: string, direction: 'collapse' | 'reopen') {
         state.sidebarSamples.push({ time: performance.now() - start, main: { left: b.left + parseFloat(style.paddingLeft), top: b.top + parseFloat(style.paddingTop),
           width: b.width - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight), height: b.height - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom) },
           port: { x: c.x, y: c.y, width: c.width, height: c.height, measuredWidth: Number(port.dataset.usableWidth), scroll: port.scrollLeft },
-          normal: rect('summary'), docked: rect('properties'), floating: rect('activity') })
+          normal: rect('summary'), docked: rect('properties'), floating: rect('activity'),
+          input: { pointer: host.stripPointerEvidence!.slice(-15), focus: document.activeElement?.outerHTML.slice(0, 180), overlayOpen: document.querySelector('[data-widget-id="activity"]')?.getAttribute('data-panel-open') } })
     }
     // Observe the same native layout frame after the host observer has committed
     // its shared measurements, before paint. A timer can force next-frame style
@@ -232,12 +258,19 @@ async function toggle(id: Id, anchor: Edge) {
   await settle(page)
 }
 async function drag(id: Id, anchor: Edge, delta: number, cancel?: 'escape' | 'pointercancel' | 'lostcapture') {
-  const box = await edge(id, anchor).boundingBox(); assert.ok(box)
+  // Normal-mode presentation changes use the existing Web Lock. A following
+  // gesture must start after that command and native splitter movement settle.
+  await page.evaluate(async key => { await navigator.locks.request(key, () => {}) }, WORKBENCH_KEY)
+  await settle(page)
+  const handle = edge(id, anchor), measured = await handle.boundingBox(); assert.ok(measured)
+  await handle.hover(); const box = await handle.boundingBox(); assert.ok(box)
+  if (JSON.stringify(measured) !== JSON.stringify(box)) console.log('Splitter actionability corrected bounds', { id, anchor, measured, box })
   const before = await raw(), h = anchor === 'top' || anchor === 'bottom'
   const sign = anchor === 'bottom' || anchor === 'right' ? -1 : 1
   const x = box.x + box.width / 2, y = box.y + box.height / 2
   await page.mouse.move(x, y); await page.mouse.down()
-  assert.ok(await edge(id, anchor).evaluate(node => node.hasPointerCapture(1)), `Native capture ${id}/${anchor}`)
+  assert.equal(await page.evaluate(({ x, y }) => !!document.elementFromPoint(x, y)?.closest('.presentation-splitter'), { x, y }), true, 'The real splitter receives pointer-down')
+  assert.ok(await handle.evaluate(node => node.hasPointerCapture(1)), `Native capture ${id}/${anchor}: ` + JSON.stringify(await page.evaluate(() => Reflect.get(window, 'panelGestureEvidence'))))
   await page.mouse.move(x + (h ? 0 : sign * delta), y + (h ? sign * delta : 0), { steps: 12 })
   assert.equal(await raw(), before, 'No resize-preview writes')
   if (cancel === 'escape') await page.keyboard.press('Escape')

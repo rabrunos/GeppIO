@@ -8,6 +8,8 @@ import { defaultChrome, parseChrome } from './chrome.ts'
 import type { WorkbenchChrome } from './chrome.ts'
 import { parsePresentations, validatePresentationEdges } from './presentations.ts'
 import type { Presentations } from './presentations.ts'
+import { parseGroups, validateGroups } from './groups.ts'
+import type { WidgetGroups } from './model.ts'
 import { retireDemoViews } from './retirement.ts'
 
 const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value)
@@ -58,9 +60,9 @@ function parseBars(value: unknown, registry: Registry): UserBar[] {
   if (bars[0]?.id !== HOME || bars[0].archived || bars.filter(bar => !bar.archived && bar.id !== HOME).length > LIMITS.legacyActiveBars) throw new Error('Protected Home or bar cap')
   return bars
 }
-function parseDocument(value: unknown, views: View[], registry: Registry, bars?: UserBar[], presentations?: Presentations) {
+function parseDocument(value: unknown, views: View[], registry: Registry, bars?: UserBar[], presentations?: Presentations, groups?: WidgetGroups) {
   if (!object(value)) throw new Error('Invalid geometry')
-  const constraints = constraintsForViews({ organization: { views } } as WorkbenchSnapshot, registry)
+  const constraints = constraintsForViews({ organization: { views, groups } } as WorkbenchSnapshot, registry)
   // Active panels retain validated Normal seeds, but those seeds do not collide
   // with or constrain the reference height of the visible Normal scene.
   const panels = new Set(presentations?.entries.filter(e => e.presentation !== 'normal').map(e => e.viewId))
@@ -93,13 +95,17 @@ export function parseWorkbench(raw: string, registry: Registry): WorkbenchSnapsh
   if (!object(data) || ![1, 2].includes(Number(data.schemaVersion)) || typeof data.schemaVersion !== 'number' || data.kind !== 'geppio-workbench' || !object(data.organization)) throw new Error('Unsupported workbench')
   const source = data.organization, views = parseViews(source.views, registry), bars = parseBars(source.bars, registry)
   const presentations = parsePresentations(source.presentations, views, registry)
-  const layout = parseDocument(data.layout, views, registry, bars, presentations)
+  const groups = parseGroups(source.groups, views, registry)
+  const layout = parseDocument(data.layout, views, registry, bars, presentations, groups)
   if (typeof source.activeBar !== 'string' || !bars.some(bar => bar.id === source.activeBar && !bar.archived)) throw new Error('Invalid active bar')
   const compositions: Composition[] = unique(list(source.compositions, LIMITS.compositions).map(item => {
     if (!object(item) || !identifier(item.id) || !item.id.startsWith('composition:') || item.id.length <= 12 || item.system !== false || !['format', 'format-widgets'].includes(String(item.mode))) throw new Error('Invalid saved composition')
     const savedViews = parseViews(item.views, registry), scopes = strings(item.scopes, 3), chrome = item.chrome === undefined ? undefined : parseChrome(item.chrome, true)
     if ((!scopes.length && !chrome?.sidebar && !chrome?.bottom) || scopes.some(region => !['main', 'bottom'].includes(region))) throw new Error('Invalid composition scopes')
-    const saved = parseDocument({ ...layout, reference: item.reference, placements: item.placements }, savedViews, registry)
+    const savedGroups = parseGroups(item.groups, savedViews, registry)
+    const saved = parseDocument({ ...layout, reference: item.reference, placements: item.placements }, savedViews, registry, undefined, undefined, savedGroups)
+    if (savedGroups?.entries.length && (item.mode === 'format' || !scopes.includes('main'))) throw new Error('Invalid scoped tab group')
+    validateGroups({ ...saved, organization: { views: savedViews, groups: savedGroups } } as WorkbenchSnapshot, registry)
     if (saved.placements.some(p => !scopes.includes(p.region))) throw new Error('Invalid scoped placement')
     const format = unique(list(item.format, POLICY.maxWidgets).map(slot => {
       if (!object(slot) || !identifier(slot.id) || !scopes.includes(String(slot.region))
@@ -113,13 +119,13 @@ export function parseWorkbench(raw: string, registry: Registry): WorkbenchSnapsh
     if (item.mode === 'format' && (saved.placements.length || savedViews.length)) throw new Error('Format cannot restore executable widget references')
     return { id: item.id, name: name(item.name), system: false, scopes: scopes as Composition['scopes'],
       reference: saved.reference, placements: saved.placements, views: savedViews, mode: item.mode as Composition['mode'], format,
-      ...(chrome ? { chrome } : {}) }
+      ...(chrome ? { chrome } : {}), ...(savedGroups ? { groups: savedGroups } : {}) }
   }), item => item.id)
   const favorites = strings(source.favorites, LIMITS.favorites), known = (id: string) => ['system:default', 'system:focus', 'system:balanced'].includes(id) || compositions.some(item => item.id === id)
   if (favorites.some(id => !known(id)) || (source.defaultComposition !== null && (typeof source.defaultComposition !== 'string' || !favorites.includes(source.defaultComposition)))) throw new Error('Invalid favorite/default')
   const organization: Organization = { views, bars, activeBar: source.activeBar, compositions, favorites, defaultComposition: source.defaultComposition as string | null,
     chrome: source.chrome === undefined ? defaultChrome() : parseChrome(source.chrome) as WorkbenchChrome,
-    presentations }
+    presentations, ...(groups ? { groups } : {}) }
   if (source.compositionOrder !== undefined) {
     const order = strings(source.compositionOrder, LIMITS.compositions + 3)
     if (order.some(id => !known(id))) throw new Error('Invalid composition order')
@@ -127,6 +133,7 @@ export function parseWorkbench(raw: string, registry: Registry): WorkbenchSnapsh
   }
   const result: WorkbenchSnapshot = { ...layout, organization }
   validatePresentationEdges(result)
+  validateGroups(result, registry)
   if (data.retiredDemos !== undefined) {
     const archive = data.retiredDemos
     if (!object(archive)) throw new Error('Invalid retired demo archive')

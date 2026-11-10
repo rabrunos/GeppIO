@@ -1,4 +1,4 @@
-import { CONSTRAINTS, DEFAULT_FREEFORM, POLICY } from '../freeform/policy.ts'
+import { CONSTRAINTS, DEFAULT_FREEFORM, POLICY, constraintInRegion } from '../freeform/policy.ts'
 import type { Constraint, Constraints, Placement, Region, Size, Snapshot } from '../freeform/types.ts'
 import type { InstalledPlugin } from '../plugins.ts'
 import { CHROME_LIMITS, defaultChrome } from './chrome.ts'
@@ -11,18 +11,23 @@ export interface WidgetType {
   constraint: Constraint; fixture?: string; widgetId?: string; pluginId?: string; retired?: boolean
   presentations?: Partial<Record<Region, readonly Presentation[]>>
   maximize?: boolean
+  tabHost?: boolean; tabMember?: boolean
 }
 export type Registry = ReadonlyMap<string, WidgetType>
 export interface View { id: string; typeId: string; modelId: string }
+export interface WidgetGroup { id: string; frameId: string; members: string[]; active: string }
+export interface WidgetGroups { version: 1; entries: WidgetGroup[] }
+export const TAB_STRIP_HEIGHT = 32
 export interface UserBar { id: string; name: string; userNamed: boolean; icon: string; archived: boolean; members: string[]; positions?: Record<string, number> }
 export interface Composition {
   id: string; name: string; system: boolean; scopes: Region[];
   reference: Snapshot['reference']; placements: Placement[]; views: View[];
-  mode: 'format' | 'format-widgets'; format: FormatSlot[]; chrome?: ChromePatch
+  mode: 'format' | 'format-widgets'; format: FormatSlot[]; chrome?: ChromePatch; groups?: WidgetGroups
 }
 export interface Organization {
   views: View[]; bars: UserBar[]; activeBar: string;
   compositions: Composition[]; compositionOrder?: string[]; favorites: string[]; defaultComposition: string | null; chrome: WorkbenchChrome; presentations?: Presentations
+  groups?: WidgetGroups
 }
 export interface WorkbenchSnapshot extends Snapshot { organization: Organization; retiredDemos?: DemoArchive }
 export interface DemoArchive { reference: Snapshot['reference']; placements: Placement[]; views: View[]; bars: Pick<UserBar, 'id' | 'members' | 'positions'>[]; presentations: Presentations }
@@ -61,6 +66,7 @@ export function widgetRegistry(plugins: readonly InstalledPlugin[] = [], demoFix
     id: `plugin:${plugin.manifest.id}:${widget.id}`, owner: `plugin:${plugin.manifest.id}`, pluginId: plugin.manifest.id, widgetId: widget.id,
     title: widget.title, category: 'Plugins', description: plugin.manifest.name,
     ...(plugin.manifest.id === 'geppio.workspace-essentials' && ['notes', 'scratch', 'checklist', 'prompts'].includes(widget.id) ? { maximize: true } : {}),
+    ...(plugin.manifest.id === 'geppio.workspace-essentials' && ['notes', 'checklist', 'prompts'].includes(widget.id) ? { tabHost: true, tabMember: true } : {}),
     appearance: 'card', presence: 'single-view', constraint: {
       min: { width: 180, height: 112 }, default: plugin.manifest.apiVersion === 2 ? { width: 360, height: 360 } : { width: 310, height: 160 }, max: { width: POLICY.maxSize, height: POLICY.maxSize },
       regions: (plugin.manifest.id === 'geppio.workspace-essentials' && ['notes', 'checklist', 'prompts'].includes(widget.id)) || (plugin.manifest.id === 'geppio.time-tracker' && ['timer', 'reports'].includes(widget.id)) ? ['main', 'sidebar', 'bottom'] : ['main'],
@@ -71,10 +77,33 @@ export function widgetRegistry(plugins: readonly InstalledPlugin[] = [], demoFix
   return new Map(entries.map(type => [type.id, Object.freeze(type)]))
 }
 export function modelId(typeId: string) { return `model:${typeId}` }
+export function groupFor(source: WorkbenchSnapshot, id: string) { return source.organization.groups?.entries.find(group => group.members.includes(id)) }
+export function groupConstraint(members: readonly View[], registry: Registry): Constraint {
+  const declarations = members.map(view => constraintInRegion(registry.get(view.typeId)!.constraint, 'main')), base = declarations[0]!
+  return { ...base, regions: ['main'], regionMin: undefined,
+    min: { width: Math.max(...declarations.map(c => c.min.width)), height: Math.max(...declarations.map(c => c.min.height)) + TAB_STRIP_HEIGHT },
+    max: { width: Math.min(...declarations.map(c => c.max.width)), height: Math.min(POLICY.maxSize, ...declarations.map(c => c.max.height + TAB_STRIP_HEIGHT)) },
+    resizeX: declarations.every(c => c.resizeX), resizeY: declarations.every(c => c.resizeY) }
+}
+/** Catalog/presence inspection only. The geometry engine still sees one placement. */
+export function surfacePlacements(source: WorkbenchSnapshot): Placement[] {
+  return [...source.placements, ...(source.organization.groups?.entries ?? []).flatMap(group => {
+    const frame = source.placements.find(p => p.id === group.frameId)
+    return frame ? group.members.filter(id => id !== group.frameId).map(id => ({ ...frame, id })) : []
+  })]
+}
+export function removeGroupedPresence(source: WorkbenchSnapshot, id: string): WorkbenchSnapshot {
+  const group = groupFor(source, id); if (!group) return source
+  const next = structuredClone(source), members = group.members.filter(member => member !== id), frameId = group.frameId === id ? members[0]! : group.frameId
+  next.placements = next.placements.map(p => p.id === group.frameId ? { ...p, id: frameId } : p)
+  next.organization.groups = { version: 1, entries: next.organization.groups!.entries.flatMap(item => item.id !== group.id ? [item] : members.length < 2 ? [] : [{ ...item, frameId, members, active: members.includes(item.active) ? item.active : members[0]! }]) }
+  return next
+}
 export function constraintsForViews(snapshot: WorkbenchSnapshot, registry: Registry): Constraints {
   return Object.fromEntries(snapshot.organization.views.flatMap(view => {
     const type = registry.get(view.typeId)
-    return type ? [[view.id, type.constraint]] : []
+    const group = groupFor(snapshot, view.id)
+    return type ? [[view.id, group?.frameId === view.id ? groupConstraint(group.members.map(id => snapshot.organization.views.find(v => v.id === id)!), registry) : type.constraint]] : []
   }))
 }
 export function adoptLayout(layout: Snapshot): WorkbenchSnapshot {
@@ -142,11 +171,14 @@ export function evaluatePlacement(snapshot: WorkbenchSnapshot, registry: Registr
   const type = registry.get(typeId)
   if (!type || type.retired || !type.constraint.regions.includes(region)) return { allowed: false, reason: 'incompatible' } as const
   if (disabled.has(type.owner)) return { allowed: false, reason: 'paused' } as const
+  const grouped = snapshot.organization.views.some(view => view.typeId === typeId && groupFor(snapshot, view.id))
+  if (grouped && operation === 'catalog') return { allowed: false, reason: 'occupied' } as const
+  if (grouped && region !== 'main') return { allowed: false, reason: 'incompatible' } as const
   if (region !== 'sidebar' && type.presence === 'single-view' && snapshot.organization.views.some(view => view.typeId === typeId && (operation === 'catalog' || ignored.includes(view.id))
     && snapshot.placements.some(p => p.id === view.id && p.region === 'sidebar'))
     && snapshot.organization.bars.some(bar => bar.id !== snapshot.organization.activeBar && bar.members.includes(typeId))) return { allowed: false, reason: 'occupied' } as const
   const existing = snapshot.organization.views.filter(view => view.typeId === typeId && !ignored.includes(view.id))
-  const occupied = snapshot.placements.filter(p => existing.some(view => view.id === p.id))
+  const occupied = surfacePlacements(snapshot).filter(p => existing.some(view => view.id === p.id))
   if (region === 'sidebar' && operation === 'catalog') {
     const bar = snapshot.organization.bars.find(bar => bar.id === snapshot.organization.activeBar)!
     if (bar.members.includes(typeId)) return { allowed: false, reason: 'occupied' } as const

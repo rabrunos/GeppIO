@@ -60,8 +60,10 @@ Execute `pnpm plugins:build` e abra o aplicativo com `pnpm start` após `pnpm bu
 Abra o menu do perfil e **Configurações > Desenvolvimento e recuperação > Plugins > Instalar
 pasta local**. Selecione `.local/plugin-packages/workspace-essentials` e clique **Ativar** em
 **Workspace Essentials**. O menu **Plugins** do cabeçalho oferece o mesmo gerenciamento.
-Entre em **Editar layout**, escolha cada widget no catálogo, selecione **Principal** e conclua.
-Ativar não adiciona widgets automaticamente; Sidebar e Bottom não são destinos deste piloto.
+Entre em **Editar layout**, escolha cada widget no catálogo, selecione uma área compatível e conclua.
+Ativar não adiciona widgets automaticamente. Anotações, Checklist e Prompts salvos aceitam
+Main, Sidebar e Bottom; Rascunho permanece apenas na Main. Na Bottom, selecione e leia
+anotações/prompts ou marque itens do checklist; os editores completos ficam na Main e na Sidebar.
 
 - **Anotações:** use **Nova anotação**, edite título/texto e selecione outra anotação na lista.
 - **Rascunho:** digite o texto; o autosave agrupa alterações por 500 ms. Aguarde **Salvo.**
@@ -78,6 +80,33 @@ gravação; consulte [retenção e recuperação](docs/architecture/plugin-data.
 São dados locais comuns, sem criptografia de credenciais ou isolamento contra plugins hostis.
 
 Teste focado em perfil descartável: `pnpm test:essentials`. O contrato v1 de Counter/Pulse permanece.
+
+## Time Tracker local
+
+Após `pnpm plugins:build`, instale `.local/plugin-packages/time-tracker` pelo mesmo menu
+**Plugins** e ative **Time Tracker**. Adicione **Cronômetro** e **Relatórios de tempo**
+explicitamente em qualquer uma das três áreas. Os dois compartilham um histórico por instalação.
+**Iniciar** começa a contagem por horário; ela continua ao ocultar o widget ou fechar o app
+e termina em **Pausar**. Aguarde **Salvo.**; em falha, use **Tentar salvar novamente**.
+O relatório oferece totais locais dos últimos sete dias e sessões paginadas, até 200 intervalos.
+Sidebar e Bottom mostram resumos compactos. Teste focado: `pnpm test:time-tracker`.
+
+## Alinhar, agrupar e maximizar na Main
+
+Em **Editar layout**, arraste um widget Normal para ver guias próximas de bordas e centros.
+Para agrupar Anotações, Checklist e Prompts salvos, arraste **Abas** até **Agrupar** no
+cabeçalho de outro widget compatível. Também é possível clicar **Abas** e escolher o destino.
+Amplie um alvo pequeno antes de agrupar. No grupo, troque de aba pelo título; em Editar,
+use as setas para reordenar ou **Separar aba** para voltar a um frame próprio, quando houver espaço.
+**Salvar edição**, **Concluir**, **Cancelar** e desfazer/refazer preservam o contrato de edição.
+Grupos ficam na Main; separe as abas antes de mover um membro para outra região ou converter
+o grupo em espaços reservados de um formato.
+
+No uso normal, o botão **Maximizar** de um widget compatível ou grupo ocupa a Main útil,
+mantendo Sidebar e Bottom acessíveis. **Restaurar** retorna à disposição anterior.
+As abas continuam disponíveis durante a maximização. O conteúdo permanece montado;
+apenas a apresentação maximizada é temporária. Testes focados: `pnpm test:maximize`,
+`pnpm test:alignment` e `pnpm test:groups`; acrescente `--scale125` para DPR automatizado 1,25.
 
 ## O que existe no workbench
 

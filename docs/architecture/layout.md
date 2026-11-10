@@ -1,5 +1,32 @@
 # Region-aware continuous widget geometry
 
+## Main tab groups — Issue #18 / alpha.28
+
+`shared/workbench/groups.ts` owns grouping, order and atomic detachment. Only the
+known Essentials notes/checklist/prompts types declare the independent optional
+host and member capabilities. Groups require Normal Main members and preserve
+the receiver's rectangle; targets smaller than aggregate member minima plus the
+32px tab strip refuse rather than partially moving or resizing a member.
+The freeform engine sees one frame, with the maximum member minima and minimum
+member maxima. Detachment reuses ordinary add/settlement and refuses without room.
+
+Optional `organization.groups` has its own version 1, frame/member identities,
+tab order and active member. The existing envelope remains version 2. Absent
+metadata keeps older profiles readable without a startup rewrite; malformed,
+orphaned, duplicate and unsupported groups enter existing recovery. History and
+format-with-widgets compositions carry the same metadata and all member views.
+Restoring a composition cannot evict an omitted Sidebar member. Converting a
+group into empty format reservations requires separating its tabs first; this
+operation refuses atomically while groups exist.
+
+The renderer retains each keyed member frame/content in its original React
+position, painting only the active content under the host chrome. Switching tabs
+does not recreate a model or Worker. A dedicated Edit header handle supports
+pointer grouping and click/focus target selection; ordinary Main move drops also
+recognize the header target. Outside it, movement and alignment retain their
+normal behavior. Reorder/detach belong to Edit. Shared-frame maximize reuses the
+existing transient Main presentation and keeps tabs accessible.
+
 ## Main drag alignment — Issue #10 / alpha.27
 
 `shared/freeform/alignment.ts` owns same-edge, opposite-edge and center candidates,
@@ -22,8 +49,8 @@ but stay mounted, including plugin models/Workers; Sidebar, Bottom and window
 chrome remain available. The maximized identity is renderer state, never saved
 geometry, history or composition data. Restore reuses ordinary stable-source
 projection; entering Edit, recovery or losing an eligible active owner clears it.
-Docked/Floating preferences and lifecycle remain independent. The surface-based
-entry point can accept a future compatible group without another layout engine.
+Docked/Floating preferences and lifecycle remain independent. Compatible group
+frames use this same surface entry point and keep their tab chrome accessible.
 
 ## Sidebar stack — Issue #41 / alpha.22
 

@@ -3,7 +3,7 @@ import { constraintInRegion, constraintsFor, POLICY } from '../freeform/policy.t
 import { projectRegion } from '../freeform/projection.ts'
 import { transfer } from '../freeform/transfer.ts'
 import type { Placement, Region, Size, Surface } from '../freeform/types.ts'
-import { HOME, LIMITS, activePlacements, constraintsForViews, evaluatePlacement, modelId, sidebarInsertion } from './model.ts'
+import { HOME, LIMITS, activePlacements, constraintsForViews, evaluatePlacement, modelId, sidebarInsertion, groupFor, removeGroupedPresence } from './model.ts'
 import type { Registry, UserBar, WorkbenchSnapshot } from './model.ts'
 import { panelIds, validatePresentationEdges } from './presentations.ts'
 
@@ -113,6 +113,7 @@ function transferActive(source: WorkbenchSnapshot, registry: Registry, id: strin
 }
 /** Movement changes only the source association and the chosen destination bar. */
 export function moveView(source: WorkbenchSnapshot, registry: Registry, id: string, target: Surface, at?: { x: number; y: number }, sourceBar = source.organization.activeBar, slotSize?: Size, disabled?: ReadonlySet<string>): WorkbenchSnapshot | null {
+  if (groupFor(source, id) && target.region !== 'main') return null
   const view = source.organization.views.find(view => view.id === id), placement = source.placements.find(p => p.id === id)
   if (!view || !placement) return null
   const type = registry.get(view.typeId)
@@ -152,6 +153,7 @@ function exactPlacement(source: WorkbenchSnapshot, registry: Registry, id: strin
   return target.region === 'sidebar' ? reconcileBarHeights(next) : next
 }
 export function removePresence(source: WorkbenchSnapshot, id: string): WorkbenchSnapshot {
+  if (groupFor(source, id)) return removeGroupedPresence(source, id)
   const next = structuredClone(source), placement = next.placements.find(p => p.id === id), view = next.organization.views.find(v => v.id === id)
   if (!placement || !view) return source
   if (placement.region === 'sidebar') {

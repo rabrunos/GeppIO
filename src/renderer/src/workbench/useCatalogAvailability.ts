@@ -10,7 +10,7 @@ export function useCatalogAvailability(view: WorkbenchSnapshot, registry: Regist
   const cache = useRef<{ geometry: string; policy: string; registry: Registry; result: Map<string, Region[]> } | null>(null)
   const bar = view.organization.bars.find(bar => bar.id === view.organization.activeBar)!
   const policy = JSON.stringify([bar.id, bar.members, [...disabled], interaction.catalogSurfaceKey])
-  const geometry = JSON.stringify([view.reference, view.placements, view.organization.views, bar.positions])
+  const geometry = JSON.stringify([view.reference, view.placements, view.organization.views, view.organization.groups, bar.positions])
   if (visible && (!cache.current || cache.current.registry !== registry || cache.current.policy !== policy || (!interaction.active() && cache.current.geometry !== geometry))) {
     cache.current = { geometry, policy, registry, result: new Map([...registry.values()].map(type => [type.id, type.constraint.regions.filter(region => interaction.canCatalogPlace(type.id, region))])) }
   }

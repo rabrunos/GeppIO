@@ -2,6 +2,13 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.28] — 2026-11-09
+
+- Group the three compatible Workspace Essentials Main widgets into a single bounded frame with independent host/member eligibility. Dedicated header targets support drag or click/focus selection; Edit supports reorder, atomic detach, history and checkpoints.
+- Persist nested versioned membership, order and active tab through the existing layout/composition codec. Preserve each actual view, content DOM and plugin Worker across tab switching; maximize the shared frame transiently with its tabs intact.
+- Keep aggregate member minima in the existing freeform solver. Too-small targets and detach without room refuse atomically; convert grouped frames to empty format reservations only after explicit separation. Older layouts remain readable without startup writes.
+- Establish the compact-panel precondition before the presentation smoke samples Sidebar transitions. Native pointer evidence shows the preceding overlap probe can enter the Floating strip; preserve geometry assertions and hover behavior rather than treating an intended reveal as a sizing failure. Synchronize splitter probes with the preceding storage command and native target actionability, retaining capture assertions and bounded evidence.
+
 ## [0.1.0-alpha.27] — 2026-11-09
 
 - Show edge/center alignment guides during Normal Main drag in Edit, with 7 CSS-pixel entry, 14px release and deterministic ties. Resolve candidates and snap validation together in the shared freeform engine, retaining the ordinary solver result and operation budget when snapping fails.

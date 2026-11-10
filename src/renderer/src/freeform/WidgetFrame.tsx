@@ -17,14 +17,15 @@ import { WorkbenchIcon } from '../workbench/WorkbenchIcon.tsx'
 import type { useSwap } from '../workbench/useSwap.ts'
 
 const LABELS: Record<Direction, string> = { n: 'borda superior', e: 'borda direita', s: 'borda inferior', w: 'borda esquerda', ne: 'canto superior direito', nw: 'canto superior esquerdo', se: 'canto inferior direito', sw: 'canto inferior esquerdo' }
-export const WidgetFrame = memo(function WidgetFrame({ placement: p, measurement: m, space = 'content', constraint, editing, interaction, withheld, unavailable, wheel, definition, children, remove, swap, swapSelected, swapAvailable, motionRevision, motion, ghosted, swapping, inactive, presentation, controls, surfaceActions, editControls = editing, hover, blur }: {
+export const WidgetFrame = memo(function WidgetFrame({ placement: p, measurement: m, space = 'content', constraint, editing, interaction, withheld, unavailable, wheel, definition, children, remove, swap, swapSelected, swapAvailable, motionRevision, motion, ghosted, swapping, inactive, presentation, controls, surfaceActions, organizationActions, tabs, groupMember, groupHost, surfaceId, contentHidden, contentId, labelledBy, headingTitle, removeTitle, editControls = editing, hover, blur }: {
+  organizationActions?: ReactNode; tabs?: ReactNode; groupMember?: boolean; groupHost?: boolean; surfaceId?: string; contentHidden?: boolean; contentId?: string; labelledBy?: string; headingTitle?: string; removeTitle?: string;
   surfaceActions?: ReactNode;
   controls?: ReactNode; editControls?: boolean; hover?(inside: boolean): void; blur?(): void;
   presentation?: { mode: 'normal' | 'docked' | 'overlay'; open: boolean; anchor: Edge | null; gesture?: boolean; freeHandlers?: HTMLAttributes<HTMLElement>; compactHandlers?: HTMLAttributes<HTMLElement> }; space?: FrameSpace;
   placement: Placement; measurement: Measurement; constraint: Constraint; editing: boolean; interaction: Interaction; withheld: boolean; unavailable: boolean; inactive: boolean;
   wheel(dx: number, dy: number): void; definition: WidgetType; children?: ReactNode; remove(): void; swap(): void; swapSelected: boolean; swapAvailable: boolean; motionRevision: number; motion: { duration: number; entering: boolean }; ghosted: boolean; swapping: ReturnType<typeof useSwap>
 }) {
-  const { t } = useLocale(), title = definition.owner === 'host' ? t(definition.title) : definition.title
+  const { t } = useLocale(), title = headingTitle ?? (definition.owner === 'host' ? t(definition.title) : definition.title)
   const frame = useRef<HTMLElement>(null), previous = useRef<{ left: number; top: number; width: number; height: number; open?: boolean; revision: number; visible: boolean; mode?: string } | null>(null), flight = useRef<Animation | null>(null)
   const { left, top, outside, clipPath, available } = projectFrame(p, m, space)
   const visible = !withheld && !unavailable && available
@@ -61,9 +62,9 @@ export const WidgetFrame = memo(function WidgetFrame({ placement: p, measurement
   useLayoutEffect(() => {
     if (presentation?.open === false && focusInside) (document.querySelector<HTMLElement>(`[aria-controls="${CSS.escape(p.id)}-presentation"]`) ?? frame.current)?.focus({ preventScroll: true })
   }, [presentation?.open])
-  return <section id={presentation ? p.id + '-presentation' : undefined} data-presentation={presentation?.mode} data-panel-open={presentation?.open} data-panel-anchor={presentation?.anchor ?? 'free'} className={'widget widget-frame ' + (editing ? 'editing ' : '') + (editing && interaction.selected === p.id ? 'selected ' : '') + (editing && interaction.blocked === p.id ? 'invalid' : '')}
+  return <section id={presentation ? p.id + '-presentation' : undefined} data-group-host={groupHost || undefined} data-group-member={groupMember || undefined} data-presentation={presentation?.mode} data-panel-open={presentation?.open} data-panel-anchor={presentation?.anchor ?? 'free'} className={'widget widget-frame ' + (editing ? 'editing ' : '') + (editing && interaction.selected === p.id ? 'selected ' : '') + (editing && interaction.blocked === p.id ? 'invalid' : '')}
     ref={frame} onPointerEnter={() => hover?.(true)} onPointerLeave={() => hover?.(false)} onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget)) blur?.() }} data-widget-appearance={definition.appearance} data-model-id={`model:${definition.id}`} data-swap-selected={swapSelected ? '' : undefined}
-    tabIndex={presentation ? -1 : undefined} hidden={!visible} inert={withheld || unavailable || inactive || (outside && interaction.activeId !== p.id)} data-widget={withheld ? undefined : p.id} data-owner-region={p.region} data-layout-keyboard={import.meta.env.DEV}
+    tabIndex={presentation ? -1 : undefined} hidden={!visible} inert={withheld || unavailable || inactive || (outside && interaction.activeId !== p.id)} data-widget={withheld ? undefined : surfaceId ?? p.id} data-owner-region={p.region} data-layout-keyboard={import.meta.env.DEV}
     data-widget-id={p.id} data-panel-gesture={presentation?.gesture || undefined} data-swap-over={swapping.preview?.target === p.id ? '' : undefined}
     data-x={p.x} data-y={p.y} data-w={p.width} data-h={p.height} data-preferred-w={p.preferred.width} data-preferred-h={p.preferred.height}
     style={{ left, top, width: p.width, height: p.height, opacity: ghosted ? 0 : undefined, clipPath }}
@@ -76,10 +77,12 @@ export const WidgetFrame = memo(function WidgetFrame({ placement: p, measurement
     }}>
     <header className="widget-heading" role={presentation?.freeHandlers || presentation?.compactHandlers ? 'button' : undefined} tabIndex={presentation?.freeHandlers || presentation?.compactHandlers ? 0 : undefined} aria-label={presentation?.freeHandlers || presentation?.compactHandlers ? t('Painel de {0}', title) : undefined} aria-expanded={presentation?.freeHandlers || presentation?.compactHandlers ? presentation.open : undefined} {...(editing ? { ...interaction.handlers(p, 'move'), onClick: undefined, onPointerDown(event) { if (!(event.target as HTMLElement).closest('button,input,textarea,select,a,summary,[contenteditable="true"]')) interaction.handlers(p, 'move').onPointerDown(event) } } : presentation?.compactHandlers ?? presentation?.freeHandlers ?? {})}><strong>{title}</strong></header>
     {editing && <button className="ui-button ui-icon-button widget-grip layout-widget-grip" aria-label={t('Mover {0}', title)} tabIndex={import.meta.env.DEV ? 0 : -1} {...interaction.handlers(p, 'move')}><WorkbenchIcon name="move" /></button>}
+    {tabs}
+    {organizationActions}
     {surfaceActions && <div className="widget-surface-actions">{surfaceActions}</div>}
-    {editControls && <div className="widget-local-controls">{controls}<button className="ui-button ui-icon-button layout-widget-remove" aria-label={t('Remover {0}', title)} onClick={remove}><XMarkIcon className="icon" /></button></div>}
+    {editControls && <div className="widget-local-controls">{controls}<button className="ui-button ui-icon-button layout-widget-remove" aria-label={t('Remover {0}', removeTitle ?? title)} onClick={remove}><XMarkIcon className="icon" /></button></div>}
     {editing && <button className="ui-button ui-icon-button widget-swap-control" hidden={!swapAvailable || !swapSelected} aria-label={t('Trocar widget de {0}', title)} title={t('Arraste sobre outro widget selecionado para trocar os espaços')} aria-pressed={swapSelected} onClick={swap} {...swapping.handlers(p.id)}><WorkbenchIcon name="move" /></button>}
-    <div className="widget-content" inert={presentation?.open === false}>{children ?? <WidgetContent id={definition.fixture ?? ''} />}</div>
+    <div className="widget-content" id={contentId} role={contentId ? 'tabpanel' : undefined} aria-labelledby={labelledBy} hidden={contentHidden} inert={presentation?.open === false || contentHidden}>{children ?? <WidgetContent id={definition.fixture ?? ''} />}</div>
     {editing && DIRECTIONS.filter(d => allowsResize(d, constraint)).map(d => <button key={d} className={'resize-zone resize-' + d} data-resize={d}
       tabIndex={import.meta.env.DEV ? 0 : -1} aria-label={t('Redimensionar {0}: {1}', title, t(LABELS[d]))}
       title={t('Redimensionar pela {0}', t(LABELS[d])) + (import.meta.env.DEV ? t(' · use as setas') : '')} {...interaction.handlers(p, d)} />)}

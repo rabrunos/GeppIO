@@ -25,6 +25,17 @@ const observations: unknown[] = []
 let page: Page
 try {
   page = await application.firstWindow()
+  const installNativeEvidence = () => {
+    const events: unknown[] = []; Object.assign(window, { correctionPointerEvidence: events })
+    const record = (event: Event) => {
+      const target = event.target instanceof Element ? event.target : null, pointer = event instanceof PointerEvent ? event : null
+      events.push({ time: performance.now(), type: event.type, focused: document.hasFocus(), target: target?.outerHTML.slice(0, 180), point: pointer ? [pointer.clientX, pointer.clientY] : null, buttons: pointer?.buttons })
+      if (events.length > 100) events.shift()
+    }
+    for (const type of ['pointerdown', 'pointerup', 'pointercancel', 'gotpointercapture', 'lostpointercapture']) document.addEventListener(type, record, true)
+    window.addEventListener('blur', record); window.addEventListener('focus', record)
+  }
+  await page.addInitScript(installNativeEvidence); await page.evaluate(installNativeEvidence)
   page.setDefaultTimeout(15000)
   const errors: string[] = []; page.on('pageerror', error => { errors.push(error.message); console.error('Renderer error:', error.message) })
   async function size(width: number, height: number) {
@@ -332,7 +343,11 @@ try {
   await writeFile('.local/diagnostics/corrections-alpha13/observations.json', JSON.stringify(observations, null, 2))
   console.log(process.argv.includes('--compositions-only') ? 'PASS focused native alpha14 composition suite' : process.argv.includes('--drops-only') ? 'PASS focused native drops: six region directions, scrolled custom bar, landing geometry, exact catalog/existing reservation drop, hover/cancel/duplicate/history, themes and reduced motion' : 'PASS approved corrections and native drops: minima/themes/viewports, rail click/jitter/reorder/cancel/blur, 14/legacy20 bars/library/scroll, focus/backdrop, local history/checkpoint, exact slots, format/library scope, preserved incompatible bytes, catalog origins/reduced motion and observed post-toast outline')
 } catch (error) {
-  if (page!) await page.screenshot({ path: '.local/diagnostics/corrections-alpha13/failure.png' })
+  if (page!) {
+    await page.screenshot({ path: '.local/diagnostics/corrections-alpha13/failure.png' })
+    const pointer = await page.evaluate(() => ({ events: Reflect.get(window, 'correctionPointerEvidence'), feedback: document.querySelector('.workspace-feedback')?.textContent, host: { ...(document.querySelector<HTMLElement>('.workbench')?.dataset ?? {}) } }))
+    await writeFile('.local/diagnostics/corrections-alpha13/pointer-failure.json', JSON.stringify(pointer, null, 2)); console.error('Correction pointer evidence:', JSON.stringify(pointer))
+  }
   throw error
 } finally {
   await application.close()

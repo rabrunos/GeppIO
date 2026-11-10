@@ -587,6 +587,28 @@ hostile-code isolation, power-loss durability, physical Windows UX or Linux appl
 
 ## Completion standard
 
+`pnpm test:groups` (`node --experimental-strip-types tools/groups-smoke.ts`) checks
+real installed Essentials members and peer Time Tracker widgets in a disposable
+Windows profile. It exercises mouse align/group, cancel/history, tab reorder and
+detach, checkpoint/composition recovery, old-envelope load, stable DOM/Workers,
+shared-frame maximize, both themes and full process restart. Use
+`pnpm test:groups --scale125` for automated DPR 1.25. The default scenario is also
+part of `pnpm test:desktop`; pure eligibility/codec/minimum/atomic refusal and
+omitted-region composition cases live in `tests/workbench-groups.test.ts`.
+Neither automation scale establishes owner acceptance at physical display DPI.
+
+The presentation smoke records native pointer/focus targets with its per-frame
+Sidebar measurements. Its compact-strip sample first moves outside the preceding
+overlap probe and waits for the actual compact panels. Alpha.27 CI observed a
+260px Floating reveal against a 31px compact-only assertion; local instrumentation
+also observed pointerover/up on Activity after the Sidebar overlap click. Local
+success alone does not prove the exact historical CI event sequence. Keep all
+per-frame geometry assertions and the independent real hover/reveal tests.
+Presentation resize probes also queue behind the existing workbench Web Lock and
+use native splitter hover actionability before measuring coordinates. They assert
+the actual hit target and pointer capture; bounded native pointer evidence is
+retained on failure. This synchronization does not write data or retry a gesture.
+
 Report passed/failed/blocked/not_run for each selected layer, the actual command/environment and
 its limits in the active Issue. Link CI to the exact commit and distinguish global result, job,
 step and tested scope. A passed source check is not a semantic TypeScript build, effective model
