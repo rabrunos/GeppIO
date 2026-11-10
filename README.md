@@ -94,6 +94,9 @@ Sidebar e Bottom mostram resumos compactos. Teste focado: `pnpm test:time-tracke
 ## Alinhar, agrupar e maximizar na Main
 
 Em **Editar layout**, arraste um widget Normal para ver guias próximas de bordas e centros.
+As bordas e os cantos de resize também alinham, mantendo a borda oposta fixa. A guia
+tracejada de **10px** mostra o espaçamento entre bordas, inclusive antes de os widgets
+se encontrarem no outro eixo. Afaste o ponteiro para liberar o snap.
 Para agrupar Anotações, Checklist e Prompts salvos, arraste **Abas** até **Agrupar** no
 cabeçalho de outro widget compatível. Também é possível clicar **Abas** e escolher o destino.
 Amplie um alvo pequeno antes de agrupar. No grupo, troque de aba pelo título; em Editar,

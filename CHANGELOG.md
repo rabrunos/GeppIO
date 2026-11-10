@@ -2,6 +2,11 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.29] — 2026-11-10
+
+- Extend shared alignment to active individual resize edges and corners, holding opposite edges fixed. Add policy-clearance spacing candidates on both axes, including diagonally separated widgets, with distinguishable measured gap guides.
+- Retain deterministic 7px/14px hysteresis, regional axes and the existing bounded reflow/settlement fallback. Pair dividers and region splitters retain their independent behavior.
+
 ## [0.1.0-alpha.28] — 2026-11-09
 
 - Group the three compatible Workspace Essentials Main widgets into a single bounded frame with independent host/member eligibility. Dedicated header targets support drag or click/focus selection; Edit supports reorder, atomic detach, history and checkpoints.

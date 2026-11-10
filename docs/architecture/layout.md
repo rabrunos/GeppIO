@@ -29,6 +29,15 @@ existing transient Main presentation and keeps tabs accessible.
 
 ## Main drag alignment — Issue #10 / alpha.27
 
+Alpha.29 extends the same engine entry point to individual resize edges/corners
+and adds facing-edge offsets from `POLICY.gap`. Offset candidates remain available
+when cross-axis projections are separated. Resize changes only the active edge,
+holding its opposite edge fixed. Guides distinguish direct lines from measured
+spacing bands. The selected candidates are rechecked against the actual settled
+scene; invalid candidates fall back to ordinary reflow within the same budget.
+Main supports both axes, Bottom only horizontal geometry, and Sidebar retains its
+packed-height resize path and fixed width. Pair dividers/shell splitters are separate.
+
 `shared/freeform/alignment.ts` owns same-edge, opposite-edge and center candidates,
 7px entry/14px release hysteresis in CSS pixels and distance/anchor/identity tie
 ordering. It first retains ordinary reflow, then tries snapping within the remaining
