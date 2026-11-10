@@ -1,10 +1,10 @@
 import { detachWidget, reorderGroup } from '../../../shared/workbench/groups.ts'
-import type { Registry, WidgetGroup } from '../../../shared/workbench/model.ts'
+import type { Registry, WidgetGroup, WorkbenchSnapshot } from '../../../shared/workbench/model.ts'
 import type { Transaction } from '../freeform/useTransaction.ts'
 import { useLocale } from './Locale.tsx'
 export const tabId = (group: string, member: string) => `${group}:tab:${member}`
 export const panelId = (group: string, member: string) => `${group}:panel:${member}`
-export function GroupTabs({ group, tx, registry, expanded }: { group: WidgetGroup; tx: Transaction; registry: Registry; expanded: boolean }) {
+export function GroupTabs({ group, tx, registry, expanded, view }: { group: WidgetGroup; tx: Transaction; registry: Registry; expanded: boolean; view: WorkbenchSnapshot }) {
   const { t } = useLocale(), index = group.members.indexOf(group.active)
   const title = (id: string) => registry.get(tx.snapshot.organization.views.find(view => view.id === id)!.typeId)!.title
   async function select(id: string, focus = false) {
@@ -13,7 +13,7 @@ export function GroupTabs({ group, tx, registry, expanded }: { group: WidgetGrou
   }
   function reorder(delta: -1 | 1) { const next = reorderGroup(tx.live.current, group.id, group.active, delta); if (next) tx.action(next) }
   function detach() {
-    const member = group.active, next = detachWidget(tx.live.current, registry, member, expanded)
+    const member = group.active, next = detachWidget(view, registry, member, expanded)
     if (!next) { tx.setMessage(t('Sem espaço para separar. Composição preservada.')); return }
     tx.action(next)
     requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-widget-id="${CSS.escape(member)}"] .group-source-handle`)?.focus())

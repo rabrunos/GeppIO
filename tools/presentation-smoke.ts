@@ -34,9 +34,11 @@ async function launch(width = 2000, height = 1400) {
   page = await application.firstWindow(); page.on('pageerror', error => errors.push(error.message))
   const installPanelEvidence = () => {
     const trace: unknown[] = []; Object.assign(window, { panelGestureEvidence: trace })
-    for (const type of ['pointerdown', 'pointerup', 'pointercancel', 'gotpointercapture', 'lostpointercapture']) document.addEventListener(type, event => {
+    for (const type of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'gotpointercapture', 'lostpointercapture', 'blur', 'focus', 'resize']) window.addEventListener(type, event => {
       const pointer = event as PointerEvent, target = event.target instanceof Element ? event.target : null
+      if (type === 'pointermove' && pointer.buttons !== 1) return
       trace.push({ time: performance.now(), type, target: target?.outerHTML.slice(0, 220) ?? 'document', point: [pointer.clientX, pointer.clientY], buttons: pointer.buttons,
+        focused: document.hasFocus(), viewport: [innerWidth, innerHeight],
         capture: [...document.querySelectorAll<HTMLElement>('.presentation-splitter')].filter(node => node.hasPointerCapture(pointer.pointerId)).map(node => node.getAttribute('aria-label')) })
       if (trace.length > 60) trace.shift()
     }, true)
@@ -82,6 +84,7 @@ async function reveal(id: Id = 'properties') {
   assert.equal(await page.evaluate(point => document.elementFromPoint(point.x, point.y)?.closest<HTMLElement>('[data-widget-id]')?.dataset.widgetId, point), id)
   // A fixed point in the trigger stays inside its expanded panel. Locator hover
   // can relocate toward the moving header while it expands, leaving the panel.
+  await page.evaluate(point => Reflect.get(window, 'presentationPointerEvents').push({ time: performance.now(), type: 'driver-hover-intent', ...point }), point)
   await page.mouse.move(point.x, point.y)
   await page.waitForFunction(id => document.querySelector(`[data-widget-id="${id}"]`)?.getAttribute('data-panel-open') === 'true', id)
   await settle(page)
@@ -192,7 +195,18 @@ async function sampleSidebar(theme: string, direction: 'collapse' | 'reopen') {
     // between layout and ResizeObserver delivery, comparing two different frames.
     const observer = new ResizeObserver(sample)
     observer.observe(document.querySelector('[data-surface="main"]')!)
-    setTimeout(() => { observer.disconnect(); state.samplingSidebar = false }, 600)
+    const root = document.querySelector<HTMLElement>('.workbench')!, initialMode = root.dataset.sidebarMode
+    let settled = 0
+    // Native click delivery may follow installation of the observer. Keep the
+    // actual transition frames, ending after its mode change and animation,
+    // rather than spending a fixed 600ms window before the click arrives.
+    function finish() {
+      const moving = root.getAnimations().some(animation => animation.playState === 'running' || animation.pending)
+      settled = root.dataset.sidebarMode !== initialMode && !moving ? settled + 1 : 0
+      if (settled >= 2 || performance.now() - start >= 15000) { observer.disconnect(); state.samplingSidebar = false }
+      else requestAnimationFrame(finish)
+    }
+    requestAnimationFrame(finish)
   })
   await page.locator('[data-bar-id="home"]').click(); await page.mouse.move(500, 80)
   await page.waitForFunction(() => !(window as unknown as { samplingSidebar: boolean }).samplingSidebar)
@@ -276,7 +290,9 @@ async function drag(id: Id, anchor: Edge, delta: number, cancel?: 'escape' | 'po
   if (cancel === 'escape') await page.keyboard.press('Escape')
   if (cancel === 'pointercancel') await edge(id, anchor).dispatchEvent('pointercancel', { pointerId: 1 })
   if (cancel === 'lostcapture') await edge(id, anchor).evaluate(node => { if (node.hasPointerCapture(1)) node.releasePointerCapture(1) })
-  await page.mouse.up(); await settle(page)
+  await page.mouse.up()
+  await page.evaluate(async key => { await navigator.locks.request(key, () => {}) }, WORKBENCH_KEY)
+  await settle(page)
   if (cancel) assert.equal(await raw(), before, 'Canceled gesture preserves bytes')
 }
 function onlyProperties() { const s = initialWorkbench(); s.placements = s.placements.filter(p => p.region !== 'main' || p.id === 'properties'); return s }
@@ -488,6 +504,6 @@ try {
   console.log(`Presentation smoke passed: four edges, free/anchored Floating, exact returns/refusal, restart, history, guards and both themes (${directory})`)
 } catch (error) {
   if (page && !page.isClosed()) { await page.screenshot({ path: `${directory}/failure.png` }).catch(() => {}); await writeFile(`${directory}/failure.json`, JSON.stringify({ error: String(error), errors, geometry: await bounds().catch(() => null), pointer: await page.evaluate(() => ({ focused: document.hasFocus(), events: (window as Window & { presentationPointerEvents?: unknown[] }).presentationPointerEvents,
-    frames: [...document.querySelectorAll<HTMLElement>('[data-widget-id]')].map(frame => ({ id: frame.dataset.widgetId, hovered: frame.matches(':hover'), open: frame.dataset.panelOpen, controls: frame.querySelector('.widget-local-controls') ? getComputedStyle(frame.querySelector('.widget-local-controls')!).pointerEvents : null })) })) }, null, 2)) }
+    gestures: Reflect.get(window, 'panelGestureEvidence'), sidebarSamples: Reflect.get(window, 'sidebarSamples'), frames: [...document.querySelectorAll<HTMLElement>('[data-widget-id]')].map(frame => ({ id: frame.dataset.widgetId, hovered: frame.matches(':hover'), open: frame.dataset.panelOpen, controls: frame.querySelector('.widget-local-controls') ? getComputedStyle(frame.querySelector('.widget-local-controls')!).pointerEvents : null })) })) }, null, 2)) }
   throw error
 } finally { if (application) await application.close(); await rm(profile, { recursive: true, force: true }) }

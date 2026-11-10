@@ -111,6 +111,8 @@ As abas continuam disponíveis durante a maximização. O conteúdo permanece mo
 apenas a apresentação maximizada é temporária. Testes focados: `pnpm test:maximize`,
 `pnpm test:alignment` e `pnpm test:groups`; acrescente `--scale125` para DPR automatizado 1,25.
 
+Grupos de abas compatíveis funcionam em Main, Bottom e nas barras principal e personalizadas da Sidebar. Em Editar layout, arraste o quadro inteiro para outra área: a prévia informa quantas abas vão e quantas ficam. A transferência preserva a ordem e só acontece se as duas partes forem válidas e houver espaço. Use o controle Abas para agrupar e Separar aba para destacar o membro selecionado.
+
 ## O que existe no workbench
 
 Cabeçalho fixo, barra contextual, Sidebar, Main, Bottom e barra de status compõem o shell.

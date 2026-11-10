@@ -3,7 +3,8 @@ import { constraintInRegion, constraintsFor, POLICY } from '../freeform/policy.t
 import { projectRegion } from '../freeform/projection.ts'
 import { transfer } from '../freeform/transfer.ts'
 import type { Placement, Region, Size, Surface } from '../freeform/types.ts'
-import { HOME, LIMITS, activePlacements, constraintsForViews, evaluatePlacement, modelId, sidebarInsertion, groupFor, removeGroupedPresence } from './model.ts'
+import { HOME, LIMITS, activePlacements, constraintsForViews, evaluatePlacement, modelId, sidebarInsertion, groupFor, removeGroupedPresence, frameTypes } from './model.ts'
+import { transferGroup } from './groups.ts'
 import type { Registry, UserBar, WorkbenchSnapshot } from './model.ts'
 import { panelIds, validatePresentationEdges } from './presentations.ts'
 
@@ -33,13 +34,13 @@ function insertSidebar(source: WorkbenchSnapshot, registry: Registry, id: string
   if (y !== undefined && !Number.isFinite(y)) return null
   const next = structuredClone(source), placement = next.placements.find(p => p.id === id)!
   const typeId = next.organization.views.find(view => view.id === id)!.typeId
-  const c = constraintInRegion(registry.get(typeId)!.constraint, 'sidebar')
+  const c = constraintInRegion(constraintsForViews(next, registry)[id]!, 'sidebar')
   if (size && (size.width < c.min.width || size.width > c.max.width)) return null
   const insertion = sidebarInsertion(source, id, y)
   Object.assign(placement, { region: 'sidebar', x: 0, width: target.width, height: size?.height ?? Math.max(c.min.height, Math.min(c.max.height, placement.height)) })
   const ordered = [...insertion.peers]; ordered.splice(insertion.index, 0, placement)
   const bar = next.organization.bars.find(bar => bar.id === next.organization.activeBar)!
-  bar.members = ordered.map(p => next.organization.views.find(view => view.id === p.id)!.typeId)
+  bar.members = ordered.flatMap(p => frameTypes(next, p.id))
   let end = 0; bar.positions = {}
   for (const p of ordered) { bar.positions[next.organization.views.find(view => view.id === p.id)!.typeId] = end; end += p.height + POLICY.gap }
   placement.y = bar.positions[typeId]!
@@ -113,7 +114,15 @@ function transferActive(source: WorkbenchSnapshot, registry: Registry, id: strin
 }
 /** Movement changes only the source association and the chosen destination bar. */
 export function moveView(source: WorkbenchSnapshot, registry: Registry, id: string, target: Surface, at?: { x: number; y: number }, sourceBar = source.organization.activeBar, slotSize?: Size, disabled?: ReadonlySet<string>): WorkbenchSnapshot | null {
-  if (groupFor(source, id) && target.region !== 'main') return null
+  const group = groupFor(source, id), placement = source.placements.find(p => p.id === id)
+  if (group && placement && (target.region !== placement.region || target.region === 'sidebar' && sourceBar !== source.organization.activeBar)) {
+    if (slotSize) return null
+    return transferGroup(source, registry, id, target, at, sourceBar, disabled)
+  }
+  return moveFrame(source, registry, id, target, at, sourceBar, slotSize, disabled)
+}
+/** Internal bounded-frame placement; group partitioning is owned by groups.ts. */
+export function moveFrame(source: WorkbenchSnapshot, registry: Registry, id: string, target: Surface, at?: { x: number; y: number }, sourceBar = source.organization.activeBar, slotSize?: Size, disabled?: ReadonlySet<string>): WorkbenchSnapshot | null {
   const view = source.organization.views.find(view => view.id === id), placement = source.placements.find(p => p.id === id)
   if (!view || !placement) return null
   const type = registry.get(view.typeId)
@@ -152,8 +161,8 @@ function exactPlacement(source: WorkbenchSnapshot, registry: Registry, id: strin
   if (!validLayout(activePlacements(next).filter(p => p.region === target.region && !panels.has(p.id)), target, constraintsFor(target, constraintsForViews(next, registry)))) return null
   return target.region === 'sidebar' ? reconcileBarHeights(next) : next
 }
-export function removePresence(source: WorkbenchSnapshot, id: string): WorkbenchSnapshot {
-  if (groupFor(source, id)) return removeGroupedPresence(source, id)
+export function removePresence(source: WorkbenchSnapshot, id: string, registry?: Registry): WorkbenchSnapshot {
+  if (groupFor(source, id)) return removeGroupedPresence(source, id, registry)
   const next = structuredClone(source), placement = next.placements.find(p => p.id === id), view = next.organization.views.find(v => v.id === id)
   if (!placement || !view) return source
   if (placement.region === 'sidebar') {
@@ -180,10 +189,16 @@ export function updateBar(source: WorkbenchSnapshot, bar: UserBar): WorkbenchSna
 export function configureBar(source: WorkbenchSnapshot, registry: Registry, bar: UserBar, surface: Surface, disabled?: ReadonlySet<string>): WorkbenchSnapshot | null {
   if (bar.members.some(id => !registry.get(id) || constraintInRegion(registry.get(id)!.constraint, 'sidebar').min.width > surface.width)) return null
   const canonical = { ...surface, width: source.reference.sidebar.width }
-  let next = updateBar(source, { ...bar, members: [] })
+  const owned = source.organization.groups?.entries.filter(group => source.placements.some(p => p.id === group.frameId && p.region === 'sidebar') && source.organization.bars.find(item => item.id === bar.id)?.members.includes(source.organization.views.find(view => view.id === group.frameId)!.typeId)) ?? []
+  if (owned.some(group => { const count = frameTypes(source, group.frameId).filter(type => bar.members.includes(type)).length; return count > 0 && count < group.members.length })) return null
+  const retained = owned.filter(group => frameTypes(source, group.frameId).every(type => bar.members.includes(type)))
+  const retainedTypes = new Set(retained.flatMap(group => frameTypes(source, group.frameId)))
+  let next = updateBar(source, { ...bar, members: [...retainedTypes] })
   if (!next) return null
+  if (next.organization.groups) next.organization.groups.entries = next.organization.groups.entries.filter(group => !owned.some(item => item.id === group.id) || retained.some(item => item.id === group.id))
   next.organization.activeBar = bar.id
   for (const typeId of bar.members) {
+    if (retainedTypes.has(typeId)) continue
     const added = addWidget(next, registry, typeId, canonical, undefined, disabled)
     if (!added) return null
     next = added
@@ -194,7 +209,9 @@ export function configureBar(source: WorkbenchSnapshot, registry: Registry, bar:
 }
 export function deleteBar(source: WorkbenchSnapshot, id: string): WorkbenchSnapshot | null {
   if (id === HOME || !source.organization.bars.find(bar => bar.id === id)?.archived) return null
-  return { ...source, organization: { ...source.organization, bars: source.organization.bars.filter(bar => bar.id !== id) } }
+  const bar = source.organization.bars.find(bar => bar.id === id)!
+  const groups = source.organization.groups && { version: 1 as const, entries: source.organization.groups.entries.filter(group => !source.placements.some(p => p.id === group.frameId && p.region === 'sidebar' && bar.members.includes(source.organization.views.find(view => view.id === p.id)!.typeId))) }
+  return { ...source, organization: { ...source.organization, ...(groups ? { groups } : {}), bars: source.organization.bars.filter(bar => bar.id !== id) } }
 }
 export function reorderBar(source: WorkbenchSnapshot, id: string, offset: number): WorkbenchSnapshot | null {
   const next = structuredClone(source), bars = next.organization.bars, from = bars.findIndex(bar => bar.id === id), to = from + offset
@@ -207,6 +224,7 @@ export function swapViews(source: WorkbenchSnapshot, registry: Registry, a: stri
   const active = activePlacements(source)
   const first = active.find(p => p.id === a), second = active.find(p => p.id === b)
   if (!first || !second || a === b) return null
+  if (first.region !== second.region && (first.region === 'sidebar' || second.region === 'sidebar') && (groupFor(source, a) || groupFor(source, b))) return null
   const one = source.organization.views.find(view => view.id === a)!, two = source.organization.views.find(view => view.id === b)!
   if (!evaluatePlacement(source, registry, one.typeId, second.region, 'swap', [a, b]).allowed
     || !evaluatePlacement(source, registry, two.typeId, first.region, 'swap', [a, b]).allowed) return null
@@ -274,7 +292,8 @@ export function fitTargets(source: WorkbenchSnapshot, registry: Registry, target
     if (!projected.feasible || !validLayout(projected.placements, surface, constraintsFor(surface, cs))) return null
     result.push(...projected.placements)
   }
-  if (result.some((p, i) => result.slice(i + 1).some(q => p.id === q.id || (p.region === q.region && collides(p, q))))) return null
+  const together = (a: Placement, b: Placement) => a.region !== 'sidebar' || source.organization.bars.some(bar => [a, b].every(p => bar.members.includes(source.organization.views.find(view => view.id === p.id)!.typeId)))
+  if (result.some((p, i) => result.slice(i + 1).some(q => p.id === q.id || (p.region === q.region && together(p, q) && collides(p, q))))) return null
   const next = { ...source, placements: result }
   try { validatePresentationEdges(next) } catch { return null }
   return next

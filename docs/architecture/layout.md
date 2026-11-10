@@ -1,10 +1,10 @@
 # Region-aware continuous widget geometry
 
-## Main tab groups — Issue #18 / alpha.28
+## Regional tab groups — Issue #18 / alpha.30
 
 `shared/workbench/groups.ts` owns grouping, order and atomic detachment. Only the
 known Essentials notes/checklist/prompts types declare the independent optional
-host and member capabilities. Groups require Normal Main members and preserve
+host and member capabilities. Groups require Normal members in the same eligible region and preserve
 the receiver's rectangle; targets smaller than aggregate member minima plus the
 32px tab strip refuse rather than partially moving or resizing a member.
 The freeform engine sees one frame, with the maximum member minima and minimum
@@ -22,10 +22,26 @@ operation refuses atomically while groups exist.
 The renderer retains each keyed member frame/content in its original React
 position, painting only the active content under the host chrome. Switching tabs
 does not recreate a model or Worker. A dedicated Edit header handle supports
-pointer grouping and click/focus target selection; ordinary Main move drops also
+pointer grouping and click/focus target selection; ordinary regional move drops also
 recognize the header target. Outside it, movement and alignment retain their
 normal behavior. Reorder/detach belong to Edit. Shared-frame maximize reuses the
 existing transient Main presentation and keeps tabs accessible.
+
+Alpha.30 derives a group's region from its bounded frame, retaining nested version 1
+metadata. Regional minima include the tab strip; tab switching does not reflow.
+Sidebar groups occupy one packed frame and retain every member type in exactly one
+owning bar. Grouping or transferring a shared Sidebar presence refuses atomically
+rather than silently altering another bar. Bar editing must keep or remove a whole
+group; explicit detachment supports changes to individual membership.
+
+`groupTransferPlan` is the shared eligibility/count/host preview. `transferGroup`
+builds both ordered subsets privately and invokes the existing frame placement
+command once. It preserves the original carrier where eligible, otherwise chooses
+the first compatible host, retains the selected tab in its subset, and gives the
+other subset its first tab. Zero eligible members, either hostless subset or an
+infeasible destination discards the entire intention. Groups remain outside the
+freeform solver. Included Bottom compositions carry their groups; Sidebar capture
+continues to store width only. Omitted-region groups remain intact on restoration.
 
 ## Main drag alignment — Issue #10 / alpha.27
 

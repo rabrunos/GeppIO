@@ -79,8 +79,10 @@ export function widgetRegistry(plugins: readonly InstalledPlugin[] = [], demoFix
 export function modelId(typeId: string) { return `model:${typeId}` }
 export function groupFor(source: WorkbenchSnapshot, id: string) { return source.organization.groups?.entries.find(group => group.members.includes(id)) }
 export function groupConstraint(members: readonly View[], registry: Registry): Constraint {
-  const declarations = members.map(view => constraintInRegion(registry.get(view.typeId)!.constraint, 'main')), base = declarations[0]!
-  return { ...base, regions: ['main'], regionMin: undefined,
+  const originals = members.map(view => registry.get(view.typeId)!.constraint), declarations = originals.map(c => constraintInRegion(c, 'main')), base = declarations[0]!
+  const regions = (['main', 'sidebar', 'bottom'] as const).filter(region => originals.every(c => c.regions.includes(region)))
+  const regionMin = Object.fromEntries(regions.map(region => [region, { width: Math.max(...originals.map(c => constraintInRegion(c, region).min.width)), height: Math.max(...originals.map(c => constraintInRegion(c, region).min.height)) + TAB_STRIP_HEIGHT }]))
+  return { ...base, regions, regionMin,
     min: { width: Math.max(...declarations.map(c => c.min.width)), height: Math.max(...declarations.map(c => c.min.height)) + TAB_STRIP_HEIGHT },
     max: { width: Math.min(...declarations.map(c => c.max.width)), height: Math.min(POLICY.maxSize, ...declarations.map(c => c.max.height + TAB_STRIP_HEIGHT)) },
     resizeX: declarations.every(c => c.resizeX), resizeY: declarations.every(c => c.resizeY) }
@@ -92,12 +94,26 @@ export function surfacePlacements(source: WorkbenchSnapshot): Placement[] {
     return frame ? group.members.filter(id => id !== group.frameId).map(id => ({ ...frame, id })) : []
   })]
 }
-export function removeGroupedPresence(source: WorkbenchSnapshot, id: string): WorkbenchSnapshot {
+export function removeGroupedPresence(source: WorkbenchSnapshot, id: string, registry?: Registry): WorkbenchSnapshot {
   const group = groupFor(source, id); if (!group) return source
-  const next = structuredClone(source), members = group.members.filter(member => member !== id), frameId = group.frameId === id ? members[0]! : group.frameId
+  const next = structuredClone(source), members = group.members.filter(member => member !== id)
+  const frameId = group.frameId !== id ? group.frameId : members.length === 1 || !registry ? members[0]! : members.find(member => registry.get(source.organization.views.find(view => view.id === member)!.typeId)?.tabHost)
+  if (!frameId) return source
   next.placements = next.placements.map(p => p.id === group.frameId ? { ...p, id: frameId } : p)
   next.organization.groups = { version: 1, entries: next.organization.groups!.entries.flatMap(item => item.id !== group.id ? [item] : members.length < 2 ? [] : [{ ...item, frameId, members, active: members.includes(item.active) ? item.active : members[0]! }]) }
+  const oldType = source.organization.views.find(view => view.id === id)!.typeId
+  const frameType = source.organization.views.find(view => view.id === group.frameId)!.typeId
+  const newFrameType = source.organization.views.find(view => view.id === frameId)!.typeId
+  if (source.placements.find(p => p.id === group.frameId)?.region === 'sidebar') for (const bar of next.organization.bars) {
+    if (!bar.members.includes(frameType)) continue
+    const y = bar.positions?.[frameType] ?? source.placements.find(p => p.id === group.frameId)!.y
+    bar.members = bar.members.filter(type => type !== oldType)
+    bar.positions ??= {}; delete bar.positions[oldType]; bar.positions[newFrameType] = y
+  }
   return next
+}
+export function frameTypes(source: WorkbenchSnapshot, id: string) {
+  return (groupFor(source, id)?.members ?? [id]).map(member => source.organization.views.find(view => view.id === member)!.typeId)
 }
 export function constraintsForViews(snapshot: WorkbenchSnapshot, registry: Registry): Constraints {
   return Object.fromEntries(snapshot.organization.views.flatMap(view => {
@@ -173,7 +189,8 @@ export function evaluatePlacement(snapshot: WorkbenchSnapshot, registry: Registr
   if (disabled.has(type.owner)) return { allowed: false, reason: 'paused' } as const
   const grouped = snapshot.organization.views.some(view => view.typeId === typeId && groupFor(snapshot, view.id))
   if (grouped && operation === 'catalog') return { allowed: false, reason: 'occupied' } as const
-  if (grouped && region !== 'main') return { allowed: false, reason: 'incompatible' } as const
+  const movingGroup = snapshot.organization.groups?.entries.find(group => ignored.includes(group.frameId) && group.members.some(id => snapshot.organization.views.some(view => view.id === id && view.typeId === typeId)))
+  if (movingGroup && movingGroup.members.some(id => !registry.get(snapshot.organization.views.find(view => view.id === id)!.typeId)!.constraint.regions.includes(region))) return { allowed: false, reason: 'incompatible' } as const
   if (region !== 'sidebar' && type.presence === 'single-view' && snapshot.organization.views.some(view => view.typeId === typeId && (operation === 'catalog' || ignored.includes(view.id))
     && snapshot.placements.some(p => p.id === view.id && p.region === 'sidebar'))
     && snapshot.organization.bars.some(bar => bar.id !== snapshot.organization.activeBar && bar.members.includes(typeId))) return { allowed: false, reason: 'occupied' } as const

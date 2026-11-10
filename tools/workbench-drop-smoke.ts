@@ -15,18 +15,21 @@ export function near(actual: Box, expected: Box, tolerance = .15) { for (const k
 /** Uses the existing corrections launch/reset controller and disposable profile. */
 export function dropDriver(page: Page, observations: unknown[]) {
   async function hold(source: Locator, to: { x: number; y: number }) {
+    await settle(page)
     // Let Playwright wait for the real hit target to be visible/stable and scroll
     // it into view before reading coordinates. Never synthesize capture.
     if (await source.evaluate(node => node.classList.contains('widget-grip'))) await source.locator('..').hover({ position: { x: 40, y: 12 } })
     await source.hover()
     const box = await source.boundingBox(); assert.ok(box)
+    const surfaces = () => page.locator('[data-surface]').evaluateAll(nodes => nodes.map(node => ({ region: node.getAttribute('data-surface'), box: node.getBoundingClientRect().toJSON(), width: node.getAttribute('data-usable-width'), height: node.getAttribute('data-usable-height') })))
+    const before = await surfaces()
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await page.mouse.down()
     assert.ok(await source.evaluate(node => node.hasPointerCapture(1)), 'The actual native pointer must be captured')
     await page.mouse.move(to.x, to.y, { steps: 8 }); await settle(page)
-    assert.ok(await source.evaluate(node => node.hasPointerCapture(1)), 'Native capture must survive through the held destination before release')
+    assert.ok(await source.evaluate(node => node.hasPointerCapture(1)), 'Native capture must survive through the held destination before release: ' + JSON.stringify({ box, to, before, after: await surfaces() }))
   }
   async function sampleRelease(id: string, reduced = false) {
-    await page.evaluate(id => {
+    await page.evaluate(({ id, reduced }) => {
       const host = window as Probe; host.dropSamples = []; host.dropSampling = true
       const started = performance.now()
       function sample() {
@@ -39,10 +42,15 @@ export function dropDriver(page: Page, observations: unknown[]) {
           target: final && targetMatrix ? { x: targetMatrix.e, y: targetMatrix.f, width: parseFloat(String(final.width)), height: parseFloat(String(final.height)) } : null,
           duration: typeof timing?.duration === 'number' ? timing.duration : timing ? String(timing.duration) : null, easing: timing?.easing ?? null,
           clip: (picture?.firstElementChild?.getAnimations()[0]?.effect as KeyframeEffect | undefined)?.getKeyframes().at(-1)?.clipPath as string ?? null })
-        if (performance.now() - started < 420) requestAnimationFrame(sample); else host.dropSampling = false
+        // Native pointer-up and the transaction can reach the renderer after
+        // sampling starts. Follow the observed flight/reveal, not a 420ms clock
+        // that can end before the unchanged 240ms flight actually finishes.
+        const revealed = (reduced || host.dropSamples!.some(sample => sample.target)) && !picture
+          && live && getComputedStyle(live).opacity === '1' && live.getBoundingClientRect().width > 0 && live.getBoundingClientRect().height > 0
+        if (!revealed && performance.now() - started < 4000) requestAnimationFrame(sample); else host.dropSampling = false
       }
       requestAnimationFrame(sample)
-    }, id)
+    }, { id, reduced })
     await page.mouse.up(); await page.waitForFunction(() => !(window as Probe).dropSampling)
     const samples = await page.evaluate(() => (window as Probe).dropSamples!)
     await writeFile('.local/diagnostics/corrections-alpha13/latest-flight.json', JSON.stringify(samples, null, 2))

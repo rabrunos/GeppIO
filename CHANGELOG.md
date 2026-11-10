@@ -2,6 +2,13 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.30] — 2026-11-10
+
+- Extend compatible Normal tab groups to Sidebar Home/custom bars and Bottom with regional aggregate minima, stable content identities and ordinary placement.
+- Partition group transfers by destination eligibility in one atomic layout intention. Preview moving/staying counts, retain relative order and active tabs, select compatible frame hosts, and refuse illegal partitions or insufficient room.
+- Preserve regional groups through history, restart and included Bottom compositions. Keep Sidebar composition scope width-only and older Main group snapshots readable without startup writes.
+- Synchronize native drop/composition probes with settled host tracks and the observed flight/reveal lifecycle, retaining strict capture, duration and geometry assertions; retain bounded activation and presentation diagnostics.
+
 ## [0.1.0-alpha.29] — 2026-11-10
 
 - Extend shared alignment to active individual resize edges and corners, holding opposite edges fixed. Add policy-clearance spacing candidates on both axes, including diagonally separated widgets, with distinguishable measured gap guides.

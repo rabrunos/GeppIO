@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { portugueseFixture, settle, beginEdit } from './freeform-smoke.ts'
 const profile = await mkdtemp(join(tmpdir(), 'geppio-smoke-groups-')), scale = process.argv.includes('--scale125') ? 1.25 : 1
-const diagnostics = `.local/diagnostics/groups-alpha28-${scale}`; await mkdir(diagnostics, { recursive: true })
+const diagnostics = `.local/diagnostics/groups-alpha30-${scale}`; await mkdir(diagnostics, { recursive: true })
 const env: Record<string, string> = Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined))
 delete env.ELECTRON_RUN_AS_NODE; delete env.NODE_OPTIONS; delete env.ELECTRON_RENDERER_URL; delete env.GEPPIO_TEST_DEMO_WIDGETS
 env.GEPPIO_TEST_USER_DATA = profile; env.NODE_ENV = 'production'
@@ -45,13 +45,37 @@ async function compare() {
   await group().getByRole('tab', { name: 'Checklist', exact: true }).click(); assert.equal(await widget('checklist').getByRole('checkbox', { name: 'Conferir grupo', exact: true }).isChecked(), true)
   await group().getByRole('tab', { name: 'Prompts salvos', exact: true }).click(); assert.equal(await widget('prompts').getByRole('textbox', { name: 'Texto do prompt', exact: true }).inputValue(), 'Prompt literal <b>sem HTML</b>')
 }
+async function transfer(region: 'main' | 'sidebar' | 'bottom', cancel = false) {
+  await page.bringToFront()
+  const before = await titles(), identity = await group().getAttribute('data-widget-id')
+  await group().hover({ position: { x: 15, y: 15 } })
+  const handle = group().locator('.widget-grip'); await handle.hover(); const start = await handle.boundingBox(); assert.ok(start)
+  const port = await page.locator(`[data-region="${region}"]`).boundingBox(); assert.ok(port)
+  const end = { x: region === 'sidebar' ? port.x + port.width - 45 : port.x + port.width - 80, y: port.y + port.height / 2 }
+  await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2); await page.mouse.down()
+  assert.equal(await handle.evaluate(node => node.hasPointerCapture(1)), true)
+  await page.mouse.move(end.x, end.y, { steps: 18 })
+  const preview = page.locator('[data-group-transfer-going]'); await preview.waitFor()
+  assert.equal(await preview.getAttribute('data-group-transfer-going'), '3'); assert.equal(await preview.getAttribute('data-group-transfer-staying'), '0'); assert.equal(await preview.getAttribute('data-group-transfer-allowed'), 'true')
+  if (cancel) await page.keyboard.press('Escape')
+  await page.mouse.up(); await settle(page); assert.equal(await preview.count(), 0)
+  if (!cancel) assert.equal(await group().getAttribute('data-owner-region'), region)
+  assert.equal(await group().getAttribute('data-widget-id'), identity); assert.deepEqual(await titles(), before)
+}
+async function compactCompare() {
+  await group().getByRole('tab', { name: 'Anotações', exact: true }).click(); await widget('notes').getByText('Conteúdo real preservado nas abas á', { exact: true }).waitFor()
+  await group().getByRole('tab', { name: 'Checklist', exact: true }).click(); assert.equal(await widget('checklist').getByRole('checkbox', { name: 'Conferir grupo', exact: true }).isChecked(), true)
+  await group().getByRole('tab', { name: 'Prompts salvos', exact: true }).click(); await widget('prompts').getByText('Prompt literal <b>sem HTML</b>', { exact: true }).waitFor()
+}
 try {
   await launch()
   await page.getByRole('button', { name: 'Plugins', exact: true }).click(); const manager = page.getByRole('dialog', { name: 'Plugins', exact: true })
   for (const name of ['workspace-essentials', 'time-tracker']) {
     await app!.evaluate(({ dialog }, path) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }) }, resolve('.local/plugin-packages/' + name))
     await manager.getByRole('button', { name: 'Instalar pasta local', exact: true }).click(); await manager.locator(`[data-plugin="geppio.${name}"]`).getByRole('switch').click()
-    await page.waitForFunction(id => document.querySelector(`[data-plugin="${id}"]`)?.getAttribute('data-status') === 'active', 'geppio.' + name)
+    const card = manager.locator(`[data-plugin="geppio.${name}"]`)
+    await page.waitForFunction(id => ['active', 'error'].includes(document.querySelector(`[data-plugin="${id}"]`)?.getAttribute('data-status') ?? ''), 'geppio.' + name)
+    assert.equal(await card.getAttribute('data-status'), 'active', 'Real plugin activation: ' + await card.innerText())
   }
   await manager.getByRole('button', { name: 'Fechar', exact: true }).click(); await page.getByTestId('edit-layout').click(); await settle(page)
   for (const [plugin, name, region] of [['workspace-essentials', 'notes', 'main'], ['workspace-essentials', 'checklist', 'main'], ['workspace-essentials', 'prompts', 'main'], ['time-tracker', 'timer', 'sidebar'], ['time-tracker', 'reports', 'bottom']]) {
@@ -122,7 +146,35 @@ try {
   await conclude(); await compare(); const saved = JSON.parse((await raw())!)
   await page.screenshot({ path: diagnostics + '/restored-light.png' }); await app!.close(); app = undefined; await launch(); await compare()
   const reopened = JSON.parse((await raw())!); assert.deepEqual(reopened.layout, saved.layout); assert.deepEqual(reopened.organization.groups.entries.map((g: { frameId: string; members: string[] }) => ({ frameId: g.frameId, members: g.members })), membership)
-  assert.equal(await page.locator('[data-plugin-widget="geppio.time-tracker:timer"]').getByRole('button', { name: 'Iniciar', exact: true }).count(), 1); assert.deepEqual(errors, [])
-  console.log(`PASS groups: real align/group/cancel/undo/redo/reorder/detach, checkpoint/composition, stable member DOM/Workers/content, maximized tabs and peer regions, older layout and process restart; automated DPR ${scale}`)
-} catch (error) { if (app) { console.error('Group UI', await page.locator('.workspace-feedback').allTextContents()); await page.screenshot({ path: diagnostics + '/failure.png' }).catch(() => {}) }; throw error }
+  assert.equal(await page.locator('[data-plugin-widget="geppio.time-tracker:timer"]').getByRole('button', { name: 'Iniciar', exact: true }).count(), 1)
+  await beginEdit(page)
+  await page.getByRole('button', { name: 'Nova barra', exact: true }).click()
+  const barDialog = page.getByRole('dialog', { name: 'Nova barra', exact: true }); await barDialog.getByRole('textbox', { name: 'Nome', exact: true }).fill('Abas regionais')
+  await barDialog.getByRole('button', { name: 'Criar barra', exact: true }).click(); await barDialog.waitFor({ state: 'detached' }); await settle(page)
+  const custom = page.locator('[data-sidebar-custom]').filter({ hasText: '' }).last(), customId = await custom.getAttribute('data-bar-id'); assert.ok(customId)
+  await custom.click(); await settle(page)
+  const regionalWorkers = page.workers(), stableViews = JSON.parse((await raw())!).organization.views
+  await transfer('sidebar', true); assert.equal(await group().getAttribute('data-owner-region'), 'main')
+  await transfer('sidebar'); await undo(); assert.equal(await group().getAttribute('data-owner-region'), 'main'); await redo(); assert.equal(await group().getAttribute('data-owner-region'), 'sidebar'); await compare()
+  await group().getByRole('tab', { name: 'Prompts salvos', exact: true }).click(); await group().getByRole('button', { name: 'Separar aba Prompts salvos', exact: true }).click(); await settle(page)
+  assert.equal(await frame('prompts').getAttribute('data-owner-region'), 'sidebar'); await groupDrag('prompts', 'notes'); await compare()
+  await transfer('bottom'); await compactCompare()
+  await group().getByRole('button', { name: 'Separar aba Prompts salvos', exact: true }).click(); await settle(page); assert.equal(await frame('prompts').getAttribute('data-owner-region'), 'bottom')
+  await groupDrag('prompts', 'notes'); await compactCompare()
+  await page.getByTestId('save-layout').click(); await settle(page)
+  // Bottom-only composition preserves the unrelated Sidebar Home timer.
+  await page.locator('.widget-catalog-toggle').click(); await settle(page); await page.getByRole('tab', { name: 'Composições', exact: true }).click(); await page.getByRole('button', { name: 'Salvar atual', exact: true }).click()
+  const regionalSave = page.getByRole('dialog', { name: 'Salvar nova composição', exact: true }); await regionalSave.waitFor(); await regionalSave.getByRole('textbox', { name: 'Nome', exact: true }).fill('Abas Bottom')
+  await regionalSave.getByRole('checkbox', { name: 'Área principal', exact: true }).uncheck()
+  await regionalSave.getByRole('button', { name: 'Salvar composição', exact: true }).click(); await regionalSave.waitFor({ state: 'detached' })
+  await page.getByRole('tab', { name: 'Composições Salvas', exact: true }).click(); const bottomCard = page.locator('[data-composition-id^="composition:"]').filter({ hasText: 'Abas Bottom' }); await bottomCard.hover(); await bottomCard.getByRole('button', { name: 'Restaurar widgets de Abas Bottom', exact: true }).click(); await settle(page); await compactCompare()
+  await page.locator('[data-bar-id="home"]').click(); await settle(page)
+  await transfer('sidebar'); await compare(); await transfer('main'); await compare()
+  assert.deepEqual(page.workers(), regionalWorkers)
+  await conclude(); const regionalSaved = JSON.parse((await raw())!); assert.deepEqual(regionalSaved.organization.views, stableViews)
+  assert.deepEqual(regionalSaved.organization.bars.find((b: { id: string }) => b.id === customId).members, [])
+  await app!.close(); app = undefined; await launch(); await compare(); const regionalReopened = JSON.parse((await raw())!)
+  assert.deepEqual(regionalReopened.layout, regionalSaved.layout); assert.deepEqual(regionalReopened.organization.groups, regionalSaved.organization.groups); assert.deepEqual(regionalReopened.organization.bars, regionalSaved.organization.bars); assert.deepEqual(errors, [])
+  console.log(`PASS groups: real align/group/cancel/undo/redo/reorder/detach, regional count preview/transfers/Home/custom/Bottom composition, stable member DOM/Workers/content, maximized tabs and peer regions, older layout and process restart; automated DPR ${scale}`)
+} catch (error) { if (app) { console.error('Group UI', { feedback: await page.locator('.workspace-feedback').allTextContents(), plugins: await page.locator('[data-plugin][data-status]').allTextContents(), errors }); await page.screenshot({ path: diagnostics + '/failure.png' }).catch(() => {}) }; throw error }
 finally { await app?.close(); assert.equal(dirname(resolve(profile)), resolve(tmpdir())); await rm(profile, { recursive: true, force: true }) }

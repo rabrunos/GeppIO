@@ -62,7 +62,7 @@ export function captureComposition(snapshot: WorkbenchSnapshot, name: string, mo
   return { id: `composition:${crypto.randomUUID()}`, name, system: false, scopes, reference: structuredClone(snapshot.reference), mode,
     placements: mode === 'format-widgets' ? structuredClone(placements) : [],
     views: mode === 'format-widgets' ? snapshot.organization.views.filter(view => surfacePlacements(snapshot).some(p => p.id === view.id && scopes.includes(p.region))) : [],
-    ...(mode === 'format-widgets' && scopes.includes('main') && snapshot.organization.groups ? { groups: structuredClone(snapshot.organization.groups) } : {}),
+    ...(mode === 'format-widgets' && snapshot.organization.groups ? { groups: { version: 1 as const, entries: structuredClone(snapshot.organization.groups.entries.filter(group => placements.some(p => p.id === group.frameId))) } } : {}),
     format: format.map((p, i) => ({ id: `format:${i}`, region: p.region, x: p.x, y: p.y, width: p.width, height: p.height })), ...(chrome ? { chrome } : {}) }
 }
 export function favoriteComposition(source: WorkbenchSnapshot, id: string, favorite: boolean, makeDefault = false, replace?: string): WorkbenchSnapshot | null {
@@ -100,7 +100,9 @@ export function applyComposition(source: WorkbenchSnapshot, registry: Registry, 
   const next = compositionChrome(structuredClone(source), composition)
   if (mode === 'widgets') {
     if (composition.mode !== 'format-widgets') return null
-    if (composition.scopes.includes('main')) { if (composition.groups) next.organization.groups = structuredClone(composition.groups); else delete next.organization.groups }
+    const preserved = next.organization.groups?.entries.filter(group => source.placements.some(p => p.id === group.frameId && !composition.scopes.includes(p.region))) ?? []
+    const entries = [...preserved, ...structuredClone(composition.groups?.entries ?? [])]
+    if (entries.length || next.organization.groups || composition.groups) next.organization.groups = { version: 1, entries }
     for (const view of composition.views) {
       if (!registry.has(view.typeId)) return null
       const existing = next.organization.views.find(item => item.id === view.id)
@@ -112,7 +114,8 @@ export function applyComposition(source: WorkbenchSnapshot, registry: Registry, 
     // Saved associations cannot evict an independent/unique presence from an
     // omitted region, even when its view identity differs from the saved one.
     for (const view of composition.views) {
-      const region = composition.placements.find(p => p.id === view.id)?.region ?? (composition.groups?.entries.some(group => group.members.includes(view.id)) ? 'main' : null)
+      const group = composition.groups?.entries.find(group => group.members.includes(view.id))
+      const region = composition.placements.find(p => p.id === (group?.frameId ?? view.id))?.region
       const type = registry.get(view.typeId)!
       if (!region || surfacePlacements(source).some(p => !composition.scopes.includes(p.region) && source.organization.views.some(v => v.id === p.id && v.typeId === type.id)
         && (type.presence === 'single-view' || p.region === region))) return null

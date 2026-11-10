@@ -1,7 +1,9 @@
 import { validLayout } from '../freeform/geometry.ts'
-import { constraintsFor, POLICY } from '../freeform/policy.ts'
-import { addWidget } from './commands.ts'
-import { constraintsForViews, groupFor, groupConstraint } from './model.ts'
+import { constraintInRegion, constraintsFor, POLICY } from '../freeform/policy.ts'
+import { REGIONS } from '../freeform/types.ts'
+import type { Region, Surface } from '../freeform/types.ts'
+import { addWidget, moveFrame, reconcileBarHeights } from './commands.ts'
+import { activePlacements, constraintsForViews, groupFor, groupConstraint, removeGroupedPresence, frameTypes } from './model.ts'
 import type { Registry, View, WidgetGroup, WidgetGroups, WorkbenchSnapshot } from './model.ts'
 import { presentationFor } from './presentations.ts'
 
@@ -12,11 +14,12 @@ export function groupPlan(source: WorkbenchSnapshot, registry: Registry, moving:
   if (from === frameId) return null
   const a = source.placements.find(p => p.id === from), b = source.placements.find(p => p.id === frameId)
   const host = source.organization.views.find(view => view.id === frameId)
-  if (!a || !b || a.region !== 'main' || b.region !== 'main' || !host || !registry.get(host.typeId)?.tabHost) return null
+  if (!a || !b || a.region !== b.region || !host || !registry.get(host.typeId)?.tabHost) return null
   const members = [...(receiver?.members ?? [frameId]), ...(origin?.members ?? [from])]
   const views = members.map(id => source.organization.views.find(view => view.id === id))
   if (views.some(view => !view || !registry.get(view.typeId)?.tabMember || presentationFor(source, view.id, registry).presentation !== 'normal') || new Set(views.map(view => view!.typeId)).size !== members.length) return null
-  const constraint = groupConstraint(views as View[], registry)
+  if (a.region === 'sidebar' && members.some(id => source.organization.bars.some(bar => bar.id !== source.organization.activeBar && bar.members.includes(source.organization.views.find(view => view.id === id)!.typeId)))) return null
+  const constraint = constraintInRegion(groupConstraint(views as View[], registry), b.region)
   const fits = b.width >= constraint.min.width && b.height >= constraint.min.height && b.width <= constraint.max.width && b.height <= constraint.max.height
   return { origin, receiver, from, frameId, members, fits }
 }
@@ -24,10 +27,11 @@ export function groupWidgets(source: WorkbenchSnapshot, registry: Registry, movi
   const plan = groupPlan(source, registry, moving, target)
   if (!plan?.fits) return null
   const next = structuredClone(source)
-  const entry: WidgetGroup = { id: plan.receiver?.id ?? plan.origin?.id ?? `group:${crypto.randomUUID()}`, frameId: plan.frameId, members: plan.members, active: moving }
+  const entry: WidgetGroup = { id: plan.receiver?.id ?? plan.origin?.id ?? `group:${crypto.randomUUID()}`, frameId: plan.frameId, members: plan.members, active: plan.origin?.active ?? moving }
   next.organization.groups = { version: 1, entries: [...(next.organization.groups?.entries ?? []).filter(group => group.id !== plan.origin?.id && group.id !== plan.receiver?.id), entry] }
   next.placements = next.placements.filter(p => p.id !== plan.from)
-  return validGroupScene(next, registry) ? next : null
+  const packed = reconcileBarHeights(next)
+  return packed && validGroupScene(packed, registry) ? packed : null
 }
 export function reorderGroup(source: WorkbenchSnapshot, groupId: string, member: string, delta: -1 | 1) {
   const next = structuredClone(source), group = next.organization.groups?.entries.find(group => group.id === groupId)
@@ -38,15 +42,62 @@ export function reorderGroup(source: WorkbenchSnapshot, groupId: string, member:
 }
 export function detachWidget(source: WorkbenchSnapshot, registry: Registry, id: string, expanded = false) {
   const group = groupFor(source, id); if (!group) return null
-  const next = structuredClone(source), members = group.members.filter(member => member !== id), frameId = group.frameId === id ? members[0]! : group.frameId
-  next.organization.groups = { version: 1, entries: next.organization.groups!.entries.flatMap(item => item.id !== group.id ? [item] : members.length < 2 ? [] : [{ ...item, frameId, members, active: members.includes(item.active) ? item.active : members[0]! }]) }
-  next.placements = next.placements.map(p => p.id === group.frameId ? { ...p, id: frameId } : p)
+  const region = source.placements.find(p => p.id === group.frameId)!.region
+  const next = removeGroupedPresence(source, id, registry)
+  if (next === source) return null
   const view = next.organization.views.find(view => view.id === id)!
-  const result = addWidget(next, registry, view.typeId, { ...source.reference.main, region: 'main', expanded })
+  const result = addWidget(next, registry, view.typeId, { ...source.reference[region], region, expanded: expanded && region === 'main' })
   return result && validGroupScene(result, registry) ? result : null
 }
 export function validGroupScene(source: WorkbenchSnapshot, registry: Registry) {
-  return validLayout(source.placements.filter(p => p.region === 'main'), { ...source.reference.main, region: 'main', expanded: true }, constraintsFor({ ...source.reference.main, region: 'main', expanded: true }, constraintsForViews(source, registry)))
+  const cs = constraintsForViews(source, registry)
+  return REGIONS.every(region => (region === 'sidebar' ? source.organization.bars.map(bar => ({ ...source, organization: { ...source.organization, activeBar: bar.id } })) : [source]).every(scene => {
+    const surface = { ...source.reference[region], region, expanded: region === 'main' }
+    return validLayout(activePlacements(scene).filter(p => p.region === region), surface, constraintsFor(surface, cs))
+  }))
+}
+/** This plan is also the renderer's preview. It contains identities, never a
+ * second geometry model or a permission transfer. */
+export function groupTransferPlan(source: WorkbenchSnapshot, registry: Registry, id: string, destination: Region) {
+  const group = groupFor(source, id), placement = source.placements.find(p => p.id === group?.frameId)
+  if (!group || !placement || group.frameId !== id) return null
+  const type = (member: string) => registry.get(source.organization.views.find(view => view.id === member)!.typeId)!
+  const going = group.members.filter(member => type(member).constraint.regions.includes(destination)), staying = group.members.filter(member => !going.includes(member))
+  const carrier = (members: string[]) => members.includes(group.frameId) && (members.length === 1 || type(group.frameId).tabHost) ? group.frameId : members.find(member => members.length === 1 || type(member).tabHost)
+  const destinationFrame = carrier(going), sourceFrame = carrier(staying)
+  const legal = (members: string[]) => members.length < 2 || members.every(member => type(member).tabMember) && !!carrier(members)
+  const sharedBar = placement.region === 'sidebar' && group.members.some(member => source.organization.bars.filter(bar => bar.members.includes(type(member).id)).length !== 1)
+  const reason = !going.length ? 'Nenhuma aba é compatível com o destino.' : !legal(going) || !legal(staying) ? 'Uma das partes não tem host compatível.' : sharedBar ? 'O grupo está associado a outra barra lateral.' : null
+  return { group, placement, going, staying, destinationFrame, sourceFrame, allowed: !reason, reason }
+}
+/** Build both partitions first, then place exactly one bounded destination frame
+ * through the existing command. Any failure discards this private snapshot. */
+export function transferGroup(source: WorkbenchSnapshot, registry: Registry, id: string, target: Surface, at?: { x: number; y: number }, sourceBar = source.organization.activeBar, disabled: ReadonlySet<string> = new Set()): WorkbenchSnapshot | null {
+  const plan = groupTransferPlan(source, registry, id, target.region)
+  if (!plan?.allowed || !plan.destinationFrame || plan.going.some(member => disabled.has(registry.get(source.organization.views.find(view => view.id === member)!.typeId)!.owner))) return null
+  const next = structuredClone(source), original = plan.placement
+  const entries = next.organization.groups!.entries.filter(group => group.id !== plan.group.id)
+  const partition = (members: string[], frameId: string, groupId: string) => {
+    if (members.length >= 2) entries.push({ id: groupId, frameId, members: [...members], active: members.includes(plan.group.active) ? plan.group.active : members[0]! })
+    return { ...original, id: frameId, preferred: { ...original.preferred } }
+  }
+  next.placements = next.placements.filter(p => p.id !== id)
+  if (plan.staying.length && plan.sourceFrame) next.placements.push(partition(plan.staying, plan.sourceFrame, plan.group.id))
+  next.placements.push(partition(plan.going, plan.destinationFrame, plan.staying.length >= 2 ? `group:${crypto.randomUUID()}` : plan.group.id))
+  next.organization.groups = { version: 1, entries }
+  if (original.region === 'sidebar') {
+    const origin = next.organization.bars.find(bar => bar.id === sourceBar)
+    if (!origin || !frameTypes(source, id).every(type => origin.members.includes(type))) return null
+    const types = new Set(frameTypes(source, id)), oldType = source.organization.views.find(view => view.id === id)!.typeId
+    const y = origin.positions?.[oldType] ?? original.y
+    origin.members = origin.members.filter(type => !types.has(type)); origin.positions ??= {}
+    for (const type of types) delete origin.positions[type]
+    if (plan.sourceFrame) { origin.members.push(...plan.staying.map(member => source.organization.views.find(view => view.id === member)!.typeId)); origin.positions[source.organization.views.find(view => view.id === plan.sourceFrame)!.typeId] = y }
+  }
+  const result = moveFrame(next, registry, plan.destinationFrame, target, at, sourceBar, undefined, disabled)
+  if (!result || !validGroupScene(result, registry)) return null
+  try { validateGroups(result, registry) } catch { return null }
+  return result
 }
 const object = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v)
 const exact = (v: Record<string, unknown>, keys: string[]) => Object.keys(v).length === keys.length && Object.keys(v).every(key => keys.includes(key))
@@ -68,10 +119,15 @@ export function validateGroups(source: WorkbenchSnapshot, registry: Registry) {
   for (const p of source.placements) occupied.add(source.organization.views.find(view => view.id === p.id)!.typeId)
   for (const group of groups) {
     const frame = source.placements.find(p => p.id === group.frameId)
-    if (!frame || frame.region !== 'main') throw new Error('Missing Main group frame')
+    if (!frame) throw new Error('Missing group frame')
+    if (frame.region === 'sidebar') {
+      const types = frameTypes(source, group.frameId), bars = source.organization.bars ?? []
+      const owners = bars.filter(bar => types.every(type => bar.members.includes(type)))
+      if (owners.length !== 1 || types.some(type => bars.filter(bar => bar.members.includes(type)).length !== 1)) throw new Error('Invalid group bar ownership')
+    }
     for (const id of group.members) {
       const view = source.organization.views.find(view => view.id === id)!
-      if (presentationFor(source, id, registry).presentation !== 'normal' || (id !== group.frameId && (source.placements.some(p => p.id === id) || occupied.has(view.typeId)))) throw new Error('Conflicting grouped presence')
+      if (!registry.get(view.typeId)!.constraint.regions.includes(frame.region) || presentationFor(source, id, registry).presentation !== 'normal' || (id !== group.frameId && (source.placements.some(p => p.id === id) || occupied.has(view.typeId)))) throw new Error('Conflicting grouped presence')
       occupied.add(view.typeId)
     }
   }

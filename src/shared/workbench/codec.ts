@@ -83,7 +83,9 @@ function parseDocument(value: unknown, views: View[], registry: Registry, bars?:
     used.add(key)
   }
   if (bars) for (const bar of bars) {
-    if (bar.members.some(typeId => !views.some(view => view.typeId === typeId && layout.placements.some(p => p.id === view.id && p.region === 'sidebar')))) throw new Error('Missing Sidebar membership view')
+    const present = (typeId: string) => views.some(view => view.typeId === typeId && layout.placements.some(p =>
+      p.region === 'sidebar' && (p.id === view.id || groups?.entries.some(group => group.frameId === p.id && group.members.includes(view.id)))))
+    if (bar.members.some(typeId => !present(typeId))) throw new Error('Missing Sidebar membership view')
     const sidebar = activePlacements({ ...layout, organization: { views, bars, activeBar: bar.id } } as WorkbenchSnapshot, false).filter(p => p.region === 'sidebar')
     if (sidebar.some((p, index) => p.y + p.height > POLICY.maxCoordinate || sidebar.slice(index + 1).some(q => collides(p, q)))) throw new Error('Invalid bar clearance')
   }
@@ -104,7 +106,7 @@ export function parseWorkbench(raw: string, registry: Registry): WorkbenchSnapsh
     if ((!scopes.length && !chrome?.sidebar && !chrome?.bottom) || scopes.some(region => !['main', 'bottom'].includes(region))) throw new Error('Invalid composition scopes')
     const savedGroups = parseGroups(item.groups, savedViews, registry)
     const saved = parseDocument({ ...layout, reference: item.reference, placements: item.placements }, savedViews, registry, undefined, undefined, savedGroups)
-    if (savedGroups?.entries.length && (item.mode === 'format' || !scopes.includes('main'))) throw new Error('Invalid scoped tab group')
+    if (savedGroups?.entries.length && (item.mode === 'format' || savedGroups.entries.some(group => !saved.placements.some(p => p.id === group.frameId && scopes.includes(p.region))))) throw new Error('Invalid scoped tab group')
     validateGroups({ ...saved, organization: { views: savedViews, groups: savedGroups } } as WorkbenchSnapshot, registry)
     if (saved.placements.some(p => !scopes.includes(p.region))) throw new Error('Invalid scoped placement')
     const format = unique(list(item.format, POLICY.maxWidgets).map(slot => {

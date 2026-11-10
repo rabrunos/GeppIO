@@ -18,6 +18,7 @@ import { useDragVisual } from '../workbench/DragLayer.tsx'
 import type { SlotIntention } from '../../../shared/workbench/slots.ts'
 import { panelIds } from '../../../shared/workbench/presentations.ts'
 import { alignedGesture } from '../../../shared/freeform/alignment.ts'
+import { groupTransferPlan } from '../../../shared/workbench/groups.ts'
 import type { AlignmentGuide, AlignmentLocks } from '../../../shared/freeform/alignment.ts'
 
 interface Gesture {
@@ -39,6 +40,7 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
   const [heldExtent, setHeldExtent] = useState<{ region: Region; width: number; height: number } | null>(null)
   const [catalogDrag, setCatalogDrag] = useState<{ typeId: string; targets: Region[]; over: Region | null } | null>(null)
   const [frameDrop, setFrameDrop] = useState<{ targets: Region[]; over: Region | null } | null>(null)
+  const [groupTransfer, setGroupTransfer] = useState<{ going: number; staying: number; region: Region; allowed: boolean; reason: string | null } | null>(null)
   const [sidebarInsert, setSidebarInsert] = useState<number | null>(null)
   const [alignmentGuides, setAlignmentGuides] = useState<AlignmentGuide[]>([])
   const frameTargets = useRef<Region[]>([])
@@ -61,6 +63,7 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
     setSidebarInsert(null)
     setAlignmentGuides([])
     setFrameDrop(null); frameTargets.current = []
+    setGroupTransfer(null)
     if (catalogGesture.current) {
       const entry = catalogGesture.current; catalogGesture.current = null; setCatalogDrag(null)
       suppressCatalogClick.current = entry.suppress
@@ -140,6 +143,8 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
     if (allowed) hit.element.setAttribute('data-drag-hover', '')
   }
   function destinationId(result: WorkbenchSnapshot, typeId: string, region: Region) {
+    const a = gesture.current, plan = a && groupTransferPlan(a.source, registry, a.id, region)
+    if (plan?.destinationFrame && result.placements.some(p => p.id === plan.destinationFrame && p.region === region)) return plan.destinationFrame
     return activePlacements(result).find(p => p.region === region && result.organization.views.some(v => v.id === p.id && v.typeId === typeId))?.id
   }
   function movementTargets(a: Gesture) {
@@ -148,7 +153,7 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
       || !!moveView(source, registry, a.id, surface(region), undefined, a.sourceBar)
       || tx.currentSlots().some(slot => slot.region === region && currentCatalog.current?.reservation(slot.id, { kind: 'move', viewId: a.id, sourceBar: a.sourceBar }, source, false))))
   }
-  function targetRegion(x: number, y: number, targets: Region[]) {
+  function targetRegion(x: number, y: number, targets: readonly Region[]) {
     return targets.find(region => {
       const element = surfaces.ports[region].current, rect = element?.getBoundingClientRect()
       const clip = region === 'sidebar' ? surfaces.scroller(region)?.getBoundingClientRect() : rect
@@ -168,6 +173,9 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
     } else if (gesture.current?.kind === 'move') {
       const targets = frameTargets.current; over = targetRegion(pointer.x, pointer.y, targets)
       setFrameDrop(previous => previous?.targets === targets && previous.over === over ? previous : { targets, over })
+      const region = targetRegion(pointer.x, pointer.y, REGIONS), plan = region && groupTransferPlan(gesture.current.source, registry, gesture.current.id, region)
+      const preview = plan && region ? { going: plan.going.length, staying: plan.staying.length, region, allowed: plan.allowed && targets.includes(region), reason: plan.reason ?? (targets.includes(region) ? null : 'Sem espaço para todas as abas elegíveis.') } : null
+      setGroupTransfer(previous => JSON.stringify(previous) === JSON.stringify(preview) ? previous : preview)
     }
     if (over !== 'sidebar' || slotHover.current) { setSidebarInsert(null); return false }
     const rect = surfaces.ports.sidebar.current?.getBoundingClientRect()
@@ -408,7 +416,7 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
   function finish(e: PointerEvent<HTMLElement>, cancel = false) {
     const a = gesture.current
     if (!a || a.pointer !== e.pointerId) return
-    if (!cancel && a.kind === 'move' && a.original.region === 'main' && visual.active()) {
+    if (!cancel && a.kind === 'move' && visual.active()) {
       const target = document.elementsFromPoint(e.clientX, e.clientY).map(node => node.closest<HTMLElement>('[data-group-target]')).find(Boolean)?.dataset.groupTarget
       if (target && currentCatalog.current?.group) {
         const result = currentCatalog.current.group(a.snapshot, a.id, target)
@@ -452,7 +460,9 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
           y: e.clientY - r.top + (region === 'sidebar' ? 0 : surfaces.ports[region].current?.scrollTop ?? 0) }, a.sourceBar) : null
         if (result) { tx.action(settleSnapshot(result)); tx.setMessage(`Widget transferido para ${REGION_LABELS[region]}. Salve ou cancele.`) }
         else { setBlocked(a.id); tx.setMessage('Transferência incompatível ou sem espaço. A composição anterior foi restaurada.') }
-        visual.release(!!result, result ? destinationId(result, a.source.organization.views.find(v => v.id === a.id)!.typeId, region) : undefined)
+        const plan = groupTransferPlan(a.source, registry, a.id, region)
+        if (!result && plan) tx.setMessage(plan.reason ?? 'Sem espaço para todas as abas elegíveis. Composição preservada.')
+        visual.release(!!result, result ? plan?.destinationFrame ?? destinationId(result, a.source.organization.views.find(v => v.id === a.id)!.typeId, region) : undefined)
         return
       }
     }
@@ -496,7 +506,7 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
       onPointerUp: (e: PointerEvent<HTMLElement>) => finish(e), onPointerCancel: (e: PointerEvent<HTMLElement>) => finish(e, true),
       onLostPointerCapture: (e: PointerEvent<HTMLElement>) => finish(e, true), onKeyDown: (e: KeyboardEvent<HTMLElement>) => keyboard(e, p, kind) }
   }
-    return { selected, setSelected, blocked, heldExtent, handlers, catalogHandlers, catalogDrag, frameDrop, sidebarInsert, alignmentGuides, alignmentRegion, gestureLabel, visual,
+    return { selected, setSelected, blocked, heldExtent, handlers, catalogHandlers, catalogDrag, frameDrop, groupTransfer, sidebarInsert, alignmentGuides, alignmentRegion, gestureLabel, visual,
     catalogSurfaceKey: REGIONS.map(region => `${surfaces.measures[region].width},${surfaces.measures[region].height}`).join(';') + expanded + JSON.stringify(tx.slots),
     canCatalogPlace: (typeId: string, region: Region) => !!currentCatalog.current?.available(typeId, region),
     activeId: gesture.current?.id ?? null,

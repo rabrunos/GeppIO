@@ -150,5 +150,11 @@ export const appMessages: Readonly<Record<string, string>> = {
   'Painéis com tamanho ou abertura temporários. Amplie a janela para restaurar as preferências.': 'Panels temporarily resized or collapsed. Enlarge the window to restore your preferences.',
   'Libere o local ou reduza o painel antes de voltar a Normal. Dados anteriores preservados.': 'Free this location or reduce the panel before returning to Normal. Previous data preserved.',
   'Borda de apresentação ocupada. Mova o outro painel antes de restaurar esta presença.': 'Presentation edge occupied. Move the other panel before restoring this view.',
-  'Apresentação incompatível ou borda ocupada. Dados anteriores preservados.': 'Incompatible presentation or occupied edge. Previous data preserved.'
+  'Apresentação incompatível ou borda ocupada. Dados anteriores preservados.': 'Incompatible presentation or occupied edge. Previous data preserved.',
+  '{0} abas vão; {1} ficam.': '{0} tabs move; {1} stay.',
+  'Nenhuma aba é compatível com o destino.': 'No tab is eligible for the destination.',
+  'Uma das partes não tem host compatível.': 'One partition has no compatible host.',
+  'O grupo está associado a outra barra lateral.': 'The group is associated with another sidebar bar.',
+  'Sem espaço para todas as abas elegíveis. Composição preservada.': 'Not enough room for all eligible tabs. Composition preserved.',
+  'Sem espaço para todas as abas elegíveis.': 'Not enough room for all eligible tabs.'
 }

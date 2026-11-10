@@ -597,6 +597,20 @@ part of `pnpm test:desktop`; pure eligibility/codec/minimum/atomic refusal and
 omitted-region composition cases live in `tests/workbench-groups.test.ts`.
 Neither automation scale establishes owner acceptance at physical display DPI.
 
+Alpha.30 extends the real-widget groups smoke to regional transfers, preview counts,
+Sidebar Home/custom ownership, Bottom compact bodies and composition recovery.
+`tests/workbench-regional-groups.test.ts` uses five controlled declarations only in
+pure tests for 3/2, 4/1, 1/4, all/none eligible, carrier promotion, hostless subsets,
+room refusal, reverse transfers and old-snapshot reads without writes. Real plugin
+eligibility is unchanged; these synthetic partition cases are not five real native
+widgets. The renderer consumes the same partition plan for its count preview.
+
+Drop-flight sampling follows the actual flight and visible live-frame reveal.
+The bounded deadline is a failure ceiling, not a fixed sample duration: native
+pointer-up/transaction delivery can precede the existing 240ms flight by enough
+time to outlast a 420ms wall-clock sample. Duration, easing, convergence, final
+geometry, clipping and no-competing-animation assertions remain unchanged.
+
 The presentation smoke records native pointer/focus targets with its per-frame
 Sidebar measurements. Its compact-strip sample first moves outside the preceding
 overlap probe and waits for the actual compact panels. Alpha.27 CI observed a

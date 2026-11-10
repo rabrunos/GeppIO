@@ -20,7 +20,7 @@ test('group eligibility is explicit; create/extend retain identities and one bou
   assert.deepEqual(grouped.organization.views, source.organization.views); assert.equal(grouped.placements.length, 2)
   assert.equal(surfacePlacements(grouped).length, 4); assert.equal(constraintsForViews(grouped, registry)[notes]!.min.height, 144)
   assert.deepEqual(groupFor(grouped, notes)!.members, [notes, checklist, prompts]); assert.equal(maximizableSurface(grouped, registry, notes), true)
-  assert.equal(moveView(grouped, registry, notes, { region: 'sidebar', width: 250, height: 900, expanded: false }), null)
+  assert.equal(moveView(grouped, registry, notes, { region: 'sidebar', width: 250, height: 900, expanded: false })!.placements.find(p => p.id === notes)!.region, 'sidebar')
   assert.equal(addWidget(grouped, registry, 'plugin:geppio.workspace-essentials:checklist', main), null)
   assert.deepEqual(source, before)
 })

@@ -143,7 +143,7 @@ function CompositionLibrary({ tx, registry, view, hidden }: { tx: Transaction; r
     const remainingSource = tx.formatSource?.placements.filter(p => !item.scopes.includes(p.region)) ?? []
     const retainedSource = remainingSource.length ? { placements: remainingSource, reference: structuredClone(tx.formatSource!.reference) } : null
     if (requested === 'format' && tx.formatMode === 'format' && tx.formatId === item.id && view.placements.some(p => item.scopes.includes(p.region))) {
-      if (item.scopes.includes('main') && view.organization.groups?.entries.length) { tx.setMessage(t('Separe as abas antes de converter grupos em espaços reservados.')); return }
+      if (view.organization.groups?.entries.some(group => view.placements.some(p => p.id === group.frameId && item.scopes.includes(p.region)))) { tx.setMessage(t('Separe as abas antes de converter grupos em espaços reservados.')); return }
       const next = { ...compositionChrome(scene, item), placements: scene.placements.filter(p => !item.scopes.includes(p.region)) }
       tx.action(next, [...tx.slots.filter(slot => !item.scopes.includes(slot.region)), ...compositionSlots(item, next)], item.id, {
         placements: [...remainingSource, ...view.placements.filter(p => item.scopes.includes(p.region))],

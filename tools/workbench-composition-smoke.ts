@@ -38,6 +38,7 @@ export async function workbenchCompositionSmoke(page: Page, reset: (snapshot?: W
     assert.equal(await dialog.locator('.thumbnail-bottom').count() > 0, bottom)
     const expected = (await geometry()).filter(p => p.region === 'main' ? main : p.region === 'bottom' && bottom)
     await dialog.getByRole('button', { name: 'Salvar composição', exact: true }).click(); await dialog.waitFor({ state: 'detached' })
+    await settle(page)
     const item = (await stored()).organization.compositions.at(-1)!
     assert.deepEqual(item.placements.map(({ id, region, x, y, width, height }) => ({ id, region, x, y, width, height })).sort((a, b) => a.id.localeCompare(b.id)), expected.sort((a, b) => a.id.localeCompare(b.id)))
     return item
