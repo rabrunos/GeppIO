@@ -2,6 +2,11 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.25] — 2026-11-09
+
+- Add an independently installable trusted-local Time Tracker with one timestamp-based timer and a shared local report of daily totals and paginated sessions. Explicit placement supports Main, Sidebar and Bottom; compact summaries retain start/pause controls.
+- Persist running start and stable completed interval identities through existing revisioned API 2 data. Reconcile lost acknowledgements on retry without duplicating intervals or replacing divergent/corrupt data; retain activation-local pending changes on failure.
+
 ## [0.1.0-alpha.24] — 2026-11-09
 
 - Enable existing Workspace Essentials notes, checklist and saved prompts in Bottom through host placement policy, with compact selection/read-only text previews and checklist toggles at the useful 105px minimum. Keep full editors in Main/Sidebar and scratch Main-only.

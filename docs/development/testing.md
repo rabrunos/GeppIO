@@ -53,6 +53,21 @@ Evidence and remaining decisions belong in the live Issues, not a tracked last-r
 
 ## Layers
 
+`pnpm test:time-tracker` is the focused disposable-profile Windows check, also in
+`pnpm test:desktop`. Build packages/application first. It installs both real
+packages and checks eligible type counts Main/Sidebar/Bottom = 6/5/5, explicit
+placement, both tracker views in every region, shared Workers, visibility changes,
+restart while running, native save failure/retry with one stable interval,
+totals/history and corrupt-data recovery. Core tests cover timestamp rollback,
+local midnight splitting, duplicate pause/start and lost-acknowledgement retry.
+
+Mouse walkthrough: Plugins → Instalar pasta local → generated `time-tracker`
+folder → Ativar. Enter Edit and choose Cronômetro and Relatórios de tempo, then
+their desired region; Conclude. Click Iniciar, hide/reopen a region or restart the
+app, then Pausar and wait for Salvo. Read daily totals/sessions in Principal;
+Lateral/Inferior show summaries. A failed save keeps a retry action and confirmed
+history. This is local ordinary data, not an account or a background OS service.
+
 Archived-bar pointer restore in `tools/workbench-organization-smoke.ts` waits for
 the filtered library grip's actionability before sampling coordinates. Filtering
 can change popup height and reanchor it on the ResizeObserver frame. The smoke

@@ -98,6 +98,11 @@ then place each selected widget explicitly in Main or, for notes/checklist/promp
 Sidebar or Bottom. Bottom provides compact reading/selection and checklist toggles;
 create/edit text in Main or Sidebar. Existing installations need no reinstall.
 Scratch stays Main-only. `pnpm test:essentials` and `pnpm test:sidebar` use disposable profiles.
+Time Tracker is independently built into `.local/plugin-packages/time-tracker`.
+Install/activate it through the same manager and explicitly place Cronômetro and
+Relatórios de tempo in any region. `pnpm test:time-tracker` exercises the real
+package in a disposable profile. Count continues from the persisted start until
+Pausar; no process must stay running while the app is closed. Wait for Salvo.
 The plugin SDK exposes no filesystem,
 process, PTY, remote-network, secret or cross-plugin authority. Workers share origin/storage authority;
 they are not an untrusted community sandbox. See [plugin boundaries](../architecture/plugins.md).

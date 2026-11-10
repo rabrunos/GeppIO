@@ -17,6 +17,23 @@ is single-view. Shared Sidebar membership still prevents a move that would stran
 
 ## Author and renderer boundary
 
+Time Tracker (alpha.25) is a separate installable API 2 package, not a core import.
+Its timer and reports share one version-1 document with a nullable running
+`{id,start}` and up to 200 completed `{id,start,end}` intervals. Start is confirmed
+before normal counting controls resume. Pause captures its end once; retry keeps
+that interval ID and timestamp. On a write error the pending operation stays in
+the activation. Retry reads the current document: an identical desired document
+settles a lost acknowledgement, the unchanged confirmed document permits a CAS
+write, and divergent/corrupt data is preserved. Closing before a successful retry
+discards the pending operation, keeping the last confirmed running/history state.
+
+Elapsed time is computed from timestamps, with rollback clamped to zero. No
+process needs to remain alive while the app is closed. Counting ends at Pausar;
+wait for Salvo before exiting. Reports show seven local calendar-day totals and
+all completed sessions in pages of twelve; compact Sidebar/Bottom show summaries.
+The 200-session pilot limit preserves history and stops offering new sessions.
+Existing installation retention/recovery and ordinary-data trust limits apply.
+
 `schemaVersion:1, apiVersion:2` opts in using the existing manifest keys/widget declarations.
 `sdk/plugin.d.ts` and the exact API 1 text/action validator remain unchanged. API 2 uses
 `sdk/plugin-v2.d.ts`: literal status text, at most eight text fields, four lists (100 items each),

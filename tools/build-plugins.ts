@@ -16,7 +16,7 @@ for (const name of (await readdir('examples/plugins')).sort()) {
   const program = ts.createProgram(ts.sys.readDirectory(source, ['.ts']), {
     target: ts.ScriptTarget.ES2023, module: ts.ModuleKind.ESNext, moduleResolution: ts.ModuleResolutionKind.Bundler,
     strict: true, noUnusedLocals: true, noUnusedParameters: true, noEmitOnError: true,
-    skipLibCheck: true, types: [], lib: ['lib.es2023.d.ts', 'lib.dom.d.ts'], rootDir: source, outDir: destination
+    skipLibCheck: true, types: [], lib: ['lib.es2023.d.ts', 'lib.dom.d.ts'], rootDir: source, outDir: destination, rewriteRelativeImportExtensions: true
   })
   const diagnostics = ts.getPreEmitDiagnostics(program)
   if (diagnostics.length) throw new Error(ts.formatDiagnosticsWithColorAndContext(diagnostics, { getCanonicalFileName: path => path, getCurrentDirectory: () => process.cwd(), getNewLine: () => '\n' }))
