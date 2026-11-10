@@ -2,6 +2,11 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.33] — 2026-11-10
+
+- Synchronize the native group smoke with actual selected-tab state before reading inert content or comparing persisted groups after restart.
+- Exercise pending preference writes under a controlled Web Lock; preserve exact active-tab, identity, order and restart assertions without changing runtime behavior.
+
 ## [0.1.0-alpha.32] — 2026-11-10
 
 - Keep every widget body visible and mounted but inert to mouse/keyboard input throughout Edit layout, including full/compact plugin surfaces, host fixtures and grouped members in all regions.

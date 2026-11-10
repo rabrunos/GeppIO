@@ -615,7 +615,12 @@ Physical mouse/motion and display-DPI owner acceptance remain separate.
 
 `pnpm test:groups` (`node --experimental-strip-types tools/groups-smoke.ts`) checks
 real installed Essentials members and peer Time Tracker widgets in a disposable
-Windows profile. It exercises mouse align/group, cancel/history, tab reorder and
+Windows profile. Tab helpers wait for actual `aria-selected` state before reading
+inert content: an `includeHidden` read alone does not acknowledge a preference
+write. A controlled Web Lock proves that hidden text is already readable while
+the previous tab remains selected, then verifies the confirmed selection after
+release. Exact restart membership, order and active-tab comparisons remain intact.
+It exercises mouse align/group, cancel/history, tab reorder and
 detach, checkpoint/composition recovery, old-envelope load, stable DOM/Workers,
 shared-frame maximize, both themes and full process restart. Use
 `pnpm test:groups --scale125` for automated DPR 1.25. The default scenario is also

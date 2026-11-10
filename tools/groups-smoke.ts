@@ -40,10 +40,35 @@ async function groupDrag(source: string, destination: string, cancel = false, al
   if (cancel) await page.keyboard.press('Escape')
   await page.mouse.up(); await settle(page); assert.equal(await page.locator('.group-drag-hint,[data-group-target]').count(), 0)
 }
+async function selected(title: string) {
+  const tab = group().getByRole('tab', { name: title, exact: true }), id = await tab.getAttribute('id'); assert.ok(id)
+  await page.waitForFunction(id => document.getElementById(id)?.getAttribute('aria-selected') === 'true', id)
+}
+async function selectTab(title: string) { await group().getByRole('tab', { name: title, exact: true }).click(); await selected(title) }
 async function compare() {
-  await group().getByRole('tab', { name: 'Anotações', exact: true }).click(); assert.equal(await widget('notes').getByRole('textbox', { name: 'Texto da anotação', exact: true, includeHidden: true }).inputValue(), 'Conteúdo real preservado nas abas á')
-  await group().getByRole('tab', { name: 'Checklist', exact: true }).click(); assert.equal(await widget('checklist').getByRole('checkbox', { name: 'Conferir grupo', exact: true, includeHidden: true }).isChecked(), true)
-  await group().getByRole('tab', { name: 'Prompts salvos', exact: true }).click(); assert.equal(await widget('prompts').getByRole('textbox', { name: 'Texto do prompt', exact: true, includeHidden: true }).inputValue(), 'Prompt literal <b>sem HTML</b>')
+  await selectTab('Anotações'); assert.equal(await widget('notes').getByRole('textbox', { name: 'Texto da anotação', exact: true, includeHidden: true }).inputValue(), 'Conteúdo real preservado nas abas á')
+  await selectTab('Checklist'); assert.equal(await widget('checklist').getByRole('checkbox', { name: 'Conferir grupo', exact: true, includeHidden: true }).isChecked(), true)
+  await selectTab('Prompts salvos'); assert.equal(await widget('prompts').getByRole('textbox', { name: 'Texto do prompt', exact: true, includeHidden: true }).inputValue(), 'Prompt literal <b>sem HTML</b>')
+}
+async function pendingSelectionProbe() {
+  await selectTab('Checklist'); const before = await raw()
+  await page.evaluate(() => new Promise<void>(acquired => {
+    void navigator.locks.request('geppio:workbench:v1', async () => {
+      acquired(); await new Promise<void>(release => { Reflect.set(window, 'releaseGroupSaveProbe', release) })
+    })
+  }))
+  try {
+    await group().getByRole('tab', { name: 'Anotações', exact: true }).click()
+    // The old includeHidden read succeeds before this pending native selection
+    // has committed. It is content evidence, never a selection acknowledgement.
+    assert.equal(await widget('prompts').getByRole('textbox', { name: 'Texto do prompt', exact: true, includeHidden: true }).inputValue(), 'Prompt literal <b>sem HTML</b>')
+    assert.equal(await group().getByRole('tab', { name: 'Checklist', exact: true }).getAttribute('aria-selected'), 'true')
+    assert.equal(await raw(), before)
+  } finally { await page.evaluate(() => { Reflect.get(window, 'releaseGroupSaveProbe')(); Reflect.deleteProperty(window, 'releaseGroupSaveProbe') }) }
+  await selected('Anotações')
+  const confirmed = JSON.parse((await raw())!); assert.equal(confirmed.organization.groups.entries[0].active, await frame('notes').getAttribute('data-widget-id'))
+  await selectTab('Prompts salvos')
+  console.log('PASS group selection synchronization: hidden content precedes a held preference write; native selected state and saved active ID agree after release')
 }
 async function transfer(region: 'main' | 'sidebar' | 'bottom', cancel = false) {
   await page.bringToFront()
@@ -63,9 +88,9 @@ async function transfer(region: 'main' | 'sidebar' | 'bottom', cancel = false) {
   assert.equal(await group().getAttribute('data-widget-id'), identity); assert.deepEqual(await titles(), before)
 }
 async function compactCompare() {
-  await group().getByRole('tab', { name: 'Anotações', exact: true }).click(); await widget('notes').getByText('Conteúdo real preservado nas abas á', { exact: true }).waitFor()
-  await group().getByRole('tab', { name: 'Checklist', exact: true }).click(); assert.equal(await widget('checklist').getByRole('checkbox', { name: 'Conferir grupo', exact: true, includeHidden: true }).isChecked(), true)
-  await group().getByRole('tab', { name: 'Prompts salvos', exact: true }).click(); await widget('prompts').getByText('Prompt literal <b>sem HTML</b>', { exact: true }).waitFor()
+  await selectTab('Anotações'); await widget('notes').getByText('Conteúdo real preservado nas abas á', { exact: true }).waitFor()
+  await selectTab('Checklist'); assert.equal(await widget('checklist').getByRole('checkbox', { name: 'Conferir grupo', exact: true, includeHidden: true }).isChecked(), true)
+  await selectTab('Prompts salvos'); await widget('prompts').getByText('Prompt literal <b>sem HTML</b>', { exact: true }).waitFor()
 }
 try {
   await launch()
@@ -125,13 +150,15 @@ try {
   await group().getByRole('button', { name: 'Mover aba para a direita', exact: true }).click(); await page.getByTestId('cancel-layout').click(); await settle(page); assert.deepEqual(await titles(), ['Prompts salvos', 'Anotações', 'Checklist'])
   await compare()
   const selectedTab = group().getByRole('tab', { name: 'Prompts salvos', exact: true }); await selectedTab.focus(); await page.keyboard.press('ArrowLeft')
+  await selected('Checklist')
   assert.equal(await group().getByRole('tab', { name: 'Checklist', exact: true }).evaluate(node => node === document.activeElement && node.getAttribute('aria-selected') === 'true'), true)
-  await compare()
+  await compare(); await pendingSelectionProbe()
   for (const name of ['notes', 'checklist', 'prompts']) assert.equal(await widget(name).getAttribute('data-mount-proof'), name)
   assert.deepEqual(page.workers(), workers)
   const beforeMax = JSON.parse((await raw())!), geometry = beforeMax.layout, membership = beforeMax.organization.groups.entries.map((g: { frameId: string; members: string[] }) => ({ frameId: g.frameId, members: g.members }))
   await page.getByRole('button', { name: 'Maximizar Grupo de widgets', exact: true }).click()
   await group().getByRole('tab', { name: 'Prompts salvos', exact: true }).focus(); await page.keyboard.press('ArrowRight')
+  await selected('Anotações')
   await settle(page); await compare()
   const maxBox = await group().boundingBox(), mainBox = await page.locator('[data-region="main"]').boundingBox(); assert.ok(maxBox && mainBox && maxBox.width > mainBox.width - 30)
   const timer = page.locator('[data-plugin-widget="geppio.time-tracker:timer"]'); await timer.getByRole('button', { name: 'Iniciar', exact: true }).click(); await timer.getByRole('button', { name: 'Pausar', exact: true }).click(); await page.locator('[data-plugin-widget="geppio.time-tracker:reports"]').getByText(/1 sessões/).waitFor()
