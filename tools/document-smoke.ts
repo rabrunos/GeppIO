@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { _electron as electron } from 'playwright'
 import type { ElectronApplication, Page } from 'playwright'
-import { mkdtemp, mkdir, readFile, writeFile, chmod, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, writeFile, chmod, rm, realpath } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { portugueseFixture, settle } from './freeform-smoke.ts'
@@ -9,8 +9,10 @@ import { enableDeveloperMode } from './plugin-dev-support.ts'
 import { WORKBENCH_KEY } from '../src/shared/workbench/model.ts'
 import type { DocumentDraft, DocumentResult } from '../src/shared/documents.ts'
 
-const profile = await mkdtemp(join(tmpdir(), 'geppio-smoke-documents-'))
-const path = join(profile, 'document.ts'), other = join(profile, 'other.txt'), diagnostics = resolve('.local/diagnostics/documents-alpha37')
+const profile = await mkdtemp(join(tmpdir(), 'geppio-smoke-documents-')), documentRoot = await realpath(profile)
+// Retain the lexical profile under os.tmpdir() for the existing profile guard;
+// selected document fixtures use canonical paths, including on Windows 8.3 temp roots.
+const path = join(documentRoot, 'document.ts'), other = join(documentRoot, 'other.txt'), diagnostics = resolve('.local/diagnostics/documents-alpha37')
 await mkdir(diagnostics, { recursive: true }); await writeFile(path, '\ufeffconst café = "😀";\r\n'); await writeFile(other, 'other\n')
 const env: Record<string, string> = Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined))
 delete env.ELECTRON_RUN_AS_NODE; delete env.ELECTRON_RENDERER_URL; delete env.NODE_OPTIONS; delete env.GEPPIO_TEST_DEMO_WIDGETS

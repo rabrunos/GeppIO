@@ -9,6 +9,9 @@ disposable files/profile, real preload/Main handlers, controlled native-dialog r
 close events, exact layout bytes, retained Workers/Sidebar/Bottom, explicit placement, both themes
 and restart/reopen. Windows CI includes this focused command and existing regression suites.
 Negative identity tests call registered Main handlers with controlled foreign-frame identities.
+Disposable selected files use a canonical fixture root (`realpath`), since Windows runner temp
+paths may use 8.3 aliases. The test-profile environment keeps its original lexical temp root;
+production canonical-path and link rejection are unchanged, including deliberate junction tests.
 Malformed native-close replies must permit a fresh attempt. The groups smoke also switches
 Editor/Widgets around a real three-member group and checks bytes, selection, mounts and Workers.
 

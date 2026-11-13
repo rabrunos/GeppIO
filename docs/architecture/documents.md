@@ -37,6 +37,8 @@ Bounded descriptor reads check before/after identity/size/time/mode. Save compar
 bytes and file/ancestor identities, detecting same-size edits and identical-byte replacements.
 Links/junction ancestors, multiple hardlinks, special files, Windows UNC/device/alternate-stream
 paths and read-only writes are refused. OS errors map to fixed bounded messages without paths.
+Selection must already use a canonical path: a native dialog returning an 8.3 short-path alias
+is refused too. Select the long canonical path explicitly; alias compatibility is not implemented.
 
 ## Save integrity and Windows limitations
 

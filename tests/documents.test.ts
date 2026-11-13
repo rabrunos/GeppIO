@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { mkdtemp, writeFile, readFile, rm, rename, chmod, link, mkdir, symlink } from 'node:fs/promises'
+import { mkdtemp, writeFile, readFile, rm, rename, chmod, link, mkdir, symlink, realpath } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -12,7 +12,10 @@ import { widgetRegistry, initialWorkbench } from '../src/shared/workbench/model.
 import { FILE_EDITOR_TYPE } from '../src/shared/files-editor.ts'
 
 async function fixture(run: (root: string, path: string, store: DocumentStore) => Promise<void>) {
-  const root = await mkdtemp(join(tmpdir(), 'geppio-smoke-documents-')), path = join(root, 'document.txt')
+  // Windows runners may spell os.tmpdir() with an 8.3 alias. Mock selection must use
+  // a canonical fixture path; production link/canonical-path refusals stay intact.
+  const temporary = await mkdtemp(join(tmpdir(), 'geppio-smoke-documents-')), root = await realpath(temporary), path = join(root, 'document.txt')
+  if (temporary.toLowerCase() !== root.toLowerCase()) console.info('Document fixture normalized a noncanonical temporary root')
   try { await writeFile(path, '\ufeffolá 😀\r\nsecond\nlast'); await run(root, path, new DocumentStore()) } finally { await chmod(path, 0o600).catch(() => {}); await rm(root, { recursive: true, force: true }) }
 }
 const cancel = async () => 'cancel' as const, discard = async () => 'discard' as const, save = async () => 'save' as const
