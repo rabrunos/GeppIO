@@ -53,6 +53,16 @@ Evidence and remaining decisions belong in the live Issues, not a tracked last-r
 
 ## Layers
 
+`pnpm test:plugin-package` covers the alpha.34 signed-file pilot using actual independently built
+Workspace Essentials bytes, disposable keys/profiles and a separately built test host. It also
+proves the normal production build rejects those test keys. Unit/process tests cover malformed
+framing/signatures/entries, scoped trust, exact adoption, state rename failure and forced exit on
+both sides of the atomic switch. Electron exercises native-dialog responses under automation,
+fresh disabled install, explicit activation, enabled/disabled adoption, retained mounts/Workers,
+exact data/layout/UUID and restart. See the [owner walkthrough and official-key gate](../architecture/plugin-package.md).
+The actual access proof uses the existing installation-bound API 2 ordinary-data path; it does not
+grant real filesystem access or isolate hostile shared-origin Workers.
+
 `pnpm test:alignment` and `pnpm test:alignment --scale125` exercise real Main
 mouse drag, snap entry/release, cancel/drop clearing, both themes and undo/restart
 with installed Workspace Essentials. Core alignment cases cover edges/centers,

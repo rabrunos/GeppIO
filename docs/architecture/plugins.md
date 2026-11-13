@@ -1,5 +1,15 @@
 # Plugin boundary — trusted local v1/v2 and future design
 
+## Signed first-party file pilot (alpha.34)
+
+Workspace Essentials can use a separately versioned, bounded Ed25519 file envelope. Main verifies
+the complete immutable snapshot before native confirmation, installs disabled, or adopts a valid
+byte-identical folder installation while preserving its UUID, preference, data and host references.
+Production roots must be independently verified and owner-authorized; an embedded key/name cannot
+establish trust. The pinned owner key is scoped only to Workspace Essentials. See [wire format, offline packaging,
+trust activation and recovery](plugin-package.md). This does not extend manifest schema 1/API 1/2,
+Worker authority or author capabilities, and does not enable general replacement/updates.
+
 ## API 2 pilot (alpha.21)
 
 Workspace Essentials opts in through `apiVersion: 2` to bounded literal text fields/lists/actions
@@ -22,8 +32,8 @@ For API 1, `plugin.json` has exactly `schemaVersion: 1`, `apiVersion: 1`, `id`, 
 relative `.js` `entry`, and `widgets: [{ id, title, surface: 'declarative' }]` (zero to eight).
 IDs and relative paths are bounded; traversal, links/junctions, unknown manifest fields, duplicate
 widget IDs and unsupported file types are rejected. Limits: 32 installations, 64 package entries,
-512 KiB/file, 2 MiB/package and 16 KiB/manifest. The native bridge offers only list/install (native
-directory picker)/setEnabled/remove. Main validates the sending window, main frame and exact app URL.
+512 KiB/file, 2 MiB/package and 16 KiB/manifest. The native bridge offers list/install (native
+directory picker)/installFile (native signed-file picker)/setEnabled/remove. Main validates the sending window, main frame and exact app URL.
 
 Every activation creates a module Web Worker and imports the independently compiled external entry.
 The entry exports `activate(context)` and returns `{ dispose(), onAction?(widgetId, actionId) }`.

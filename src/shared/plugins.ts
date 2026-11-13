@@ -17,6 +17,7 @@ export type PluginResult<T> = { ok: true; value: T } | { ok: false; error: strin
 export interface PluginBridge {
   list(): Promise<PluginResult<PluginInventory>>
   install(): Promise<PluginResult<PluginInventory | null>>
+  installFile(): Promise<PluginResult<PluginInventory | null>>
   setEnabled(id: string, enabled: boolean): Promise<PluginResult<PluginInventory>>
   remove(id: string): Promise<PluginResult<PluginInventory>>
 }

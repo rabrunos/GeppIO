@@ -94,7 +94,7 @@ app.whenReady().then(async () => {
       return true
     })
   }
-  for (const operation of ['list', 'install', 'set-enabled', 'remove'] as const) {
+  for (const operation of ['list', 'install', 'install-file', 'set-enabled', 'remove'] as const) {
     ipcMain.handle('plugins:' + operation, async (event, ...args: unknown[]): Promise<PluginResult<unknown>> => {
       const win = BrowserWindow.fromWebContents(event.sender)
       if (!win || event.senderFrame !== event.sender.mainFrame || event.senderFrame.url !== (devURL ?? `${IDENTITY.protocol}://${IDENTITY.host}/index.html`)) return { ok: false, error: 'Origem de gerenciamento inválida.' }
@@ -102,6 +102,18 @@ app.whenReady().then(async () => {
       if (mutation && managementBusy) return { ok: false, error: 'Aguarde a operação de plugins em andamento.' }
       if (mutation) managementBusy = true
       try {
+        if (operation === 'install-file' && !args.length) {
+          const frame = event.senderFrame, generationCurrent = plugins.ownerGuard(event.sender.id)
+          const currentOwner = () => !win.isDestroyed() && !event.sender.isDestroyed() && generationCurrent() && event.sender.mainFrame === frame && frame.url === (devURL ?? `${IDENTITY.protocol}://${IDENTITY.host}/index.html`)
+          const selected = await dialog.showOpenDialog(win, { title: 'Instalar arquivo assinado', buttonLabel: 'Verificar pacote', properties: ['openFile'], filters: [{ name: 'Plugin GeppIO assinado', extensions: ['gpp'] }] })
+          if (!currentOwner() || selected.canceled || selected.filePaths.length !== 1) return { ok: true, value: null }
+          const value = await plugins.installSigned(selected.filePaths[0]!, async preview => {
+            if (!currentOwner()) return false
+            const result = await dialog.showMessageBox(win, { type: 'question', title: 'Confirmar plugin assinado', message: `${preview.name} · ${preview.version}`, detail: `Publicador verificado: ${preview.publisher}\nPlugin: ${preview.id}\n${preview.adoption ? 'Adotar instalação existente: preservar identidade, ativação, dados e posições.' : 'Nova instalação: começa desativada. Ative e adicione os widgets explicitamente.'}\nNenhum novo acesso é concedido. O piloto continua usando Workers locais confiáveis e dados comuns da própria instalação. Não há isolamento para código hostil.`, buttons: ['Cancelar', preview.adoption ? 'Adotar instalação' : 'Instalar desativado'], defaultId: 0, cancelId: 0, noLink: true })
+            return result.response === 1 && currentOwner()
+          }, currentOwner)
+          return { ok: true, value }
+        }
         if (operation === 'list' && !args.length) return { ok: true, value: await plugins.list() }
         if (operation === 'install' && !args.length) {
           const selected = await dialog.showOpenDialog(win, { title: 'Instalar plugin local confiável', buttonLabel: 'Instalar desativado', properties: ['openDirectory'] })

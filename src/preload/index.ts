@@ -7,6 +7,7 @@ declare const __APP_VERSION__: string
 const plugins: PluginBridge = Object.freeze({
   list: () => ipcRenderer.invoke('plugins:list'),
   install: () => ipcRenderer.invoke('plugins:install'),
+  installFile: () => ipcRenderer.invoke('plugins:install-file'),
   setEnabled: (id: string, enabled: boolean) => ipcRenderer.invoke('plugins:set-enabled', id, enabled),
   remove: (id: string) => ipcRenderer.invoke('plugins:remove', id)
 })

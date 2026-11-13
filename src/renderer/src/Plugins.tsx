@@ -46,6 +46,7 @@ export function usePlugins() {
   const bridge = window.geppio?.plugins
   return { inventory, views, message, busy, available: Boolean(bridge),
     install: () => { if (bridge) void manage(() => bridge.install()) },
+    installFile: () => { if (bridge) void manage(() => bridge.installFile()) },
     toggle: (view: RuntimePlugin) => { if (bridge) void manage(() => bridge.setEnabled(view.plugin.manifest.id, view.status === 'error' || !view.plugin.enabled), view.plugin.manifest.id) },
     remove: (id: string) => { if (bridge) void manage(() => bridge.remove(id), id) },
     removeInvalid: (id: string) => { if (bridge) void manage(() => bridge.remove(id), id) },
@@ -59,8 +60,10 @@ export function PluginSettings({ plugins }: { plugins: Plugins }) {
   const { t } = useLocale()
   return <section aria-label="Plugins">
     <h3>Plugins</h3>
-    <p>{t('Instale somente pacotes locais de desenvolvimento confiáveis. Esta versão não oferece isolamento para plugins de terceiros.')}</p>
-    <button className="ui-button tool-button ui-button-primary" disabled={plugins.busy || !plugins.available} onClick={plugins.install}>{t('Instalar pasta local')}</button>
+    <p>{t('Instale um arquivo assinado do piloto Workspace Essentials. Esta versão não oferece isolamento para plugins de terceiros.')}</p>
+    <button className="ui-button tool-button ui-button-primary" disabled={plugins.busy || !plugins.available} onClick={plugins.installFile}>{t('Instalar arquivo assinado')}</button>
+    <p>{t('Desenvolvimento confiável: instale pastas somente de código que você revisou.')}</p>
+    <button className="ui-button tool-button" disabled={plugins.busy || !plugins.available} onClick={plugins.install}>{t('Instalar pasta local')}</button>
     <p role="status">{plugins.busy ? t('Processando plugins…') : t(plugins.message)}</p>
     {plugins.inventory.errors.map(error => <div className="plugin-error" key={error}><p>{error}</p>{/^[a-z][a-z0-9.-]*:/.test(error) && <button className="ui-button tool-button" disabled={plugins.busy} onClick={() => plugins.removeInvalid(error.split(':')[0]!)}>{t('Remover instalação inválida')}</button>}</div>)}
     {!plugins.views.length && <p>{t('Nenhum plugin instalado.')}</p>}

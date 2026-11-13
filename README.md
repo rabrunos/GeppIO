@@ -56,6 +56,14 @@ limites dos testes e aceites estão nas issues e no [guia de validação](docs/d
 
 ## Workspace Essentials local
 
+O piloto de arquivo assinado usa **Instalar arquivo assinado** no mesmo painel Plugins e verifica
+Ed25519 antes de confirmar. A instalação nova começa desativada; a adoção de uma pasta com arquivos
+idênticos preserva identidade, ativação, dados e posições. A chave pública Ed25519 do proprietário,
+verificada e autorizada em 13/11/2026, é confiável somente para `geppio.workspace-essentials`.
+Consulte o [formato, comandos de assinatura e roteiro Windows](docs/architecture/plugin-package.md).
+`pnpm test:plugin-package` usa chaves temporárias em um host de teste separado e comprova sua recusa
+pelo build normal. A instalação de pasta abaixo continua sendo uma ação de desenvolvimento confiável.
+
 Execute `pnpm plugins:build` e abra o aplicativo com `pnpm start` após `pnpm build`.
 Abra o menu do perfil e **Configurações > Desenvolvimento e recuperação > Plugins > Instalar
 pasta local**. Selecione `.local/plugin-packages/workspace-essentials` e clique **Ativar** em

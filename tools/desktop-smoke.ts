@@ -89,7 +89,7 @@ try {
   const privileged = await page.evaluate(() => ({ require: 'require' in window, process: 'process' in window, bridge: Object.keys(window.geppio ?? {}) }))
   if (privileged.require || privileged.process || privileged.bridge.some(key => !['name', 'version', 'platform', 'plugins', 'pluginData', 'windowControls', 'demoFixtures'].includes(key))) throw new Error('Unexpected privileged renderer surface')
   assert.equal(await page.evaluate(() => window.geppio!.demoFixtures), true, 'This geometry suite explicitly opts into disposable-profile fixtures')
-  assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.plugins).sort()), ['install', 'list', 'remove', 'setEnabled'])
+  assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.plugins).sort()), ['install', 'installFile', 'list', 'remove', 'setEnabled'])
   assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.pluginData).sort()), ['begin', 'end', 'read', 'write'])
   assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.windowControls).sort()), ['close', 'maximize', 'minimize'], 'Only the three owner-authorized host chrome actions are exposed')
   const nativeBoundary = await application!.evaluate(({ BrowserWindow }) => {

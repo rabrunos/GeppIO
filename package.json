@@ -1,6 +1,6 @@
 {
   "name": "geppio",
-  "version": "0.1.0-alpha.33",
+  "version": "0.1.0-alpha.34",
   "private": true,
   "license": "UNLICENSED",
   "description": "GeppIO — a local desktop workbench, Windows first.",
@@ -22,6 +22,9 @@
     "doctor": "node --experimental-strip-types tools/doctor.ts",
     "check": "pnpm check:repo && pnpm typecheck && pnpm lint && pnpm test && pnpm plugins:build && pnpm build",
     "plugins:build": "node --experimental-strip-types tools/build-plugins.ts",
+    "plugins:package": "node --experimental-strip-types tools/plugin-package.ts",
+    "plugins:key": "node --experimental-strip-types tools/plugin-key.ts",
+    "test:plugin-package": "pnpm build && node --experimental-strip-types --test tests/plugin-package.test.ts && node --experimental-strip-types tools/plugin-package-smoke.ts",
     "test:desktop": "pnpm test:essentials && pnpm test:time-tracker && pnpm test:maximize && pnpm test:alignment && pnpm test:groups && pnpm test:edit-lock && node --experimental-strip-types tools/demo-retirement-smoke.ts && node --experimental-strip-types tools/identity-smoke.ts && node --experimental-strip-types tools/desktop-smoke.ts && pnpm test:workbench && pnpm test:presentations",
     "test:essentials": "node --experimental-strip-types tools/workspace-essentials-smoke.ts",
     "test:time-tracker": "node --experimental-strip-types tools/time-tracker-smoke.ts",

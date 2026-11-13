@@ -2,6 +2,13 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.34] — 2026-11-13
+
+- Add a bounded, domain-separated Ed25519 file envelope and offline signing tools for the first-party Workspace Essentials pilot, without dependencies or manifest/API changes.
+- Verify a native-selected immutable snapshot before confirmation; install disabled or adopt a byte-identical legacy installation with its UUID, enabled preference, ordinary data and workbench references preserved.
+- Atomically commit a managed signed-snapshot reference, reverify trust/content on startup, retain recoverable failures without legacy fallback, and preserve installation-bound data revocation.
+- Pin the independently verified owner-authorized Ed25519 public key only for Workspace Essentials. Keep disposable roots in injected test instances/a separate test build, and support an owner-signed package smoke against the normal production build.
+
 ## [0.1.0-alpha.33] — 2026-11-10
 
 - Synchronize the native group smoke with actual selected-tab state before reading inert content or comparing persisted groups after restart.

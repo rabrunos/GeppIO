@@ -65,6 +65,10 @@ feedback. Blanket Electron permission denial remains unchanged. Platform referen
 The installation's host-generated UUID (`revision` in package preferences) is its durable identity,
 distinct from manifest ID. No in-place update exists; future updates require an explicit identity/
 migration decision. A new install gets a new UUID even when its manifest ID and bytes match.
+The alpha.34 [signed-package pilot](plugin-package.md) adds one narrow exception to folder
+replacement: a verified byte-identical Workspace Essentials folder can be adopted by an atomic
+signed-snapshot reference, retaining that same installation UUID and preference. It never rewrites
+confirmed data or host workbench/history references and is not a general update mechanism.
 
 Main opens a random activation token only for an enabled, inspected API 2 installation. It binds
 the token to that installation and owning webContents; the Worker never receives it. Worker data

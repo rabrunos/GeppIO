@@ -1,15 +1,21 @@
 import { lstat, readdir, readFile, mkdir, writeFile, rename, rm, realpath } from 'node:fs/promises'
 import { join, resolve, relative, isAbsolute, extname } from 'node:path'
-import { randomUUID } from 'node:crypto'
-import { PLUGIN_LIMITS, parseManifest, packagePath, pluginId, isRecord } from '../shared/plugins.ts'
-import type { PluginInventory, PluginManifest, InstalledPlugin } from '../shared/plugins.ts'
+import { randomUUID, createHash } from 'node:crypto'
+import { PLUGIN_LIMITS, packagePath, pluginId, isRecord } from '../shared/plugins.ts'
+import type { PluginInventory, InstalledPlugin } from '../shared/plugins.ts'
 import { IDENTITY } from '../shared/identity.ts'
 import { PluginDataStore } from './plugin-data.ts'
 import { DATA_LIMITS, dataRevision, parseDataDocument } from '../shared/plugin-data.ts'
 import type { DataSnapshot } from '../shared/plugin-data.ts'
+import { readPackageSnapshot, validatePackageFiles, verifyPluginPackage } from './plugin-package.ts'
+import type { Package } from './plugin-package.ts'
+import { PLUGIN_TRUST } from './plugin-trust.ts'
+import type { PluginTrustEntry } from './plugin-trust.ts'
 
-interface Package { manifest: PluginManifest; files: Map<string, Uint8Array> }
-interface State { schemaVersion: 1; plugins: Record<string, { enabled: boolean; revision: string }> }
+interface SignedPointer { snapshot: string; sha256: string }
+interface Preference { enabled: boolean; revision: string; signed?: SignedPointer }
+interface State { schemaVersion: 1; plugins: Record<string, Preference> }
+export interface SignedInstallPreview { publisher: string; name: string; id: string; version: string; adoption: boolean }
 /** Local trusted packages only. Inspect the complete bounded snapshot before copying/exposing it. */
 export async function inspectPackage(root: string): Promise<Package> {
   if (!(await lstat(root)).isDirectory() || (await lstat(root)).isSymbolicLink()) throw new Error('Escolha uma pasta de plugin regular.')
@@ -34,11 +40,7 @@ export async function inspectPackage(root: string): Promise<Package> {
     }
   }
   await walk(canonical)
-  const manifestBytes = files.get('plugin.json')
-  if (!manifestBytes) throw new Error('plugin.json não encontrado.')
-  const manifest = parseManifest(new TextDecoder('utf-8', { fatal: true }).decode(manifestBytes))
-  if (!files.has(manifest.entry)) throw new Error('Módulo de entrada não encontrado.')
-  return { manifest, files }
+  return validatePackageFiles(files)
 }
 /** Only paths generated from validated IDs are ever written or removed. No renderer path argument. */
 export class PluginStore {
@@ -51,8 +53,10 @@ export class PluginStore {
   private channels = new Map<string, { id: string; installation: string; owner: number; started: number; requests: number }>()
   private dataPending = 0
   private generations = new Map<number, number>()
-  constructor(root: string) { this.root = resolve(root); this.data = new PluginDataStore(join(this.root, '..', 'plugin-data')) }
+  private readonly trust: readonly Readonly<PluginTrustEntry>[]
+  constructor(root: string, trust: readonly Readonly<PluginTrustEntry>[] = PLUGIN_TRUST) { this.root = resolve(root); this.trust = trust; this.data = new PluginDataStore(join(this.root, '..', 'plugin-data')) }
   revokeOwner(owner: number): void { this.generations.set(owner, (this.generations.get(owner) ?? 0) + 1); for (const [token, channel] of this.channels) if (channel.owner === owner) this.channels.delete(token) }
+  ownerGuard(owner: number): () => boolean { const generation = this.generations.get(owner) ?? 0; return () => (this.generations.get(owner) ?? 0) === generation }
   endData(owner: number, token: unknown): void {
     if (typeof token !== 'string' || this.channels.get(token)?.owner !== owner) throw new Error('Canal de dados inválido.')
     this.channels.delete(token)
@@ -96,7 +100,7 @@ export class PluginStore {
     if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error('Diretório de plugins inválido.')
   }
   private async load(): Promise<void> {
-    await this.directory(this.root); await this.directory(join(this.root, 'packages'))
+    await this.directory(this.root); await this.directory(join(this.root, 'packages')); await this.directory(join(this.root, 'signed'))
     if (this.loaded) return
     try {
       const path = join(this.root, 'state.json'), stat = await lstat(path)
@@ -104,7 +108,7 @@ export class PluginStore {
       const value: unknown = JSON.parse(await readFile(path, 'utf8'))
       if (!isRecord(value) || value.schemaVersion !== 1 || Object.keys(value).length !== 2 || !isRecord(value.plugins) || Object.keys(value.plugins).length > PLUGIN_LIMITS.plugins) throw new Error('Estado de plugins inválido.')
       for (const [id, item] of Object.entries(value.plugins)) {
-        if (!pluginId(id) || !isRecord(item) || Object.keys(item).length !== 2 || typeof item.enabled !== 'boolean' || typeof item.revision !== 'string' || !/^[a-f0-9-]{36}$/.test(item.revision)) throw new Error('Estado de plugins inválido.')
+        if (!pluginId(id) || !isRecord(item) || Object.keys(item).some(key => !['enabled', 'revision', 'signed'].includes(key)) || typeof item.enabled !== 'boolean' || typeof item.revision !== 'string' || !/^[a-f0-9-]{36}$/.test(item.revision) || (item.signed !== undefined && (!isRecord(item.signed) || Object.keys(item.signed).length !== 2 || typeof item.signed.snapshot !== 'string' || !/^[a-f0-9-]{36}$/.test(item.signed.snapshot) || typeof item.signed.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(item.signed.sha256)))) throw new Error('Estado de plugins inválido.')
       }
       this.state = value as unknown as State
     } catch (error) {
@@ -112,10 +116,10 @@ export class PluginStore {
     }
     this.loaded = true
   }
-  private async save(state: State): Promise<void> {
+  private async save(state: State, beforeCommit: () => void = () => undefined): Promise<void> {
     const temporary = join(this.root, 'state-' + randomUUID() + '.tmp')
-    try { await writeFile(temporary, JSON.stringify(state), { flag: 'wx' }); await rename(temporary, join(this.root, 'state.json')); this.state = state }
-    finally { await rm(temporary, { force: true }) }
+    try { await writeFile(temporary, JSON.stringify(state), { flag: 'wx' }); beforeCommit(); await rename(temporary, join(this.root, 'state.json')); this.state = state }
+    finally { await rm(temporary, { force: true }).catch(() => undefined) }
   }
   private serial<T>(operation: () => Promise<T>): Promise<T> {
     const pending = this.queue.then(operation)
@@ -127,28 +131,78 @@ export class PluginStore {
     const plugins: InstalledPlugin[] = [], errors: string[] = [], snapshots = new Map<string, Package>()
     const names = await readdir(join(this.root, 'packages'))
     if (names.length > PLUGIN_LIMITS.plugins) throw new Error('Diretório com plugins demais.')
-    for (const id of names.sort()) {
+    for (const id of [...new Set([...names, ...Object.keys(this.state.plugins)])].sort()) {
       if (!pluginId(id)) { errors.push('Pasta de plugin com ID inválido.'); continue }
       try {
-        const pkg = await inspectPackage(join(this.root, 'packages', id))
-        if (pkg.manifest.id !== id) throw new Error('ID do manifesto não corresponde à pasta instalada.')
         const item = this.state.plugins[id]
+        // Signed preferences never fall back to a legacy directory, including after corruption.
+        let pkg: Package
+        if (item?.signed) {
+          const bytes = await readPackageSnapshot(join(this.root, 'signed', item.signed.snapshot + '.gpp'))
+          if (createHash('sha256').update(bytes).digest('hex') !== item.signed.sha256) throw new Error('Pacote assinado difere do conteúdo confirmado. Dados preservados.')
+          pkg = verifyPluginPackage(bytes, this.trust)
+        } else pkg = await inspectPackage(join(this.root, 'packages', id))
+        if (pkg.manifest.id !== id) throw new Error('ID do manifesto não corresponde à pasta instalada.')
         if (!item) { errors.push(id + ': pacote incompleto; reinstale pela interface.'); continue }
-        plugins.push({ manifest: pkg.manifest, ...item }); snapshots.set(id, pkg)
+        plugins.push({ manifest: pkg.manifest, enabled: item.enabled, revision: item.revision }); snapshots.set(id, pkg)
       } catch (error) { errors.push(id + ': ' + (error instanceof Error && !('code' in error) ? error.message : 'Pacote ilegível ou inválido.')) }
     }
-    for (const id of Object.keys(this.state.plugins)) if (!names.includes(id)) errors.push(id + ': pacote instalado ausente.')
     this.packages = snapshots
     return { plugins, errors }
   }
   list(): Promise<PluginInventory> { return this.serial(() => this.inventory()) }
+  /** Main-only transaction: callback confirms this immutable snapshot, never a renderer path/token. */
+  installSigned(source: string, confirm: (preview: SignedInstallPreview) => Promise<boolean>, currentOwner: () => boolean): Promise<PluginInventory | null> {
+    return this.serial(async () => {
+      await this.load()
+      const bytes = await readPackageSnapshot(source), pkg = verifyPluginPackage(bytes, this.trust), id = pkg.manifest.id
+      const previous = this.state.plugins[id], names = await readdir(join(this.root, 'packages'))
+      if (previous?.signed || (!previous && names.includes(id))) throw new Error('Já existe uma instalação conflitante com esse ID.')
+      const equivalent = async () => {
+        const legacy = await inspectPackage(join(this.root, 'packages', id))
+        if (legacy.manifest.id !== id || legacy.files.size !== pkg.files.size || [...legacy.files].some(([path, value]) => !pkg.files.has(path) || !Buffer.from(value).equals(Buffer.from(pkg.files.get(path)!)))) throw new Error('A instalação existente difere do pacote assinado. Dados preservados.')
+      }
+      if (previous) await equivalent()
+      else if (new Set([...names, ...Object.keys(this.state.plugins)]).size >= PLUGIN_LIMITS.plugins) throw new Error('Limite de 32 plugins atingido.')
+      const stateBytes = await this.stateBytes()
+      if (stateBytes === null ? Object.keys(this.state.plugins).length > 0 : JSON.stringify(JSON.parse(stateBytes)) !== JSON.stringify(this.state)) throw new Error('Estado externo mudou. Reinicie antes de instalar.')
+      if (!currentOwner() || !await confirm({ publisher: pkg.publisher, name: pkg.manifest.name, id, version: pkg.manifest.version, adoption: Boolean(previous) }) || !currentOwner()) return null
+      // Recheck actual legacy bytes and external state changes after the native confirmation.
+      if (previous) await equivalent()
+      else if ((await readdir(join(this.root, 'packages'))).includes(id)) throw new Error('Instalação mudou durante a confirmação.')
+      if (await this.stateBytes() !== stateBytes) throw new Error('Estado mudou durante a confirmação. Dados preservados.')
+      // Recheck current trust scope before persistence, as well as on every inventory/startup.
+      verifyPluginPackage(bytes, this.trust)
+      const signed = randomUUID(), snapshot = join(this.root, 'signed', signed + '.gpp'), staging = snapshot + '.tmp'
+      let committed = false
+      try {
+        await writeFile(staging, bytes, { flag: 'wx' }); await rename(staging, snapshot)
+        if (!currentOwner()) return null
+        if (previous) await equivalent()
+        if (await this.stateBytes() !== stateBytes) throw new Error('Estado mudou antes da instalação. Dados preservados.')
+        await this.save({ ...this.state, plugins: { ...this.state.plugins, [id]: { ...(previous ?? { enabled: false, revision: randomUUID() }), signed: { snapshot: signed, sha256: createHash('sha256').update(bytes).digest('hex') } } } }, () => { if (!currentOwner()) throw new Error('Confirmação expirada.') })
+        committed = true
+      } finally {
+        await rm(staging, { force: true }).catch(() => undefined)
+        if (!committed) await rm(snapshot, { force: true }).catch(() => undefined)
+      }
+      return this.inventory()
+    })
+  }
+  private async stateBytes(): Promise<string | null> {
+    try {
+      const path = join(this.root, 'state.json'), stat = await lstat(path)
+      if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 16 * 1024) throw new Error('Estado de plugins inválido.')
+      return await readFile(path, 'utf8')
+    } catch (error) { if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return null; throw error }
+  }
   install(source: string): Promise<PluginInventory> {
     return this.serial(async () => {
       await this.load()
       const pkg = await inspectPackage(source), id = pkg.manifest.id
       const names = await readdir(join(this.root, 'packages'))
       if (this.state.plugins[id] || names.includes(id)) throw new Error('Já existe um plugin com esse ID.')
-      if (Math.max(names.length, Object.keys(this.state.plugins).length) >= PLUGIN_LIMITS.plugins) throw new Error('Limite de 32 plugins atingido.')
+      if (new Set([...names, ...Object.keys(this.state.plugins)]).size >= PLUGIN_LIMITS.plugins) throw new Error('Limite de 32 plugins atingido.')
       const staging = join(this.root, 'install-' + randomUUID()), destination = join(this.root, 'packages', id)
       await mkdir(staging)
       let moved = false
@@ -175,6 +229,7 @@ export class PluginStore {
     return this.serial(async () => {
       await this.load()
       if (!pluginId(id)) throw new Error('ID de plugin inválido.')
+      const signed = this.state.plugins[id]?.signed
       const destination = join(this.root, 'packages', id), tombstone = join(this.root, 'remove-' + randomUUID())
       let moved = false
       try { await rename(destination, tombstone); moved = true }
@@ -184,7 +239,8 @@ export class PluginStore {
       catch (error) { if (moved) await rename(tombstone, destination); throw error }
       this.packages.delete(id)
       for (const [token, channel] of this.channels) if (channel.id === id) this.channels.delete(token)
-      if (moved) await rm(tombstone, { recursive: true, force: true })
+      if (moved) await rm(tombstone, { recursive: true, force: true }).catch(() => undefined)
+      if (signed) await rm(join(this.root, 'signed', signed.snapshot + '.gpp'), { force: true }).catch(() => undefined)
       return this.inventory()
     })
   }

@@ -14,6 +14,7 @@ Read only the rows needed for the active Issue. This is a route map, not task st
 | Fixed native window chrome (not plugin SDK) | `src/shared/window-controls.ts`, `src/main/index.ts`, `src/preload/index.ts`, `tests/window-controls.test.ts` |
 | Legacy fractional v1 validation and identity recovery | `src/shared/layout.ts`, `src/shared/layout-defaults.ts`, `src/shared/layout-migration.ts`, `src/main/layout-migration.ts` |
 | Future plugins, APIs, slots and scripts | [Plugin design boundaries](../architecture/plugins.md) |
+| First-party signed package, offline signing, exact adoption and recovery | [Plugin package](../architecture/plugin-package.md), `src/main/plugin-package.ts`, `src/main/plugin-trust.ts`, `tests/plugin-package.test.ts`, `tools/plugin-package-smoke.ts` |
 | API 2 trusted-local text surfaces, durable ordinary data and retention | [Plugin data](../architecture/plugin-data.md), `src/main/plugin-data.ts`, `tests/plugin-data.test.ts`, `tools/workspace-essentials-smoke.ts` |
 | Native boundary or untrusted input | [Security baseline](SECURITY_BASELINE.md), [control map](../architecture/security.md) |
 | Task version, effort, scope or approval | [Task policy](TASK_POLICY.md) |
