@@ -45,7 +45,7 @@ try {
   }
   await manager.getByRole('button', { name: 'Fechar', exact: true }).click(); assert.equal(await page.locator('.widget-frame').count(), 0)
   await edit()
-  for (const [label, count] of [['Principal', 6], ['Lateral', 5], ['Inferior', 5]] as const) {
+  for (const [label, count] of [['Principal', 7], ['Lateral', 5], ['Inferior', 5]] as const) {
     await page.getByRole('button', { name: 'Todas as áreas', exact: true }).click()
     await page.getByRole('button', { name: `Filtrar por: ${label}`, exact: true }).click()
     assert.equal(await page.locator('[data-catalog-type]').count(), count)

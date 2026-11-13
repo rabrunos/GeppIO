@@ -28,7 +28,7 @@ async function launch() {
   assert.equal(await page.evaluate(() => window.geppio!.demoFixtures), false)
 }
 const raw = () => page.evaluate(key => localStorage.getItem(key), WORKBENCH_KEY)
-async function noDemos() { assert.equal(await page.locator('.widget-frame[data-widget-id]:not([data-widget-id^="plugin:"])').count(), 0); assert.equal(await page.locator('[data-catalog-type^="host:"]').count(), 0) }
+async function noDemos() { assert.equal(await page.locator('.widget-frame[data-widget-id]:not([data-widget-id^="plugin:"])').count(), 0); assert.equal(await page.locator('[data-catalog-type^="host:"]:not([data-catalog-type="host:file-editor"])').count(), 0) }
 async function conclude() { await page.getByTestId('conclude-layout').click(); await page.getByTestId('edit-layout').waitFor(); await settle(page); await noDemos() }
 try {
   await launch(); await noDemos()

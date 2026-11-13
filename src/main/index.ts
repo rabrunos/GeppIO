@@ -9,6 +9,7 @@ import type { PluginResult } from '../shared/plugins.ts'
 import { LEGACY_IDENTITY, prepareProfile, validatedTestProfile } from './profile-migration.ts'
 import { recoverLayout } from './layout-migration.ts'
 import { validWindowControlRequest } from '../shared/window-controls.ts'
+import { bindDocuments } from './document-bridge.ts'
 
 protocol.registerSchemesAsPrivileged([
   { scheme: IDENTITY.protocol, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
@@ -47,6 +48,7 @@ async function createWindow(): Promise<void> {
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   win.webContents.on('will-navigate', event => event.preventDefault())
   win.webContents.on('will-attach-webview', event => event.preventDefault())
+  bindDocuments(win, devURL ?? `${IDENTITY.protocol}://${IDENTITY.host}/index.html`)
   const owner = win.webContents.id
   const revokeData = () => plugins.revokeOwner(owner)
   win.webContents.on('did-start-navigation', (_event, _url, _inPlace, mainFrame) => { if (mainFrame) revokeData() })

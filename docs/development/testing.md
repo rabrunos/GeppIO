@@ -1,5 +1,41 @@
 # Validation guide
 
+## Selected document pilot (alpha.37)
+
+Build with `pnpm check`, then run `pnpm test:documents`. Pure tests cover UTF-8/BOM/mixed EOL,
+exact bytes, equal-size conflicts, identical-byte replacement, missing/read-only files, links,
+malformed/oversized requests, revocation, Save/Discard/Cancel and draft retention. Electron uses
+disposable files/profile, real preload/Main handlers, controlled native-dialog responses, Ctrl+S,
+close events, exact layout bytes, retained Workers/Sidebar/Bottom, explicit placement, both themes
+and restart/reopen. Windows CI includes this focused command and existing regression suites.
+Negative identity tests call registered Main handlers with controlled foreign-frame identities.
+Malformed native-close replies must permit a fresh attempt. The groups smoke also switches
+Editor/Widgets around a real three-member group and checks bytes, selection, mounts and Workers.
+
+For actual OS-picker interaction, run `node --experimental-strip-types tools/document-smoke.ts --native-ui`.
+It opens a disposable profile and records fixture paths in ignored
+`.local/diagnostics/documents-alpha37/native-fixture.json`, then waits for app closure. Select that
+file through the real picker, edit, cancel dirty native close, save and close. The wait alone is not
+test evidence: record actual observed actions in Issue #45. Physical owner acceptance is separate.
+
+For a reusable owner-only disposable profile, run this from the repository in PowerShell after
+the build (keep the same shell/profile for relaunch):
+
+```powershell
+$env:GEPPIO_TEST_USER_DATA = Join-Path $env:TEMP ('geppio-smoke-owner-' + [guid]::NewGuid())
+New-Item -ItemType Directory -Path $env:GEPPIO_TEST_USER_DATA
+pnpm.cmd start
+```
+
+Create a disposable TXT/TS in a private folder and reopen it explicitly after restarting with
+`pnpm.cmd start`. This manual profile is retained; the automated/native-ui helper cleans its own
+fixtures on exit. Unset `GEPPIO_TEST_USER_DATA` in this shell before returning to normal usage.
+
+Owner smoke: Editor → open disposable TXT/TS → edit → Widgets → Edit layout → add Editor de arquivo
+to Principal → Conclude → continue the same draft → Save → verify disk → close/relaunch/reopen.
+Check existing widgets. Use ordinary files in a private folder; [Windows metadata/ACL preservation
+and unsaved crash recovery are outside the pilot](../architecture/documents.md#save-integrity-and-windows-limitations).
+
 ## Real presentation pilot (alpha.36)
 
 `pnpm test:presentations` retains the host fixture smoke and then runs
@@ -116,7 +152,7 @@ and activates with Space/Enter.
 
 `pnpm test:time-tracker` is the focused disposable-profile Windows check, also in
 `pnpm test:desktop`. Build packages/application first. It installs both real
-packages and checks eligible type counts Main/Sidebar/Bottom = 6/5/5, explicit
+packages and checks eligible type counts Main/Sidebar/Bottom = 7/5/5, explicit
 placement, both tracker views in every region, shared Workers, visibility changes,
 restart while running, native save failure/retry with one stable interval,
 totals/history and corrupt-data recovery. Core tests cover timestamp rollback,

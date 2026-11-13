@@ -2,6 +2,13 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.37] — 2026-11-13
+
+- Introduce essential first-party Files & Editor with one selected UTF-8 file, shared editable session, direct Editor mode and explicitly placed Main editor widget; no public SDK or dependency changes.
+- Add fixed window/main-frame-bound native selection, save and release with revocable opaque handles, 1 MiB bounds, exact content/identity checks and BOM/newline preservation.
+- Retain drafts on conflicts and failures; coordinate replacement/native close with Save/Discard/Cancel. Document sibling-replacement Windows ACL/metadata limits and deferred unsaved crash recovery.
+- Preserve workbench/plugin lifetimes and layout bytes across modes; add pure/native-boundary and Electron document smoke to Windows CI.
+
 ## [0.1.0-alpha.36] — 2026-11-13
 
 - Enable the host-assigned experimental Main presentation pilot for real Workspace Essentials Notes, reusing four-edge Docked/Overlay, free floating, compact strips, sizing and constrained-window adaptation.

@@ -2,6 +2,10 @@
 
 ## Implemented boundaries
 
+Alpha.37 adds [essential Files & Editor and Core document service](documents.md): one native-selected
+file/session shared by direct Editor and an explicitly placed Main widget. This first-party host
+module preserves workbench storage/plugin lifetimes and does not extend public Worker API 1/2.
+
 The alpha.13/alpha.14 host presentation is rooted in `App`, `Header`, `Sidebar`, `WidgetFrame`,
 `useRegions`, `useSurfaces`, `useInteraction` and `useTransaction`. Approved design sections
 remain in their original cascade order under `workbench/design/`; `host.css` adapts DOM owners

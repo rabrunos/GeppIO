@@ -4,6 +4,11 @@ The current app is local and has no account, remote content, terminal, database 
 secret vault. Issue #21 adds only explicitly trusted local development plugins. Offline does not mean trusted input. JSON layout import, saved layout bytes,
 asset URLs and build dependencies are relevant inputs. See the [control map](../architecture/security.md).
 
+Issue #45 adds four fixed app-owned document operations and a close-request event, limited to one
+native-selected UTF-8 file (1 MiB), exact owner/main frame and revocable opaque handle. No renderer
+path or plugin file grant exists. Follow the [document boundary](../architecture/documents.md) for
+byte/identity checks, failure retention and explicit Windows ACL/metadata/crash limitations.
+
 The proposed [optional community identity](https://github.com/rabrunos/GeppIO/issues/34) is separate
 from local desktop use and per-plugin external service authentication. It is not an implemented
 account service or a requirement to sign in before using the local workbench.

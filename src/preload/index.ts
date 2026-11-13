@@ -3,6 +3,7 @@ import { IDENTITY } from '../shared/identity.ts'
 import type { PluginBridge } from '../shared/plugins.ts'
 import type { WindowControls } from '../shared/window-controls.ts'
 import type { PluginDataBridge } from '../shared/plugin-data.ts'
+import type { DocumentBridge } from '../shared/documents.ts'
 declare const __APP_VERSION__: string
 const plugins: PluginBridge = Object.freeze({
   list: () => ipcRenderer.invoke('plugins:list'),
@@ -25,5 +26,16 @@ const pluginData = Object.freeze<PluginDataBridge>({
   write: (token, expectedRevision, document) => ipcRenderer.invoke('plugin-data:write', token, expectedRevision, document),
   end: token => ipcRenderer.invoke('plugin-data:end', token)
 })
-contextBridge.exposeInMainWorld('geppio', Object.freeze({ name: IDENTITY.name, version: __APP_VERSION__, platform: process.platform, plugins, pluginData, windowControls,
+const documents = Object.freeze<DocumentBridge>({
+  open: draft => ipcRenderer.invoke('document:open', draft),
+  save: draft => ipcRenderer.invoke('document:save', draft),
+  release: draft => ipcRenderer.invoke('document:release', draft),
+  close: (ticket, draft) => ipcRenderer.invoke('document:close', ticket, draft),
+  onCloseRequested(listener) {
+    const receive = (_event: Electron.IpcRendererEvent, ticket: string) => listener(ticket)
+    ipcRenderer.on('document:close-requested', receive)
+    return () => { ipcRenderer.removeListener('document:close-requested', receive) }
+  }
+})
+contextBridge.exposeInMainWorld('geppio', Object.freeze({ name: IDENTITY.name, version: __APP_VERSION__, platform: process.platform, plugins, pluginData, windowControls, documents,
   demoFixtures: process.argv.includes('--geppio-demo-fixtures') }))

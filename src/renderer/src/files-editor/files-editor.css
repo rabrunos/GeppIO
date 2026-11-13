@@ -1,0 +1,21 @@
+.file-mode-switch { display: flex; gap: 4px; margin-inline: 14px; }
+.file-mode-switch [aria-pressed="true"] { color: var(--color-accent); outline: 1px solid currentColor; }
+.file-editor { display: flex; flex-direction: column; height: 100%; min-height: 0; min-width: 0; background: var(--color-surface); color: var(--color-text); }
+.file-editor-toolbar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 10px; border-bottom: 1px solid var(--color-border); }
+.file-editor-toolbar strong { flex: 1 1 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-editor textarea { flex: 1; min-height: 60px; width: 100%; resize: none; padding: 14px; border: 0; border-radius: 0; background: var(--color-surface); color: var(--color-text); font: 14px/1.6 Consolas, monospace; tab-size: 4; }
+.file-editor textarea:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+.file-editor-feedback { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding: 8px 10px; border-top: 1px solid var(--color-border); font-size: 12px; }
+.file-editor-empty { margin: auto; max-width: 520px; padding: 24px; }
+.file-editor-empty h2 { font-size: 20px; margin-bottom: 12px; }
+.file-editor-empty p { margin-block: 10px; }
+.file-editor-limit { margin: 0; padding: 4px 10px 8px; color: var(--color-text-muted); font-size: 11px; line-height: 1.4; }
+.direct-file-editor { position: absolute; inset: 0; z-index: 25; border: 1px solid var(--color-border); border-radius: var(--card-radius); overflow: hidden; }
+.main-region:has(.direct-file-editor) { position: relative; }
+.workbench[data-file-mode="editor"] .project-actions { display: none; }
+.workbench[data-file-mode="editor"] .main-placement { pointer-events: none; }
+.workbench[data-file-mode="editor"] .main-placement { visibility: hidden; }
+.workbench[data-file-mode="editor"] .widget-frame[data-owner-region="main"],
+.workbench[data-file-mode="editor"] .presentation-trigger-area,
+.workbench[data-file-mode="editor"] .main-region .main-expand-toggle { visibility: hidden !important; pointer-events: none !important; }
+.widget-content:has(> .file-editor) { overflow: hidden; }
