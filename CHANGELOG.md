@@ -2,6 +2,14 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.35] — 2026-11-13
+
+- Add per-profile Developer Mode, disabled by default, with native-folder loading from the original built source and explicit reload through bounded in-memory snapshots.
+- Keep installation/data UUIDs distinct from accepted code generations; atomically accept reloads, revoke stale channels, replace Workers once, and preserve confirmed data and workbench/recovery identities.
+- Pause external sources when Developer Mode is off, verify accepted content on resume/restart without recovery-copy fallback, and retain source files on unregister.
+- Link byte-identical alpha.34 managed copies to their original folders while retaining their recovery copy; preserve scoped signed-file verification/adoption and legacy compatibility.
+- Flush host input drafts before lifecycle changes, defer unsaved pilot edits, and offer deliberate recovery after activation failure. Add focused unit, interruption and Windows Electron scenarios.
+
 ## [0.1.0-alpha.34] — 2026-11-13
 
 - Add a bounded, domain-separated Ed25519 file envelope and offline signing tools for the first-party Workspace Essentials pilot, without dependencies or manifest/API changes.

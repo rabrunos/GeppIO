@@ -9,13 +9,16 @@ from local desktop use and per-plugin external service authentication. It is not
 account service or a requirement to sign in before using the local workbench.
 
 Keep the Electron renderer sandboxed and context-isolated with Node integration and webview disabled.
-The preload exposes version/platform metadata, five fixed plugin-management operations, four
+The preload exposes version/platform metadata, eight fixed plugin-management operations, four
 fixed activation-bound ordinary-data operations for opt-in API 2, and the
 owner-authorized minimize/maximize/close host chrome actions. All operations are validated
 in Main against the owning window and its main frame. Installation selects a directory or signed file
 in a native dialog; no path or generic channel argument is exposed. The first-party signed-file
 pilot authenticates its immutable snapshot using scoped owner-authorized Ed25519 roots before
 native confirmation and persistence. See [package trust and recovery](../architecture/plugin-package.md).
+Developer Mode gates external-folder load/link/reload in Main. Accepted code generations are
+separate from durable installation/data identity; reload and pause revoke stale channels. Original
+paths stay local to Main preferences, while only bounded accepted snapshots reach the protocol.
 Window actions accept no arguments and
 resolve only the sender's own native window. Plugin Workers have no preload/DOM bridge.
 See [API 2 data boundaries](../architecture/plugin-data.md) for installation identity, revocation,

@@ -1,3 +1,4 @@
+import { enableDeveloperMode } from './plugin-dev-support.ts'
 import assert from 'node:assert/strict'
 import { _electron as electron } from 'playwright'
 import { mkdtemp, mkdir, rm } from 'node:fs/promises'
@@ -16,7 +17,8 @@ try {
   await page.getByTestId('edit-layout').waitFor(); await portugueseFixture(page); assert.equal(await page.evaluate(() => devicePixelRatio), scale)
   await page.getByRole('button', { name: 'Plugins', exact: true }).click(); const manager = page.getByRole('dialog', { name: 'Plugins', exact: true })
   await app.evaluate(({ dialog }, path) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }) }, resolve('.local/plugin-packages/workspace-essentials'))
-  await manager.getByRole('button', { name: 'Instalar pasta local', exact: true }).click(); await manager.locator('[data-plugin="geppio.workspace-essentials"]').getByRole('switch').click()
+  await enableDeveloperMode(manager)
+  await manager.getByRole('button', { name: 'Carregar pasta local', exact: true }).click(); await manager.locator('[data-plugin="geppio.workspace-essentials"]').getByRole('switch').click()
   await page.waitForFunction(() => document.querySelector('[data-plugin="geppio.workspace-essentials"]')?.getAttribute('data-status') === 'active')
   await manager.getByRole('button', { name: 'Fechar', exact: true }).click(); await page.getByTestId('edit-layout').click(); await settle(page)
   for (const name of ['notes', 'prompts']) { await page.locator(`[data-catalog-type="plugin:geppio.workspace-essentials:${name}"]`).click(); await page.locator('[data-widget-place="main"]').click(); await settle(page) }

@@ -8,7 +8,7 @@ import type { Presentation, Presentations } from './presentations.ts'
 export interface WidgetType {
   id: string; owner: string; title: string; category: string; description: string;
   appearance: 'card' | 'seamless'; presence: 'single-view' | 'multiple-areas';
-  constraint: Constraint; fixture?: string; widgetId?: string; pluginId?: string; retired?: boolean
+  constraint: Constraint; fixture?: string; widgetId?: string; pluginId?: string; retired?: boolean; missing?: boolean
   presentations?: Partial<Record<Region, readonly Presentation[]>>
   maximize?: boolean
   tabHost?: boolean; tabMember?: boolean
@@ -62,9 +62,10 @@ export function widgetRegistry(plugins: readonly InstalledPlugin[] = [], demoFix
       }
     }
   }))
-  for (const plugin of plugins) for (const widget of plugin.manifest.widgets) entries.push({
+  for (const plugin of plugins) for (const widget of [...plugin.manifest.widgets, ...(plugin.recoveryWidgets ?? [])]) entries.push({
     id: `plugin:${plugin.manifest.id}:${widget.id}`, owner: `plugin:${plugin.manifest.id}`, pluginId: plugin.manifest.id, widgetId: widget.id,
     title: widget.title, category: 'Plugins', description: plugin.manifest.name,
+    ...(!plugin.manifest.widgets.some(current => current.id === widget.id) ? { missing: true } : {}),
     ...(plugin.manifest.id === 'geppio.workspace-essentials' && ['notes', 'scratch', 'checklist', 'prompts'].includes(widget.id) ? { maximize: true } : {}),
     ...(plugin.manifest.id === 'geppio.workspace-essentials' && ['notes', 'checklist', 'prompts'].includes(widget.id) ? { tabHost: true, tabMember: true } : {}),
     appearance: 'card', presence: 'single-view', constraint: {
@@ -185,7 +186,7 @@ export function sidebarInsertion(snapshot: WorkbenchSnapshot, id: string | null,
 export function evaluatePlacement(snapshot: WorkbenchSnapshot, registry: Registry, typeId: string, region: Region,
   operation: 'catalog' | 'move' | 'swap' | 'restore', ignored: readonly string[] = [], disabled: ReadonlySet<string> = new Set()) {
   const type = registry.get(typeId)
-  if (!type || type.retired || !type.constraint.regions.includes(region)) return { allowed: false, reason: 'incompatible' } as const
+  if (!type || type.retired || type.missing || !type.constraint.regions.includes(region)) return { allowed: false, reason: 'incompatible' } as const
   if (disabled.has(type.owner)) return { allowed: false, reason: 'paused' } as const
   const grouped = snapshot.organization.views.some(view => view.typeId === typeId && groupFor(snapshot, view.id))
   if (grouped && operation === 'catalog') return { allowed: false, reason: 'occupied' } as const

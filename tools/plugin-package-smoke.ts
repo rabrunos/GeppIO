@@ -6,7 +6,7 @@ import { join, resolve } from 'node:path'
 import { build } from 'vite'
 import { _electron as electron } from 'playwright'
 import type { ElectronApplication, Page } from 'playwright'
-import { inspectPackage } from '../src/main/plugins.ts'
+import { inspectPackage, PluginStore } from '../src/main/plugins.ts'
 import { readPackageSnapshot, verifyPluginPackage } from '../src/main/plugin-package.ts'
 import { publicIdentity, signPluginPackage } from './plugin-package.ts'
 import { portugueseFixture, settle } from './freeform-smoke.ts'
@@ -131,10 +131,10 @@ try {
   await close()
 
   for (const enabled of [true, false]) {
-    const root = await profile(); await launch(root)
-    await app!.evaluate(({ dialog }, folder) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [folder] }) }, resolve('.local/plugin-packages/workspace-essentials'))
-    const legacy = await page.evaluate(() => window.geppio!.plugins.install()); assert.ok(legacy.ok && legacy.value)
-    const original = legacy.value.plugins[0]!
+    const root = await profile()
+    // Seed the actual alpha.34 managed-copy format before starting the new host.
+    const original = (await new PluginStore(join(root, 'GeppIO', 'plugins')).install(resolve('.local/plugin-packages/workspace-essentials'))).plugins[0]!
+    await launch(root)
     await toggle(true)
     const model = emptyModel(), note = 'item.' + randomUUID(), prompt = 'item.' + randomUUID()
     model.notes = [{ id: note, title: 'Nota retida', body: 'Nota confirmada antes da adoção' }]; model.selectedNote = note
@@ -160,7 +160,7 @@ try {
     await page.locator('.widget-frame').evaluateAll(nodes => nodes.forEach(node => node.setAttribute('data-adoption-mounted', 'retained')))
     await openSettings(); await picker(); await installFile()
     const adopted = (await inventory()).plugins[0]!
-    assert.deepEqual(adopted, { ...original, enabled })
+    assert.deepEqual(adopted, { ...original, enabled, source: 'signed' })
     assert.equal(await page.evaluate(() => localStorage.getItem('geppio:workbench:v1')), layout)
     assert.deepEqual(await readFile(dataPath), confirmed)
     assert.equal(await page.locator('.widget-frame[data-adoption-mounted="retained"]').count(), 4)

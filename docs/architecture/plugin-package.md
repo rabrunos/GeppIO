@@ -186,3 +186,11 @@ Keep that terminal/profile path for restart. This restricted profile override is
 
 Production must reject files signed by any unpinned test/unknown/revoked key. Automated evidence,
 including the owner-signed production smoke, does not substitute for owner mouse acceptance.
+
+## Developer Mode compatibility (alpha.35)
+
+Signed-file installation remains available with Developer Mode off. Only legacy managed copies can
+be adopted; already linked/external registrations are same-ID conflicts even when bytes match.
+The publisher key scope, wire verification, native confirmation and startup verification are unchanged.
+Legacy test profiles are seeded in the actual alpha.34 managed-copy format; development folder
+loading now registers an original source and cannot stand in for the signed-adoption fixture.

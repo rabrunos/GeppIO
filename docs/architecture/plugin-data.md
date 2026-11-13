@@ -63,20 +63,21 @@ feedback. Blanket Electron permission denial remains unchanged. Platform referen
 ## Identity and lifecycle
 
 The installation's host-generated UUID (`revision` in package preferences) is its durable identity,
-distinct from manifest ID. No in-place update exists; future updates require an explicit identity/
-migration decision. A new install gets a new UUID even when its manifest ID and bytes match.
+distinct from manifest ID. External folders now have a separate accepted code-generation UUID;
+explicit reload changes only this generation, preserving installation-bound data and workbench identity.
+Managed/signed general updates still require a separate identity/migration decision. A new install gets a new UUID even when its manifest ID and bytes match.
 The alpha.34 [signed-package pilot](plugin-package.md) adds one narrow exception to folder
 replacement: a verified byte-identical Workspace Essentials folder can be adopted by an atomic
 signed-snapshot reference, retaining that same installation UUID and preference. It never rewrites
 confirmed data or host workbench/history references and is not a general update mechanism.
 
 Main opens a random activation token only for an enabled, inspected API 2 installation. It binds
-the token to that installation and owning webContents; the Worker never receives it. Worker data
+the token to that installation, accepted code generation and owning webContents; the Worker never receives it. Worker data
 requests route through their callback-bound runtime entry, never a claimed namespace. Main checks
 exact main-frame URL/identity, enabled installation and channel inside the serialized operation and
 immediately before replacement. Unknown fields and namespace claims are rejected.
 
-Stop/failure/shutdown releases the channel before disposal. Main revokes on disable/uninstall,
+Stop/failure/shutdown releases the channel before disposal. Main revokes on accepted external reload, Developer Mode pause, disable/uninstall,
 main-frame navigation/reload, render-process loss and destruction. A document-generation counter
 invalidates pending opens across navigation; a repeated owner/installation open replaces its token.
 Queued stale operations fail. Shared-origin Workers retain browser storage authority: these API
@@ -119,3 +120,7 @@ Coverage: `tests/plugin-data.test.ts`, `tests/plugin-runtime.test.ts`, `pnpm tes
 The disposable-profile smoke installs/enables, explicitly places, edits/copies, restarts, compares,
 disables/re-enables, removes/reopens a view, exercises native failure/draft/retry and checks API 1
 Counter/Pulse. It runs first in `pnpm test:desktop`; archived-bar assertions remain unchanged.
+
+External folder mode/reload/link and pending-edit handling are specified in [plugin boundaries](plugins.md).
+The optional third host-only data-channel open argument binds code generation; the Worker data facade
+and durable data-document schema are unchanged. Neither absolute paths nor native tokens enter Worker messages.

@@ -3,6 +3,7 @@ import type { PluginInventory, PluginResult } from '../../shared/plugins.ts'
 import { PluginRuntime } from './plugin-runtime.ts'
 import type { RuntimePlugin } from './plugin-runtime.ts'
 import { useLocale } from './workbench/Locale.tsx'
+import { flushPluginDrafts } from './plugin-drafts.ts'
 
 export function usePlugins() {
   const [inventory, setInventory] = useState<PluginInventory>({ plugins: [], errors: [] })
@@ -27,11 +28,11 @@ export function usePlugins() {
     })()
     return () => { mounted = false; host.shutdown(); runtime.current = null }
   }, [])
-  async function manage(operation: () => Promise<PluginResult<PluginInventory | null>>, stopId?: string) {
+  async function manage(operation: () => Promise<PluginResult<PluginInventory | null>>, prepare: string[] = [], retryId?: string) {
     if (locked.current) return
     locked.current = true; setBusy(true); setMessage('')
     try {
-      if (stopId) await runtime.current?.stop(stopId)
+      if (prepare.length && (!await flushPluginDrafts(prepare) || !await runtime.current?.prepareChange(prepare))) { setMessage('Há edições pendentes ou falha ao salvar. Aguarde Salvo, conclua o novo item ou copie o texto pendente antes de tentar novamente. Nada foi descartado.'); return }
       const result = await operation()
       if (!result.ok) {
         setMessage(result.error)
@@ -39,7 +40,7 @@ export function usePlugins() {
         const actual = refreshed?.ok ? refreshed.value : inventory
         setInventory(actual); await runtime.current?.sync(actual.plugins)
       }
-      else if (result.value) { setInventory(result.value); await runtime.current?.sync(result.value.plugins) }
+      else if (result.value) { if (retryId) await runtime.current?.stop(retryId); setInventory(result.value); await runtime.current?.sync(result.value.plugins) }
     } catch { setMessage('Falha ao gerenciar plugins. Os dados existentes foram preservados.') }
     finally { locked.current = false; setBusy(false) }
   }
@@ -47,9 +48,12 @@ export function usePlugins() {
   return { inventory, views, message, busy, available: Boolean(bridge),
     install: () => { if (bridge) void manage(() => bridge.install()) },
     installFile: () => { if (bridge) void manage(() => bridge.installFile()) },
-    toggle: (view: RuntimePlugin) => { if (bridge) void manage(() => bridge.setEnabled(view.plugin.manifest.id, view.status === 'error' || !view.plugin.enabled), view.plugin.manifest.id) },
-    remove: (id: string) => { if (bridge) void manage(() => bridge.remove(id), id) },
-    removeInvalid: (id: string) => { if (bridge) void manage(() => bridge.remove(id), id) },
+    setDeveloperMode: (enabled: boolean) => { if (bridge) void manage(() => bridge.setDeveloperMode(enabled), enabled ? [] : inventory.plugins.filter(item => item.source === 'external' && item.enabled).map(item => item.manifest.id)) },
+    reload: (id: string, discardDrafts = false) => { if (bridge) void manage(() => bridge.reload(id), discardDrafts ? [] : [id]) },
+    link: (id: string) => { if (bridge) void manage(() => bridge.link(id)) },
+    toggle: (view: RuntimePlugin) => { if (bridge) { const id = view.plugin.manifest.id; void manage(() => bridge.setEnabled(id, view.status === 'error' || !(view.plugin.desiredEnabled ?? view.plugin.enabled)), view.status === 'error' ? [] : [id], view.status === 'error' ? id : undefined) } },
+    remove: (id: string) => { if (bridge) void manage(() => bridge.remove(id), [id]) },
+    removeInvalid: (id: string) => { if (bridge) void manage(() => bridge.remove(id)) },
     action: (id: string, widgetId: string, actionId: string) => { void runtime.current?.action(id, widgetId, actionId) },
     widgetEvent: (id: string, widgetId: string, event: import('../../shared/plugin-surface.ts').WidgetEvent) => runtime.current?.widgetEvent(id, widgetId, event) ?? Promise.resolve(false)
   }
@@ -62,17 +66,23 @@ export function PluginSettings({ plugins }: { plugins: Plugins }) {
     <h3>Plugins</h3>
     <p>{t('Instale um arquivo assinado do piloto Workspace Essentials. Esta versão não oferece isolamento para plugins de terceiros.')}</p>
     <button className="ui-button tool-button ui-button-primary" disabled={plugins.busy || !plugins.available} onClick={plugins.installFile}>{t('Instalar arquivo assinado')}</button>
-    <p>{t('Desenvolvimento confiável: instale pastas somente de código que você revisou.')}</p>
-    <button className="ui-button tool-button" disabled={plugins.busy || !plugins.available} onClick={plugins.install}>{t('Instalar pasta local')}</button>
+    <label className="workspace-switch-row"><span>{t('Modo desenvolvedor')}</span><input type="checkbox" role="switch" aria-label={t('Modo desenvolvedor')} checked={Boolean(plugins.inventory.developerMode)} disabled={plugins.busy || !plugins.available} onChange={event => plugins.setDeveloperMode(event.target.checked)} /></label>
+    <p>{t('Pastas externas executam código local confiável. Desligar o modo pausa essas fontes e mantém dados, posições e ativação desejada.')}</p>
+    {plugins.inventory.developerMode && <button className="ui-button tool-button" disabled={plugins.busy || !plugins.available} onClick={plugins.install}>{t('Carregar pasta local')}</button>}
     <p role="status">{plugins.busy ? t('Processando plugins…') : t(plugins.message)}</p>
     {plugins.inventory.errors.map(error => <div className="plugin-error" key={error}><p>{error}</p>{/^[a-z][a-z0-9.-]*:/.test(error) && <button className="ui-button tool-button" disabled={plugins.busy} onClick={() => plugins.removeInvalid(error.split(':')[0]!)}>{t('Remover instalação inválida')}</button>}</div>)}
     {!plugins.views.length && <p>{t('Nenhum plugin instalado.')}</p>}
     <ul className="plugin-list">{plugins.views.map(view => <li key={view.plugin.manifest.id} data-plugin={view.plugin.manifest.id} data-status={view.status}>
       <div><strong>{view.plugin.manifest.name}</strong><small>{view.plugin.manifest.id} · {view.plugin.manifest.version} · {view.plugin.manifest.widgets.length} widget(s)</small></div>
+      <small>{t(view.plugin.source === 'external' ? 'Pasta externa' : view.plugin.source === 'signed' ? 'Pacote assinado' : 'Cópia gerenciada legada')}</small>
       <span className="badge">{t(STATUS[view.status])}</span>
       <p role="status">{t(view.detail)}</p>
+      {view.plugin.unavailable && <p role="status">{t(view.plugin.unavailable)}</p>}
       <details><summary>{t('Eventos desta sessão')}</summary><ul>{view.events.map((event, index) => <li key={index}>{event}</li>)}</ul></details>
-      <div className="plugin-actions"><button className="ui-button tool-button" disabled={plugins.busy} onClick={() => plugins.toggle(view)}>{t(view.status === 'error' ? 'Tentar novamente' : view.plugin.enabled ? 'Desativar' : 'Ativar')}</button>
+      <div className="plugin-actions"><button className="ui-button tool-button" disabled={plugins.busy || view.plugin.source === 'external' && !plugins.inventory.developerMode} onClick={() => plugins.toggle(view)}>{t(view.status === 'error' ? 'Tentar novamente' : (view.plugin.desiredEnabled ?? view.plugin.enabled) ? 'Desativar' : 'Ativar')}</button>
+        {plugins.inventory.developerMode && view.plugin.source === 'external' && <button className="ui-button tool-button" disabled={plugins.busy} onClick={() => plugins.reload(view.plugin.manifest.id)}>{t('Recarregar')}</button>}
+        {plugins.inventory.developerMode && view.plugin.source === 'external' && view.status === 'error' && <button className="ui-button tool-button" disabled={plugins.busy} onClick={() => plugins.reload(view.plugin.manifest.id, true)}>{t('Recarregar descartando rascunhos')}</button>}
+        {plugins.inventory.developerMode && (view.plugin.source ?? 'legacy') === 'legacy' && <button className="ui-button tool-button" disabled={plugins.busy} onClick={() => plugins.link(view.plugin.manifest.id)}>{t('Vincular pasta original')}</button>}
         {view.status === 'error' && view.plugin.enabled && <button className="ui-button tool-button" disabled={plugins.busy} onClick={() => plugins.toggle({ ...view, status: 'active' })}>{t('Desativar')}</button>}
         <button className="ui-button tool-button" disabled={plugins.busy} onClick={() => plugins.remove(view.plugin.manifest.id)}>{t('Remover')}</button></div>
     </li>)}</ul>

@@ -8,6 +8,9 @@ const plugins: PluginBridge = Object.freeze({
   list: () => ipcRenderer.invoke('plugins:list'),
   install: () => ipcRenderer.invoke('plugins:install'),
   installFile: () => ipcRenderer.invoke('plugins:install-file'),
+  setDeveloperMode: (enabled: boolean) => ipcRenderer.invoke('plugins:set-developer-mode', enabled),
+  reload: (id: string) => ipcRenderer.invoke('plugins:reload', id),
+  link: (id: string) => ipcRenderer.invoke('plugins:link', id),
   setEnabled: (id: string, enabled: boolean) => ipcRenderer.invoke('plugins:set-enabled', id, enabled),
   remove: (id: string) => ipcRenderer.invoke('plugins:remove', id)
 })
@@ -17,7 +20,7 @@ const windowControls: WindowControls = Object.freeze({
   close: () => ipcRenderer.invoke('window:close')
 })
 const pluginData = Object.freeze<PluginDataBridge>({
-  begin: (id, installation) => ipcRenderer.invoke('plugin-data:begin', id, installation),
+  begin: (id, installation, generation) => ipcRenderer.invoke('plugin-data:begin', id, installation, generation),
   read: token => ipcRenderer.invoke('plugin-data:read', token),
   write: (token, expectedRevision, document) => ipcRenderer.invoke('plugin-data:write', token, expectedRevision, document),
   end: token => ipcRenderer.invoke('plugin-data:end', token)

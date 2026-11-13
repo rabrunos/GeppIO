@@ -31,7 +31,7 @@ export function parseDataDocument(value: unknown): DataDocument {
 }
 /** Host-only bridge. Tokens never enter the Worker facade. */
 export interface PluginDataBridge {
-  begin(id: string, installation: string): Promise<PluginResult<string>>
+  begin(id: string, installation: string, generation?: string): Promise<PluginResult<string>>
   read(token: string): Promise<PluginResult<DataSnapshot>>
   write(token: string, expectedRevision: number, document: DataDocument): Promise<PluginResult<DataSnapshot>>
   end(token: string): Promise<PluginResult<null>>

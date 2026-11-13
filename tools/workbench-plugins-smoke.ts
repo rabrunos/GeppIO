@@ -1,3 +1,4 @@
+import { enableDeveloperMode } from './plugin-dev-support.ts'
 import assert from 'node:assert/strict'
 import { _electron as electron } from 'playwright'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
@@ -20,7 +21,8 @@ try {
   async function open() { if (!await manager.isVisible()) await page.getByRole('button', { name: 'Plugins', exact: true }).click(); await manager.waitFor(); await settle(page) }
   async function install(folder: string) {
     await app.evaluate(({ dialog }, selected) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [selected] }) }, folder)
-    await manager.getByRole('button', { name: 'Instalar pasta local', exact: true }).click()
+    await enableDeveloperMode(manager)
+    await manager.getByRole('button', { name: 'Carregar pasta local', exact: true }).click()
     await page.waitForFunction(() => !document.querySelector<HTMLButtonElement>('.plugin-panel-footer button:last-child')!.disabled)
   }
   async function status(id: string, value: string) { await page.waitForFunction(({ id, value }) => document.querySelector(`.plugins-menu [data-plugin="${id}"]`)?.getAttribute('data-status') === value, { id, value }) }

@@ -1,3 +1,4 @@
+import { enableDeveloperMode } from './plugin-dev-support.ts'
 import assert from 'node:assert/strict'
 import { _electron as electron } from 'playwright'
 import type { ElectronApplication, Page } from 'playwright'
@@ -97,7 +98,8 @@ try {
   await page.getByRole('button', { name: 'Plugins', exact: true }).click(); const manager = page.getByRole('dialog', { name: 'Plugins', exact: true })
   for (const name of ['workspace-essentials', 'time-tracker']) {
     await app!.evaluate(({ dialog }, path) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }) }, resolve('.local/plugin-packages/' + name))
-    await manager.getByRole('button', { name: 'Instalar pasta local', exact: true }).click(); await manager.locator(`[data-plugin="geppio.${name}"]`).getByRole('switch').click()
+    await enableDeveloperMode(manager)
+    await manager.getByRole('button', { name: 'Carregar pasta local', exact: true }).click(); await manager.locator(`[data-plugin="geppio.${name}"]`).getByRole('switch').click()
     const card = manager.locator(`[data-plugin="geppio.${name}"]`)
     await page.waitForFunction(id => ['active', 'error'].includes(document.querySelector(`[data-plugin="${id}"]`)?.getAttribute('data-status') ?? ''), 'geppio.' + name)
     assert.equal(await card.getAttribute('data-status'), 'active', 'Real plugin activation: ' + await card.innerText())

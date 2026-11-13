@@ -1,3 +1,4 @@
+import { enableDeveloperMode } from './plugin-dev-support.ts'
 import assert from 'node:assert/strict'
 import { _electron as electron } from 'playwright'
 import type { ElectronApplication, Page } from 'playwright'
@@ -71,7 +72,8 @@ try {
   await page.getByRole('button', { name: 'Plugins', exact: true }).click()
   const manager = page.getByRole('dialog', { name: 'Plugins', exact: true })
   await app!.evaluate(({ dialog }, path) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }) }, resolve('.local/plugin-packages/workspace-essentials'))
-  await manager.getByRole('button', { name: 'Instalar pasta local', exact: true }).click()
+  await enableDeveloperMode(manager)
+  await manager.getByRole('button', { name: 'Carregar pasta local', exact: true }).click()
   const entry = manager.locator(`[data-plugin="${plugin}"]`)
   await entry.getByRole('switch').click()
   await page.waitForFunction(id => document.querySelector(`[data-plugin="${id}"]`)?.getAttribute('data-status') === 'active', plugin)

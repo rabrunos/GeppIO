@@ -211,8 +211,9 @@ Esse piloto não executa terminal nem amplia a API de plugins.
 
 ## Plugins locais confiáveis
 
-Gere os exemplos com `pnpm plugins:build`. No botão **Plugins** do cabeçalho, use **Instalar pasta
-local** e selecione `.local/plugin-packages/counter` e `.local/plugin-packages/pulse` separadamente.
+Gere os exemplos com `pnpm plugins:build`. Em **Configurações → Desenvolvimento e recuperação →
+Plugins**, ative **Modo desenvolvedor**, use **Carregar pasta local** e selecione
+`.local/plugin-packages/counter` e `.local/plugin-packages/pulse` separadamente.
 O gerenciamento também está disponível na área de desenvolvimento das configurações.
 
 A instalação começa desativada. Counter publica contador e ação reais; Pulse executa atividade
@@ -224,7 +225,16 @@ não concede filesystem, PTY, processos, rede remota, segredos, APIs entre plugi
 Remover apenas a presença do widget conserva o Worker. Desativar encerra a execução e retira a
 publicação; uma presença já salva pode continuar na cena com mensagem de pausa. Reativar reinicia
 o estado do Counter. Instalação e enabled persistem; o conteúdo próprio não ganha persistência por
-salvar o layout. Atualizações exigem remover e reinstalar o pacote gerado, não editar a cópia fonte.
+salvar o layout. Para pastas externas, recompile na mesma pasta e clique **Recarregar** explicitamente.
+O UUID, os dados confirmados e as posições permanecem; não há monitoramento ou aceitação automática.
+Desligar **Modo desenvolvedor** pausa as fontes externas e conserva a ativação desejada. Ao reiniciar,
+uma fonte ausente ou alterada fica indisponível até a recarga explícita.
+
+Cópias gerenciadas antigas oferecem **Vincular pasta original**: escolha uma pasta com exatamente
+os mesmos arquivos e bytes. A cópia antiga permanece para recuperação, sem execução automática se
+a fonte vinculada faltar. **Remover** conserva os arquivos da pasta externa. Aguarde **Salvo.** e
+conclua itens pendentes antes de recarregar/pausar. Em falha de runtime, copie os rascunhos antes
+de tentar novamente ou usar **Recarregar descartando rascunhos**.
 
 Os exemplos têm `plugin.json` e TypeScript independentes em `examples/plugins/`. Instale a pasta
 gerada de `.js`/`.json`, não a fonte. Pacotes adicionais compatíveis não exigem recompilar o Core.

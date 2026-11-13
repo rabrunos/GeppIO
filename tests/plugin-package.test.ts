@@ -119,7 +119,7 @@ for (const enabled of [false, true]) test(`alpha.33 folder adoption preserves UU
     if (!enabled) await f.store.setEnabled(id, false)
     const dataPath = join(f.root, 'plugin-data', old.revision + '.json'), before = await readFile(dataPath)
     const adopted = (await f.store.installSigned(f.path, async preview => { assert.equal(preview.adoption, true); return true }, current))!.plugins[0]!
-    assert.deepEqual(adopted, { ...old, enabled })
+    assert.deepEqual(adopted, { ...old, enabled, source: 'signed' })
     assert.deepEqual(await readFile(dataPath), before)
     assert.ok((await readdir(join(f.managed, 'packages'))).includes(id), 'Legacy recovery bytes retained')
     const restarted = new PluginStore(f.managed, trust)
@@ -207,7 +207,7 @@ for (const phase of ['before', 'after', 'failure']) test(`state boundary ${phase
     const result = spawnSync(process.execPath, ['--experimental-strip-types', 'tools/fixtures/plugin-package-interrupt.ts', f.managed, f.path, phase], { input: JSON.stringify(trust), encoding: 'utf8' })
     assert.equal(result.status, phase === 'before' ? 73 : phase === 'after' ? 74 : 75, result.stderr)
     const restarted = new PluginStore(f.managed, trust), actual = (await restarted.list()).plugins[0]!
-    assert.deepEqual(actual, { ...installed, enabled: true })
+    assert.deepEqual(actual, { ...installed, enabled: true, source: phase === 'after' ? 'signed' : 'legacy' })
     assert.ok(restarted.asset(`geppio://app/plugins/${id}/${actual.revision}/entry.js`))
     const state = JSON.parse(await readFile(join(f.managed, 'state.json'), 'utf8')) as { plugins: Record<string, { signed?: string }> }
     assert.equal(Boolean(state.plugins[id]!.signed), phase === 'after')

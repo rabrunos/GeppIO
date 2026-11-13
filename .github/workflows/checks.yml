@@ -32,6 +32,8 @@ jobs:
         run: pnpm check
       - name: Signed plugin package pilot in isolated profiles
         run: pnpm test:plugin-package
+      - name: External plugin development in isolated profiles
+        run: pnpm test:plugin-dev
       - name: Focused Sidebar stack smoke in an isolated profile
         run: pnpm test:sidebar
       - name: Built desktop smoke in an isolated profile

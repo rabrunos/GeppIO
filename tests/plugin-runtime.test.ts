@@ -17,7 +17,7 @@ class FakeWorker implements PluginWorker {
   message(value: unknown) { this.onmessage?.({ data: value } as MessageEvent<unknown>) }
   postMessage(value: unknown) {
     const request = value as { type: string; requestId: number }; this.requests.push(request)
-    if (this.answer) queueMicrotask(() => this.message({ type: 'done', requestId: request.requestId }))
+    if (this.answer && typeof request.requestId === 'number') queueMicrotask(() => this.message({ type: 'done', requestId: request.requestId }))
   }
   terminate() { this.terminated = true }
 }
@@ -125,5 +125,43 @@ test('v2 lifecycle timeout retains the last surface and draft for recovery witho
     assert.equal(views[0]!.widgets.counter?.fields?.[0]?.value, 'pending text')
     assert.match(views[0]!.widgets.counter!.text, /^Falha no plugin/)
     assert.equal(await runtime.widgetEvent(plugin.manifest.id, 'counter', { kind: 'input', controlId: 'draft', value: 'late' }), false)
+  } finally { runtime.shutdown() }
+})
+
+test('external generations replace a Worker once, preserve installation identity and reject stale callbacks/events', async () => {
+  const workers: FakeWorker[] = [], calls: unknown[][] = []; let views: RuntimePlugin[] = []
+  const data: PluginDataBridge = { async begin(...args) { calls.push(args); return { ok: true, value: 'token' } }, async end() { return { ok: true, value: null } }, async read() { return { ok: true, value: { revision: 0, document: null } } }, async write() { return { ok: false, error: 'failure' } } }
+  const runtime = new PluginRuntime(() => { const worker = new FakeWorker(); workers.push(worker); return worker }, values => { views = values }, 100, data)
+  try {
+    const external = { ...plugin, generation: 'code-one', source: 'external' as const, manifest: { ...plugin.manifest, apiVersion: 2 as const } }
+    await runtime.sync([external]); await runtime.sync([external]); assert.equal(workers.length, 1)
+    assert.deepEqual(calls[0], [plugin.manifest.id, plugin.revision, 'code-one'])
+    const staleMessage = workers[0]!.onmessage, staleError = workers[0]!.onerror
+    await runtime.sync([{ ...external, generation: 'code-two' }]); await runtime.sync([{ ...external, generation: 'code-two' }])
+    assert.equal(workers.length, 2); assert.ok(workers[0]!.terminated)
+    staleMessage?.({ data: { type: 'widget', widgetId: 'counter', view: { text: 'stale' } } } as MessageEvent<unknown>)
+    staleError?.({ preventDefault() {} } as ErrorEvent)
+    assert.deepEqual(views[0]!.widgets, {}); assert.equal(views[0]!.status, 'active'); assert.equal(views[0]!.plugin.revision, plugin.revision)
+    assert.equal(await runtime.widgetEvent(plugin.manifest.id, 'counter', { kind: 'action', controlId: 'stale' }), false)
+    await runtime.sync([{ ...external, enabled: false, generation: 'code-three' }]); assert.equal(workers.length, 2)
+    await runtime.sync([{ ...external, generation: 'code-three' }]); assert.equal(workers.length, 3)
+  } finally { runtime.shutdown() }
+})
+test('preparation defers unsaved drafts, permits read-reconciled lost acknowledgement and an activation error without drafts', async () => {
+  const worker = new FakeWorker()
+  const data: PluginDataBridge = { async begin() { return { ok: true, value: 'token' } }, async end() { return { ok: true, value: null } }, async read() { return { ok: true, value: { revision: 1, document: { schemaVersion: 1, value: { text: 'confirmed' } } } } }, async write() { return { ok: false, error: 'lost acknowledgement' } } }
+  const runtime = new PluginRuntime(() => worker, () => {}, 100, data)
+  try {
+    const v2 = { ...plugin, manifest: { ...plugin.manifest, apiVersion: 2 as const } }
+    await runtime.sync([v2])
+    worker.message({ type: 'widget', widgetId: 'counter', view: { text: 'Salvando…' } }); assert.equal(await runtime.prepareChange([plugin.manifest.id]), false)
+    worker.message({ type: 'data', id: 1, operation: 'write', expectedRevision: 0, document: { schemaVersion: 1, value: { text: 'confirmed' } } })
+    await new Promise(resolve => setTimeout(resolve, 0))
+    worker.message({ type: 'widget', widgetId: 'counter', view: { text: 'Falha ao salvar. Alteração pendente' } }); assert.equal(await runtime.prepareChange([plugin.manifest.id]), false)
+    worker.message({ type: 'data', id: 2, operation: 'read' }); await new Promise(resolve => setTimeout(resolve, 0))
+    worker.message({ type: 'widget', widgetId: 'counter', view: { text: 'Pausado\nSalvo.\n\nAguarde Salvo antes de fechar.' } }); assert.equal(await runtime.prepareChange([plugin.manifest.id]), true)
+    worker.message({ type: 'failed', message: 'failed with surface' }); assert.equal(await runtime.prepareChange([plugin.manifest.id]), false)
+    await runtime.stop(plugin.manifest.id); await runtime.sync([v2])
+    worker.message({ type: 'failed', message: 'activation failed before publishing' }); assert.equal(await runtime.prepareChange([plugin.manifest.id]), true)
   } finally { runtime.shutdown() }
 })

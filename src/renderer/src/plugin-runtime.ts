@@ -1,4 +1,4 @@
-import { PLUGIN_LIMITS, isRecord, boundedText, parseWidgetView } from '../../shared/plugins.ts'
+import { PLUGIN_LIMITS, isRecord, boundedText, parseWidgetView, codeGeneration } from '../../shared/plugins.ts'
 import type { InstalledPlugin, WidgetView } from '../../shared/plugins.ts'
 import { dataRevision, exactKeys, parseDataDocument } from '../../shared/plugin-data.ts'
 import type { PluginDataBridge } from '../../shared/plugin-data.ts'
@@ -31,6 +31,7 @@ interface Running {
   queuedEvents?: number
   inputStart?: number
   inputCount?: number
+  writeFailed?: boolean
 }
 /** Identity is bound to each Worker callback, never accepted from a plugin payload. */
 export class PluginRuntime {
@@ -55,7 +56,7 @@ export class PluginRuntime {
     this.event(entry, message); this.finish(entry); this.emit()
   }
   private receive(entry: Running, value: unknown): void {
-    if (entry.view.status === 'error' || entry.view.status === 'disabled') return
+    if (this.closed || this.entries.get(entry.view.plugin.manifest.id) !== entry || (!this.current(entry) && entry.view.status !== 'stopping')) return
     try {
       if (Date.now() - entry.windowStart >= 1000) { entry.messages = 0; entry.windowStart = Date.now() }
       if (++entry.messages > (entry.view.plugin.manifest.apiVersion === 2 ? 120 : 60)) throw new Error('Plugin excedeu o limite de mensagens.')
@@ -68,6 +69,8 @@ export class PluginRuntime {
       else if (value.type === 'status' && boundedText(value.message)) this.event(entry, value.message)
       else if (value.type === 'widget' && typeof value.widgetId === 'string' && entry.view.plugin.manifest.widgets.some(widget => widget.id === value.widgetId)) {
         const view = entry.view.plugin.manifest.apiVersion === 2 ? parseWidgetViewV2(value.view) : parseWidgetView(value.view)
+        // Trusted local pilots can reconcile a lost write acknowledgement with a read.
+        if (/(?:^|\n)Salvo\.(?:\n|$)/.test(view.text) && !/pendente|Falha ao salvar/i.test(view.text)) entry.writeFailed = false
         if (entry.view.status !== 'stopping') entry.view.widgets = { ...entry.view.widgets, [value.widgetId]: view }
       } else throw new Error('Mensagem ou contribuição não declarada no manifesto.')
       this.emit()
@@ -87,7 +90,7 @@ export class PluginRuntime {
     requests.add(id)
     void pending.catch(() => ({ ok: false as const, error: 'Armazenamento indisponível. Rascunho preservado.' })).then(result => {
       requests.delete(id)
-      if (this.current(entry)) entry.worker.postMessage({ type: 'data-result', id, result })
+      if (this.current(entry)) { if (value.operation === 'write') entry.writeFailed = !result.ok; entry.worker.postMessage({ type: 'data-result', id, result }) }
     }).catch(() => this.fail(entry, 'Resposta de dados indisponível.'))
   }
   private request(entry: Running, type: string, data: Record<string, unknown> = {}): Promise<void> {
@@ -102,7 +105,7 @@ export class PluginRuntime {
   async sync(plugins: InstalledPlugin[]): Promise<void> {
     for (const [id, entry] of this.entries) {
       const plugin = plugins.find(item => item.manifest.id === id)
-      if (!plugin || plugin.revision !== entry.view.plugin.revision) { await this.stop(id); this.entries.delete(id) }
+      if (!plugin || plugin.revision !== entry.view.plugin.revision || codeGeneration(plugin) !== codeGeneration(entry.view.plugin)) { await this.stop(id); this.entries.delete(id) }
       else if (!plugin.enabled) { await this.stop(id); entry.view.plugin = plugin }
     }
     for (const plugin of plugins) {
@@ -111,7 +114,7 @@ export class PluginRuntime {
       if (existing && (existing.view.status !== 'disabled' || !plugin.enabled)) { existing.view.plugin = plugin; continue }
       if (!plugin.enabled) {
         const worker: PluginWorker = { onmessage: null, onerror: null, onmessageerror: null, postMessage() {}, terminate() {} }
-        this.entries.set(id, { worker, view: { plugin, status: 'disabled', detail: 'Instalado; não executado.', events: [], widgets: {} }, messages: 0, windowStart: Date.now() }); continue
+        this.entries.set(id, { worker, view: { plugin, status: 'disabled', detail: plugin.unavailable ?? 'Instalado; não executado.', events: [], widgets: {} }, messages: 0, windowStart: Date.now() }); continue
       }
       let worker: PluginWorker
       try { worker = this.createWorker() }
@@ -124,13 +127,13 @@ export class PluginRuntime {
       this.emit()
       if (plugin.manifest.apiVersion === 2) {
         try {
-          const result = await this.data?.begin(id, plugin.revision)
+          const result = plugin.generation ? await this.data?.begin(id, plugin.revision, plugin.generation) : await this.data?.begin(id, plugin.revision)
           if (!result?.ok) throw new Error(result && !result.ok ? result.error : 'Dados v2 indisponíveis.')
           if (!this.current(entry)) { void this.data?.end(result.value); continue }
           entry.token = result.value
         } catch (error) { this.fail(entry, error instanceof Error ? error.message : 'Dados indisponíveis.'); continue }
       }
-      await this.request(entry, 'activate', { entry: `geppio://app/plugins/${id}/${plugin.revision}/${plugin.manifest.entry}`, pluginId: id, apiVersion: plugin.manifest.apiVersion })
+      await this.request(entry, 'activate', { entry: `geppio://app/plugins/${id}/${codeGeneration(plugin)}/${plugin.manifest.entry}`, pluginId: id, apiVersion: plugin.manifest.apiVersion })
       if (entry.view.status === 'starting') { entry.view.status = 'active'; this.event(entry, 'activate concluído.') }
       this.emit()
     }
@@ -151,6 +154,22 @@ export class PluginRuntime {
     const entry = this.entries.get(id)
     if (entry?.view.status !== 'active' || entry.pending || entry.view.widgets[widgetId]?.action?.id !== actionId) return
     await this.request(entry, 'action', { widgetId, actionId })
+  }
+  /** Host lifecycle preparation, not an author API or an assertion of hostile-code isolation. */
+  async prepareChange(ids: readonly string[]): Promise<boolean> {
+    for (const id of ids) {
+      const entry = this.entries.get(id)
+      if (!entry || entry.view.status === 'disabled') continue
+      const until = Date.now() + this.timeout
+      while (entry.pending || entry.queuedEvents || entry.dataRequests?.size) {
+        if (Date.now() >= until) return false
+        await new Promise(resolve => setTimeout(resolve, 10))
+      }
+      if (entry.writeFailed || entry.view.status === 'error' && Object.keys(entry.view.widgets).length > 0 && entry.view.plugin.manifest.apiVersion === 2 || Object.values(entry.view.widgets).some(view => /Falha ao salvar|Salvando|pendente/i.test(view.text))) return false
+      // The pilot's unsubmitted checklist item is intentionally not a saved document yet.
+      if (id === 'geppio.workspace-essentials' && entry.view.widgets.checklist?.fields?.some(field => field.id === 'item' && field.value.length > 0)) return false
+    }
+    return true
   }
   async widgetEvent(id: string, widgetId: string, input: WidgetEvent): Promise<boolean> {
     const entry = this.entries.get(id), view = entry?.view.widgets[widgetId]

@@ -1,6 +1,6 @@
 {
   "name": "geppio",
-  "version": "0.1.0-alpha.34",
+  "version": "0.1.0-alpha.35",
   "private": true,
   "license": "UNLICENSED",
   "description": "GeppIO — a local desktop workbench, Windows first.",
@@ -36,7 +36,8 @@
     "test:presentations": "node --experimental-strip-types tools/presentation-smoke.ts",
     "test:workbench": "node --experimental-strip-types tools/workbench-smoke.ts && node --experimental-strip-types tools/workbench-organization-smoke.ts && node --experimental-strip-types tools/workbench-plugins-smoke.ts && node --experimental-strip-types tools/workbench-corrections-smoke.ts",
     "test:desktop:dev": "node --experimental-strip-types tools/identity-smoke.ts --dev && node --experimental-strip-types tools/desktop-smoke.ts --dev",
-    "github:prepare": "node --experimental-strip-types tools/github-prepare.ts"
+    "github:prepare": "node --experimental-strip-types tools/github-prepare.ts",
+    "test:plugin-dev": "pnpm plugins:build && pnpm build && node --experimental-strip-types --test tests/plugin-dev.test.ts && node --experimental-strip-types tools/plugin-dev-smoke.ts"
   },
   "dependencies": {
     "@heroicons/react": "2.2.0",

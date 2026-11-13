@@ -1,3 +1,4 @@
+import { enableDeveloperMode } from './plugin-dev-support.ts'
 import assert from 'node:assert/strict'
 import { _electron as electron } from 'playwright'
 import type { ElectronApplication, Page } from 'playwright'
@@ -29,7 +30,8 @@ async function closeManager() { await manager().getByRole('button', { name: 'Fec
 async function status(plugin: string, value: string) { await page.waitForFunction(({ plugin, value }) => document.querySelector(`[data-plugin="${plugin}"]`)?.getAttribute('data-status') === value, { plugin, value }) }
 async function install(folder: string, plugin: string) {
   await app!.evaluate(({ dialog }, selected) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [selected] }) }, resolve(folder))
-  await manager().getByRole('button', { name: 'Instalar pasta local', exact: true }).click(); await status(plugin, 'disabled')
+  await enableDeveloperMode(manager())
+  await manager().getByRole('button', { name: 'Carregar pasta local', exact: true }).click(); await status(plugin, 'disabled')
   await manager().locator(`[data-plugin="${plugin}"]`).getByRole('switch').click(); await status(plugin, 'active')
 }
 async function conclude() { await page.getByTestId('conclude-layout').click(); await page.getByTestId('edit-layout').waitFor(); await settle(page) }
@@ -103,7 +105,8 @@ try {
   const settings = page.getByRole('dialog', { name: 'Configurações', exact: true })
   await settings.getByRole('button', { name: 'Desenvolvimento e recuperação', exact: true }).click()
   await app!.evaluate(({ dialog }, selected) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [selected] }) }, resolve('.local/plugin-packages/workspace-essentials'))
-  await settings.getByRole('button', { name: 'Instalar pasta local', exact: true }).click(); await status(id, 'disabled')
+  await enableDeveloperMode(settings)
+  await settings.getByRole('button', { name: 'Carregar pasta local', exact: true }).click(); await status(id, 'disabled')
   await settings.locator(`[data-plugin="${id}"]`).getByRole('button', { name: 'Ativar', exact: true }).click(); await status(id, 'active')
   await settings.getByRole('button', { name: 'Fechar configurações', exact: true }).click(); await settle(page)
   evidence.settingsInstallEnable = 'passed'
@@ -112,7 +115,7 @@ try {
   const stale = await page.evaluate(async id => {
     const inventory = await window.geppio!.plugins.list(); if (!inventory.ok) throw new Error(inventory.error)
     const installed = inventory.value.plugins.find(plugin => plugin.manifest.id === id)!
-    return window.geppio!.pluginData.begin(id, installed.revision)
+    return window.geppio!.pluginData.begin(id, installed.revision, installed.generation)
   }, id)
   assert.ok(stale.ok)
   await page.reload(); await page.getByTestId('edit-layout').waitFor(); await settle(page)

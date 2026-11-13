@@ -1,5 +1,53 @@
 # Plugin boundary — trusted local v1/v2 and future design
 
+## External folder development (alpha.35 / Issue #44)
+
+Developer Mode is per profile and defaults off. Settings always offers signed-file installation;
+when enabled it also offers native-directory loading, explicit reload of external registrations,
+and exact linking of legacy managed copies. The header manager exposes the same fixed operations.
+The three source types are signed snapshot, legacy managed copy, and trusted external folder.
+Only reviewed local authoring is supported; this adds no third-party execution authority.
+
+External registrations persist the canonical absolute source path locally, accepted content digest,
+validated manifest/widget history, desired enabled preference and a code-generation UUID. They keep
+no persistent code copy. The path is absent from renderer inventory, Worker messages, logs and
+workbench exports. Main inspects the complete bounded file set into memory and serves accepted
+snapshots through the existing managed protocol. Installing starts disabled; placement is explicit.
+
+Reload checks Developer Mode, source type and the same manifest ID. It validates a full candidate,
+then atomically replaces state before changing the in-memory snapshot or revoking channels.
+A rejected/canceled/precommit-failed operation preserves the running snapshot. No watcher, rebuild,
+inventory refresh or re-enable accepts new bytes. Accepted code can fail activation; that is shown
+as a runtime failure, distinct from validation rejection. Each accepted reload gets a new generation
+while retaining the installation UUID/data namespace. Renderer replaces its Worker once; Main
+checks generation on assets, channel opening, queued requests and before data commit.
+
+Mode off revokes external channels and pauses Workers, retaining desired activation/data/layouts.
+Mode on and process restart re-inspect the last accepted digest before execution. A missing,
+invalid or changed source appears unavailable with an explicit Reload instruction. No fallback to
+memory from a previous process or the legacy recovery copy is permitted. Repeated same-mode
+requests are idempotent. In-process accepted snapshots remain immutable until an explicit reload;
+this is not live disk monitoring or hostile same-user filesystem protection.
+
+Linking requires the same ID and exact complete file/byte digest as the inspected legacy copy.
+It keeps installation UUID, preference, data, layout references and the existing managed recovery
+copy. The initial generation equals the legacy revision, so an active identical Worker survives.
+Later explicit reloads accept changes. Signed adoption remains limited to byte-identical managed
+copies; signed files conflict with external registrations. Unregistering external sources never
+writes/deletes their files, and retained legacy recovery copies are marked to prevent rediscovery.
+
+Host text fields flush before reload/pause/removal and the runtime waits for bounded event/data
+completion. Unsaved pilot models or an unsubmitted checklist item defer the operation with feedback.
+Runtime failure preserves field text for copying; deliberate Retry or "Recarregar descartando
+rascunhos" may discard activation-local drafts. This is trusted-pilot handling, not a new author
+persistence protocol. Missing widget declarations remain separate recoverable host types, hidden
+from new placement, without entering the retired demo archive. Their IDs/placements/compositions
+remain available for the declaration to return. Historical widget identities are bounded to 64.
+
+State schema remains 1, with optional Developer Mode/external/retained fields; alpha.34 preferences
+remain readable. State is bounded to 1 MiB to hold at most 32 bounded manifests/history records.
+A state rename is the commit boundary, not a power-loss/fsync durability guarantee.
+
 ## Signed first-party file pilot (alpha.34)
 
 Workspace Essentials can use a separately versioned, bounded Ed25519 file envelope. Main verifies
@@ -20,11 +68,12 @@ execution or general SDK expansion follows from this first-party trusted-local p
 
 ## Implemented experimental runtime (Issue #21)
 
-Only owner-authored/reviewed trusted local development packages are supported. Main copies a selected
-directory to `userData/plugins/packages/<id>` and atomically persists installation preferences in
+Only owner-authored/reviewed trusted local development packages are supported. Existing legacy
+installations keep their managed directory at `userData/plugins/packages/<id>` and preferences in
 `userData/plugins/state.json`. New installs are disabled. Discovery validates the actual installed
 files, not a static fixture registry. The protocol serves immutable inspected JS snapshots only
-for enabled IDs/revisions. Source edits do not mutate installed packages; remove/reinstall to update.
+for enabled IDs/revisions. Legacy copies are independent of their original folder; link it
+explicitly to adopt the external reload workflow.
 Invalid installed packages appear as recoverable inventory errors; corrupt preference bytes are
 preserved and management is blocked. No package is executed in Main/preload.
 
@@ -32,8 +81,10 @@ For API 1, `plugin.json` has exactly `schemaVersion: 1`, `apiVersion: 1`, `id`, 
 relative `.js` `entry`, and `widgets: [{ id, title, surface: 'declarative' }]` (zero to eight).
 IDs and relative paths are bounded; traversal, links/junctions, unknown manifest fields, duplicate
 widget IDs and unsupported file types are rejected. Limits: 32 installations, 64 package entries,
-512 KiB/file, 2 MiB/package and 16 KiB/manifest. The native bridge offers list/install (native
-directory picker)/installFile (native signed-file picker)/setEnabled/remove. Main validates the sending window, main frame and exact app URL.
+512 KiB/file, 2 MiB/package and 16 KiB/manifest. The fixed native bridge offers list/install
+(development-only native directory picker), installFile (native signed-file picker),
+setDeveloperMode/reload/link/setEnabled/remove. No renderer paths are accepted. Main validates the
+sending window, main frame and exact app URL.
 
 Every activation creates a module Web Worker and imports the independently compiled external entry.
 The entry exports `activate(context)` and returns `{ dispose(), onAction?(widgetId, actionId) }`.

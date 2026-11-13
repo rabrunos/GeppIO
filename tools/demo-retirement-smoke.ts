@@ -1,3 +1,4 @@
+import { enableDeveloperMode } from './plugin-dev-support.ts'
 import assert from 'node:assert/strict'
 import { _electron as electron } from 'playwright'
 import type { ElectronApplication, Page } from 'playwright'
@@ -38,7 +39,8 @@ try {
   await page.getByRole('button', { name: 'Plugins', exact: true }).click()
   const manager = page.getByRole('dialog', { name: 'Plugins', exact: true })
   await app!.evaluate(({ dialog }, path) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }) }, resolve('.local/plugin-packages/counter'))
-  await manager.getByRole('button', { name: 'Instalar pasta local', exact: true }).click()
+  await enableDeveloperMode(manager)
+  await manager.getByRole('button', { name: 'Carregar pasta local', exact: true }).click()
   const record = manager.locator('[data-plugin="local.counter"]')
   await record.getByRole('switch').click()
   await page.waitForFunction(() => document.querySelector('[data-plugin="local.counter"]')?.getAttribute('data-status') === 'active')

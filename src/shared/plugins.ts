@@ -11,16 +11,27 @@ export interface PluginManifest {
   entry: string
   widgets: { id: string; title: string; surface: 'declarative' }[]
 }
-export interface InstalledPlugin { manifest: PluginManifest; enabled: boolean; revision: string }
-export interface PluginInventory { plugins: InstalledPlugin[]; errors: string[] }
+export interface InstalledPlugin {
+  manifest: PluginManifest; enabled: boolean; revision: string
+  source?: 'legacy' | 'signed' | 'external'
+  generation?: string
+  desiredEnabled?: boolean
+  unavailable?: string
+  recoveryWidgets?: PluginManifest['widgets']
+}
+export interface PluginInventory { plugins: InstalledPlugin[]; errors: string[]; developerMode?: boolean }
 export type PluginResult<T> = { ok: true; value: T } | { ok: false; error: string }
 export interface PluginBridge {
   list(): Promise<PluginResult<PluginInventory>>
   install(): Promise<PluginResult<PluginInventory | null>>
   installFile(): Promise<PluginResult<PluginInventory | null>>
+  setDeveloperMode(enabled: boolean): Promise<PluginResult<PluginInventory>>
+  reload(id: string): Promise<PluginResult<PluginInventory>>
+  link(id: string): Promise<PluginResult<PluginInventory | null>>
   setEnabled(id: string, enabled: boolean): Promise<PluginResult<PluginInventory>>
   remove(id: string): Promise<PluginResult<PluginInventory>>
 }
+export function codeGeneration(plugin: InstalledPlugin): string { return plugin.generation ?? plugin.revision }
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }

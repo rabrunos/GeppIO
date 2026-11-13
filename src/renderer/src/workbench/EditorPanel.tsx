@@ -62,7 +62,7 @@ export function EditorPanel({ tx, registry, open, setOpen, slot, chooseSlot, add
     ]
     return () => animations.forEach(animation => animation?.cancel())
   }, [slot?.id])
-  const types = [...registry.values()].filter(type => !type.retired && (!slot || type.constraint.regions.includes(slot.region)) && (!areas.length || areas.some(region => type.constraint.regions.includes(region))))
+  const types = [...registry.values()].filter(type => !type.retired && !type.missing && (!slot || type.constraint.regions.includes(slot.region)) && (!areas.length || areas.some(region => type.constraint.regions.includes(region))))
   const owners = [...new Set(types.map(type => type.owner))], selectedPlugin = owners.includes(plugin) ? plugin : 'all'
   const ownerName = (owner: string) => owner === 'all' ? t('Todos os plugins') : owner === 'host' ? 'GeppIO' : [...registry.values()].find(type => type.owner === owner)?.description ?? owner
   const matches = types.filter(type => (selectedPlugin === 'all' || type.owner === selectedPlugin)

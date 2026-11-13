@@ -1,3 +1,4 @@
+import { enableDeveloperMode } from './plugin-dev-support.ts'
 import { _electron as electron } from 'playwright'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -54,13 +55,15 @@ async function settings(page: Page) {
   await page.getByRole('menuitem', { name: 'Abrir configurações', exact: true }).click()
   await page.getByTestId('plugin-settings').waitFor()
   await page.getByRole('button', { name: 'Desenvolvimento e recuperação', exact: true }).click()
-  await page.getByRole('button', { name: 'Instalar pasta local', exact: true }).waitFor({ state: 'visible' })
+  await enableDeveloperMode(page)
+  await page.getByRole('button', { name: 'Carregar pasta local', exact: true }).waitFor({ state: 'visible' })
 }
 async function install(page: Page, path: string) {
   await application!.evaluate(({ dialog }, selected) => {
     dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [selected] })) as typeof dialog.showOpenDialog
   }, path)
-  await page.getByRole('button', { name: 'Instalar pasta local', exact: true }).click()
+  await enableDeveloperMode(page)
+  await page.getByRole('button', { name: 'Carregar pasta local', exact: true }).click()
 }
 async function status(page: Page, id: string, state: string) {
   if (state === 'active') {
@@ -89,7 +92,7 @@ try {
   const privileged = await page.evaluate(() => ({ require: 'require' in window, process: 'process' in window, bridge: Object.keys(window.geppio ?? {}) }))
   if (privileged.require || privileged.process || privileged.bridge.some(key => !['name', 'version', 'platform', 'plugins', 'pluginData', 'windowControls', 'demoFixtures'].includes(key))) throw new Error('Unexpected privileged renderer surface')
   assert.equal(await page.evaluate(() => window.geppio!.demoFixtures), true, 'This geometry suite explicitly opts into disposable-profile fixtures')
-  assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.plugins).sort()), ['install', 'installFile', 'list', 'remove', 'setEnabled'])
+  assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.plugins).sort()), ['install', 'installFile', 'link', 'list', 'reload', 'remove', 'setDeveloperMode', 'setEnabled'])
   assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.pluginData).sort()), ['begin', 'end', 'read', 'write'])
   assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.windowControls).sort()), ['close', 'maximize', 'minimize'], 'Only the three owner-authorized host chrome actions are exposed')
   const nativeBoundary = await application!.evaluate(({ BrowserWindow }) => {
@@ -207,7 +210,7 @@ try {
   assert.equal(await page.locator('[data-plugin-widget]').count(), 0)
   await install(page, resolve('.local/plugin-packages/pulse')); await status(page, 'local.pulse', 'disabled')
   await install(page, resolve('.local/plugin-packages/counter'))
-  await page.getByTestId('plugin-settings').getByText('Já existe um plugin com esse ID.', { exact: true }).waitFor()
+  await page.getByTestId('plugin-settings').getByText('Já existe uma instalação conflitante com esse ID.', { exact: true }).waitFor()
   assert.equal(await page.locator('[data-plugin]').count(), 2)
   const counter = () => page.locator('[data-plugin="local.counter"]')
   const pulse = () => page.locator('[data-plugin="local.pulse"]')

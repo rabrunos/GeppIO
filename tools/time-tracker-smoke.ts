@@ -1,3 +1,4 @@
+import { enableDeveloperMode } from './plugin-dev-support.ts'
 import assert from 'node:assert/strict'
 import { _electron as electron } from 'playwright'
 import type { ElectronApplication, Page } from 'playwright'
@@ -37,7 +38,8 @@ try {
   for (const name of ['workspace-essentials', 'time-tracker']) {
     const id = 'geppio.' + name
     await app!.evaluate(({ dialog }, path) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }) }, resolve('.local/plugin-packages/' + name))
-    await manager.getByRole('button', { name: 'Instalar pasta local', exact: true }).click()
+    await enableDeveloperMode(manager)
+    await manager.getByRole('button', { name: 'Carregar pasta local', exact: true }).click()
     await manager.locator(`[data-plugin="${id}"]`).getByRole('switch').click()
     await page.waitForFunction(id => document.querySelector(`[data-plugin="${id}"]`)?.getAttribute('data-status') === 'active', id)
   }

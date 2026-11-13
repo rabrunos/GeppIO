@@ -72,8 +72,8 @@ app.whenReady().then(async () => {
       if (!win || frame !== event.sender.mainFrame || frame?.url !== (devURL ?? `${IDENTITY.protocol}://${IDENTITY.host}/index.html`)) return { ok: false, error: 'Origem de dados inválida.' }
       const owner = event.sender.id
       try {
-        if (operation === 'begin' && args.length === 2 && pluginId(args[0]) && typeof args[1] === 'string' && /^[a-f0-9-]{36}$/.test(args[1])) {
-          const token = await plugins.beginData(owner, args[0], args[1])
+        if (operation === 'begin' && (args.length === 2 || args.length === 3) && pluginId(args[0]) && typeof args[1] === 'string' && /^[a-f0-9-]{36}$/.test(args[1]) && (args[2] === undefined || typeof args[2] === 'string' && /^[a-f0-9-]{36}$/.test(args[2]))) {
+          const token = await plugins.beginData(owner, args[0], args[1], args[2] as string | undefined)
           if (event.sender.isDestroyed() || event.sender.mainFrame !== frame) { plugins.endData(owner, token); throw new Error('Documento de ativação expirado.') }
           return { ok: true, value: token }
         }
@@ -94,17 +94,17 @@ app.whenReady().then(async () => {
       return true
     })
   }
-  for (const operation of ['list', 'install', 'install-file', 'set-enabled', 'remove'] as const) {
+  for (const operation of ['list', 'install', 'install-file', 'set-developer-mode', 'reload', 'link', 'set-enabled', 'remove'] as const) {
     ipcMain.handle('plugins:' + operation, async (event, ...args: unknown[]): Promise<PluginResult<unknown>> => {
       const win = BrowserWindow.fromWebContents(event.sender)
       if (!win || event.senderFrame !== event.sender.mainFrame || event.senderFrame.url !== (devURL ?? `${IDENTITY.protocol}://${IDENTITY.host}/index.html`)) return { ok: false, error: 'Origem de gerenciamento inválida.' }
       const mutation = operation !== 'list'
       if (mutation && managementBusy) return { ok: false, error: 'Aguarde a operação de plugins em andamento.' }
       if (mutation) managementBusy = true
+      const frame = event.senderFrame, generationCurrent = plugins.ownerGuard(event.sender.id)
+      const currentOwner = () => !win.isDestroyed() && !event.sender.isDestroyed() && generationCurrent() && event.sender.mainFrame === frame && frame.url === (devURL ?? `${IDENTITY.protocol}://${IDENTITY.host}/index.html`)
       try {
         if (operation === 'install-file' && !args.length) {
-          const frame = event.senderFrame, generationCurrent = plugins.ownerGuard(event.sender.id)
-          const currentOwner = () => !win.isDestroyed() && !event.sender.isDestroyed() && generationCurrent() && event.sender.mainFrame === frame && frame.url === (devURL ?? `${IDENTITY.protocol}://${IDENTITY.host}/index.html`)
           const selected = await dialog.showOpenDialog(win, { title: 'Instalar arquivo assinado', buttonLabel: 'Verificar pacote', properties: ['openFile'], filters: [{ name: 'Plugin GeppIO assinado', extensions: ['gpp'] }] })
           if (!currentOwner() || selected.canceled || selected.filePaths.length !== 1) return { ok: true, value: null }
           const value = await plugins.installSigned(selected.filePaths[0]!, async preview => {
@@ -115,9 +115,14 @@ app.whenReady().then(async () => {
           return { ok: true, value }
         }
         if (operation === 'list' && !args.length) return { ok: true, value: await plugins.list() }
-        if (operation === 'install' && !args.length) {
-          const selected = await dialog.showOpenDialog(win, { title: 'Instalar plugin local confiável', buttonLabel: 'Instalar desativado', properties: ['openDirectory'] })
-          return { ok: true, value: selected.canceled || selected.filePaths.length !== 1 ? null : await plugins.install(selected.filePaths[0]!) }
+        if (operation === 'set-developer-mode' && args.length === 1 && typeof args[0] === 'boolean') return { ok: true, value: await plugins.setDeveloperMode(args[0], currentOwner) }
+        if (operation === 'reload' && args.length === 1 && pluginId(args[0])) return { ok: true, value: await plugins.reload(args[0], currentOwner) }
+        if ((operation === 'install' && !args.length) || (operation === 'link' && args.length === 1 && pluginId(args[0]))) {
+          if (!await plugins.developerModeEnabled()) throw new Error('Ative Modo desenvolvedor para selecionar pastas externas confiáveis.')
+          if (operation === 'link') await plugins.canLink(args[0] as string)
+          const selected = await dialog.showOpenDialog(win, { title: operation === 'link' ? 'Vincular pasta original' : 'Carregar pasta local confiável', buttonLabel: operation === 'link' ? 'Vincular pasta' : 'Carregar desativado', properties: ['openDirectory'] })
+          if (!currentOwner() || selected.canceled || selected.filePaths.length !== 1) return { ok: true, value: null }
+          return { ok: true, value: operation === 'link' ? await plugins.linkExternal(args[0] as string, selected.filePaths[0]!, currentOwner) : await plugins.loadExternal(selected.filePaths[0]!, currentOwner) }
         }
         if (operation === 'set-enabled' && args.length === 2 && pluginId(args[0]) && typeof args[1] === 'boolean') return { ok: true, value: await plugins.setEnabled(args[0], args[1]) }
         if (operation === 'remove' && args.length === 1 && pluginId(args[0])) return { ok: true, value: await plugins.remove(args[0]) }

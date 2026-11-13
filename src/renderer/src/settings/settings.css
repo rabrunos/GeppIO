@@ -13,3 +13,5 @@ input[type="checkbox"] { accent-color: var(--accent); }
 .presentation-options { margin-top: 16px; flex-wrap: wrap; }
 .plugin-widgets { padding: 0 0 9px; }.plugin-widget { min-width: min(240px,100%); }
 .host-development-settings { width: min(680px, calc(100vw - 22px)); }
+.host-development-settings .plugin-list { grid-template-columns: minmax(0, 1fr); }
+.host-development-settings .plugin-actions { flex-wrap: wrap; }
