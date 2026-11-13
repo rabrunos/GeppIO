@@ -367,6 +367,10 @@ export function useInteraction(tx: Transaction, view: WorkbenchSnapshot, surface
     if (scrolling) animation.current = requestAnimationFrame(next => latest.current.tick(next))
   }
   function transferTo(id: string, region: Region, at?: { x: number; y: number }) {
+    const typeId = tx.live.current.organization.views.find(view => view.id === id)?.typeId
+    if (typeId && registry.get(typeId)?.preserveNormalGeometry && panelIds(tx.live.current).has(id) && tx.live.current.placements.find(p => p.id === id)?.region !== region) {
+      tx.setMessage('Volte a Normal antes de transferir este widget para outra região.'); return false
+    }
     if (!tx.editing || !feasible[region]) { tx.setMessage('Região sem espaço disponível. Reabra ou amplie a região antes de transferir.'); return false }
     const result = moveView(settleSnapshot(latest.current.view), registry, id, surface(region), at)
     if (!result) { tx.setMessage(`Transferência para ${REGION_LABELS[region]} incompatível ou sem espaço para os mínimos. Composição preservada.`); setBlocked(id); return false }

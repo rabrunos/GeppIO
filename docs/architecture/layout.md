@@ -1,5 +1,21 @@
 # Region-aware continuous widget geometry
 
+## Real Notes presentation pilot — Issue #11 / alpha.36
+
+The host registry assigns only Workspace Essentials Notes the existing Main presentation
+capabilities. Sidebar/Bottom remain Normal. `preserveNormalGeometry` is host metadata:
+the pilot returns its validated saved Normal seed, preserving peer placements/reference,
+instead of converting the expanded panel rectangle used by the host demonstrator. A
+conflicting seed refuses atomically. The envelope and nested presentation versions stay 2.
+Preferred panel sizes, position and explicit Docked open state remain independent.
+Overlay hover/reveal remains transient, including restart's compact trigger behavior.
+
+Grouped members require Normal; transitions refuse before draft/history mutation.
+Regional transfer requires explicitly returning to Normal first. No tab detachment,
+plugin data write, Worker activation or author API follows from presentation changes.
+Notes reuses the existing joint arrangement, compact reservations and window adaptation;
+opening an Overlay does not change Normal projection. Checklist has no panel capability.
+
 ## Regional tab groups — Issue #18 / alpha.30
 
 `shared/workbench/groups.ts` owns grouping, order and atomic detachment. Only the

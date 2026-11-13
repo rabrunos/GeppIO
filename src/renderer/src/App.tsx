@@ -100,6 +100,10 @@ function Workbench({ plugins }: { plugins: ReturnType<typeof usePlugins> }) {
   const [showFeedback, setShowFeedback] = useState(false), initialMessage = useRef(tx.message)
   const fullMain = { width: surfaces.measures.main.ownerWidth ?? 0, height: surfaces.measures.main.ownerHeight ?? 0 }
   const activePanels = panelIds(tx.snapshot), panelActive = activePanels.size > 0
+  // Presentation-only edits must not adopt viewport/catalog projections of the
+  // real pilot's Normal seed or its peers. Geometry commands carry their own view.
+  const preservePresentationGeometry = tx.snapshot.organization.views.some(record => registry.get(record.typeId)?.preserveNormalGeometry
+    && tx.snapshot.placements.some(p => p.id === record.id && p.region === 'main'))
   function resolvePanels(snapshot: WorkbenchSnapshot) {
     const base = arrangePresentations(snapshot, fullMain, constraints, expanded)
     const scrollbar = expanded && snapshot.placements.some(p => p.region === 'main' && !activePanels.has(p.id) && p.x + p.width > base.normal.width) ? surfaces.scrollbarHeight.current : 0
@@ -157,13 +161,13 @@ function Workbench({ plugins }: { plugins: ReturnType<typeof usePlugins> }) {
   useEffect(() => { surfaces.measure() }, [regions.sidebarMode, tx.editing, editorOpen])
   function toggleExpansion(next: boolean) { interaction.end(true); setExpanded(next); try { localStorage.setItem(EXPANSION_KEY, String(next)) } catch { tx.setMessage(t('Preferência alterada somente nesta sessão.')) } }
   function toggleTheme() { tx.changeLocal({ theme: theme === 'dark' ? 'light' : 'dark' }) }
-  function begin() { grouping.cancel(); maximize.clear(); interaction.end(false); setWidgetsRequest(value => value + 1); if (tx.editing) { setEditorOpen(true); return }; tx.begin(panelActive ? tx.snapshot : view) }
+  function begin() { grouping.cancel(); maximize.clear(); interaction.end(false); setWidgetsRequest(value => value + 1); if (tx.editing) { setEditorOpen(true); return }; tx.begin(panelActive || preservePresentationGeometry ? tx.snapshot : view) }
   function confirmLayout(conclude: boolean) {
     grouping.cancel()
     interaction.end(false)
     regions.commitKeyboard()
     if (REGIONS.some(r => !feasible[r] && visible.placements.some(p => p.region === r))) { tx.setMessage(t('Espaço insuficiente. Amplie a região antes de salvar.')); return }
-    const next = panelActive ? tx.live.current : { ...view, organization: tx.live.current.organization }
+    const next = panelActive || preservePresentationGeometry ? tx.live.current : { ...view, organization: tx.live.current.organization }
     if (conclude) void tx.conclude(next); else void tx.saveEditing(next)
   }
   function add(type: string, region: Region, target?: SessionSlot, at?: { x: number; y: number }) {

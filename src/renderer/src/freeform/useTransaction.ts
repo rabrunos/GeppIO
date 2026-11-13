@@ -145,6 +145,9 @@ export function useTransaction(registry: Registry = widgetRegistry(), localState
     async present(patch: PresentationPatch, id = 'properties', bounds?: { size: Size; expanded: boolean; scrollbar: number }) {
       if (saving.current || history.current.active) return false
       if (patch.presentation && !editingRef.current) return false
+      if (patch.presentation && patch.presentation !== 'normal' && live.current.organization.groups?.entries.some(group => group.members.includes(id))) {
+        setMessage('Separe a aba do grupo antes de alterar a apresentação. O grupo foi preservado.'); return false
+      }
       let next: WorkbenchSnapshot
       try {
         if (patch.presentation === 'normal' && presentationFor(live.current, id, registry).presentation !== 'normal') {

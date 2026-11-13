@@ -2,6 +2,13 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.36] — 2026-11-13
+
+- Enable the host-assigned experimental Main presentation pilot for real Workspace Essentials Notes, reusing four-edge Docked/Overlay, free floating, compact strips, sizing and constrained-window adaptation.
+- Restore Notes' saved Normal geometry independently of panel preferences and plugin data. Refuse grouped presentation changes and require explicit Normal before regional transfer, retaining atomic transactions and existing persistence formats.
+- Keep presentation-only Edit confirmations from adopting viewport/catalog projection; support Enter/Space on existing compact panel and splitter controls.
+- Add installed-package presentation smoke in both themes at DPR 1 and simulated 1.25 to the presentation/desktop CI chain; retain Essentials and timestamp-based Time Tracker continuity controls.
+
 ## [0.1.0-alpha.35] — 2026-11-13
 
 - Add per-profile Developer Mode, disabled by default, with native-folder loading from the original built source and explicit reload through bounded in-memory snapshots.

@@ -1,5 +1,7 @@
 /** Native host UI phrases. User content and plugin publications never enter this catalogue. */
 export const appMessages: Readonly<Record<string, string>> = {
+  'Separe a aba do grupo antes de alterar a apresentação. O grupo foi preservado.': 'Detach the tab from its group before changing presentation. The group was preserved.',
+  'Volte a Normal antes de transferir este widget para outra região.': 'Return to Normal before transferring this widget to another region.',
   'Grupo de widgets': 'Widget group', 'Abas': 'Tabs', 'Abas do grupo': 'Group tabs', 'Agrupar': 'Group',
   'Arrastar {0} para agrupar': 'Drag {0} to group', 'Arraste para agrupar. Clique para escolher o destino.': 'Drag to group. Click to choose the destination.',
   'Solte aqui para agrupar': 'Drop here to group', 'Amplie o widget para caber as abas.': 'Enlarge the widget to fit the tabs.',

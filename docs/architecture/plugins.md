@@ -1,5 +1,10 @@
 # Plugin boundary — trusted local v1/v2 and future design
 
+Alpha.36 assigns the existing Main presentation controls to the known Workspace Essentials
+Notes widget through host metadata only. This adds no manifest field, SDK method, permission
+or lifecycle action. Checklist and Time Tracker retain their prior capabilities. Presentation
+and mounting do not own persisted ordinary data or accepted installation/code identities.
+
 ## External folder development (alpha.35 / Issue #44)
 
 Developer Mode is per profile and defaults off. Settings always offers signed-file installation;

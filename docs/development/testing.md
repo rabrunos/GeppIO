@@ -1,5 +1,24 @@
 # Validation guide
 
+## Real presentation pilot (alpha.36)
+
+`pnpm test:presentations` retains the host fixture smoke and then runs
+`tools/real-presentation-smoke.ts` at DPR 1 and simulated DPR 1.25. Both runs install
+the actual built Workspace Essentials package in disposable profiles and exercise Notes'
+four Docked/five Overlay choices through localized keyboard-accessible controls, both
+themes, stable mounted roots/Workers/model identity, unchanged Normal geometry and
+confirmed data, hover peer bounds, collapse/reopen, process restart, narrow/wide and
+Save/Cancel/Undo/Redo, free movement, grouped refusal, keyboard collapse/reopen,
+reduced motion, pause/reactivation/reload and quota/stale-write preservation.
+Checklist supplies an interactive Normal control. The existing
+desktop chain includes this command, Essentials, Time Tracker and Edit-lock/group tests.
+`tests/real-presentations.test.ts` covers host eligibility, atomic group/seed/transfer
+refusal, roundtrips and omitted-region composition behavior. These tests do not establish
+physical Windows DPI, motion quality or owner acceptance. Time Tracker uses persisted
+timestamps, never a claim of Worker execution after process exit. Its smoke hides
+the timer's actual containing Sidebar/Bottom and switches away from its Sidebar bar,
+checking the original running record before transfer/restart and one completed interval.
+
 ## Current baseline and evidence boundaries
 
 This guide describes repeatable checks and their scope, not current task status or an execution

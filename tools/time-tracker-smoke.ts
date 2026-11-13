@@ -63,7 +63,27 @@ try {
   const started = (await read()).document.value.running
   assert.ok(started?.start > 0)
   const workers = page.workers()
-  for (const region of ['sidebar', 'bottom', 'main']) { await edit(); for (const name of ['timer', 'reports']) if (await frame(name).getAttribute('data-owner-region') !== region) await move(name, region); await conclude(); await saved() }
+  for (const region of ['sidebar', 'bottom', 'main']) {
+    await edit(); for (const name of ['timer', 'reports']) if (await frame(name).getAttribute('data-owner-region') !== region) await move(name, region); await conclude(); await saved()
+    if (region === 'sidebar') {
+      await page.getByRole('button', { name: 'Ferramentas', exact: true }).click(); await settle(page)
+      assert.deepEqual((await read()).document.value.running, started, 'Hiding the containing Sidebar preserves the session')
+      await page.getByRole('button', { name: 'Ferramentas', exact: true }).click(); await settle(page)
+      await page.getByRole('button', { name: 'Nova barra', exact: true }).click()
+      const bar = page.getByRole('dialog', { name: 'Nova barra', exact: true })
+      await bar.getByRole('textbox', { name: 'Nome', exact: true }).fill('Controle de continuidade')
+      await bar.getByRole('button', { name: 'Criar barra', exact: true }).click(); await bar.waitFor({ state: 'detached' }); await settle(page)
+      await page.locator('[data-sidebar-custom]').last().click(); await settle(page)
+      assert.deepEqual((await read()).document.value.running, started, 'An inactive Sidebar bar does not pause the session')
+      await page.locator('[data-bar-id="home"]').click(); await settle(page)
+    }
+    if (region === 'bottom') {
+      await page.getByRole('separator', { name: 'Altura da Bottom', exact: true }).press('Enter'); await settle(page)
+      assert.deepEqual((await read()).document.value.running, started, 'Collapsing the containing Bottom preserves the session')
+      await page.getByRole('separator', { name: 'Altura da Bottom', exact: true }).press('Enter'); await settle(page)
+    }
+    assert.deepEqual((await read()).document.value.running, started)
+  }
   assert.deepEqual(page.workers(), workers, 'Region moves retain both plugin Workers')
   await page.getByRole('button', { name: 'Ferramentas', exact: true }).click(); await settle(page)
   await page.getByRole('button', { name: 'Ferramentas', exact: true }).click(); await settle(page)

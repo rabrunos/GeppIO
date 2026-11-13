@@ -10,6 +10,7 @@ export interface WidgetType {
   appearance: 'card' | 'seamless'; presence: 'single-view' | 'multiple-areas';
   constraint: Constraint; fixture?: string; widgetId?: string; pluginId?: string; retired?: boolean; missing?: boolean
   presentations?: Partial<Record<Region, readonly Presentation[]>>
+  preserveNormalGeometry?: boolean
   maximize?: boolean
   tabHost?: boolean; tabMember?: boolean
 }
@@ -65,6 +66,7 @@ export function widgetRegistry(plugins: readonly InstalledPlugin[] = [], demoFix
   for (const plugin of plugins) for (const widget of [...plugin.manifest.widgets, ...(plugin.recoveryWidgets ?? [])]) entries.push({
     id: `plugin:${plugin.manifest.id}:${widget.id}`, owner: `plugin:${plugin.manifest.id}`, pluginId: plugin.manifest.id, widgetId: widget.id,
     title: widget.title, category: 'Plugins', description: plugin.manifest.name,
+    ...(plugin.manifest.id === 'geppio.workspace-essentials' && widget.id === 'notes' ? { presentations: { main: ['normal', 'docked', 'overlay'] as const }, preserveNormalGeometry: true } : {}),
     ...(!plugin.manifest.widgets.some(current => current.id === widget.id) ? { missing: true } : {}),
     ...(plugin.manifest.id === 'geppio.workspace-essentials' && ['notes', 'scratch', 'checklist', 'prompts'].includes(widget.id) ? { maximize: true } : {}),
     ...(plugin.manifest.id === 'geppio.workspace-essentials' && ['notes', 'checklist', 'prompts'].includes(widget.id) ? { tabHost: true, tabMember: true } : {}),

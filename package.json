@@ -1,6 +1,6 @@
 {
   "name": "geppio",
-  "version": "0.1.0-alpha.35",
+  "version": "0.1.0-alpha.36",
   "private": true,
   "license": "UNLICENSED",
   "description": "GeppIO — a local desktop workbench, Windows first.",
@@ -33,7 +33,7 @@
     "test:groups": "node --experimental-strip-types tools/groups-smoke.ts",
     "test:edit-lock": "node --experimental-strip-types tools/edit-lock-smoke.ts",
     "test:sidebar": "node --experimental-strip-types tools/sidebar-stack-smoke.ts",
-    "test:presentations": "node --experimental-strip-types tools/presentation-smoke.ts",
+    "test:presentations": "node --experimental-strip-types tools/presentation-smoke.ts && node --experimental-strip-types tools/real-presentation-smoke.ts && node --experimental-strip-types tools/real-presentation-smoke.ts --scale125",
     "test:workbench": "node --experimental-strip-types tools/workbench-smoke.ts && node --experimental-strip-types tools/workbench-organization-smoke.ts && node --experimental-strip-types tools/workbench-plugins-smoke.ts && node --experimental-strip-types tools/workbench-corrections-smoke.ts",
     "test:desktop:dev": "node --experimental-strip-types tools/identity-smoke.ts --dev && node --experimental-strip-types tools/desktop-smoke.ts --dev",
     "github:prepare": "node --experimental-strip-types tools/github-prepare.ts",

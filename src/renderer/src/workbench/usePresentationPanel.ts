@@ -87,6 +87,11 @@ export function usePresentationPanel(tx: Transaction, layout: PresentationLayout
             onPointerCancel: cancel, onLostPointerCapture: cancel,
             onKeyDown(event: KeyboardEvent<HTMLElement>) {
               if (event.key === 'Escape' && active.current) { event.preventDefault(); event.stopPropagation(); cancel() }
+              if ((event.key === 'Enter' || event.key === ' ') && !event.repeat && !active.current && !tx.saving && !tx.recovery && !tx.gestureActive) {
+                event.preventDefault(); event.stopPropagation()
+                if (free) setPeek(previous => ({ ...previous, [id]: true }))
+                else void tx.present({ open: compact ? true : !state.open }, id)
+              }
             }
           }
         }

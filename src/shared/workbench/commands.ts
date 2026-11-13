@@ -127,6 +127,7 @@ export function moveFrame(source: WorkbenchSnapshot, registry: Registry, id: str
   if (!view || !placement) return null
   const type = registry.get(view.typeId)
   if (!type) return null
+  if (type.preserveNormalGeometry && placement.region !== target.region && panelIds(source).has(id)) return null
   const next = structuredClone(source), destination = next.organization.bars.find(bar => bar.id === next.organization.activeBar)!
   const otherSidebar = next.placements.find(p => p.id !== id && p.region === 'sidebar' && next.organization.views.find(view => view.id === p.id)?.typeId === type.id)
   if (target.region === 'sidebar' && destination.members.includes(type.id) && (placement.region !== 'sidebar' || sourceBar !== destination.id)) return null
@@ -226,6 +227,7 @@ export function swapViews(source: WorkbenchSnapshot, registry: Registry, a: stri
   if (!first || !second || a === b) return null
   if (first.region !== second.region && (first.region === 'sidebar' || second.region === 'sidebar') && (groupFor(source, a) || groupFor(source, b))) return null
   const one = source.organization.views.find(view => view.id === a)!, two = source.organization.views.find(view => view.id === b)!
+  if (first.region !== second.region && [one, two].some(view => registry.get(view.typeId)?.preserveNormalGeometry && panelIds(source).has(view.id))) return null
   if (!evaluatePlacement(source, registry, one.typeId, second.region, 'swap', [a, b]).allowed
     || !evaluatePlacement(source, registry, two.typeId, first.region, 'swap', [a, b]).allowed) return null
   const next = structuredClone(source)

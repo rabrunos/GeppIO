@@ -2,7 +2,7 @@ import type { Constraints, Placement, Rect, Region, Size } from '../freeform/typ
 import { projectRegion } from '../freeform/projection.ts'
 import { clamp, collides, validLayout, validRect } from '../freeform/geometry.ts'
 import { POLICY } from '../freeform/policy.ts'
-import { constraintsForViews, widgetRegistry } from './model.ts'
+import { constraintsForViews, groupFor, widgetRegistry } from './model.ts'
 import type { Registry, View, WidgetType, WorkbenchSnapshot } from './model.ts'
 
 export const PILOT_VIEW = 'properties'
@@ -77,6 +77,7 @@ export function changePresentation(source: WorkbenchSnapshot, patch: Presentatio
   if (!view || !type || !placement || !type.presentations?.main || placement.region !== 'main'
     || !availablePresentations(type, placement.region).includes(patch.presentation ?? before.presentation)) throw new Error('Unavailable presentation')
   const entry = { ...before, ...patch }
+  if (entry.presentation !== 'normal' && groupFor(source, id)) throw new Error('Grouped widgets require Normal presentation')
   if (patch.presentation && patch.presentation !== before.presentation && patch.open === undefined) entry.open = true
   if (patch.presentation === 'normal') { entry.open = true; entry.anchor = null }
   if (patch.presentation && patch.presentation !== 'normal' && !Object.hasOwn(patch, 'anchor')) throw new Error('Anchor required')
@@ -173,6 +174,15 @@ export function returnToNormal(source: WorkbenchSnapshot, id: string, size: Size
   const constraints = constraintsForViews(source, registry), before = arrangePresentations(source, size, constraints, expanded, scrollbarHeight), panel = before.panels[id]
   if (!panel) return null
   const next = changePresentation(source, { presentation: 'normal' }, registry, id), ids = panelIds(source)
+  const view = source.organization.views.find(view => view.id === id)!
+  if (registry.get(view.typeId)?.preserveNormalGeometry) {
+    // The real-widget pilot reuses its existing Normal seed, never the panel's
+    // effective rectangle. No plugin data or persistent format is introduced.
+    const normals = next.placements.filter(p => p.region === 'main' && !panelIds(next).has(p.id))
+    if (!validLayout(normals, { region: 'main', ...next.reference.main, expanded }, constraints)
+      || !arrangePresentations(next, size, constraints, expanded, scrollbarHeight).feasible) return null
+    return next
+  }
   const normals = projectRegion({ ...source, placements: source.placements.filter(p => !ids.has(p.id)) }, 'main',
     { width: before.normal.width, height: before.normal.height - scrollbarHeight }, expanded, constraints)
   if (!normals.feasible) return null
