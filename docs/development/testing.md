@@ -6,6 +6,10 @@ After Ctrl+C, the controlled smoke waits at most 10 seconds for a new real Power
 before typing the next command. This distinguishes cancellation from the 30-second Sleep finishing
 naturally and avoids typing into a pipeline still unwinding. CI runs both native scales immediately
 after the checked build, before the longer regression suites; no later checks are skipped.
+The clipboard drag waits for both its result and the following empty prompt in the rendered xterm
+rows before measuring coordinates, so the final shell redraw cannot shift the selected line.
+Failure reveal compares the complete bounded exited-session transcript and retained emulator identity,
+plus visible output sentinels. Visible row slices may legitimately change with presentation dimensions.
 
 Build with `pnpm check`, then run `pnpm test:terminal` and `pnpm test:status-bar`.
 `node --experimental-strip-types tools/terminal-smoke.ts --scale125` repeats the real Windows

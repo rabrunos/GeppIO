@@ -29,6 +29,16 @@ const state = async (): Promise<TerminalRead> => {
   if (!result.ok) throw new Error(result.error)
   return result.value
 }
+const transcript = () => page.evaluate(async () => {
+  let after = 0, text = ''
+  for (let i = 0; i < 10; i++) {
+    const result = await window.geppio!.terminal.read(null, after)
+    if (!result.ok) throw new Error(result.error)
+    text += result.value.data; after = result.value.next
+    if (!result.value.data) return text
+  }
+  throw new Error('Terminal transcript exceeded the bounded read budget')
+})
 const status = () => page.locator('[data-status-terminal]')
 async function waitPhase(phase: string) { await page.waitForFunction(phase => document.querySelector('[data-status-terminal]')?.getAttribute('data-status-terminal') === phase, phase, { timeout: 20000 }) }
 async function output(expected: string) {
@@ -128,7 +138,13 @@ try {
   await page.keyboard.insertText("'EDIT_' + 'abX'"); await page.keyboard.press('ArrowLeft'); await page.keyboard.press('Backspace'); await page.keyboard.insertText('c'); await page.keyboard.press('Enter'); await output('EDIT_abc')
   await app.evaluate(({ clipboard }) => clipboard.writeText("'PASTE_' + 'ok'"))
   await page.locator('.terminal-host .xterm-helper-textarea').focus(); await page.keyboard.press('Control+v'); await page.keyboard.press('Enter'); await output('PASTE_ok')
-  await page.waitForFunction(() => [...document.querySelectorAll('.xterm-rows > div')].some(element => element.textContent?.trim() === 'PASTE_ok'))
+  await page.waitForFunction(() => {
+    const rows = [...document.querySelectorAll('.xterm-rows > div')].map(element => element.textContent?.trim() ?? '')
+    const output = rows.findIndex(text => text === 'PASTE_ok'), prompt = rows.findLastIndex(text => text.length > 0)
+    // Wait for the emulator's rendered prompt below the result, not just Core output arrival.
+    return output >= 0 && prompt > output && /^PS .*?>$/.test(rows[prompt]!)
+  })
+  await settle(page)
   const row = await page.locator('.xterm-rows > div').evaluateAll(rows => {
     const element = rows.find(row => row.textContent?.trim() === 'PASTE_ok')!, box = element.getBoundingClientRect()
     const span = element.querySelector('span')!, charWidth = span.getBoundingClientRect().width / (span.textContent?.length ?? 1)
@@ -248,11 +264,16 @@ try {
 
   await send('exit 7'); await waitPhase('exited'); await waitDead(firstPid)
   assert.equal((await state()).state.exitCode, 7); assert.equal(await status().getAttribute('data-failed'), 'true')
-  const failedScreen = await page.locator('.xterm-rows').innerText()
+  const failedTranscript = await transcript()
   await mode('Widgets'); await status().click(); assert.equal(await page.locator('.workbench').getAttribute('data-file-mode'), 'editor')
   assert.ok(await page.locator('.direct-terminal').isVisible())
   await page.waitForFunction(() => document.activeElement?.classList.contains('xterm-helper-textarea'))
-  assert.equal(await page.locator('.xterm-rows').innerText(), failedScreen)
+  assert.equal(await transcript(), failedTranscript, 'exit output history remains exact across presentation sizes')
+  assert.equal(await emulator!.evaluate(element => element === document.querySelector('.terminal-emulator')), true)
+  await page.waitForFunction(() => {
+    const text = document.querySelector('.xterm-rows')?.textContent ?? ''
+    return text.includes('ENV_session') && text.includes('exit 7')
+  })
   await page.getByRole('button', { name: 'Reiniciar terminal', exact: true }).click(); await waitPhase('running'); await output('PS ')
   assert.notEqual((await state()).state.id, first.id); assert.equal(await status().getAttribute('data-failed'), 'false')
   assert.equal((await page.evaluate(id => window.geppio!.terminal.resize(id!, 80, 24), first.id)).ok, false)
