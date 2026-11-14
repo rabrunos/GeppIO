@@ -2,6 +2,23 @@
 
 ## Selected document pilot (alpha.37)
 
+Alpha.38 adds `tools/editor-geometry-smoke.ts` to `pnpm test:maximize` (also in the desktop chain).
+Run `pnpm test:maximize --scale125` for simulated DPR 1.25. Each scale compares actual DOM bounds
+of direct Editor with real maximized Workspace Essentials Notes in 32 combinations: light/dark,
+1920×1080 / 1024×768, Sidebar and Bottom open/collapsed, bounded/expanded Main. Expected insets
+come from computed Main padding/borders, not screenshot pixels. It checks card style/corner hit
+clipping, nonoverlapping reachable toolbar/textarea/feedback, native viewport and keyboard region
+resizes, restoration, unchanged layout bytes/Workers, an unsaved disposable JSON draft across
+Editor/Widgets switches and exact Ctrl+S disk bytes. Measurements/screenshots stay under ignored
+`.local/diagnostics/maximize-alpha31-<scale>/`. This is automated Windows evidence; physical DPI
+and owner visual acceptance remain separate in Issue #45.
+
+Physical comparison: with a disposable profile, place Workspace Essentials Anotações in Main,
+conclude layout editing and maximize it. Compare all four Main margins and rounded frame corners
+with direct Editor at the same window size. Open/edit a disposable JSON/TXT, switch Widgets →
+Editor with a dirty buffer, then Ctrl+S and inspect the file. Repeat narrow/wide, both themes and
+Sidebar/Bottom open/collapsed; expanded Main intentionally follows the host's unpadded right edge.
+
 Build with `pnpm check`, then run `pnpm test:documents`. Pure tests cover UTF-8/BOM/mixed EOL,
 exact bytes, equal-size conflicts, identical-byte replacement, missing/read-only files, links,
 malformed/oversized requests, revocation, Save/Discard/Cancel and draft retention. Electron uses

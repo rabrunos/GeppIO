@@ -25,7 +25,7 @@ import { useTransaction } from './freeform/useTransaction.ts'
 import { useSurfaces } from './freeform/useSurfaces.ts'
 import { useInteraction } from './freeform/useInteraction.ts'
 import { WidgetFrame } from './freeform/WidgetFrame.tsx'
-import { projectFrame } from './freeform/frame-layout.ts'
+import { projectFrame, regionViewport } from './freeform/frame-layout.ts'
 import { Header, ContextBar } from './workbench/Header.tsx'
 import { Sidebar } from './workbench/Sidebar.tsx'
 import { EditorPanel } from './workbench/EditorPanel.tsx'
@@ -106,7 +106,7 @@ function Workbench({ plugins }: { plugins: ReturnType<typeof usePlugins> }) {
     && !disabledOwners().has(maximizedOwner ?? '') ? maximized : null
   useEffect(() => { if (maximized && !maximizedSurface) maximize.clear() }, [maximized, maximizedSurface])
   const [showFeedback, setShowFeedback] = useState(false), initialMessage = useRef(tx.message)
-  const fullMain = { width: surfaces.measures.main.ownerWidth ?? 0, height: surfaces.measures.main.ownerHeight ?? 0 }
+  const fullMain = regionViewport('main', surfaces.measures.main)
   const activePanels = panelIds(tx.snapshot), panelActive = activePanels.size > 0
   // Presentation-only edits must not adopt viewport/catalog projections of the
   // real pilot's Normal seed or its peers. Geometry commands carry their own view.
@@ -237,8 +237,8 @@ function Workbench({ plugins }: { plugins: ReturnType<typeof usePlugins> }) {
       <Sidebar tx={tx} registry={registry} regions={regions} sidebarWidth={surfaces.measures.sidebar.width} theme={theme} toggleTheme={toggleTheme} saveBar={saveBar}><ScrollArea as="aside" className="sidebar-region ui-scrollbar" data-region="sidebar" onScroll={surfaces.measure} tabIndex={0} aria-label={t('Barra lateral')}>{port('sidebar')}</ScrollArea></Sidebar>
       <main className={'main-region ' + (expanded ? 'expanded' : '')} data-region="main" data-testid="layout-canvas" data-engine="freeform" data-expanded={expanded} data-panel-adapted={arrangement.adapted} data-panel-reservation={Object.values(arrangement.reservations).reduce((a, b) => a + b, 0)} data-panel-reservations={JSON.stringify(arrangement.reservations)}>
         <div className="main-placement" style={{ display: 'flex', flex: 1, minWidth: 0, minHeight: 0, marginTop: arrangement.reservations.top, marginBottom: arrangement.reservations.bottom, marginLeft: arrangement.reservations.left, marginRight: arrangement.reservations.right }}>{port('main')}</div>
-        {fileMode === 'editor' && <div className="direct-file-editor"><FileEditor session={fileSession} /></div>}
       </main>
+      {fileMode === 'editor' && <div className="direct-file-editor" style={fullMain}><FileEditor session={fileSession} /></div>}
       <footer className="bottom-region" data-region="bottom"><div className="bottom-surface">{port('bottom')}{!feasible.bottom && visible.placements.some(p => p.region === 'bottom') && <div className="bottom-recovery" data-testid="bottom-recovery" role="alert"><span>{t('Espaço insuficiente. Amplie a região antes de salvar.')}</span><button className="ui-button tool-button" onClick={() => regions.expand('bottom')}>{t('Ampliar Bottom')}</button></div>}</div></footer>
       <div className="region-splitter sidebar-splitter" data-active={regions.resizing === 'sidebar' ? '' : undefined} role="separator" aria-label={t('Largura da Sidebar')} aria-orientation="vertical" tabIndex={regions.sidebarMode === 'docked' ? 0 : -1} aria-valuenow={regions.sidebar} aria-valuemin={regions.bounds.sidebar.min} aria-valuemax={regions.bounds.sidebar.max} {...regions.handlers('sidebar')} />
       <div className="region-splitter bottom-splitter" data-active={regions.resizing === 'bottom' ? '' : undefined} role="separator" aria-label={t('Altura da Bottom')} aria-orientation="horizontal" tabIndex={0} aria-valuenow={regions.bottom} aria-valuemin={regions.collapsed.bottom || regions.bottomRevealing ? 0 : regions.bounds.bottom.min} aria-valuemax={regions.bounds.bottom.max} {...regions.handlers('bottom')} />

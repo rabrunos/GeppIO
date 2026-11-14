@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import type { Measurement } from '../freeform/useSurfaces.ts'
+import { regionViewport } from '../freeform/frame-layout.ts'
 
 export interface MaximizeState { id: string; serial: number; phase: 'expanding' | 'expanded' | 'restoring' }
 /** Presentation only: no saved geometry, history intention or duplicate surface. */
@@ -17,7 +18,7 @@ export function frameMotionTiming(element: Element) {
 }
 export function MaximizeBackdrop({ state, measurement: m }: { state: MaximizeState; measurement: Measurement }) {
   const element = useRef<HTMLDivElement>(null), flight = useRef<Animation | null>(null)
-  const left = m.ownerLeft ?? m.left, top = m.ownerTop ?? m.top, width = m.ownerWidth ?? m.width, height = m.ownerHeight ?? m.height
+  const { left, top, width, height } = regionViewport('main', m)
   useLayoutEffect(() => {
     const node = element.current!
     const running = flight.current?.playState === 'running', current = getComputedStyle(node).backdropFilter

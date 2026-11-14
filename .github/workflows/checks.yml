@@ -40,6 +40,8 @@ jobs:
         run: pnpm test:desktop
       - name: Selected document lifecycle and modes in an isolated profile
         run: pnpm test:documents
+      - name: Maximized widget and direct Editor geometry at simulated DPR 1.25
+        run: pnpm test:maximize --scale125
       - name: Host presentation regression at simulated DPR 1.25
         run: node --experimental-strip-types tools/presentation-smoke.ts --scale125
   secrets:

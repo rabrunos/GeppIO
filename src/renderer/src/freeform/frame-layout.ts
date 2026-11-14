@@ -1,15 +1,19 @@
-import type { Placement } from '../../../shared/freeform/types.ts'
+import type { Placement, Region } from '../../../shared/freeform/types.ts'
 import type { Measurement } from './useSurfaces.ts'
 
 export type FrameSpace = 'content' | 'viewport'
+/** Usable region rectangle in work-area coordinates, independent of content scroll. */
+export function regionViewport(region: Region, m: Measurement) {
+  return region === 'main' ? { left: m.ownerLeft ?? m.left, top: m.ownerTop ?? m.top,
+    width: m.ownerWidth ?? m.width, height: m.ownerHeight ?? m.height }
+    : { left: m.left, top: m.top, width: m.clipWidth ?? m.width, height: m.clipHeight ?? m.height }
+}
 /** One region measurement and one coordinate/clip path for every mounted widget.
  * Viewport constraints fix an anchored widget to its region, rather than scrolling
  * its rectangle with content. Insets and paint coordinates remain shared.
  */
 export function projectFrame(p: Placement, m: Measurement, space: FrameSpace = 'content') {
-  const owner = p.region === 'main' ? { left: m.ownerLeft ?? m.left, top: m.ownerTop ?? m.top,
-    width: m.ownerWidth ?? m.width, height: m.ownerHeight ?? m.height }
-    : { left: m.left, top: m.top, width: m.clipWidth ?? m.width, height: m.clipHeight ?? m.height }
+  const owner = regionViewport(p.region, m)
   const viewport = space === 'viewport' ? owner : { left: m.left, top: m.top, width: m.clipWidth ?? m.width, height: m.clipHeight ?? m.height }
   const offset = { x: viewport.left - owner.left, y: viewport.top - owner.top }
   const scroll = space === 'viewport' ? { x: 0, y: 0 } : { x: m.scrollLeft, y: m.scrollTop }

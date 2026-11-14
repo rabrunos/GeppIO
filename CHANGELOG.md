@@ -2,6 +2,12 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.38] — 2026-11-14
+
+- Match direct Editor mode to the host-measured usable Main rectangle used by maximized widgets, including expansion, viewport/region resizing and fractional DPR.
+- Share the ordinary card border, radius and clipping without invoking widget maximize or persisting an editor placement; retain the official editor and shared document session.
+- Add measured Electron comparisons against real maximized Notes in both themes, narrow/wide windows, Sidebar/Bottom states and Main expansion, with dirty-buffer, exact save/layout bytes and maximize/restore regressions.
+
 ## [0.1.0-alpha.37] — 2026-11-13
 
 - Introduce essential first-party Files & Editor with one selected UTF-8 file, shared editable session, direct Editor mode and explicitly placed Main editor widget; no public SDK or dependency changes.

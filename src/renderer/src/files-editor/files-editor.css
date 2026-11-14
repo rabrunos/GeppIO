@@ -10,8 +10,7 @@
 .file-editor-empty h2 { font-size: 20px; margin-bottom: 12px; }
 .file-editor-empty p { margin-block: 10px; }
 .file-editor-limit { margin: 0; padding: 4px 10px 8px; color: var(--color-text-muted); font-size: 11px; line-height: 1.4; }
-.direct-file-editor { position: absolute; inset: 0; z-index: 25; border: 1px solid var(--color-border); border-radius: var(--card-radius); overflow: hidden; }
-.main-region:has(.direct-file-editor) { position: relative; }
+.direct-file-editor { position: absolute; z-index: 25; }
 .workbench[data-file-mode="editor"] .project-actions { display: none; }
 .workbench[data-file-mode="editor"] .main-placement { pointer-events: none; }
 .workbench[data-file-mode="editor"] .main-placement { visibility: hidden; }

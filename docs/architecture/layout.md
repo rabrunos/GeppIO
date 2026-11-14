@@ -93,6 +93,12 @@ projection; entering Edit, recovery or losing an eligible active owner clears it
 Docked/Floating preferences and lifecycle remain independent. Compatible group
 frames use this same surface entry point and keep their tab chrome accessible.
 
+Alpha.38 shares `regionViewport` between frame projection, backdrop and direct Editor.
+Its Main rectangle comes from `useSurfaces` owner measurements (computed padding/borders),
+independent of content scroll and panel reservations. Direct Editor uses that rectangle and
+the host card style as a permanent presentation, without maximize state or a widget placement;
+see [document presentation ownership](documents.md#ownership-and-presentation).
+
 The renderer presentation owns a serial and expanding/expanded/restoring phase.
 `WidgetFrame` reuses its WAAPI frame motion with theme region timing, animating
 translation and dimensions without scaling text. Reversal reads the actual

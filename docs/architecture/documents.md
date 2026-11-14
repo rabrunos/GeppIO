@@ -15,7 +15,14 @@ Main accepts a frozen draft only for an explicit operation, not another independ
 Both adapters render the same `FileEditor`, only one at a time; selection/scroll and draft survive.
 The textarea's native undo history belongs to its mounted surface and resets on presentation change;
 the shared draft, confirmed bytes and document identity do not reset.
-Editor covers Main's presentation while the workbench, Sidebar/Bottom and Workers remain mounted.
+Editor covers Main's usable presentation while the workbench, Sidebar/Bottom and Workers remain mounted.
+Since alpha.38, `regionViewport` in `freeform/frame-layout.ts` supplies the same measured Main
+rectangle to direct Editor, maximized widget projection and the maximize backdrop. The direct
+container is a work-area sibling of Main in those shared coordinates, with the ordinary host card
+border, radius and clipping. Host padding/borders (including the unpadded expanded right edge)
+remain authoritative; content scrolling and Docked reservations do not shrink this rectangle.
+This presentation does not invoke maximize or create a placement. Its internal content can later
+be subdivided without changing region geometry ownership; no split view is implemented.
 Switching modes writes no layout bytes and is blocked during layout edits/gestures. Mode is
 session-only. The Main-only single-view widget is catalogued but never automatically inserted.
 

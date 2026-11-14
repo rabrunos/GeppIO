@@ -1,4 +1,5 @@
 import { enableDeveloperMode } from './plugin-dev-support.ts'
+import { editorGeometry } from './editor-geometry-smoke.ts'
 import assert from 'node:assert/strict'
 import { _electron as electron } from 'playwright'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
@@ -131,6 +132,7 @@ try {
   assert.equal(await page.locator('[data-maximize-backdrop]').count(), 0); assert.equal(await frame.evaluate(node => node.getAnimations().length), 0)
   await page.getByTestId('cancel-layout').click(); await settle(page)
   assert.equal(await scratch.getAttribute('data-mount-proof'), 'scratch'); assert.equal(await notes.getAttribute('data-mount-proof'), 'peer'); assert.deepEqual(page.workers(), workers)
+  await editorGeometry(app, page, profile, diagnostics, scale)
   await maximize.click(); await page.getByRole('button', { name: 'Plugins', exact: true }).click()
   await manager.locator('[data-plugin="geppio.workspace-essentials"]').getByRole('switch').click(); await manager.getByRole('button', { name: 'Fechar', exact: true }).click(); await settle(page)
   assert.equal(await page.locator('.workbench').getAttribute('data-maximized-surface'), null)

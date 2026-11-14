@@ -29,7 +29,8 @@
 .bottom-region .placement-port { overflow: clip; }
 .freeform-layer { z-index: auto; }
 .freeform-layer .widget-frame { position: absolute; }
-.widget-frame { border-color: var(--color-border); border-radius: var(--card-radius); background: var(--color-surface); z-index: 12; }
+.widget-frame, .direct-file-editor { border: 1px solid var(--color-border); border-radius: var(--card-radius); background: var(--color-surface); overflow: hidden; }
+.widget-frame { z-index: 12; }
 .widget-frame[data-owner-region="sidebar"] { z-index: 41; }
 .widget-frame[data-owner-region="bottom"] { z-index: 35; }
 .workbench[data-sidebar-presentation="floating"] .widget-frame[data-owner-region="sidebar"] { transform: translateX(-4px); opacity: 0; visibility: hidden; pointer-events: none; transition: transform var(--sidebar-hide-motion) var(--region-easing), opacity var(--sidebar-hide-fade) ease, visibility 0s linear var(--sidebar-hide-motion); }
