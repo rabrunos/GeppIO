@@ -1,6 +1,6 @@
 {
   "name": "geppio",
-  "version": "0.1.0-alpha.39",
+  "version": "0.1.0-alpha.40",
   "private": true,
   "license": "UNLICENSED",
   "description": "GeppIO — a local desktop workbench, Windows first.",
@@ -39,11 +39,15 @@
     "test:workbench": "node --experimental-strip-types tools/workbench-smoke.ts && node --experimental-strip-types tools/workbench-organization-smoke.ts && node --experimental-strip-types tools/workbench-plugins-smoke.ts && node --experimental-strip-types tools/workbench-corrections-smoke.ts",
     "test:desktop:dev": "node --experimental-strip-types tools/identity-smoke.ts --dev && node --experimental-strip-types tools/desktop-smoke.ts --dev",
     "github:prepare": "node --experimental-strip-types tools/github-prepare.ts",
-    "test:plugin-dev": "pnpm plugins:build && pnpm build && node --experimental-strip-types --test tests/plugin-dev.test.ts && node --experimental-strip-types tools/plugin-dev-smoke.ts"
+    "test:plugin-dev": "pnpm plugins:build && pnpm build && node --experimental-strip-types --test tests/plugin-dev.test.ts && node --experimental-strip-types tools/plugin-dev-smoke.ts",
+    "test:terminal": "node --experimental-strip-types --test tests/terminal.test.ts && node --experimental-strip-types tools/terminal-smoke.ts",
+    "test:status-bar": "node --experimental-strip-types --test tests/status-bar.test.ts"
   },
   "dependencies": {
     "@heroicons/react": "2.2.0",
+    "@xterm/xterm": "6.0.0",
     "motion": "14.0.0",
+    "node-pty": "1.1.0",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },

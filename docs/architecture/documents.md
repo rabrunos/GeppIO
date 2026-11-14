@@ -8,6 +8,11 @@ Public API 1/2 is unchanged.
 
 ## Ownership and presentation
 
+Alpha.40's [Status Bar](status-bar.md) subscribes to this same EditorSession for actual dirty/busy/
+error, BOM/EOL and cursor state. Its language override is session-only; it never edits document
+bytes. [Terminal](terminal.md) has a separate functional owner and survives mode changes alongside
+the existing unsaved draft. Monaco remains a later standalone migration, not this delivery.
+
 `DocumentStore` owns the absolute path, file/ancestor identities, exact confirmed bytes and opaque
 UUID/revision. Only bounded text, basename, BOM flag, ID and revision reach the renderer.
 `EditorSession` owns one editable buffer and dirty/busy/error state outside layout/plugin storage.
@@ -83,6 +88,6 @@ These platform references do not replace application tests or owner acceptance.
 Alpha.39 adds the [bounded first-party Explorer](explorer.md) through this same store/session.
 Its directory grant is independent from the open document and adds no Worker authority.
 
-Full project roots, tabs/splits, search, terminal/PTY, Git, LSP/debug/build, OS associations/CLI
+Full project roots, tabs/splits, search, Git, LSP/debug/build, OS associations/CLI
 routing, second windows, automatic restoration, crash recovery, metadata-preserving native writes,
 public rich UI/grants, marketplace/distribution and layout portability remain separate scopes.

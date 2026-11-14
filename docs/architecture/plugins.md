@@ -1,5 +1,10 @@
 # Plugin boundary — trusted local v1/v2 and future design
 
+Alpha.40 adds an essential [Terminal](terminal.md) with a Core-owned native session and shared
+xterm presentation. Its fixed native calls are app-only and absent from the Worker facade. Neither
+trusted installed plugins nor declarative widget data receive a process-spawning capability.
+This does not certify hostile shared-origin Workers or same-user native process isolation.
+
 Alpha.39 adds the [Explorer](explorer.md) to the same essential module, sharing navigation between
 its explicit Main/Sidebar widget and Editor activity view. This adds no Worker/native grant or SDK.
 

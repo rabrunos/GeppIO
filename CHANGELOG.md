@@ -2,6 +2,13 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.40] — 2026-11-14
+
+- Added a genuine persistent PowerShell/ConPTY Terminal using approved xterm 6.0.0 and node-pty 1.1.0, with input, ANSI/Unicode, interrupt, bounded history, resize, actual exit/restart, explicit termination and native-owner cleanup.
+- One Core session and one session-owned emulator serve the official Main/Bottom widget and Editor's existing Bottom presentation; mode switches retain shell state, output, document drafts and unrelated Workers without automatically placing widgets.
+- Connected the fixed 25px Status Bar to actual document dirty/busy/error/saved, UTF-8/BOM, EOL, cursor and session-only language state, plus real terminal phase/exit failure and reveal/focus routing. Removed unsupported decorative indicators.
+- Added focused pure and Windows built-Electron native Terminal/Status Bar coverage, Windows CI and scoped lifecycle/build/security documentation. Windows Node-API prebuilds work with Electron 44.6.0 without another rebuild package. Physical owner acceptance remains separate.
+
 ## [0.1.0-alpha.39] — 2026-11-14
 
 - Added the official Files & Editor Explorer: native-selected navigation root, bounded lazy tree, keyboard navigation, refresh/retry, and shared state between the Editor activity panel and explicitly placed Main/Sidebar widget.

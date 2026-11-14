@@ -4,7 +4,7 @@ import tailwindcss from '@tailwindcss/vite'
 import pkg from './package.json'
 
 export default defineConfig({
-  main: { build: { rollupOptions: { output: { format: 'cjs', entryFileNames: 'index.cjs' } } } },
+  main: { build: { rollupOptions: { external: ['node-pty'], output: { format: 'cjs', entryFileNames: 'index.cjs' } } } },
   preload: {
     define: { __APP_VERSION__: JSON.stringify(pkg.version) },
     build: { rollupOptions: { output: { format: 'cjs', entryFileNames: 'index.cjs' } } }

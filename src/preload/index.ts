@@ -44,5 +44,12 @@ const explorer = Object.freeze<ExplorerBridge>({
   open: (root, node, draft) => ipcRenderer.invoke('explorer:open', root, node, draft),
   release: root => ipcRenderer.invoke('explorer:release', root)
 })
-contextBridge.exposeInMainWorld('geppio', Object.freeze({ name: IDENTITY.name, version: __APP_VERSION__, platform: process.platform, plugins, pluginData, windowControls, documents, explorer,
+const terminal = Object.freeze<import('../shared/terminal.ts').TerminalBridge>({
+  read: (id, after) => ipcRenderer.invoke('terminal:read', id, after),
+  start: () => ipcRenderer.invoke('terminal:start'),
+  input: (id, data) => ipcRenderer.invoke('terminal:input', id, data),
+  resize: (id, cols, rows) => ipcRenderer.invoke('terminal:resize', id, cols, rows),
+  close: id => ipcRenderer.invoke('terminal:close', id)
+})
+contextBridge.exposeInMainWorld('geppio', Object.freeze({ name: IDENTITY.name, version: __APP_VERSION__, platform: process.platform, plugins, pluginData, windowControls, documents, explorer, terminal,
   demoFixtures: process.argv.includes('--geppio-demo-fixtures') }))

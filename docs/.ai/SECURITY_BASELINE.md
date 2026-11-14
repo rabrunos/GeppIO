@@ -1,12 +1,19 @@
 # Selected security baseline
 
+Issue #47 adds the first-party [Terminal/ConPTY boundary](../architecture/terminal.md): five fixed
+window/main-frame-bound calls, generation IDs, bounded input/output/dimensions and native cleanup.
+Commands run with the real OS user's privileges. No Worker process grant or generalized executor
+is exposed; existing sandbox/context isolation/CSP/navigation controls remain. This local trusted
+pilot is not hostile-plugin/process isolation. [Status Bar](../architecture/status-bar.md) consumes
+existing document/session state and never interprets arbitrary output as project diagnostics.
+
 Issue #46 adds four fixed app-only [Explorer operations](../architecture/explorer.md) for one
 native-selected folder. Main holds bounded revocable node/root grants, checks full ancestor
 identities and canonical containment, refuses ordinary links/junctions and special paths, and
 opens through the existing document service. There is no renderer path input or Worker grant.
 Path-based IO retains TOCTOU; arbitrary Windows reparse-tag/special-storage protection is unverified.
 
-The current app is local and has no account, remote content, terminal, database or
+The current app is local and has no account, remote content, database or
 secret vault. Issue #21 adds only explicitly trusted local development plugins. Offline does not mean trusted input. JSON layout import, saved layout bytes,
 asset URLs and build dependencies are relevant inputs. See the [control map](../architecture/security.md).
 
@@ -34,7 +41,7 @@ Window actions accept no arguments and
 resolve only the sender's own native window. Plugin Workers have no preload/DOM bridge.
 See [API 2 data boundaries](../architecture/plugin-data.md) for installation identity, revocation,
 limits, retention and recovery. Namespace checks do not isolate hostile shared-origin Workers.
-No generic IPC executor, process runner,
+No generic IPC executor or plugin process runner,
 filesystem method, remote URL opener or arbitrary script evaluator is allowed in this foundation.
 Production loads a bounded custom protocol with a restrictive script CSP and blocks remote requests.
 Development allows only the configured loopback server plus script imports from the managed local

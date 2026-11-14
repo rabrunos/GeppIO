@@ -5,6 +5,7 @@ import { CHROME_LIMITS, defaultChrome } from './chrome.ts'
 import type { ChromePatch, WorkbenchChrome } from './chrome.ts'
 import type { Presentation, Presentations } from './presentations.ts'
 import { FILE_EDITOR, FILE_EXPLORER } from '../files-editor.ts'
+import { TERMINAL_WIDGET } from '../terminal-widget.ts'
 
 export interface WidgetType {
   id: string; owner: string; title: string; category: string; description: string;
@@ -64,7 +65,7 @@ export function widgetRegistry(plugins: readonly InstalledPlugin[] = [], demoFix
       }
     }
   }))
-  entries.push(FILE_EDITOR, FILE_EXPLORER)
+  entries.push(FILE_EDITOR, FILE_EXPLORER, TERMINAL_WIDGET)
   for (const plugin of plugins) for (const widget of [...plugin.manifest.widgets, ...(plugin.recoveryWidgets ?? [])]) entries.push({
     id: `plugin:${plugin.manifest.id}:${widget.id}`, owner: `plugin:${plugin.manifest.id}`, pluginId: plugin.manifest.id, widgetId: widget.id,
     title: widget.title, category: 'Plugins', description: plugin.manifest.name,

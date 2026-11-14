@@ -45,12 +45,13 @@ try {
   }
   await manager.getByRole('button', { name: 'Fechar', exact: true }).click(); assert.equal(await page.locator('.widget-frame').count(), 0)
   await edit()
-  // Alpha.39 adds the official Explorer to Main/Sidebar, never Bottom.
-  for (const [label, count] of [['Principal', 8], ['Lateral', 6], ['Inferior', 5]] as const) {
+  // Alpha.40 adds Terminal to Main/Bottom; Explorer remains Main/Sidebar.
+  for (const [label, count] of [['Principal', 9], ['Lateral', 6], ['Inferior', 6]] as const) {
     await page.getByRole('button', { name: 'Todas as áreas', exact: true }).click()
     await page.getByRole('button', { name: `Filtrar por: ${label}`, exact: true }).click()
     assert.equal(await page.locator('[data-catalog-type]').count(), count)
     assert.equal(await page.locator('[data-catalog-type="host:file-explorer"]').count(), label === 'Inferior' ? 0 : 1)
+    assert.equal(await page.locator('[data-catalog-type="host:terminal"]').count(), label === 'Lateral' ? 0 : 1)
   }
   await page.getByRole('button', { name: 'Todas as áreas', exact: true }).click()
   for (const name of ['timer', 'reports']) { await page.locator(`[data-catalog-type="plugin:${plugin}:${name}"]`).click(); await page.locator('[data-widget-place="main"]').click(); await settle(page) }
@@ -108,6 +109,6 @@ try {
   await app!.close(); app = undefined; await writeFile(dataPath, valid); await launch(); await saved()
   assert.equal((await read()).document.value.sessions.length, 1); assert.match(await content('reports').innerText(), /Totais diários/)
   await page.screenshot({ path: diagnostics + '/timer-reports.png' }); assert.deepEqual(errors, [])
-  console.log('PASS Time Tracker: install/explicit placement, catalog 8/6/5 including Explorer Main/Sidebar, all destinations, shared Workers, visibility, start/restart/pause, native failure/retry, single interval, totals/history and corrupt recovery')
+  console.log('PASS Time Tracker: install/explicit placement, catalog 9/6/6 including Explorer Main/Sidebar and Terminal Main/Bottom, all destinations, shared Workers, visibility, start/restart/pause, native failure/retry, single interval, totals/history and corrupt recovery')
 } catch (error) { await page?.screenshot({ path: diagnostics + '/failure.png' }).catch(() => {}); throw error }
 finally { await app?.close(); assert.equal(dirname(resolve(profile)), resolve(tmpdir())); assert.ok(profile.includes('geppio-smoke-time-')); await rm(profile, { recursive: true, force: true }) }

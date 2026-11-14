@@ -23,7 +23,7 @@ export function FileEditor({ session }: { session: EditorSession }) {
     const element = input.current
     if (element) { element.setSelectionRange(session.selection.start, session.selection.end); element.scrollTop = session.selection.top; element.scrollLeft = session.selection.left }
   }, [session, state.document?.id])
-  const remember = () => { const element = input.current; if (element) session.selection = { start: element.selectionStart, end: element.selectionEnd, top: element.scrollTop, left: element.scrollLeft } }
+  const remember = () => { const element = input.current; if (element) session.rememberSelection({ start: element.selectionStart, end: element.selectionEnd, top: element.scrollTop, left: element.scrollLeft }) }
   return <section className="file-editor" aria-label="Arquivos & Editor" data-document-id={state.document?.id} data-document-dirty={session.dirty} data-document-status={state.busy ? 'busy' : state.code ?? (session.dirty ? 'dirty' : 'clean')}>
     <div className="file-editor-toolbar">
       <strong title={state.document?.name}>{state.document?.name ?? 'Nenhum arquivo aberto'}{session.dirty ? ' •' : ''}</strong>

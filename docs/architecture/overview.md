@@ -2,6 +2,11 @@
 
 ## Implemented boundaries
 
+Alpha.40 adds the essential [interactive Terminal](terminal.md) and [contextual Status Bar](status-bar.md).
+Main owns one persistent PTY; the renderer session owns one bounded xterm emulator across Editor
+Bottom and explicit Main/Bottom widget presentations. Five fixed caller-bound operations do not
+extend the Worker SDK. Document status derives from the existing editable session.
+
 Alpha.39 adds the [bounded Explorer](explorer.md) to Files & Editor: one native folder grant,
 lazy shared tree, explicit Main/Sidebar widget and existing-host Editor activity presentation.
 Directory access remains in Main and opens through the same document store/session.
@@ -43,7 +48,7 @@ exact-slot admission is shared by click/catalog/move and does not serialize thos
 Main owns the native window, a bounded local asset protocol and the trusted local package store.
 The preload exposes immutable metadata plus fixed list/install/setEnabled/remove operations and
 the owner-authorized minimize/maximize/close controls for the application's main frame.
-There is no generic IPC entry point, filesystem/terminal function
+There is no generic IPC entry point, arbitrary filesystem/process function
 or remote-content embedding. Each enabled external package runs in a renderer Web Worker;
 validated declarative contributions are rendered by React in the Main region.
 Manifest/API v1 maps them to Main-only, single-view cards in the host catalog. Host metadata
@@ -80,7 +85,7 @@ native identity recovery still uses its v1 contract. `src/shared/identity.ts` ce
 
 ## Intentional simplifications
 
-No Core Utility Process or third-party Plugin Host is started merely to imitate the former prototype. There is no work requiring them yet. Do not add SQLite, node-pty, an interpreter, an updater or production SDK authority before the corresponding Issue defines a real need and boundary. The existing bounded local SDK is experimental, not evidence of these capabilities.
+No Core Utility Process or third-party Plugin Host is started merely to imitate the former prototype. There is no work requiring them yet. Do not add SQLite, an interpreter, an updater or production SDK authority before the corresponding Issue defines a real need and boundary. The existing bounded local SDK is experimental, not evidence of these capabilities.
 
 Sidebar/Main/Bottom are peer regions in a CSS workbench grid; that structural CSS grid is unrelated
 to widget positioning. Sidebar width and Bottom height retain independent bounded pixel splitters,

@@ -1,5 +1,25 @@
 # Validation guide
 
+## Interactive Terminal and contextual Status Bar (alpha.40 / Issue #47)
+
+Build with `pnpm check`, then run `pnpm test:terminal` and `pnpm test:status-bar`.
+`node --experimental-strip-types tools/terminal-smoke.ts --scale125` repeats the real Windows
+ConPTY journey at simulated DPR 1.25. Windows CI runs both scales. Pure tests cover strict request
+shapes/dimensions/input, bounded cursor output, Unicode transport, actual phase labels and document
+EOL/cursor/language/busy/error retention. The native smoke launches built production Electron using
+disposable profiles/directories, real PowerShell and the registered app bridge. It exercises persistent
+variables/CWD/PID, ANSI/Unicode/stderr, Ctrl+C, long output, resize, both widget regions, mode/draft/
+Worker continuity, actual exit 7/0, failure reveal/restart, explicit termination and shutdown cleanup.
+One-use controlled native-spawn failure tests startup feedback without changing production authority.
+Native IPC negative probes use foreign sender/frame, malformed/stale/oversized requests. Tests use
+real keyboard/editor Save and inspect exact BOM/CRLF bytes; language changes do not mutate files.
+Both themes, narrow/wide and the fixed 25px status geometry are checked. Controlled native dialog
+results are test fixtures, not physical picker evidence. Captures remain ignored diagnostics.
+
+See [Terminal lifecycle/budgets](../architecture/terminal.md), [Status Bar data](../architecture/status-bar.md)
+and [Windows preparation](local.md#terminal-native-runtime-alpha40). Automated evidence is not physical
+Windows/DPI owner acceptance, Linux support, installer validation or hostile-plugin/process isolation.
+
 ## Explorer pilot (alpha.39 / Issue #46)
 
 `pnpm test:explorer` runs pure authority/model regressions and a built Electron smoke with disposable

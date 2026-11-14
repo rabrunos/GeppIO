@@ -1,12 +1,34 @@
 # Local development
 
+## Terminal native runtime (alpha.40)
+
+Use the locked Windows x64 graph with Electron 44.6.0. `node-pty@1.1.0` includes Windows Node-API
+prebuilds; its reviewed install/postinstall scripts are allowlisted. Run `pnpm.cmd install --frozen-lockfile`,
+then `pnpm.cmd rebuild node-pty` if installation previously skipped scripts. This selects/prepares
+the shipped binary; on the validated Windows x64/Electron ABI 149 runtime no C++ compilation or
+@electron/rebuild is needed. Run `pnpm.cmd check`, `pnpm.cmd test:terminal` and `pnpm.cmd test:status-bar`.
+The real built-Electron smoke is the native ABI/runtime proof, not a successful install or typecheck.
+
+The app uses the OS ConPTY implementation (`useConptyDll: false`) and an installed PowerShell 7,
+falling back to Windows PowerShell; Windows build 18309+ is required by the selected node-pty path.
+The observed Windows host uses Windows PowerShell. Fixed launch configuration disables PSReadLine
+history (SaveNothing, path NUL) in that process only; no user profile/build/task is run. Do not install native build tooling or add rebuild packages without the individual
+dependency gate if another architecture/Electron lacks a working prebuild. Linux compilation/runtime
+and future installers are not validated here.
+
+Main externalizes node-pty; keep its complete production package, workers, native prebuilds and
+licenses alongside the application. xterm is bundled in the renderer. `pnpm.cmd start` exercises
+the built app from this installed checkout; copying only `out/` is insufficient. There is no new
+packager or release command. Future ASAR/unpacked native distribution needs separate validation.
+See [lifecycle and bounded buffering](../architecture/terminal.md) and [Status Bar data](../architecture/status-bar.md).
+
 ## Existing checkout and supported environment
 
 Use Node.js 24.x, pnpm 11.25.0 and Git. Windows is the first validated desktop target.
 The owner direction includes Windows and Linux; Linux application validation and distribution
 remain separate work. The Ubuntu secret-scan job does not exercise the Linux desktop app.
 GitHub CLI is needed only for authorized GitHub operations, not for the local UI.
-The current dependency set has no PTY, SQLite or native-plugin addon requirement.
+The approved Terminal uses node-pty Windows ConPTY prebuilds; SQLite/native plugin addons remain absent.
 
 The repository, Issues and real `pnpm-lock.yaml` already exist. On another machine, use the
 existing checkout and locked graph; do not repeat intake, GitHub binding or foundation bootstrap.
@@ -33,7 +55,7 @@ script shim without weakening ExecutionPolicy. Do not elevate merely to suppress
 Installation needs registry access and the Electron binary download. The current Electron package
 downloads its binary on first use. This is not an offline source bundle; after setup, the bounded
 local app does not require service credentials. `pnpm-workspace.yaml` permits lifecycle builds only
-for the reviewed esbuild versions and retains strict engine/peer/build policies and exact saving.
+for the reviewed esbuild versions and exact node-pty 1.1.0, retaining strict engine/peer/build policies and exact saving.
 Do not regenerate the lockfile, weaken those controls or change dependency pins to make setup pass.
 An actual mismatch needs a scoped task, observed evidence and the external-adoption gate where applicable.
 

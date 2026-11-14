@@ -1,0 +1,22 @@
+.terminal-view { display: flex; flex-direction: column; height: 100%; min-width: 0; min-height: 0; overflow: hidden; }
+.terminal-toolbar { display: flex; flex: none; align-items: center; gap: 6px; min-height: 28px; font-size: 11px; overflow-x: auto; }
+.terminal-toolbar strong { flex-shrink: 0; }
+.terminal-toolbar .ui-button { flex-shrink: 0; padding: 2px 5px; min-height: 24px; font-size: 11px; }
+.terminal-phase { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.terminal-host { flex: 1; min-width: 0; min-height: 0; overflow: hidden; }
+.terminal-emulator { width: 100%; height: 100%; }
+.terminal-emulator .xterm { height: 100%; }
+.terminal-feedback { flex: none; margin: 1px 0; font-size: 11px; max-height: 36px; overflow: auto; }
+.direct-terminal { position: absolute; inset: 5px 10px; min-width: 0; min-height: 0; }
+.bottom-surface:has(.direct-terminal) { position: relative; }
+.workbench[data-file-mode="editor"] .widget-frame[data-owner-region="bottom"] { visibility: hidden; pointer-events: none; }
+.widget-frame:has(.terminal-view) .widget-content { overflow: hidden; }
+.status-bar .status-left, .status-bar .status-right { min-width: 0; gap: 10px; overflow: hidden; }
+.status-bar .status-left { flex: 0 1 auto; max-width: 55%; }
+.status-document, .status-terminal { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.status-terminal { background: transparent; border: 0; color: inherit; font: inherit; padding: 0 3px; min-height: 23px; cursor: pointer; }
+.status-terminal[data-failed="true"] { color: var(--color-danger, #e66b6b); }
+.status-terminal:focus-visible, .status-language:focus-visible { outline: 1px solid currentColor; outline-offset: -1px; }
+.status-bar .status-language { height: 23px; min-height: 0; max-width: 115px; padding: 0 3px; background: var(--color-region); color: inherit; border: 0; border-radius: 0; font: inherit; }
+.status-cursor, .status-encoding, .status-eol { white-space: nowrap; }
+@media (max-width: 1100px) { .status-version { display: none; } .status-bar .status-left, .status-bar .status-right { gap: 5px; } }

@@ -1,5 +1,10 @@
 # Region-aware continuous widget geometry
 
+Alpha.40's [Terminal](terminal.md) reuses Main/Bottom widget eligibility and the existing direct
+Editor Bottom region/splitter. Presentation changes reuse one session/emulator, never auto-insert
+saved placements or write layout bytes. The contextual [Status Bar](status-bar.md) stays at 25px
+outside regional widget geometry. Existing Workers/bars remain independent of Terminal visibility.
+
 Alpha.39's [Explorer activity view](explorer.md) uses the existing Sidebar chrome/animation with
 session-only Editor Sidebar visibility/width. Widgets bars/placements remain independent. Its
 official single-view widget uses ordinary Main/Sidebar constraints and explicit placement.
