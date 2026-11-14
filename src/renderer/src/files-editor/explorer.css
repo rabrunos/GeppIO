@@ -1,0 +1,23 @@
+.file-explorer { display: flex; flex-direction: column; min-width: 0; min-height: 0; height: 100%; color: var(--color-text); font-size: 12px; background: var(--color-surface); }
+.explorer-toolbar { display: flex; align-items: center; gap: 2px; min-height: 32px; padding: 2px 6px; border-bottom: 1px solid var(--color-border); }
+.explorer-toolbar strong { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.explorer-toolbar .ui-icon-button { width: 26px; min-width: 26px; height: 26px; padding: 4px; }
+.explorer-scroll { flex: 1; min-height: 0; overflow: hidden auto; }
+.explorer-row { display: flex; align-items: center; box-sizing: border-box; width: 100%; min-width: 0; gap: 4px; height: 24px; padding-right: 6px; cursor: pointer; user-select: none; }
+.explorer-row:hover { background: var(--color-border); }
+.explorer-row[aria-selected="true"] { background: color-mix(in srgb, var(--color-accent) 18%, var(--color-surface)); color: var(--color-text); }
+.explorer-row:focus-visible { outline: 1px solid var(--color-accent); outline-offset: -1px; }
+.explorer-row[aria-disabled="true"] { opacity: .6; }
+.explorer-chevron { width: 12px; height: 12px; flex: 0 0 12px; }
+.explorer-chevron.is-open { transform: rotate(90deg); }
+.explorer-node-icon { width: 15px; height: 15px; flex: 0 0 15px; }
+.explorer-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.explorer-empty, .explorer-inline-error, .explorer-directory-empty { padding: 6px 10px; margin: 0; color: var(--color-text-muted); overflow-wrap: anywhere; }
+.explorer-empty .tool-button { margin-top: 6px; }
+.explorer-feedback { flex: none; padding: 2px 8px; overflow-wrap: anywhere; font-size: 11px; }
+.explorer-feedback:empty { display: none; }
+.widget-content:has(> .file-explorer) { overflow: hidden; }
+.editor-explorer-panel { flex: 1; min-height: 0; overflow: hidden; }
+.workbench[data-file-mode="editor"] .sidebar-region,
+.workbench[data-file-mode="editor"] .widget-frame[data-owner-region="sidebar"] { visibility: hidden !important; pointer-events: none !important; }
+.workbench[data-file-mode="editor"] .sidebar-region { position: absolute; inset: 40px 0 0; }

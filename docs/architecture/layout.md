@@ -1,5 +1,9 @@
 # Region-aware continuous widget geometry
 
+Alpha.39's [Explorer activity view](explorer.md) uses the existing Sidebar chrome/animation with
+session-only Editor Sidebar visibility/width. Widgets bars/placements remain independent. Its
+official single-view widget uses ordinary Main/Sidebar constraints and explicit placement.
+
 ## Real Notes presentation pilot — Issue #11 / alpha.36
 
 The host registry assigns only Workspace Essentials Notes the existing Main presentation

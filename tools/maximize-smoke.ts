@@ -139,4 +139,9 @@ try {
   assert.deepEqual(errors, []); await page.screenshot({ path: diagnostics + '/restored.png' })
   console.log(`PASS maximize: observed growth/reverse/Main-only blur/sharp content, both themes, reduced motion/fast interruption, exact bytes/geometry, mouse/focus, mounted peers/content/Workers, resized projection, Edit, eligibility, peer regions and target unavailability; automated DPR ${scale}`)
 } catch (error) { await (await app.firstWindow()).screenshot({ path: diagnostics + '/failure.png' }).catch(() => {}); throw error }
-finally { await app.close(); assert.equal(dirname(resolve(profile)), resolve(tmpdir())); await rm(profile, { recursive: true, force: true }) }
+finally {
+  // A failed geometry assertion may leave a disposable dirty document/native dialog.
+  // Destroy only this test application's windows so cleanup cannot wait on owner confirmation.
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().forEach(win => win.destroy())).catch(() => {})
+  await app.close(); assert.equal(dirname(resolve(profile)), resolve(tmpdir())); await rm(profile, { recursive: true, force: true })
+}

@@ -22,8 +22,8 @@ export class EditorSession {
     this.update({ text })
   }
   feedback(error: string) { this.update({ error }) }
-  private async run(action: () => Promise<DocumentResult>): Promise<void> {
-    if (this.state.busy) return
+  private async run(action: () => Promise<DocumentResult>): Promise<boolean> {
+    if (this.state.busy) return false
     this.update({ busy: true, error: null, code: null })
     try {
       const result = await action()
@@ -35,10 +35,12 @@ export class EditorSession {
         if (result.document?.id !== this.state.document?.id) this.selection = { start: 0, end: 0, top: 0, left: 0 }
         this.update({ document: result.document, text: result.document?.text ?? '' })
       }
-    } catch { this.update({ error: 'A comunicação com o Core falhou. Mantenha o rascunho aberto e copie seu conteúdo.', code: 'unavailable' }) }
+      return result.ok && !result.canceled
+    } catch { this.update({ error: 'A comunicação com o Core falhou. Mantenha o rascunho aberto e copie seu conteúdo.', code: 'unavailable' }); return false }
     finally { this.update({ busy: false }) }
   }
   open = () => this.locked ? Promise.resolve() : this.run(() => this.bridge.open(this.draft()))
+  openAuthorized = (action: (draft: DocumentDraft | null) => Promise<DocumentResult>) => this.locked ? Promise.resolve(false) : this.run(() => action(this.draft()))
   save = () => this.locked || !this.state.document ? Promise.resolve() : this.run(() => this.bridge.save(this.draft()!))
   release = () => this.locked || !this.state.document ? Promise.resolve() : this.run(() => this.bridge.release(this.draft()!))
   close = async (ticket: string): Promise<void> => {

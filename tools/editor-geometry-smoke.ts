@@ -47,7 +47,12 @@ export async function editorGeometry(app: ElectronApplication, page: Page, profi
       await expansion(page, expanded)
       assert.equal(await page.locator('[data-region="main"]').getAttribute('data-expanded'), String(expanded))
       for (const [sidebar, bottom] of [[true, true], [false, true], [false, false], [true, false]]) {
+        // Alpha.39 keeps Editor Sidebar state independent. Set both presentations explicitly
+        // before measuring identical chrome; every subsequent mode switch must still preserve bytes.
+        await mode('Widgets')
         if ((await root.getAttribute('data-sidebar-mode') === 'docked') !== sidebar) { await page.getByRole('button', { name: 'Ferramentas', exact: true }).click(); await settle(page) }
+        await mode('Editor')
+        if ((await root.getAttribute('data-sidebar-mode') === 'docked') !== sidebar) { await page.getByRole('button', { name: 'Explorador', exact: true }).click(); await settle(page) }
         if ((await root.getAttribute('data-bottom-mode') === 'docked') !== bottom) { await page.getByRole('separator', { name: 'Altura da Bottom', exact: true }).press('Enter'); await settle(page) }
         assert.equal(await root.getAttribute('data-sidebar-mode'), sidebar ? 'docked' : 'hidden')
         assert.equal(await root.getAttribute('data-bottom-mode'), bottom ? 'docked' : 'hidden')

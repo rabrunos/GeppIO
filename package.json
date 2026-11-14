@@ -1,6 +1,6 @@
 {
   "name": "geppio",
-  "version": "0.1.0-alpha.38",
+  "version": "0.1.0-alpha.39",
   "private": true,
   "license": "UNLICENSED",
   "description": "GeppIO — a local desktop workbench, Windows first.",
@@ -28,6 +28,7 @@
     "test:desktop": "pnpm test:essentials && pnpm test:time-tracker && pnpm test:maximize && pnpm test:alignment && pnpm test:groups && pnpm test:edit-lock && node --experimental-strip-types tools/demo-retirement-smoke.ts && node --experimental-strip-types tools/identity-smoke.ts && node --experimental-strip-types tools/desktop-smoke.ts && pnpm test:workbench && pnpm test:presentations",
     "test:essentials": "node --experimental-strip-types tools/workspace-essentials-smoke.ts",
     "test:documents": "node --experimental-strip-types --test tests/documents.test.ts && node --experimental-strip-types tools/document-smoke.ts",
+    "test:explorer": "node --experimental-strip-types --test tests/explorer.test.ts && node --experimental-strip-types tools/explorer-smoke.ts",
     "test:time-tracker": "node --experimental-strip-types tools/time-tracker-smoke.ts",
     "test:maximize": "node --experimental-strip-types tools/maximize-smoke.ts",
     "test:alignment": "node --experimental-strip-types tools/alignment-smoke.ts",

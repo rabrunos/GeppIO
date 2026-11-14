@@ -1,5 +1,8 @@
 # Plugin boundary — trusted local v1/v2 and future design
 
+Alpha.39 adds the [Explorer](explorer.md) to the same essential module, sharing navigation between
+its explicit Main/Sidebar widget and Editor activity view. This adds no Worker/native grant or SDK.
+
 Alpha.37 [Files & Editor](documents.md) is an essential bundled host-registered first-party module,
 with one shared editor/session and no new external Worker/manifest format. Core document authority
 is absent from public API 1/2 and imported content. Final essential packaging/distribution remains

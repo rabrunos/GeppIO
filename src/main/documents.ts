@@ -77,7 +77,7 @@ export class DocumentStore {
     if (!draft || !this.selection || draft.id !== this.selection.snapshot.id || draft.revision !== this.selection.snapshot.revision) throw new DocumentFailure('stale')
     return this.selection
   }
-  async select(path: string, draft: DocumentDraft | null, decide: () => Promise<DocumentDecision>, current: () => boolean): Promise<DocumentResult> {
+  async select(path: string, draft: DocumentDraft | null, decide: () => Promise<DocumentDecision>, current: () => boolean, authorize?: () => Promise<void>): Promise<DocumentResult> {
     this.current(draft)
     let candidate = await inspect(path)
     const previous = this.selection
@@ -88,6 +88,7 @@ export class DocumentStore {
     if (previous && sameTarget && previous.snapshot.revision !== revision) candidate = previous.evidence
     // A dialog may have been open for minutes. Revalidate the candidate before granting it.
     if (!sameEvidence(candidate, await inspect(path))) throw new DocumentFailure('conflict')
+    await authorize?.()
     if (!current()) throw new DocumentFailure('stale')
     this.generation++
     this.selection = { evidence: candidate, snapshot: { id: randomUUID(), revision: randomUUID(), name: basename(path).slice(0, 255), text: candidate.text, bom: candidate.bom } }

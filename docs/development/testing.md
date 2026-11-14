@@ -1,5 +1,13 @@
 # Validation guide
 
+## Explorer pilot (alpha.39 / Issue #46)
+
+`pnpm test:explorer` runs pure authority/model regressions and a built Electron smoke with disposable
+directories/profile. `node --experimental-strip-types tools/explorer-smoke.ts --scale125` repeats
+tree/rail integration at simulated DPR 1.25. Windows CI runs both. Native dialog responses are
+controlled in Main; renderer calls use real preload/registered handlers. This is not physical owner
+Windows acceptance. The [Explorer contract](../architecture/explorer.md) records budgets and limits.
+
 ## Selected document pilot (alpha.37)
 
 Alpha.38 adds `tools/editor-geometry-smoke.ts` to `pnpm test:maximize` (also in the desktop chain).

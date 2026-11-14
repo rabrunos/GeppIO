@@ -2,6 +2,13 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.39] — 2026-11-14
+
+- Added the official Files & Editor Explorer: native-selected navigation root, bounded lazy tree, keyboard navigation, refresh/retry, and shared state between the Editor activity panel and explicitly placed Main/Sidebar widget.
+- Editor mode uses Explorer instead of user bars; collapse/peek/resize reuses host chrome with session-only Sidebar preferences. Widgets bars, layout bytes and plugin lifecycles remain independent.
+- Main holds revocable opaque directory/node grants, validates full ancestor identities and canonical targets, refuses links/special paths and oversized listings, and opens files through the existing document/draft/close service. No Worker or public SDK authority was added.
+- Added pure/native Electron Explorer regressions and Windows CI. Path-based TOCTOU, special Windows storage/reparse tags and existing atomic-save metadata limitations remain disclosed; owner Windows acceptance is separate.
+
 ## [0.1.0-alpha.38] — 2026-11-14
 
 - Match direct Editor mode to the host-measured usable Main rectangle used by maximized widgets, including expansion, viewport/region resizing and fractional DPR.

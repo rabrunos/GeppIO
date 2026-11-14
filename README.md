@@ -10,8 +10,13 @@ persistência de layout. Há um runtime experimental real para plugins locais co
 O perfil novo abre Main, Sidebar e Bottom vazios; escolha widgets dos plugins instalados
 no catálogo. Os sete demos foram retirados do uso normal. Layouts anteriores preservam
 plugins, barras e composições; referências dos demos ficam guardadas para recuperação.
-Editor de arquivos, projeto conectado ao filesystem, Git, terminal, ChatGPT, Codex e GitLayer
-ainda são propostas, não ferramentas funcionais desta base. Não há conta GeppIO, backend,
+Arquivos & Editor oferece edição real de um documento UTF-8 de até 1 MiB e, na alpha.39,
+Explorador para uma pasta local selecionada em diálogo nativo. No modo Editor, o Explorador
+ocupa a Sidebar; no modo Widgets, coloque seu widget explicitamente em Main ou Sidebar.
+A árvore e o rascunho são compartilhados. Use **Atualizar árvore** após mudanças no disco ou
+antes de reabrir um item cujo arquivo foi substituído ao salvar. A navegação aceita até 512
+entradas por pasta e 32 níveis; não cria, move nem exclui arquivos. Veja os [limites](docs/architecture/explorer.md).
+Projeto completo, Git, terminal, ChatGPT, Codex e GitLayer ainda são propostas. Não há conta GeppIO, backend,
 sincronização em nuvem ou API paga de IA.
 
 Windows é o primeiro alvo validado. A direção de produto inclui Windows e Linux, mas não há

@@ -2,6 +2,10 @@
 
 ## Implemented boundaries
 
+Alpha.39 adds the [bounded Explorer](explorer.md) to Files & Editor: one native folder grant,
+lazy shared tree, explicit Main/Sidebar widget and existing-host Editor activity presentation.
+Directory access remains in Main and opens through the same document store/session.
+
 Alpha.37 adds [essential Files & Editor and Core document service](documents.md): one native-selected
 file/session shared by direct Editor and an explicitly placed Main widget. This first-party host
 module preserves workbench storage/plugin lifetimes and does not extend public Worker API 1/2.

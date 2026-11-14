@@ -80,6 +80,9 @@ These platform references do not replace application tests or owner acceptance.
 
 ## Deferred
 
-Explorer/project roots, tabs/splits, search, terminal/PTY, Git, LSP/debug/build, OS associations/CLI
+Alpha.39 adds the [bounded first-party Explorer](explorer.md) through this same store/session.
+Its directory grant is independent from the open document and adds no Worker authority.
+
+Full project roots, tabs/splits, search, terminal/PTY, Git, LSP/debug/build, OS associations/CLI
 routing, second windows, automatic restoration, crash recovery, metadata-preserving native writes,
 public rich UI/grants, marketplace/distribution and layout portability remain separate scopes.

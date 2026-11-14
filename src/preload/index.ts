@@ -4,6 +4,7 @@ import type { PluginBridge } from '../shared/plugins.ts'
 import type { WindowControls } from '../shared/window-controls.ts'
 import type { PluginDataBridge } from '../shared/plugin-data.ts'
 import type { DocumentBridge } from '../shared/documents.ts'
+import type { ExplorerBridge } from '../shared/explorer.ts'
 declare const __APP_VERSION__: string
 const plugins: PluginBridge = Object.freeze({
   list: () => ipcRenderer.invoke('plugins:list'),
@@ -37,5 +38,11 @@ const documents = Object.freeze<DocumentBridge>({
     return () => { ipcRenderer.removeListener('document:close-requested', receive) }
   }
 })
-contextBridge.exposeInMainWorld('geppio', Object.freeze({ name: IDENTITY.name, version: __APP_VERSION__, platform: process.platform, plugins, pluginData, windowControls, documents,
+const explorer = Object.freeze<ExplorerBridge>({
+  select: () => ipcRenderer.invoke('explorer:select'),
+  list: (root, node) => ipcRenderer.invoke('explorer:list', root, node),
+  open: (root, node, draft) => ipcRenderer.invoke('explorer:open', root, node, draft),
+  release: root => ipcRenderer.invoke('explorer:release', root)
+})
+contextBridge.exposeInMainWorld('geppio', Object.freeze({ name: IDENTITY.name, version: __APP_VERSION__, platform: process.platform, plugins, pluginData, windowControls, documents, explorer,
   demoFixtures: process.argv.includes('--geppio-demo-fixtures') }))
