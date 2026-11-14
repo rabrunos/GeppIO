@@ -168,7 +168,7 @@ export function useRegions(forced = false, confirmed: WorkbenchChrome = defaultC
       if (hoverTimer.current) clearTimeout(hoverTimer.current)
       if (forced || !collapsed.sidebar) return
       if (inside && !blockPeek.current) hoverTimer.current = setTimeout(() => { setFloating(true); setPeek(true) }, 100)
-      else if (!inside) { blockPeek.current = false; hoverTimer.current = setTimeout(() => { if (!area.current?.querySelector('.host-sidebar-content:focus-within')) setPeek(false) }, 280) }
+      else if (!inside) { blockPeek.current = false; hoverTimer.current = setTimeout(() => { if (!area.current?.querySelector('.host-sidebar-content:focus-within, .editor-explorer-panel:focus-within')) setPeek(false) }, 280) }
     },
     cancel, commitKeyboard, active: () => !!active.current,
     expand(kind: RegionKind) { set(kind, bounds[kind].max); setCollapsed(prev => ({ ...prev, [kind]: false })); publish(kind, bounds[kind].max, true) },

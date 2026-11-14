@@ -11,6 +11,7 @@ import { enableDeveloperMode } from './plugin-dev-support.ts'
 import { TERMINAL_TYPE } from '../src/shared/terminal-widget.ts'
 import { WORKBENCH_KEY } from '../src/shared/workbench/model.ts'
 import type { TerminalRead, TerminalResult } from '../src/shared/terminal.ts'
+import { editorRegionGeometry } from './editor-region-geometry-smoke.ts'
 
 const profile = await mkdtemp(join(tmpdir(), 'geppio-smoke-terminal-')), root = await realpath(profile)
 const scale125 = process.argv.includes('--scale125'), diagnostics = resolve('.local/diagnostics/terminal-alpha40-' + (scale125 ? '125' : '100'))
@@ -240,8 +241,12 @@ try {
   assert.equal(await emulator!.evaluate(element => element === document.querySelector('.terminal-emulator')), true, 'same emulator DOM survives presentation changes')
   assert.deepEqual(page.workers(), workers)
   await send("'CONT_' + ($alpha40 + 1)"); await output('CONT_42')
+  await mode('Editor'); await editorRegionGeometry(app, page, diagnostics, scale125 ? 1.25 : 1)
+  await send("'GEOMETRY_' + $PID + '_' + $alpha40 + '_' + $env:GEPPIO_ALPHA40"); await output(`GEOMETRY_${firstPid}_41_session`)
+  await send("'GEOMETRY_CWD_' + (Get-Location).Path"); await output('GEOMETRY_CWD_' + root)
+  // Emit the visible failure-route sentinel after the added resize matrix; older output stays in scrollback.
   await send("'ENV_' + $env:GEPPIO_ALPHA40"); await output('ENV_session')
-  await mode('Editor'); await editor.press('Control+s')
+  await editor.press('Control+s')
   await page.waitForFunction(() => document.querySelector('[data-status-document]')?.getAttribute('data-status-document') === 'saved')
   assert.equal(await readFile(fixture, 'utf8'), '\ufeff{\r\n  "draft": 40\r\n}\r\n')
   for (const [file, language, eol] of [[textFixture, 'Texto simples', 'LF'], [typeFixture, 'TypeScript', 'CR']]) {

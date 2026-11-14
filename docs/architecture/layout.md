@@ -1,5 +1,17 @@
 # Region-aware continuous widget geometry
 
+## Editor regional presentations — alpha.41 / Issue #48
+
+Direct Explorer and Terminal panels use `regionViewport` from the same `useSurfaces`
+owner/placement-port measurements as widgets. Their absolute work-area coordinates never become
+placements or bar members. Sidebar's measurement includes header separation, actual stable native
+scrollbar reservation and host reveal clipping; Bottom uses its padded port and visible owner clip.
+There is no second set of CSS insets. The hidden widget Sidebar stays in its normal flex slot;
+its outer scrolling is disabled in Editor while the Explorer tree owns vertical scrolling.
+Both panels reuse host card boundaries and Sidebar peek motion/focus retention. Bottom remains
+externally clipped; resizing its measured panel triggers the existing xterm ResizeObserver fit.
+Main's owner-content rectangle and the native/document/session contracts are unchanged.
+
 Alpha.40's [Terminal](terminal.md) reuses Main/Bottom widget eligibility and the existing direct
 Editor Bottom region/splitter. Presentation changes reuse one session/emulator, never auto-insert
 saved placements or write layout bytes. The contextual [Status Bar](status-bar.md) stays at 25px

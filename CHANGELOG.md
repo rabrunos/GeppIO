@@ -2,6 +2,12 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.41] — 2026-11-14
+
+- Editor Explorer and Terminal now fill the same measured usable Sidebar/Bottom rectangles as host widget presentations, including regional insets, scrollbar reservation, clipping and resizing. Removed the separate Explorer flow and guessed Terminal insets.
+- Preserved Sidebar reveal/peek keyboard interaction, the Explorer's inner tree scroll, Terminal internal scrollback and the existing shared document/native-terminal sessions. Main geometry, saved placements, bars and Worker lifecycle remain unchanged.
+- Extended built Windows Electron coverage for measured regional parity across themes, sizes, dock/collapse/peek, resizing and DPR 1/1.25; physical owner acceptance remains separate.
+
 ## [0.1.0-alpha.40] — 2026-11-14
 
 - Added a genuine persistent PowerShell/ConPTY Terminal using approved xterm 6.0.0 and node-pty 1.1.0, with input, ANSI/Unicode, interrupt, bounded history, resize, actual exit/restart, explicit termination and native-owner cleanup.

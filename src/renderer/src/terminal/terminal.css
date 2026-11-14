@@ -7,8 +7,7 @@
 .terminal-emulator { width: 100%; height: 100%; }
 .terminal-emulator .xterm { height: 100%; }
 .terminal-feedback { flex: none; margin: 1px 0; font-size: 11px; max-height: 36px; overflow: auto; }
-.direct-terminal { position: absolute; inset: 5px 10px; min-width: 0; min-height: 0; }
-.bottom-surface:has(.direct-terminal) { position: relative; }
+.direct-terminal { z-index: 35; }
 .workbench[data-file-mode="editor"] .widget-frame[data-owner-region="bottom"] { visibility: hidden; pointer-events: none; }
 .widget-frame:has(.terminal-view) .widget-content { overflow: hidden; }
 .status-bar .status-left, .status-bar .status-right { min-width: 0; gap: 10px; overflow: hidden; }

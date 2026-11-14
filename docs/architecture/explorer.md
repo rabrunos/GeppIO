@@ -9,6 +9,12 @@ A selected folder is a navigation scope, not a Workspace or automatic session re
 
 ## Presentation and storage
 
+Alpha.41 places the direct activity panel in the host's measured usable Sidebar viewport,
+sharing widget insets, native gutter budget, header separation, clipping and peek motion.
+The hidden Widgets scroll owner retains its flex geometry with outer scrolling disabled;
+the Explorer tree is the only active vertical content scroller. This presentation is never
+a saved placement/bar member. Peek retains focus inside the direct panel as well as host chrome.
+
 Widgets mode retains Home, custom bars and catalog. Explicit Main/Sidebar placement uses ordinary
 host constraints (180 × 160 minimum, 300 × 400 default), Sidebar width adaptation and Edit-only
 individual gestures. Nothing is inserted automatically. The Explorer has a single widget view,

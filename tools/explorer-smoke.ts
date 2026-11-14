@@ -106,10 +106,32 @@ try {
   const separator = page.getByRole('separator', { name: 'Largura da Sidebar', exact: true })
   await separator.focus(); await separator.press('End'); await text().focus(); await settle(page)
   const panelBox = await page.locator('.editor-explorer-panel').boundingBox(), explorerBox = await page.locator('.file-explorer').boundingBox()
-  assert.ok(panelBox && explorerBox && Math.abs(panelBox.height - explorerBox.height) < 2 && explorerBox.height > 500)
+  assert.ok(panelBox && explorerBox && explorerBox.height > 500)
+  const border = await page.locator('.editor-explorer-panel').evaluate(node => { const css = getComputedStyle(node); return [css.borderLeftWidth, css.borderTopWidth, css.borderRightWidth, css.borderBottomWidth].map(parseFloat) })
+  // The activity panel now has the same real host border as widget/Main presentations.
+  // Assert exact inner bounds rather than the old unframed height approximation.
+  for (const delta of [explorerBox.x - panelBox.x - border[0]!, explorerBox.y - panelBox.y - border[1]!,
+    panelBox.x + panelBox.width - explorerBox.x - explorerBox.width - border[2]!, panelBox.y + panelBox.height - explorerBox.y - explorerBox.height - border[3]!]) assert.ok(Math.abs(delta) < .06, 'Explorer fills the bordered usable panel')
   await separator.focus(); await separator.press('Home'); await text().focus(); await settle(page)
   assert.equal(await page.locator('.explorer-scroll').evaluate(node => node.scrollWidth <= node.clientWidth), true)
   assert.ok(await item('leaf.txt').locator('.explorer-name').evaluate(node => node.clientWidth >= 16), 'Deep indentation retains a usable name at minimum Sidebar width')
+  assert.equal(await raw(), beforeChrome)
+  // The direct panel shares widget reveal geometry but keeps ordinary tree keyboard focus.
+  await rail.getByRole('button', { name: 'Explorador', exact: true }).click(); await page.mouse.move(850, 100)
+  await rail.getByRole('button', { name: 'Explorador', exact: true }).hover()
+  await page.waitForFunction(() => document.querySelector('.workbench')?.getAttribute('data-sidebar-mode') === 'peek', undefined, { timeout: 10000 })
+  await page.locator('.host-sidebar-content').evaluate(async node => { await Promise.all(node.getAnimations().map(animation => animation.finished.catch(() => undefined))) })
+  await tree().getByRole('treeitem').first().focus(); await page.keyboard.press('End')
+  assert.ok(await page.locator('.explorer-scroll').evaluate(node => node.scrollTop > 0), 'peek tree scrolls to keyboard destination')
+  await page.mouse.move(850, 100)
+  // Exercise the real 280ms leave timer while focus remains in the reparented direct panel.
+  await page.waitForTimeout(350)
+  assert.equal(await page.locator('.workbench').getAttribute('data-sidebar-mode'), 'peek')
+  assert.ok(await tree().evaluate(node => node.contains(document.activeElement)))
+  await page.keyboard.press('ArrowUp'); assert.ok(await tree().evaluate(node => node.contains(document.activeElement)))
+  await page.keyboard.press('Escape'); await settle(page)
+  assert.equal(await page.locator('.workbench').getAttribute('data-sidebar-mode'), 'hidden')
+  await rail.getByRole('button', { name: 'Explorador', exact: true }).click(); await settle(page)
   assert.equal(await raw(), beforeChrome)
   await picker(null); await openFolder(); await idle(); assert.equal(await item('inside.txt').count(), 1)
   evidence.rail = 'passed: only Explorer, toggle collapse/reopen, original splitter min/max, full-height panel and unchanged persisted chrome'

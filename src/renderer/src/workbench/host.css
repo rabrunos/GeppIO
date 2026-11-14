@@ -29,12 +29,13 @@
 .bottom-region .placement-port { overflow: clip; }
 .freeform-layer { z-index: auto; }
 .freeform-layer .widget-frame { position: absolute; }
-.widget-frame, .direct-file-editor { border: 1px solid var(--color-border); border-radius: var(--card-radius); background: var(--color-surface); overflow: hidden; }
+.widget-frame, .direct-file-editor, .editor-region-panel { border: 1px solid var(--color-border); border-radius: var(--card-radius); background: var(--color-surface); overflow: hidden; }
+.editor-region-panel { position: absolute; min-width: 0; min-height: 0; }
 .widget-frame { z-index: 12; }
 .widget-frame[data-owner-region="sidebar"] { z-index: 41; }
 .widget-frame[data-owner-region="bottom"] { z-index: 35; }
-.workbench[data-sidebar-presentation="floating"] .widget-frame[data-owner-region="sidebar"] { transform: translateX(-4px); opacity: 0; visibility: hidden; pointer-events: none; transition: transform var(--sidebar-hide-motion) var(--region-easing), opacity var(--sidebar-hide-fade) ease, visibility 0s linear var(--sidebar-hide-motion); }
-.workbench[data-sidebar-presentation="floating"][data-sidebar-mode="peek"] .widget-frame[data-owner-region="sidebar"] { transform: none; opacity: 1; visibility: visible; pointer-events: auto; transition-duration: var(--region-motion), .2s, 0s; transition-delay: 0s; }
+.workbench[data-sidebar-presentation="floating"] :is(.widget-frame[data-owner-region="sidebar"], .editor-explorer-panel) { transform: translateX(-4px); opacity: 0; visibility: hidden; pointer-events: none; transition: transform var(--sidebar-hide-motion) var(--region-easing), opacity var(--sidebar-hide-fade) ease, visibility 0s linear var(--sidebar-hide-motion); }
+.workbench[data-sidebar-presentation="floating"][data-sidebar-mode="peek"] :is(.widget-frame[data-owner-region="sidebar"], .editor-explorer-panel) { transform: none; opacity: 1; visibility: visible; pointer-events: auto; transition-duration: var(--region-motion), .2s, 0s; transition-delay: 0s; }
 .widget-frame[data-widget-appearance="seamless"] { background: transparent; border-color: transparent; border-radius: 0; box-shadow: none; }
 .widget-frame[data-widget-appearance="seamless"].editing { border: 1px solid var(--color-border); border-radius: var(--card-radius); }
 .widget-heading { background: transparent; border: 0; padding: 11px; gap: 11px; min-height: 42px; }

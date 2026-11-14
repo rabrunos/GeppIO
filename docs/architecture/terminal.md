@@ -2,6 +2,11 @@
 
 ## Ownership
 
+Alpha.41's direct Editor presentation uses the host's measured usable Bottom viewport,
+including real port padding and visible-owner clipping, instead of independent CSS insets.
+The existing resize observer fits xterm within that rectangle after region changes; the
+Bottom has no outer scrollbar. Native ownership, bridge and emulator continuity are unchanged.
+
 `main/terminal.ts` owns one persistent native `node-pty` session per app window. Windows uses
 the OS ConPTY implementation, preferring the existing Program Files PowerShell 7 executable,
 otherwise System32 Windows PowerShell. The initial directory is the actual OS user home, unrelated

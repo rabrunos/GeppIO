@@ -11,7 +11,7 @@ concurrency:
 jobs:
   windows:
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1, pinned from the inspected method
         with:
@@ -30,9 +30,9 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Check structure, types, lint, tests and build
         run: pnpm check
-      - name: Native PowerShell ConPTY lifecycle and contextual Status Bar
+      - name: Native PowerShell, Status Bar and measured Editor regional geometry
         run: pnpm test:terminal && pnpm test:status-bar
-      - name: Shared terminal presentations at simulated DPR 1.25
+      - name: Shared terminal and Sidebar/Bottom geometry at simulated DPR 1.25
         run: node --experimental-strip-types tools/terminal-smoke.ts --scale125
       - name: Signed plugin package pilot in isolated profiles
         run: pnpm test:plugin-package

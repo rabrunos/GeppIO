@@ -1,5 +1,22 @@
 # Validation guide
 
+## Shared Editor Sidebar/Bottom geometry (alpha.41 / Issue #48)
+
+The existing `test:terminal` built-Electron journey now runs `editor-region-geometry-smoke.ts`
+while a real PowerShell, dirty JSON and unrelated Worker are alive. The existing Windows CI
+Terminal steps exercise 48 owner/port comparisons per DPR (1 and simulated 1.25): light/dark,
+1920×1080/1024×768, min/max splitter sizes, Sidebar dock/hidden/peek and Bottom dock/hidden.
+The Windows job retains a bounded 40-minute budget for these added native matrices; the
+previous successful alpha.40 workflow already took about 23 minutes without them.
+The oracle measures actual DOM owner padding, port client extents, stable native scrollbar
+reservation and clipping, comparing all six rectangle dimensions within .06 CSS px (subpixel
+layout precision), never comparing a widget's arbitrary height to the available panel height.
+Native integer client rounding is recorded separately from fractional bounding rectangles;
+the same host engine budget must match exactly across modes. Hit probes check boundaries,
+rounded clipping, hidden-region inertness, header/rail/status separation and scroll owners.
+Evidence is written to ignored `editor-region-geometry.json` beside Terminal diagnostics.
+Existing Explorer, Terminal, document and maximize regressions retain functional coverage.
+
 ## Interactive Terminal and contextual Status Bar (alpha.40 / Issue #47)
 
 After Ctrl+C, the controlled smoke waits at most 10 seconds for a new real PowerShell prompt
