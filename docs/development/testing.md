@@ -2,6 +2,11 @@
 
 ## Interactive Terminal and contextual Status Bar (alpha.40 / Issue #47)
 
+After Ctrl+C, the controlled smoke waits at most 10 seconds for a new real PowerShell prompt
+before typing the next command. This distinguishes cancellation from the 30-second Sleep finishing
+naturally and avoids typing into a pipeline still unwinding. CI runs both native scales immediately
+after the checked build, before the longer regression suites; no later checks are skipped.
+
 Build with `pnpm check`, then run `pnpm test:terminal` and `pnpm test:status-bar`.
 `node --experimental-strip-types tools/terminal-smoke.ts --scale125` repeats the real Windows
 ConPTY journey at simulated DPR 1.25. Windows CI runs both scales. Pure tests cover strict request

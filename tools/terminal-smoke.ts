@@ -50,6 +50,20 @@ async function output(expected: string) {
   }
   throw new Error('Timed out awaiting real PTY output')
 }
+async function interruptedPrompt(after: number) {
+  const until = Date.now() + 10000
+  let text = ''
+  while (Date.now() < until) {
+    const result = await page.evaluate(after => window.geppio!.terminal.read(null, after), after)
+    if (!result.ok) throw new Error(result.error)
+    assert.equal(result.value.state.phase, 'running', 'interrupt must retain the real shell')
+    text = (text + result.value.data).slice(-8192); after = result.value.next
+    // This is a controlled PowerShell smoke oracle, never product command tracking.
+    if (/^PS [^\r\n>]*> *$/m.test(stripVTControlCharacters(text))) return
+    await new Promise(resolve => setTimeout(resolve, 50))
+  }
+  throw new Error('Ctrl+C did not return a real PowerShell prompt within 10 seconds')
+}
 async function pid(prefix: string) {
   const until = Date.now() + 15000
   while (Date.now() < until) {
@@ -100,6 +114,7 @@ try {
   await output('PS ')
   const first = (await state()).state
   assert.ok(first.id); assert.match(first.shell, /PowerShell/); assert.ok(first.cwd)
+  console.log('terminal smoke: selected shell', first.shell)
   await send("'POLICY_' + (Get-PSReadLineOption).HistorySaveStyle + '_' + [IO.Path]::GetFileName((Get-PSReadLineOption).HistorySavePath)"); await output('POLICY_SaveNothing_NUL')
   evidence.historyPolicy = 'passed: actual PSReadLine SaveNothing with NUL target before interactive commands'
   await send('$alpha40 = 41'); await send("'VALUE_' + ($alpha40 + 1)"); await output('VALUE_42')
@@ -146,7 +161,10 @@ try {
   evidence.boundary = 'passed: fixed real handlers reject foreign sender/subframe, malformed calls, stale IDs, oversized input and invalid resize; duplicate start retains session'
 
   await send("Write-Output ('SLEEP_' + 'started'); Start-Sleep -Seconds 30"); await output('SLEEP_started')
-  await page.keyboard.press('Control+c'); await send("'INT_' + 'ok'"); await output('INT_ok')
+  const beforeInterrupt = await page.evaluate(() => window.geppio!.terminal.read(null, Number.MAX_SAFE_INTEGER))
+  assert.ok(beforeInterrupt.ok)
+  await page.keyboard.press('Control+c'); await interruptedPrompt(beforeInterrupt.value.next)
+  await send("'INT_' + 'ok'"); await output('INT_ok')
   await page.evaluate(async () => { const result = await window.geppio!.terminal.read(null, 0); if (result.ok) await window.geppio!.terminal.input(result.value.state.id!, "1..4000 | ForEach-Object { 'long-output-' + $_ }; Write-Output ('LONG_' + 'done')\r") })
   await output('LONG_done')
   await send("1..20000 | ForEach-Object { 'bounded-output-{0:D8}-{1:D8}' -f $_, ($_ * 7) }; Write-Output ('BOUND_' + 'ok')"); await output('BOUND_ok')

@@ -30,6 +30,10 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Check structure, types, lint, tests and build
         run: pnpm check
+      - name: Native PowerShell ConPTY lifecycle and contextual Status Bar
+        run: pnpm test:terminal && pnpm test:status-bar
+      - name: Shared terminal presentations at simulated DPR 1.25
+        run: node --experimental-strip-types tools/terminal-smoke.ts --scale125
       - name: Signed plugin package pilot in isolated profiles
         run: pnpm test:plugin-package
       - name: External plugin development in isolated profiles
@@ -44,10 +48,6 @@ jobs:
         run: pnpm test:explorer
       - name: Explorer responsiveness at simulated DPR 1.25
         run: node --experimental-strip-types tools/explorer-smoke.ts --scale125
-      - name: Native PowerShell ConPTY lifecycle and contextual Status Bar
-        run: pnpm test:terminal && pnpm test:status-bar
-      - name: Shared terminal presentations at simulated DPR 1.25
-        run: node --experimental-strip-types tools/terminal-smoke.ts --scale125
       - name: Maximized widget and direct Editor geometry at simulated DPR 1.25
         run: pnpm test:maximize --scale125
       - name: Host presentation regression at simulated DPR 1.25
