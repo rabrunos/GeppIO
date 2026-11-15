@@ -7,13 +7,16 @@ import type { DocumentDraft, DocumentResult } from '../shared/documents.ts'
 import { DirectoryStore, ExplorerFailure, explorerFailure } from './explorer.ts'
 import { validExplorerRequest } from '../shared/explorer.ts'
 import type { ExplorerResult } from '../shared/explorer.ts'
+import { GitStore, GitFailure, gitFailure } from './git.ts'
+import { validGitRequest } from '../shared/git.ts'
 
 /** Installed for the exact app window, never a recovery window or another WebContents. */
 export function bindDocuments(win: BrowserWindow, expectedURL: string): void {
   const store = new DocumentStore()
   const directories = new DirectoryStore()
+  const git = new GitStore(directories)
   let busy = false, closing = false, ticket: string | null = null
-  const revoke = () => { store.revoke(); directories.revoke(); ticket = null }
+  const revoke = () => { git.revoke(); store.revoke(); directories.revoke(); ticket = null }
   const decide = async () => {
     const result = await dialog.showMessageBox(win, { type: 'question', title: 'Alterações não salvas', message: 'Salvar as alterações antes de continuar?', detail: 'Cancelar mantém o arquivo e o rascunho abertos.', buttons: ['Salvar', 'Descartar', 'Cancelar'], defaultId: 2, cancelId: 2, noLink: true })
     return (['save', 'discard', 'cancel'] as const)[result.response] ?? 'cancel'
@@ -75,10 +78,12 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): void {
         const selected = await dialog.showOpenDialog(win, { title: 'Abrir pasta', buttonLabel: 'Abrir pasta', properties: ['openDirectory'] })
         if (!current()) throw new ExplorerFailure('stale')
         if (selected.canceled || selected.filePaths.length !== 1) return { ok: true, root: directories.snapshot, canceled: true }
-        return await directories.select(selected.filePaths[0]!, current)
+        const result = await directories.select(selected.filePaths[0]!, current)
+        git.revoke()
+        return result
       }
       const root = args[0] as string, node = args[1] as string
-      if (operation === 'release') return directories.release(root)
+      if (operation === 'release') { const result = directories.release(root); git.revoke(); return result }
       if (operation === 'list') return await directories.list(root, node, current)
       const path = await directories.file(root, node, current)
       return await store.select(path, args[2] as DocumentDraft | null, decide, current, async () => { await directories.file(root, node, current) })
@@ -87,9 +92,17 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): void {
       return operation === 'open' && !result.ok && store.snapshot ? { ...result, confirmed: store.snapshot } : result
     } finally { busy = false }
   })
+  const gitOperations = ['status', 'compare'] as const
+  for (const operation of gitOperations) ipcMain.handle(`git:${operation}`, async (event, ...args: unknown[]) => {
+    const frame = event.senderFrame
+    if (win.isDestroyed() || event.sender !== win.webContents || frame !== win.webContents.mainFrame || frame?.url !== expectedURL || !validGitRequest(operation, args)) return gitFailure(new GitFailure('invalid'))
+    const current = () => !closing && !win.isDestroyed() && !win.webContents.isDestroyed() && win.webContents.mainFrame === frame && frame.url === expectedURL
+    try { return await git.inspect(operation, args[0] as string, args[1] as string | undefined, current) } catch (error) { return gitFailure(error) }
+  })
   win.webContents.on('destroyed', () => {
     revoke()
     for (const operation of operations) ipcMain.removeHandler(`document:${operation}`)
     for (const operation of directoryOperations) ipcMain.removeHandler(`explorer:${operation}`)
+    for (const operation of gitOperations) ipcMain.removeHandler(`git:${operation}`)
   })
 }

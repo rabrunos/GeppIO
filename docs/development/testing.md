@@ -1,5 +1,20 @@
 # Validation guide
 
+## Read-only Git (alpha.43 / Issue #50)
+
+After building, `pnpm test:git` runs disposable real-Git tests and real Electron production
+DPR 1/1.25 plus development. Fixtures cover clean/index/working/untracked/delete/rename,
+detached HEAD/conflict, Unicode/spaces, binary/large, nested/bare/worktree/gitlink, missing Git,
+invalid requests, configuration sentinels, stale grants, process output and a controlled-timer
+native process timeout. Full file hashes/inodes/mtime compare repository index/refs/config and
+working files before/after inspection. No owner repository is used as an application fixture.
+Electron checks a live PowerShell UUID/command and actual installed plugin Worker continuity,
+exact dirty Monaco identity/text/undo/selection/scroll, disposed comparison
+models, fixed caller validation, Editor activity/Sidebar widget sharing, themes/geometry and
+unchanged layout bytes through mode changes. Existing document/Explorer/Monaco/Terminal,
+Status Bar, Sidebar and desktop regressions remain required. Automated DPR and dialog stubs
+do not replace physical owner picker/mouse/DPI acceptance. See [scope and limits](../architecture/git.md).
+
 ## Monaco shared editing (alpha.42 / Issue #49)
 
 `pnpm test:monaco` runs pure interval/exact-draft tests, actual built Electron at DPR 1 and

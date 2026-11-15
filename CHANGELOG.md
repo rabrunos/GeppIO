@@ -2,6 +2,13 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.43] — 2026-11-15
+
+- Added first-party read-only Git Changes in the ordinary Main/Sidebar catalog and the existing Editor activity rail, sharing one ephemeral state owner and the exact Explorer folder grant.
+- Inspections use a bounded disposable metadata copy and fixed installed Git builtins with isolated configuration/environment. No Git operation writes selected repository data; unsupported roots, filters, extensions, links and budgets fail explicitly.
+- Added independent disposable Monaco Diff Editor models for bounded HEAD-to-saved-disk UTF-8 comparisons, preserving the active document draft, undo history and native authority. Global Git settings are deliberately ignored; this is not staged/unstaged layer comparison.
+- Added disposable-repository and real Windows Electron security, nonmutation and presentation coverage. Existing Monaco/DOMPurify advisory acceptance remains in force; no dependency or public plugin capability was added.
+
 ## [0.1.0-alpha.42] — 2026-11-14
 
 - Replaced the official file textarea with stock Monaco 0.57.0: local syntax/language modes, find/replace, multiple cursors, folding, indentation and ordinary editor shortcuts in both presentations.

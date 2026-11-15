@@ -25,7 +25,7 @@ export function safeExplorerName(name: string): boolean {
 type Evidence = { path: string; chain: string; kind: 'directory' | 'file' }
 type Node = Omit<Evidence, 'kind'> & { kind: ExplorerNode['kind']; display: ExplorerNode; depth: number }
 /** Inspect every lexical ancestor, including those above the selected navigation root. */
-async function inspect(path: string, kind: Evidence['kind']): Promise<Evidence> {
+export async function inspectExplorerPath(path: string, kind: Evidence['kind']): Promise<Evidence> {
   if (!isAbsolute(path) || resolve(path) !== path || path.length > 8192
     || process.platform === 'win32' && !/^[a-z]:\\/i.test(path)) throw new ExplorerFailure('unsupported')
   const chain: string[] = []
@@ -54,7 +54,7 @@ export class DirectoryStore {
   guard(): () => boolean { const generation = this.generation; return () => generation === this.generation }
   revoke(): void { this.generation++; this.root = null; this.nodes.clear() }
   async select(path: string, current: () => boolean): Promise<ExplorerResult> {
-    const evidence = await inspect(path, 'directory')
+    const evidence = await inspectExplorerPath(path, 'directory')
     if (!current()) throw new ExplorerFailure('stale')
     this.revoke()
     const display: ExplorerNode = { id: randomUUID(), name: basename(path) || 'Pasta', kind: 'directory' }
@@ -67,7 +67,7 @@ export class DirectoryStore {
     if (node.kind === 'blocked') throw new ExplorerFailure('unsupported')
     const inside = relative(selected.path, node.path)
     if (inside === '..' || inside.startsWith('..' + sep) || isAbsolute(inside)) throw new ExplorerFailure('unsupported')
-    const actual = await inspect(node.path, node.kind)
+    const actual = await inspectExplorerPath(node.path, node.kind)
     if (!current() || selected !== this.root || this.nodes.get(id) !== node || actual.chain !== node.chain) throw new ExplorerFailure('stale')
     return node
   }
@@ -75,6 +75,10 @@ export class DirectoryStore {
     const node = await this.target(root, id, current)
     if (node.kind !== 'file') throw new ExplorerFailure('unsupported')
     return node.path
+  }
+  /** Main-only reuse of the exact selected root; never a renderer path grant. */
+  async folder(root: string, current: () => boolean): Promise<string> {
+    return (await this.target(root, root, current)).path
   }
   release(root: string): ExplorerResult {
     if (!this.root || root !== this.root.display.id) throw new ExplorerFailure('stale')

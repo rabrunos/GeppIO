@@ -1,5 +1,12 @@
 # Selected security baseline
 
+Issue #50 adds the first-party [read-only Git boundary](../architecture/git.md): exact Explorer
+root grant, two fixed caller-bound operations and a disposable bounded metadata copy. Installed
+Git builtins never load the original executable configuration or write the selected repository.
+Global settings are ignored; unsupported roots/storage/config fail closed. Separate read-only
+Monaco comparison models never replace the editable draft. Existing native TOCTOU and trusted
+same-user limitations remain; no Worker capability or generalized executor is introduced.
+
 Issue #49 adds the app-owned [Monaco ESM/model/asset boundary](../architecture/monaco.md),
 including the owner's explicit known-advisory exception for pinned Monaco 0.57.0/DOMPurify 3.4.15.
 Local bundled language Workers receive no native bridge or private filesystem URI. Production

@@ -2,6 +2,10 @@
 
 ## Implemented boundaries
 
+Alpha.43 adds the [read-only Git pilot](git.md) using the exact Explorer grant, disposable
+metadata and isolated installed Git builtins. One session serves Main/Sidebar widgets and
+the second Editor activity; independent Monaco Diff Editor models compare HEAD to saved disk.
+
 Alpha.40 adds the essential [interactive Terminal](terminal.md) and [contextual Status Bar](status-bar.md).
 Main owns one persistent PTY; the renderer session owns one bounded xterm emulator across Editor
 Bottom and explicit Main/Bottom widget presentations. Five fixed caller-bound operations do not

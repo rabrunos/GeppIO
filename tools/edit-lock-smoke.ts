@@ -98,7 +98,11 @@ async function groupDrag(name: string) {
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 10 }); await page.mouse.up(); await settle(page)
 }
 async function transferGroup(region: 'main' | 'sidebar' | 'bottom') {
-  await group().hover({ position: { x: 15, y: 15 } }); const handle = group().locator('.widget-grip'); await handle.hover(); const from = await handle.boundingBox(), to = await page.locator(`[data-region="${region}"]`).boundingBox(); assert.ok(from && to)
+  // Reenter the actual group after a transfer/probe before targeting its hidden grip.
+  await page.mouse.move(500, 80)
+  await group().hover({ position: { x: 15, y: 15 } })
+  await page.waitForFunction(() => { const frame = document.querySelector('.widget-frame[data-group-host]'); return frame?.matches(':hover') && getComputedStyle(frame.querySelector('.widget-grip')!).pointerEvents === 'auto' })
+  const handle = group().locator('.widget-grip'); await handle.hover(); const from = await handle.boundingBox(), to = await page.locator(`[data-region="${region}"]`).boundingBox(); assert.ok(from && to)
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2); await page.mouse.down(); assert.equal(await handle.evaluate(node => node.hasPointerCapture(1)), true)
   await page.mouse.move(to.x + to.width - 70, to.y + to.height / 2, { steps: 16 })
   await page.locator('[data-group-transfer-going="3"][data-group-transfer-staying="0"][data-group-transfer-allowed="true"]').waitFor()

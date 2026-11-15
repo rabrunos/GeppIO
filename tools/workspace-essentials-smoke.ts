@@ -77,7 +77,11 @@ async function compare() {
 async function move(name: string, region: 'main' | 'sidebar' | 'bottom') {
   const frame = page.locator('.widget-frame').filter({ has: widget(name) })
   if (await frame.getAttribute('data-owner-region') === 'sidebar') await page.locator('[data-region="sidebar"]').evaluate(node => { node.scrollTop = node.scrollHeight })
+  // Enter from outside after remount/reflow; retained native cursor coordinates
+  // alone do not establish that the current frame's hover controls are active.
+  await page.mouse.move(500, 80)
   await frame.hover({ position: { x: 40, y: 12 } })
+  await page.waitForFunction(name => { const frame = document.querySelector(`[data-plugin-widget="geppio.workspace-essentials:${name}"]`)!.closest('.widget-frame')!; return frame.matches(':hover') && getComputedStyle(frame.querySelector('.widget-grip')!).pointerEvents === 'auto' }, name)
   const grip = frame.locator('.widget-grip'), box = await grip.boundingBox(); assert.ok(box)
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
   await page.waitForFunction(name => getComputedStyle(document.querySelector(`[data-plugin-widget="geppio.workspace-essentials:${name}"]`)!.closest('.widget-frame')!.querySelector('.widget-grip')!).pointerEvents === 'auto', name)

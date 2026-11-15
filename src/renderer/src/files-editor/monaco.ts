@@ -33,6 +33,7 @@ const languages: Record<DocumentLanguage, string> = { 'Texto simples': 'plaintex
 const owners = new WeakMap<EditorSession, MonacoPresentation>()
 /** Internal DOM association for built-runtime inspection; no global/preload/plugin API. */
 export interface MonacoHost extends HTMLDivElement { readonly monacoEditor?: monaco.editor.IStandaloneCodeEditor }
+export interface GitDiffHost extends HTMLDivElement { readonly monacoDiffEditor?: monaco.editor.IStandaloneDiffEditor }
 
 /** One session-owned editor/model. Presentations only attach/detach its existing DOM. */
 class MonacoPresentation {
@@ -144,4 +145,17 @@ export function monacoPresentation(session: EditorSession) {
   let owner = owners.get(session)
   if (!owner) { owner = new MonacoPresentation(session); owners.set(session, owner) }
   return owner
+}
+
+/** Disposable public Diff Editor; never observes or updates the editable session/model. */
+export function createGitDiff(host: GitDiffHost, comparison: import('../../../shared/git.ts').GitComparison): () => void {
+  const original = monaco.editor.createModel(comparison.original, 'plaintext')
+  const modified = monaco.editor.createModel(comparison.modified, 'plaintext')
+  const editor = monaco.editor.createDiffEditor(host, { readOnly: true, originalEditable: false, domReadOnly: true, renderSideBySide: true, useInlineViewWhenSpaceIsLimited: true, automaticLayout: false, minimap: { enabled: false }, maxComputationTime: 1000, maxFileSize: 1, renderOverviewRuler: false })
+  editor.setModel({ original, modified })
+  const observer = new ResizeObserver(() => editor.layout({ width: host.clientWidth, height: host.clientHeight }))
+  observer.observe(host); editor.layout({ width: host.clientWidth, height: host.clientHeight })
+  host.dataset.gitDiffModels = '2'
+  Object.defineProperty(host, 'monacoDiffEditor', { configurable: true, value: editor })
+  return () => { observer.disconnect(); editor.setModel(null); editor.dispose(); original.dispose(); modified.dispose(); delete host.dataset.gitDiffModels; delete (host as { monacoDiffEditor?: unknown }).monacoDiffEditor }
 }

@@ -16,7 +16,14 @@ ocupa a Sidebar; no modo Widgets, coloque seu widget explicitamente em Main ou S
 A árvore e o rascunho são compartilhados. Use **Atualizar árvore** após mudanças no disco ou
 antes de reabrir um item cujo arquivo foi substituído ao salvar. A navegação aceita até 512
 entradas por pasta e 32 níveis; não cria, move nem exclui arquivos. Veja os [limites](docs/architecture/explorer.md).
-Projeto completo, Git, terminal, ChatGPT, Codex e GitLayer ainda são propostas. Não há conta GeppIO, backend,
+Na alpha.43, **Alterações Git** consulta a raiz exata selecionada no Explorador, mostra branch,
+índice, alterações no disco e arquivos novos. Está no catálogo (Main/Sidebar) e nas atividades
+do modo Editor. **Atualizar Git** renova os dados; selecionar um arquivo compatível abre a
+comparação Monaco somente leitura de **HEAD para o arquivo salvo**, sem incluir seu rascunho.
+O piloto usa Git para Windows instalado em Arquivos de Programas, ignora configuração global e
+recusa formatos/limites não suportados. Veja [segurança e limites](docs/architecture/git.md).
+O Terminal local e o editor Monaco já são reais; projeto completo, ChatGPT, Codex e GitLayer
+continuam propostas. Não há conta GeppIO, backend,
 sincronização em nuvem ou API paga de IA.
 
 Windows é o primeiro alvo validado. A direção de produto inclui Windows e Linux, mas não há

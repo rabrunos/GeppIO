@@ -1,0 +1,14 @@
+.git-changes { display: flex; flex-direction: column; min-width: 0; min-height: 0; height: 100%; overflow: hidden; padding: 10px; gap: 8px; font-size: 12px; }
+.git-changes header { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.git-changes header strong, .git-branch { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.git-changes p { margin: 0; overflow-wrap: anywhere; }
+.git-policy, .git-basis { font-size: 11px; opacity: .8; }
+.git-list { min-height: 0; overflow-y: auto; overflow-x: hidden; }
+.git-group h3 { font-size: 12px; margin: 10px 0 4px; }
+.git-group ul { list-style: none; margin: 0; padding: 0; }
+.git-file { display: flex; width: 100%; gap: 6px; justify-content: space-between; padding: 6px 2px; text-align: left; }
+.git-file span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.git-file small { flex-shrink: 0; opacity: .75; }
+.git-diff { width: 100%; height: min(65vh, 640px); min-height: 180px; overflow: hidden; }
+.profile-dialog.git-dialog { width: min(1100px, 92vw); max-width: 92vw; }
+.git-dialog .profile-dialog-heading h2 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

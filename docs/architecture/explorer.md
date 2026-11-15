@@ -20,7 +20,8 @@ host constraints (180 × 160 minimum, 300 × 400 default), Sidebar width adaptat
 individual gestures. Nothing is inserted automatically. The Explorer has a single widget view,
 independent of the Main-only editor widget.
 
-Editor mode has one actual activity, Explorer. Its panel fills the existing Sidebar content area
+Alpha.43 adds [Git Changes](git.md) as a second first-party Editor activity using this same
+root grant and measured panel. The Explorer activity panel fills the existing Sidebar content area
 and is not a saved placement. The active button toggles the Sidebar. Original rail, width constraints,
 reveal/peek and collapse remain in use. Editor Sidebar size/visibility are session-only and separate
 from confirmed Widgets chrome. Explicit Bottom changes retain existing host behavior. Mode changes

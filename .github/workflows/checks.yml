@@ -32,6 +32,8 @@ jobs:
         run: pnpm check
       - name: Real Monaco shared editing, local Workers, DPR and development runtime
         run: pnpm test:monaco
+      - name: Read-only Git authority, nonmutation and independent Monaco comparison
+        run: pnpm test:git
       - name: Native PowerShell, Status Bar and measured Editor regional geometry
         run: pnpm test:terminal && pnpm test:status-bar
       - name: Shared terminal and Sidebar/Bottom geometry at simulated DPR 1.25

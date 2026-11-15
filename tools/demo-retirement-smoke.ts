@@ -30,8 +30,9 @@ async function launch() {
 const raw = () => page.evaluate(key => localStorage.getItem(key), WORKBENCH_KEY)
 async function noDemos() {
   assert.equal(await page.locator('.widget-frame[data-widget-id]:not([data-widget-id^="plugin:"])').count(), 0)
-  // Files & Editor and Terminal are real essential types, not retired synthetic demos.
-  assert.equal(await page.locator('[data-catalog-type^="host:"]:not([data-catalog-type="host:file-editor"]):not([data-catalog-type="host:file-explorer"]):not([data-catalog-type="host:terminal"])').count(), 0)
+  // Files & Editor, Terminal and read-only Git are essential types, not retired synthetic demos.
+  assert.equal(await page.locator('[data-catalog-type^="host:"]:not([data-catalog-type="host:file-editor"]):not([data-catalog-type="host:file-explorer"]):not([data-catalog-type="host:terminal"]):not([data-catalog-type="host:git-changes"])').count(), 0)
+  assert.equal(await page.locator('[data-catalog-type="host:git-changes"]').count(), 1)
 }
 async function conclude() { await page.getByTestId('conclude-layout').click(); await page.getByTestId('edit-layout').waitFor(); await settle(page); await noDemos() }
 try {

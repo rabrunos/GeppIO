@@ -59,6 +59,15 @@ async function seed(snapshot = initialWorkbench(), theme = 'dark') {
 async function begin() { if (await page.getByTestId('edit-layout').count()) { await page.getByTestId('edit-layout').click(); await settle(page) } }
 async function conclude() { await page.getByTestId('conclude-layout').click(); await page.getByTestId('edit-layout').waitFor(); await settle(page) }
 async function hoverHeading(id: Id = 'properties') {
+  if (await frame(id).getAttribute('data-panel-open') === 'false') {
+    // In Edit, a collapsed panel can expose its menu without expanding. Target
+    // its visible strip rather than the clipped expanded heading rectangle.
+    const box = await frame(id).boundingBox(); assert.ok(box)
+    const point = { x: box.x + Math.min(40, box.width / 2), y: box.y + Math.min(14, box.height / 2) }
+    assert.equal(await page.evaluate(point => document.elementFromPoint(point.x, point.y)?.closest<HTMLElement>('[data-widget-id]')?.dataset.widgetId, point), id)
+    await page.mouse.move(point.x, point.y)
+    return
+  }
   const heading = frame(id).locator('.widget-heading'), box = await heading.boundingBox(); assert.ok(box)
   await page.mouse.move(box.x + Math.min(40, box.width / 2), box.y + (box.width <= 32 ? Math.min(40, box.height / 2) : box.height / 2))
 }
