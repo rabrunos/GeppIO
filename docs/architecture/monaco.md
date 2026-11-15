@@ -41,8 +41,8 @@ Monaco's included TypeScript services are local single-model facilities, not a f
 
 The complete upstream MIT license and ThirdPartyNotices are retained in
 [legal notices](../legal/monaco-LICENSE.txt) and [third-party notices](../legal/monaco-ThirdPartyNotices.txt).
-The bundled DOMPurify license header is retained verbatim by bundling; its full dual-license
-text is retained [separately](../legal/dompurify-LICENSE.txt), together with
+Bundling can strip upstream source comments; do not rely on an emitted license header.
+DOMPurify's full dual-license text is retained [separately](../legal/dompurify-LICENSE.txt), together with
 [its MPL license](../legal/dompurify-LICENSE-MPL.txt),
 [marked](../legal/marked-LICENSE.txt) and [optional types](../legal/trusted-types-LICENSE.txt).
 Future distribution must preserve all applicable notices and reassess this prototype-only exception.
