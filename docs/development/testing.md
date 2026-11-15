@@ -10,6 +10,9 @@ real languages/Status Bar, local Workers/CSP/no unexpected remote requests, both
 exact BOM/mixed-EOL unchanged and edited bytes, explicit save and cancellation/conflict retention.
 Existing document, Explorer, Terminal and geometry smokes use the same real-Monaco helper;
 unrelated plugin Worker continuity remains separate from Monaco language Worker startup.
+The smoke explicitly sets the initial native content viewport to 1920×1080 before catalog
+placement, like the existing document smoke, then checks narrow/wide resizing separately.
+This avoids depending on the hosted Windows desktop's initial display constraints.
 
 Run all Issue #49 regression commands after `pnpm check`. Production audit must be reported with
 the [known accepted exception](../architecture/monaco.md), not called clean. Windows CI runs

@@ -30,6 +30,9 @@ try {
   }
   app = await electron.launch({ args: ['.', ...(scale125 ? ['--force-device-scale-factor=1.25'] : [])], env })
   const page = await app.firstWindow()
+  // Catalog placement needs the same explicit usable viewport as the existing document smokes;
+  // hosted Windows desktops may otherwise constrain the initial window to a smaller display.
+  await app.evaluate(({ BrowserWindow }) => { const win = BrowserWindow.getAllWindows()[0]!; win.setContentSize(1920, 1080); win.show(); win.focus() })
   page.setDefaultTimeout(15000)
   page.on('pageerror', e => errors.push(e.message)); page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()) })
   page.on('request', request => { if (/^https?:/.test(request.url()) && !request.url().startsWith('http://127.0.0.1:5173/')) requests.push(request.url()) })
