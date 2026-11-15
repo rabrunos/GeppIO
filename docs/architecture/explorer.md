@@ -74,7 +74,8 @@ and special storage are unsupported/unverified. Existing Windows save ACL/ADS/me
 limitations remain. This is not an untrusted-plugin isolation platform.
 
 No create/rename/move/copy/delete, filesystem drag/drop, multiple roots, project management,
-restore, watchers, tabs/splits, Git, search, terminal, highlighting, LSP or public panel SDK.
+restore, watchers, tabs/splits, Git, search, terminal or public panel SDK are added by Explorer.
+The shared Editor supplies alpha.42 Monaco highlighting independently; project-wide LSP remains deferred.
 
 `tests/explorer.test.ts` and `pnpm test:explorer` use disposable directories and the actual registered
 Electron bridge. Native dialog responses are controlled by tests, not mocked React actions. This

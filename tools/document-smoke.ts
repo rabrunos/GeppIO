@@ -1,3 +1,4 @@
+import { fileEditor, pluginWorkers } from './monaco-support.ts'
 import assert from 'node:assert/strict'
 import { _electron as electron } from 'playwright'
 import type { ElectronApplication, Page } from 'playwright'
@@ -19,7 +20,7 @@ delete env.ELECTRON_RUN_AS_NODE; delete env.ELECTRON_RENDERER_URL; delete env.NO
 env.GEPPIO_TEST_USER_DATA = profile; env.NODE_ENV = 'production'
 let app: ElectronApplication | undefined, page!: Page
 const errors: string[] = [], evidence: Record<string, string> = {}
-const text = () => page.getByRole('textbox', { name: 'Conteúdo do arquivo', exact: true })
+const text = () => fileEditor(page)
 const mode = (value: 'Editor' | 'Widgets') => page.locator('.file-mode-switch').getByRole('button', { name: value, exact: true }).click()
 const state = () => page.locator('.file-editor')
 const idle = () => page.waitForFunction(() => document.querySelector('.file-editor')?.getAttribute('data-document-status') !== 'busy')
@@ -106,13 +107,13 @@ try {
     await page.getByTestId('conclude-layout').click(); await page.getByTestId('edit-layout').waitFor(); await settle(page)
     await page.getByRole('button', { name: 'Iniciar', exact: true }).click()
     await page.waitForFunction(() => document.querySelector('[data-plugin-widget="geppio.time-tracker:timer"] p')?.textContent?.includes('Salvo.'))
-    const workers = page.workers(), layout = await raw()
+    const workers = pluginWorkers(page), layout = await raw()
     await page.locator('[data-plugin-widget]').evaluateAll(nodes => nodes.forEach(node => node.setAttribute('data-document-mount', 'retained')))
     await text().fill('widgets draft\n'); assert.equal(await state().getAttribute('data-document-id'), id)
     for (const value of ['Editor', 'Widgets', 'Editor', 'Widgets'] as const) {
       await mode(value); await settle(page); assert.equal(await text().count(), 1); assert.equal(await text().inputValue(), 'widgets draft\n')
       assert.equal(await state().getAttribute('data-document-id'), id); assert.equal(await state().getAttribute('data-document-dirty'), 'true')
-      assert.equal(await raw(), layout); assert.deepEqual(page.workers(), workers)
+      assert.equal(await raw(), layout); assert.deepEqual(pluginWorkers(page), workers)
       assert.equal(await page.locator('[data-document-mount="retained"]').count(), 3)
     }
     await text().fill('shared final\n'); await save(); assert.equal(await readFile(path, 'utf8'), '\ufeffshared final\r\n')
@@ -144,10 +145,10 @@ try {
 
     for (const theme of ['light', 'dark']) {
       await page.evaluate(theme => localStorage.setItem('geppio:theme:v1', theme), theme); await page.reload(); await page.getByTestId('edit-layout').waitFor(); await settle(page)
-      await mode('Editor'); await open(other); await text().focus(); assert.equal(await text().evaluate(node => node === document.activeElement), true)
+      await mode('Editor'); await open(other); await text().focus(); assert.equal(await text().focused(), true)
       await page.screenshot({ path: join(diagnostics, `${theme}.png`) }); await page.getByRole('button', { name: 'Fechar arquivo', exact: true }).click(); await idle()
     }
-    evidence.themes = 'passed: light/dark screenshots and textarea keyboard focus'
+    evidence.themes = 'passed: light/dark screenshots and actual Monaco keyboard focus'
     await open(other); await text().fill('saved on native close\n'); await picker(other, 0)
     const closed = app!.waitForEvent('close'); await app!.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.close()); await closed; app = undefined
     assert.equal(await readFile(other, 'utf8'), 'saved on native close\n')

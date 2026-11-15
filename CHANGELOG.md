@@ -2,6 +2,14 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.42] — 2026-11-14
+
+- Replaced the official file textarea with stock Monaco 0.57.0: local syntax/language modes, find/replace, multiple cursors, folding, indentation and ordinary editor shortcuts in both presentations.
+- One session-owned Monaco model/editor retains undo/redo, selections and viewport across Editor/Widgets switches. EditorSession remains the exact draft owner; DocumentStore retains native authority, explicit saves and conflict/close protection. Simultaneous model edits preserve untouched mixed EOL tokens and BOM.
+- Connected actual Monaco cursor/language state to the existing Status Bar, retaining Explorer, Terminal and host geometry. Added local ESM language Workers and bundled font MIME support without weakening CSP.
+- Added pure and actual Electron Monaco tests for production/development, themes, resizing and simulated DPR 1.25, plus existing document/workbench regressions. Physical owner acceptance remains separate.
+- Pinned the individually approved Monaco package with its upstream notices. The owner explicitly accepted the documented bundled DOMPurify 3.4.15 advisory risk for this local, non-distributed prototype; this is not a clean dependency audit or an automatic future upgrade.
+
 ## [0.1.0-alpha.41] — 2026-11-14
 
 - Editor Explorer and Terminal now fill the same measured usable Sidebar/Bottom rectangles as host widget presentations, including regional insets, scrollbar reservation, clipping and resizing. Removed the separate Explorer flow and guessed Terminal insets.

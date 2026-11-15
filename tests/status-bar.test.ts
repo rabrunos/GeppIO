@@ -5,7 +5,7 @@ import { documentCursor, documentEOL, documentLanguage } from '../src/shared/doc
 import { EditorSession } from '../src/renderer/src/files-editor/session.ts'
 import type { DocumentBridge, DocumentSnapshot } from '../src/shared/documents.ts'
 
-test('EOL and cursor reflect actual bytes and textarea selection coordinates', () => {
+test('EOL and cursor reflect actual bytes and normalized editor selection coordinates', () => {
   for (const [text, expected] of [['', 'Sem EOL'], ['x\n', 'LF'], ['x\r\n', 'CRLF'], ['x\r', 'CR'], ['x\r\ny\nz\r', 'Misto']]) assert.equal(documentEOL(text!), expected)
   assert.deepEqual(documentCursor('a\r\nb\rc\n😀x', 9), { line: 4, column: 4 })
   assert.deepEqual(documentCursor('a\r\nb', 2), { line: 2, column: 1 })

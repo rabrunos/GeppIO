@@ -1,3 +1,4 @@
+import { fileEditor, pluginWorkers } from './monaco-support.ts'
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
@@ -31,7 +32,7 @@ let app: ElectronApplication | undefined, page!: Page
 const errors: string[] = [], evidence: Record<string, string> = {}
 const tree = () => page.getByRole('tree', { name: 'Arquivos da pasta' })
 const item = (name: string) => tree().getByRole('treeitem', { name, exact: true })
-const text = () => page.getByRole('textbox', { name: 'Conteúdo do arquivo', exact: true })
+const text = () => fileEditor(page)
 const mode = async (value: 'Editor' | 'Widgets') => { await page.locator('.file-mode-switch').getByRole('button', { name: value, exact: true }).click(); await settle(page) }
 const idle = () => page.waitForFunction(() => !document.querySelector('.file-explorer[aria-busy="true"]') && document.querySelector('.file-editor')?.getAttribute('data-document-status') !== 'busy')
 const raw = () => page.evaluate(key => localStorage.getItem(key), WORKBENCH_KEY)
@@ -63,15 +64,15 @@ try {
   assert.deepEqual(names, ['empty', 'nested'])
   await item('empty').click(); await idle(); assert.equal(await page.getByText('Pasta vazia', { exact: true }).count(), 1)
   await item('empty').click(); await idle()
-  await item('z-large').click(); await idle(); assert.match(await page.getByRole('alert').innerText(), /512 entradas/)
+  await item('z-large').click(); await idle(); assert.match(await page.locator('.file-explorer').getByRole('alert').innerText(), /512 entradas/)
   await item('z-large').click(); await idle()
   if (process.platform === 'win32') {
     const denied = join(scope, 'z-denied'); await mkdir(denied); await refresh()
     execFileSync('icacls.exe', [denied, '/deny', '*S-1-1-0:(RD)'], { stdio: 'pipe' })
     try {
-      await item('z-denied').click(); await idle(); assert.match(await page.getByRole('alert').innerText(), /permissões/)
+      await item('z-denied').click(); await idle(); assert.match(await page.locator('.file-explorer').getByRole('alert').innerText(), /permissões/)
     } finally { execFileSync('icacls.exe', [denied, '/remove:d', '*S-1-1-0'], { stdio: 'pipe' }) }
-    await refresh(); assert.equal(await page.getByRole('alert').count(), 0)
+    await refresh(); assert.equal(await page.locator('.file-explorer').getByRole('alert').count(), 0)
     await item('z-denied').click(); await idle()
   }
   await item('z-deep').click(); await idle()
@@ -161,7 +162,7 @@ try {
   await barDialog.getByRole('button', { name: 'Criar barra', exact: true }).click(); await barDialog.waitFor({ state: 'detached' }); await settle(page)
   await place('host:file-explorer', 'sidebar'); await place('host:file-editor', 'main')
   await page.getByTestId('conclude-layout').click(); await page.getByTestId('edit-layout').waitFor(); await settle(page)
-  const layout = await raw(), workers = page.workers()
+  const layout = await raw(), workers = pluginWorkers(page)
   const activeBar = await page.locator('.workbench').getAttribute('data-active-bar')
   assert.equal(await page.getByRole('navigation', { name: 'Barras do usuário' }).getByRole('button', { name: 'Smoke Explorer', exact: true }).getAttribute('aria-current'), 'true')
   assert.equal(await text().inputValue(), 'shared dirty draft'); assert.equal(await item('nested').getAttribute('aria-expanded'), 'true')
@@ -172,7 +173,7 @@ try {
     await mode(value); await idle(); assert.equal(await text().inputValue(), 'shared dirty draft'); assert.equal(await raw(), layout)
     assert.equal(await page.locator('.workbench').getAttribute('data-active-bar'), activeBar)
     assert.equal(await item('nested').getAttribute('aria-expanded'), 'true'); assert.equal(await tree().count(), 1)
-    assert.equal(await scroll.evaluate(node => node.scrollTop), scrollTop); assert.deepEqual(page.workers(), workers)
+    assert.equal(await scroll.evaluate(node => node.scrollTop), scrollTop); assert.deepEqual(pluginWorkers(page), workers)
   }
   // Explicitly move the same official Explorer from Sidebar to Main through the host catalog.
   await page.getByTestId('edit-layout').click(); await settle(page)

@@ -1,5 +1,22 @@
 # Validation guide
 
+## Monaco shared editing (alpha.42 / Issue #49)
+
+`pnpm test:monaco` runs pure interval/exact-draft tests, actual built Electron at DPR 1 and
+simulated 1.25, and a development Vite/Electron run. It drives stock Monaco keyboard/edit/find/
+replace/multicursor behavior and inspects public model/editor APIs via an internal DOM association.
+It verifies one model/editor, undo/redo/selection/scroll across repeated presentation switches,
+real languages/Status Bar, local Workers/CSP/no unexpected remote requests, both themes/widths,
+exact BOM/mixed-EOL unchanged and edited bytes, explicit save and cancellation/conflict retention.
+Existing document, Explorer, Terminal and geometry smokes use the same real-Monaco helper;
+unrelated plugin Worker continuity remains separate from Monaco language Worker startup.
+
+Run all Issue #49 regression commands after `pnpm check`. Production audit must be reported with
+the [known accepted exception](../architecture/monaco.md), not called clean. Windows CI runs
+Monaco's three runtime variants in addition to existing native/workbench suites. The existing
+physical owner smoke remains separate: disposable JSON, edit unsaved, switch Editor/Widgets,
+undo/redo, change language, explicit Save/inspect bytes/status, Explorer and live Terminal.
+
 ## Shared Editor Sidebar/Bottom geometry (alpha.41 / Issue #48)
 
 The existing `test:terminal` built-Electron journey now runs `editor-region-geometry-smoke.ts`

@@ -1,11 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { EditorSession } from './session.ts'
-import { editorText } from '../../../shared/documents.ts'
+import { monacoPresentation } from './monaco.ts'
 import './files-editor.css'
 
 export function useFileEditor(locked: boolean) {
   const [session] = useState(() => new EditorSession(window.geppio!.documents))
   session.locked = locked
+  useEffect(() => { const presentation = monacoPresentation(session); presentation.connect(); return () => presentation.dispose() }, [session])
   useEffect(() => session.bridge.onCloseRequested(ticket => { void session.close(ticket) }), [session])
   useEffect(() => {
     const save = (event: KeyboardEvent) => {
@@ -18,12 +19,12 @@ export function useFileEditor(locked: boolean) {
 }
 /** Both adapters render this same implementation; only the selected adapter mounts it. */
 export function FileEditor({ session }: { session: EditorSession }) {
-  const state = useSyncExternalStore(session.subscribe, session.snapshot), input = useRef<HTMLTextAreaElement>(null)
+  const state = useSyncExternalStore(session.subscribe, session.snapshot), input = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => {
     const element = input.current
-    if (element) { element.setSelectionRange(session.selection.start, session.selection.end); element.scrollTop = session.selection.top; element.scrollLeft = session.selection.left }
+    if (element) return monacoPresentation(session).attach(element)
   }, [session, state.document?.id])
-  const remember = () => { const element = input.current; if (element) session.rememberSelection({ start: element.selectionStart, end: element.selectionEnd, top: element.scrollTop, left: element.scrollLeft }) }
+  useLayoutEffect(() => { monacoPresentation(session).refresh() }, [session, state.busy, session.locked])
   return <section className="file-editor" aria-label="Arquivos & Editor" data-document-id={state.document?.id} data-document-dirty={session.dirty} data-document-status={state.busy ? 'busy' : state.code ?? (session.dirty ? 'dirty' : 'clean')}>
     <div className="file-editor-toolbar">
       <strong title={state.document?.name}>{state.document?.name ?? 'Nenhum arquivo aberto'}{session.dirty ? ' •' : ''}</strong>
@@ -31,7 +32,7 @@ export function FileEditor({ session }: { session: EditorSession }) {
       <button className="ui-button tool-button" aria-keyshortcuts="Control+S" disabled={!state.document || state.busy || session.locked} onClick={() => { void session.save() }}>Salvar arquivo</button>
       {state.document && <button className="ui-button tool-button" disabled={state.busy || session.locked} onClick={() => { void session.release() }}>Fechar arquivo</button>}
     </div>
-    {state.document ? <textarea ref={input} data-file-editor="" aria-label="Conteúdo do arquivo" aria-describedby="file-editor-feedback" value={editorText(state.text)} readOnly={state.busy || session.locked} spellCheck={false} autoCapitalize="off" autoCorrect="off" wrap="off" onChange={event => session.edit(event.target.value)} onSelect={remember} onScroll={remember} onBlur={remember} />
+    {state.document ? <div ref={input} className="monaco-host" data-file-editor="" aria-describedby="file-editor-feedback" />
       : <div className="file-editor-empty"><h2>Seu primeiro documento</h2><p>Abra um arquivo de texto ou código UTF-8 de até 1 MiB. O mesmo documento fica disponível no widget Editor de arquivo.</p><p>O rascunho fica apenas nesta sessão. Salve antes de sair.</p></div>}
     <div className="file-editor-feedback" id="file-editor-feedback" role="status" aria-live="polite">
       <span>{state.busy ? 'Operação de arquivo em andamento…' : state.error ?? (state.document ? session.dirty ? 'Alterações não salvas' : 'Salvo · UTF-8' + (state.document.bom ? ' com BOM' : '') : 'Seleção individual por diálogo nativo')}</span>

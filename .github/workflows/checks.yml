@@ -30,6 +30,8 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Check structure, types, lint, tests and build
         run: pnpm check
+      - name: Real Monaco shared editing, local Workers, DPR and development runtime
+        run: pnpm test:monaco
       - name: Native PowerShell, Status Bar and measured Editor regional geometry
         run: pnpm test:terminal && pnpm test:status-bar
       - name: Shared terminal and Sidebar/Bottom geometry at simulated DPR 1.25

@@ -1,5 +1,11 @@
 # Selected security baseline
 
+Issue #49 adds the app-owned [Monaco ESM/model/asset boundary](../architecture/monaco.md),
+including the owner's explicit known-advisory exception for pinned Monaco 0.57.0/DOMPurify 3.4.15.
+Local bundled language Workers receive no native bridge or private filesystem URI. Production
+CSP remains unchanged; only local `.ttf` font MIME support is added. This is not a clean audit
+or an untrusted editor/plugin platform. Future patched stable upgrades require scoped validation.
+
 Issue #47 adds the first-party [Terminal/ConPTY boundary](../architecture/terminal.md): five fixed
 window/main-frame-bound calls, generation IDs, bounded input/output/dimensions and native cleanup.
 Commands run with the real OS user's privileges. No Worker process grant or generalized executor

@@ -1,3 +1,4 @@
+import { fileEditor, pluginWorkers } from './monaco-support.ts'
 import assert from 'node:assert/strict'
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -7,8 +8,8 @@ import { WORKBENCH_KEY } from '../src/shared/workbench/model.ts'
 
 /** Real DOM owner/port oracle, exercised by the live PowerShell/document smoke at both DPRs. */
 export async function editorRegionGeometry(app: ElectronApplication, page: Page, diagnostics: string, scale: number) {
-  const root = page.locator('.workbench'), workers = page.workers()
-  const editor = page.getByRole('textbox', { name: 'Conteúdo do arquivo', exact: true })
+  const root = page.locator('.workbench'), workers = pluginWorkers(page)
+  const editor = fileEditor(page)
   const draft = await editor.inputValue(), doc = await page.locator('.file-editor').getAttribute('data-document-id')
   const native = await page.evaluate(() => window.geppio!.terminal.read(null, 0))
   assert.ok(native.ok)
@@ -118,7 +119,7 @@ export async function editorRegionGeometry(app: ElectronApplication, page: Page,
           assert.ok(viewport.screen.width <= viewport.host.width + .06, 'xterm columns fit resized Bottom')
         }
         assert.equal(await editor.inputValue(), draft); assert.equal(await page.locator('.file-editor').getAttribute('data-document-id'), doc)
-        assert.deepEqual(await navigation(), nav); assert.deepEqual(page.workers(), workers)
+        assert.deepEqual(await navigation(), nav); assert.deepEqual(pluginWorkers(page), workers)
         assert.equal(await raw(), before, 'Editor mode/sizing does not rewrite saved Widgets placements/bars')
         const current = await page.evaluate(() => window.geppio!.terminal.read(null, 0)); assert.ok(current.ok)
         assert.equal(current.value.state.id, native.value.state.id)

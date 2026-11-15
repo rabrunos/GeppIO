@@ -1,4 +1,44 @@
-# Essential Files & Editor — alpha.37
+# Essential Files & Editor — alpha.42
+
+## Monaco integration — alpha.42 / Issue #49
+
+The official FileEditor now attaches a session-owned Monaco presentation from
+`renderer/src/files-editor/monaco.ts`. It uses public ESM editor/model/worker APIs only.
+EditorSession remains the single exact editable draft and functional document identity;
+DocumentStore still owns native paths, revisions, confirmed bytes and file authority.
+The LF Monaco model is an editing projection, not a second file service. It uses an opaque
+`inmemory://geppio/<document UUID>` URI without a native path or basename.
+
+One editor instance and its DOM are reattached between the direct Main and explicit widget
+containers, like the existing Terminal presentation. No model/editor is created per mode.
+Monaco owns its undo/redo stack, multi-selections, focus and scroll state during detachment.
+The existing shared host viewport remains authoritative; ResizeObserver lays out Monaco inside
+its actual container. Themes select stock `vs`/`vs-dark`. Monaco-specific code stays in this
+small adapter; native document service and public plugin SDK do not import Monaco.
+
+On actual document replacement/release the adapter detaches and disposes the obsolete model,
+clears its format history and creates at most one new active model. Save keeps the same model,
+URI and undo history while EditorSession receives the confirmed revision. Canceled/failed
+operations retain the draft and model. Final app teardown disposes observers, subscriptions,
+editor/model and locally created Workers; React StrictMode effect replay does not dispose an
+owner reconnected in the same turn. Language Workers are reused across mode changes and may
+remain idle while no file is open until Monaco's worker lifecycle or app teardown ends them.
+
+`shared/document-edits.ts` applies simultaneous LF-model change intervals to the exact draft,
+preserving original CRLF/LF/CR bytes outside changed intervals. Inserted newlines use the first
+existing draft convention, falling back to the confirmed file convention through native delete/insert
+replacement events with a temporarily empty draft, otherwise LF. Monaco undo-version metadata retains newline-token sequences
+so undo/redo can restore deleted mixed EOLs without retaining a second editable text buffer.
+EditorSession validates every exact proposal against Unicode and the 1 MiB cap including BOM.
+Rejected model edits are undone using public APIs and the accepted draft is reconciled if
+Monaco grouped the refusal with preceding typing. Unchanged displayed content restores exact
+confirmed bytes. No view/language/mode operation saves or normalizes the file on disk.
+
+Normal stock features include text/JSON/JS/TS/HTML/CSS/Markdown modes, line numbers, selections,
+multiple cursors, undo/redo, find/replace, indentation and folding. No project-wide LSP,
+debugger, extension host or additional native capability is implied. The internal host DOM has
+a read-only editor association for real built-runtime inspection, not a window/preload/plugin SDK.
+See [Monaco dependency/asset boundary](monaco.md) for the explicit advisory exception and upgrades.
 
 Issue #45 authorizes one real selected file, not a complete IDE. The essential official module
 comprises `shared/files-editor.ts` (host registration) and renderer `files-editor/` (session/UI).
@@ -8,18 +48,17 @@ Public API 1/2 is unchanged.
 
 ## Ownership and presentation
 
-Alpha.40's [Status Bar](status-bar.md) subscribes to this same EditorSession for actual dirty/busy/
-error, BOM/EOL and cursor state. Its language override is session-only; it never edits document
-bytes. [Terminal](terminal.md) has a separate functional owner and survives mode changes alongside
-the existing unsaved draft. Monaco remains a later standalone migration, not this delivery.
+The [Status Bar](status-bar.md) subscribes to this same EditorSession for actual dirty/busy/
+error, BOM/EOL and Monaco cursor state. Its language override is session-only and changes the
+model language without editing document bytes. [Terminal](terminal.md) has a separate functional
+owner and survives mode changes alongside the existing unsaved draft.
 
 `DocumentStore` owns the absolute path, file/ancestor identities, exact confirmed bytes and opaque
 UUID/revision. Only bounded text, basename, BOM flag, ID and revision reach the renderer.
 `EditorSession` owns one editable buffer and dirty/busy/error state outside layout/plugin storage.
 Main accepts a frozen draft only for an explicit operation, not another independently editable copy.
-Both adapters render the same `FileEditor`, only one at a time; selection/scroll and draft survive.
-The textarea's native undo history belongs to its mounted surface and resets on presentation change;
-the shared draft, confirmed bytes and document identity do not reset.
+Both adapters render the same `FileEditor`, only one at a time, attaching the same Monaco DOM;
+selection/scroll, undo/redo, shared draft, confirmed bytes and document identity survive.
 Editor covers Main's usable presentation while the workbench, Sidebar/Bottom and Workers remain mounted.
 Since alpha.38, `regionViewport` in `freeform/frame-layout.ts` supplies the same measured Main
 rectangle to direct Editor, maximized widget projection and the maximize backdrop. The direct
@@ -42,7 +81,8 @@ revoke handles and queued guards. Calls are serialized; closing cannot race an a
 The cap is 1,048,576 bytes including BOM. Fatal UTF-8 decoding and control-character rejection
 refuse unsupported/binary inputs regardless of extension. Empty and ordinary TXT/JS/TS/JSON/other
 UTF-8 files work. Unchanged spans preserve exact CRLF/LF/CR bytes; new lines use the first existing
-convention, otherwise LF. Textarea supplies selection, native undo/redo, clipboard and Ctrl+S.
+convention, otherwise LF, with the empty-replacement fallback described above. Monaco supplies
+selection, undo/redo and clipboard; the existing application shortcut retains explicit Ctrl+S.
 No text is executed, parsed as HTML, sent to plugins or logged.
 
 Bounded descriptor reads check before/after identity/size/time/mode. Save compares full confirmed

@@ -1,6 +1,6 @@
 {
   "name": "geppio",
-  "version": "0.1.0-alpha.41",
+  "version": "0.1.0-alpha.42",
   "private": true,
   "license": "UNLICENSED",
   "description": "GeppIO — a local desktop workbench, Windows first.",
@@ -41,11 +41,13 @@
     "github:prepare": "node --experimental-strip-types tools/github-prepare.ts",
     "test:plugin-dev": "pnpm plugins:build && pnpm build && node --experimental-strip-types --test tests/plugin-dev.test.ts && node --experimental-strip-types tools/plugin-dev-smoke.ts",
     "test:terminal": "node --experimental-strip-types --test tests/terminal.test.ts && node --experimental-strip-types tools/terminal-smoke.ts",
-    "test:status-bar": "node --experimental-strip-types --test tests/status-bar.test.ts"
+    "test:status-bar": "node --experimental-strip-types --test tests/status-bar.test.ts",
+    "test:monaco": "node --experimental-strip-types --test tests/monaco.test.ts && node --experimental-strip-types tools/monaco-smoke.ts && node --experimental-strip-types tools/monaco-smoke.ts --scale125 && node --experimental-strip-types tools/monaco-smoke.ts --dev"
   },
   "dependencies": {
     "@heroicons/react": "2.2.0",
     "@xterm/xterm": "6.0.0",
+    "monaco-editor": "0.57.0",
     "motion": "14.0.0",
     "node-pty": "1.1.0",
     "react": "19.3.0",

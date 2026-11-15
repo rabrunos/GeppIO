@@ -1,3 +1,4 @@
+import { fileEditor, pluginWorkers } from './monaco-support.ts'
 import assert from 'node:assert/strict'
 import { readFile, realpath, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -13,7 +14,7 @@ export async function editorGeometry(app: ElectronApplication, page: Page, profi
   await app.evaluate(({ dialog }, file) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [file] }) }, file)
   const root = page.locator('.workbench'), editor = page.locator('.direct-file-editor')
   const notes = page.locator('[data-plugin-widget="geppio.workspace-essentials:notes"]').locator('xpath=ancestor::section[contains(@class,"widget-frame")]')
-  const text = page.getByRole('textbox', { name: 'Conteúdo do arquivo', exact: true })
+  const text = fileEditor(page)
   const mode = async (name: 'Editor' | 'Widgets') => { await page.locator('.file-mode-switch').getByRole('button', { name, exact: true }).click(); await settle(page) }
   const raw = () => page.evaluate(async key => navigator.locks.request(key, () => localStorage.getItem(key)), WORKBENCH_KEY)
   const resize = async (width: number, height: number) => {
@@ -36,7 +37,7 @@ export async function editorGeometry(app: ElectronApplication, page: Page, profi
     for (const edge of ['left', 'top', 'right', 'bottom'] as const) assert.ok(Math.abs(a[edge] - b[edge]) < .06, `${label} ${edge}: ${a[edge]} != ${b[edge]}`)
   }
   const geometry = () => notes.evaluate(node => ['data-x', 'data-y', 'data-w', 'data-h'].map(key => node.getAttribute(key)))
-  const initialTheme = await root.getAttribute('data-theme'), workers = page.workers()
+  const initialTheme = await root.getAttribute('data-theme'), workers = pluginWorkers(page)
   await mode('Editor'); await page.getByRole('button', { name: 'Abrir arquivo', exact: true }).click()
   await text.waitFor(); await text.fill(draft)
   const id = await page.locator('.file-editor').getAttribute('data-document-id')
@@ -70,7 +71,7 @@ export async function editorGeometry(app: ElectronApplication, page: Page, profi
             const rows = [...node.querySelectorAll<HTMLElement>('.file-editor > *')].map(child => child.getBoundingClientRect())
             const contained = rows.every(row => row.left >= inner.left - .06 && row.right <= inner.right + .06 && row.top >= inner.top - .06 && row.bottom <= inner.bottom + .06)
             const ordered = rows.every((row, index) => index === 0 || row.top >= rows[index - 1]!.bottom - .06)
-            const reachable = [...node.querySelectorAll('button,textarea')].every(child => { const box = child.getBoundingClientRect(); return child.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)) })
+            const reachable = [...node.querySelectorAll('button,.monaco-host')].every(child => { const box = child.getBoundingClientRect(); return child.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)) })
             const clippedCorners = [[r.left + .5, r.top + .5], [r.right - .5, r.top + .5], [r.left + .5, r.bottom - .5], [r.right - .5, r.bottom - .5]].every(([x, y]) => !node.contains(document.elementFromPoint(x!, y!)))
             return { contained, ordered, reachable, clippedCorners, overflow: node.scrollWidth <= node.clientWidth && node.scrollHeight <= node.clientHeight }
           })
@@ -90,7 +91,7 @@ export async function editorGeometry(app: ElectronApplication, page: Page, profi
           await notes.getByRole('button', { name: 'Restaurar Anotações', exact: true }).click(); await settle(page)
           assert.deepEqual(await geometry(), normal)
           await mode('Editor'); assert.equal(await text.inputValue(), draft); assert.equal(await page.locator('.file-editor').getAttribute('data-document-dirty'), 'true')
-          assert.equal(await raw(), before); assert.deepEqual(page.workers(), workers)
+          assert.equal(await raw(), before); assert.deepEqual(pluginWorkers(page), workers)
           assert.equal(await readFile(file, 'utf8'), original)
           if (sidebar && bottom && width === 1920) await page.screenshot({ path: join(diagnostics, `editor-${theme}-${expanded}.png`) })
           samples.push({ theme, expanded, sidebar: sidebar!, bottom: bottom!, width: width!, height: height!, scrollLeft, direct, maximized })

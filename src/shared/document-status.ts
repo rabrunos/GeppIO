@@ -20,7 +20,7 @@ export function documentEOL(text: string): string {
   }
   return kinds.size > 1 ? 'Misto' : kinds.has('\r\n') ? 'CRLF' : kinds.has('\r') ? 'CR' : kinds.has('\n') ? 'LF' : 'Sem EOL'
 }
-/** Cursor uses textarea UTF-16 selection offsets; CRLF occupies one displayed newline. */
+/** Cursor uses the active editor's LF-model UTF-16 offset; CRLF is one displayed newline. */
 export function documentCursor(text: string, offset: number) {
   const normalized = editorText(text), end = Math.max(0, Math.min(normalized.length, offset))
   let line = 1, column = 1

@@ -2,6 +2,7 @@ import { applyEditorText, DOCUMENT_LIMIT, wellFormedText } from '../../../shared
 import type { DocumentBridge, DocumentDraft, DocumentError, DocumentResult, DocumentSnapshot } from '../../../shared/documents.ts'
 import { DOCUMENT_LANGUAGES } from '../../../shared/document-status.ts'
 import type { DocumentLanguage } from '../../../shared/document-status.ts'
+import { editorText } from '../../../shared/documents.ts'
 
 export interface EditorState { document: DocumentSnapshot | null; text: string; busy: boolean; error: string | null; code: DocumentError | null; cursor: number; language: DocumentLanguage | null }
 /** One editable buffer, independent of views, layout, plugin storage and Worker lifecycle. */
@@ -23,10 +24,18 @@ export class EditorSession {
   get dirty() { return !!this.state.document && this.state.text !== this.state.document.text }
   private draft(): DocumentDraft | null { return this.state.document ? { id: this.state.document.id, revision: this.state.document.revision, text: this.state.text } : null }
   edit(value: string) {
-    if (!this.state.document || this.state.busy || this.locked) return
-    const text = applyEditorText(this.state.text, value)
-    if (!wellFormedText(text) || new TextEncoder().encode(text).length + (this.state.document.bom ? 3 : 0) > DOCUMENT_LIMIT) { this.feedback('Edição recusada: limite de 1 MiB em UTF-8. O rascunho anterior foi mantido.'); return }
+    return this.accept(applyEditorText(this.state.text, value))
+  }
+  editExact(value: string) {
+    if (!this.state.document) return false
+    const text = editorText(value) === editorText(this.state.document.text) ? this.state.document.text : value
+    return this.accept(text)
+  }
+  private accept(text: string) {
+    if (!this.state.document || this.state.busy || this.locked) return false
+    if (!wellFormedText(text) || new TextEncoder().encode(text).length + (this.state.document.bom ? 3 : 0) > DOCUMENT_LIMIT) { this.feedback('Edição recusada: Unicode inválido ou limite de 1 MiB em UTF-8. O rascunho anterior foi mantido.'); return false }
     this.update({ text })
+    return true
   }
   feedback(error: string) { this.update({ error }) }
   private async run(action: () => Promise<DocumentResult>): Promise<boolean> {

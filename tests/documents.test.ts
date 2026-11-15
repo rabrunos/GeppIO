@@ -89,7 +89,7 @@ test('protocol accepts only exact bounded argument shapes, never paths/channels'
   const error = documentFailure(new Error('C:\\private\\secret.txt'))
   assert.ok(!JSON.stringify(error).includes('private'))
 })
-test('textarea edits preserve unchanged mixed line endings and non-BMP text', () => {
+test('normalized editor text preserves unchanged mixed line endings and non-BMP text', () => {
   const raw = 'a\r\nb\nc\rd😀'; assert.equal(applyEditorText(raw, editorText(raw)), raw)
   assert.equal(applyEditorText(raw, 'a\nb!\nc\nd😀'), 'a\r\nb!\nc\rd😀')
   assert.equal(applyEditorText('a\r\nb', 'a\nb\nc'), 'a\r\nb\r\nc')

@@ -24,7 +24,7 @@ export function validDocumentRequest(operation: string, args: readonly unknown[]
   return args.length === 1 && (operation === 'open' && args[0] === null || ['open', 'save', 'release'].includes(operation) && validDraft(args[0]))
 }
 export const editorText = (text: string) => text.replace(/\r\n?/g, '\n')
-/** Textarea normalizes newlines. Preserve original bytes in unchanged spans, including mixed EOLs. */
+/** LF-normalized display text. Preserve exact bytes in unchanged spans, including mixed EOLs. */
 export function applyEditorText(previous: string, next: string): string {
   const old = editorText(previous)
   if (old === next) return previous

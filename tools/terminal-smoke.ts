@@ -1,3 +1,4 @@
+import { fileEditor, pluginWorkers } from './monaco-support.ts'
 import assert from 'node:assert/strict'
 import { _electron as electron } from 'playwright'
 import type { ElectronApplication, Page } from 'playwright'
@@ -113,7 +114,7 @@ try {
   await manager.locator('[data-plugin="geppio.time-tracker"]').getByRole('switch').click()
   await page.waitForFunction(() => document.querySelector('[data-plugin="geppio.time-tracker"]')?.getAttribute('data-status') === 'active')
   await manager.getByRole('button', { name: 'Fechar', exact: true }).click()
-  const workers = page.workers()
+  const workers = pluginWorkers(page)
   console.log('terminal smoke: starting PowerShell')
   assert.equal((await state()).state.phase, 'none')
   await page.getByRole('button', { name: 'Mostrar Terminal', exact: true }).click()
@@ -223,7 +224,7 @@ try {
   assert.equal(await page.locator('.status-encoding').innerText(), 'UTF-8 BOM'); assert.equal(await page.locator('.status-eol').innerText(), 'CRLF')
   const bytes = await readFile(fixture)
   await page.getByRole('combobox', { name: 'Linguagem do documento' }).selectOption('TypeScript'); assert.deepEqual(await readFile(fixture), bytes)
-  const editor = page.getByRole('textbox', { name: 'Conteúdo do arquivo', exact: true })
+  const editor = fileEditor(page)
   await editor.fill('{\n  "draft": 40\n}\n'); await editor.press('Control+Home'); await editor.press('ArrowDown'); await editor.press('ArrowRight')
   await page.waitForFunction(() => document.querySelector('.status-cursor')?.textContent === 'Ln 2, Col 2')
   assert.equal(await page.locator('[data-status-document]').getAttribute('data-status-document'), 'dirty')
@@ -239,7 +240,7 @@ try {
   }
   assert.equal(await page.evaluate(key => localStorage.getItem(key), WORKBENCH_KEY), savedLayout)
   assert.equal(await emulator!.evaluate(element => element === document.querySelector('.terminal-emulator')), true, 'same emulator DOM survives presentation changes')
-  assert.deepEqual(page.workers(), workers)
+  assert.deepEqual(pluginWorkers(page), workers)
   await send("'CONT_' + ($alpha40 + 1)"); await output('CONT_42')
   await mode('Editor'); await editorRegionGeometry(app, page, diagnostics, scale125 ? 1.25 : 1)
   await send("'GEOMETRY_' + $PID + '_' + $alpha40 + '_' + $env:GEPPIO_ALPHA40"); await output(`GEOMETRY_${firstPid}_41_session`)

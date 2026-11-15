@@ -3,8 +3,9 @@
 .file-editor { display: flex; flex-direction: column; height: 100%; min-height: 0; min-width: 0; background: var(--color-surface); color: var(--color-text); }
 .file-editor-toolbar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 10px; border-bottom: 1px solid var(--color-border); }
 .file-editor-toolbar strong { flex: 1 1 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.file-editor textarea { flex: 1; min-height: 60px; width: 100%; resize: none; padding: 14px; border: 0; border-radius: 0; background: var(--color-surface); color: var(--color-text); font: 14px/1.6 Consolas, monospace; tab-size: 4; }
-.file-editor textarea:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+.monaco-host { flex: 1; min-height: 60px; min-width: 0; width: 100%; overflow: hidden; }
+.monaco-instance { width: 100%; height: 100%; }
+.monaco-host:focus-within { outline: 2px solid var(--color-accent); outline-offset: -2px; }
 .file-editor-feedback { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding: 8px 10px; border-top: 1px solid var(--color-border); font-size: 12px; }
 .file-editor-empty { margin: auto; max-width: 520px; padding: 24px; }
 .file-editor-empty h2 { font-size: 20px; margin-bottom: 12px; }
