@@ -9,13 +9,16 @@ const labels: Record<string, string> = { M: 'Modificado', A: 'Adicionado', D: 'E
 export function GitChanges({ session }: { session: GitSession }) {
   const state = useSyncExternalStore(session.subscribe, session.snapshot)
   const changes = state.status?.changes ?? []
-  const group = (title: string, entries: GitChange[], layer: 'index' | 'working') => entries.length > 0 && <section className="git-group"><h3>{title} ({entries.length})</h3><ul>{entries.map(change => <li key={change.id}><button className="ui-button git-file" disabled={state.busy || session.locked} onClick={() => { void session.compare(change.id) }} title={(change.previous ? change.previous + ' → ' : '') + change.name}><span>{change.name}</span><small>{change.conflict ? 'Conflito' : change.untracked ? 'Novo' : labels[change[layer]] ?? change[layer]}</small></button></li>)}</ul></section>
+  const group = (title: string, entries: GitChange[], layer: 'index' | 'working') => entries.length > 0 && <section className="git-group"><h3>{title} ({entries.length})</h3><ul>{entries.map(change => {
+    const operation = layer === 'index' ? 'unstage' : 'stage', label = operation === 'stage' ? 'Preparar' : 'Despreparar'
+    return <li key={change.id}><button className="ui-button git-file" disabled={state.busy || session.locked} onClick={() => { void session.compare(change.id) }} title={(change.previous ? change.previous + ' → ' : '') + change.name}><span>{change.name}</span><small>{change.conflict ? 'Conflito' : change.untracked ? 'Novo' : labels[change[layer]] ?? change[layer]}</small></button><button className="ui-button git-action" aria-label={label + ' ' + change.name} title={change.actionReason ?? (operation === 'stage' ? 'Preparar o arquivo salvo no disco; não salva o rascunho.' : 'Retirar este arquivo do índice; mantém o disco.')} disabled={state.busy || session.locked || !change[operation]} onClick={() => { void session.mutate(operation, change.id) }}>{label}</button></li>
+  })}</ul></section>
   return <section className="git-changes" aria-label="Alterações Git" data-git-root={state.root ?? ''}>
-    <header><strong title={state.status?.name}>{state.status?.name ?? 'Git · somente leitura'}</strong><button className="ui-button tool-button" disabled={!state.root || state.busy || session.locked} onClick={() => { void session.refresh() }}>Atualizar Git</button></header>
+    <header><strong title={state.status?.name}>{state.status?.name ?? 'Git'}</strong><button className="ui-button tool-button" disabled={!state.root || state.busy || session.locked} onClick={() => { void session.refresh() }}>Atualizar Git</button></header>
     {!state.root && <p>Abra uma pasta no Explorador para consultar sua raiz Git.</p>}
     {state.busy && <p role="status">Consultando Git…</p>}
     {state.error && <p role="alert">{state.error}</p>}
-    {state.status && <><p className="git-branch">{state.status.branch}</p><p className="git-policy">Configuração global ignorada. Filtros não suportados. Comparação: HEAD → disco, sem rascunhos.</p><div className="git-list ui-scrollbar">
+    {state.status && <><p className="git-branch">{state.status.branch}</p><p className="git-policy">Preparar usa o arquivo salvo no disco, sem salvar rascunhos. Configuração global ignorada; filtros não suportados. Comparação: HEAD → disco.</p><div className="git-list ui-scrollbar">
       {changes.length === 0 && <p>Árvore de trabalho limpa.</p>}
       {group('Conflitos', changes.filter(c => c.conflict), 'working')}
       {group('Preparadas (índice)', changes.filter(c => !c.conflict && !c.untracked && c.index !== ' '), 'index')}

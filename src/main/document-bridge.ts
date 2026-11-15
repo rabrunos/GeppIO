@@ -92,7 +92,7 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): void {
       return operation === 'open' && !result.ok && store.snapshot ? { ...result, confirmed: store.snapshot } : result
     } finally { busy = false }
   })
-  const gitOperations = ['status', 'compare'] as const
+  const gitOperations = ['status', 'compare', 'stage', 'unstage'] as const
   for (const operation of gitOperations) ipcMain.handle(`git:${operation}`, async (event, ...args: unknown[]) => {
     const frame = event.senderFrame
     if (win.isDestroyed() || event.sender !== win.webContents || frame !== win.webContents.mainFrame || frame?.url !== expectedURL || !validGitRequest(operation, args)) return gitFailure(new GitFailure('invalid'))

@@ -6,7 +6,9 @@
 .git-list { min-height: 0; overflow-y: auto; overflow-x: hidden; }
 .git-group h3 { font-size: 12px; margin: 10px 0 4px; }
 .git-group ul { list-style: none; margin: 0; padding: 0; }
-.git-file { display: flex; width: 100%; gap: 6px; justify-content: space-between; padding: 6px 2px; text-align: left; }
+.git-group li { display: flex; align-items: center; min-width: 0; gap: 4px; }
+.git-action { flex-shrink: 0; font-size: 10px; padding: 4px; }
+.git-file { display: flex; flex: 1; min-width: 0; gap: 6px; justify-content: space-between; padding: 6px 2px; text-align: left; }
 .git-file span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .git-file small { flex-shrink: 0; opacity: .75; }
 .git-diff { width: 100%; height: min(65vh, 640px); min-height: 180px; overflow: hidden; }

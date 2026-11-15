@@ -21,7 +21,7 @@ test('production script CSP is not the development inline-script policy', () => 
 test('static security regression: renderer has only fixed management, activation-bound data and authorized window chrome', () => {
   const preload = readFileSync('src/preload/index.ts', 'utf8'), main = readFileSync('src/main/index.ts', 'utf8')
   assert.ok(!/child_process|node:fs|sendSync|\.send\(/.test(preload))
-  assert.deepEqual([...preload.matchAll(/ipcRenderer.invoke\('([^']+)'/g)].map(match => match[1]), ['plugins:list', 'plugins:install', 'plugins:install-file', 'plugins:set-developer-mode', 'plugins:reload', 'plugins:link', 'plugins:set-enabled', 'plugins:remove', 'window:minimize', 'window:maximize', 'window:close', 'plugin-data:begin', 'plugin-data:read', 'plugin-data:write', 'plugin-data:end', 'document:open', 'document:save', 'document:release', 'document:close', 'explorer:select', 'explorer:list', 'explorer:open', 'explorer:release', 'terminal:read', 'terminal:start', 'terminal:input', 'terminal:resize', 'terminal:close', 'git:status', 'git:compare'])
+  assert.deepEqual([...preload.matchAll(/ipcRenderer.invoke\('([^']+)'/g)].map(match => match[1]), ['plugins:list', 'plugins:install', 'plugins:install-file', 'plugins:set-developer-mode', 'plugins:reload', 'plugins:link', 'plugins:set-enabled', 'plugins:remove', 'window:minimize', 'window:maximize', 'window:close', 'plugin-data:begin', 'plugin-data:read', 'plugin-data:write', 'plugin-data:end', 'document:open', 'document:save', 'document:release', 'document:close', 'explorer:select', 'explorer:list', 'explorer:open', 'explorer:release', 'terminal:read', 'terminal:start', 'terminal:input', 'terminal:resize', 'terminal:close', 'git:status', 'git:compare', 'git:stage', 'git:unstage'])
   const documents = readFileSync('src/main/document-bridge.ts', 'utf8')
   assert.match(documents, /event.sender !== win.webContents/)
   assert.match(documents, /frame !== win.webContents.mainFrame/)
@@ -33,7 +33,7 @@ test('static security regression: renderer has only fixed management, activation
   assert.match(terminal, /event.senderFrame !== win.webContents.mainFrame/)
   assert.match(terminal, /event.senderFrame\?\.url !== expectedURL/)
   assert.match(terminal, /validTerminalRequest\(operation, args\)/)
-  assert.doesNotMatch(readFileSync('sdk/plugin.d.ts', 'utf8'), /DocumentBridge|document:open|ExplorerBridge|explorer:|TerminalBridge|terminal:|GitBridge|git:status|git:compare/)
+  assert.doesNotMatch(readFileSync('sdk/plugin.d.ts', 'utf8'), /DocumentBridge|document:open|ExplorerBridge|explorer:|TerminalBridge|terminal:|GitBridge|git:status|git:compare|git:stage|git:unstage/)
   assert.match(main, /event.senderFrame !== event.sender.mainFrame/)
   assert.match(main, /sandbox: true/); assert.match(main, /contextIsolation: true/)
   assert.match(main, /nodeIntegration: false/); assert.match(main, /webviewTag: false/)

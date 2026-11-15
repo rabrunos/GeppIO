@@ -2,6 +2,10 @@
 
 ## Implemented boundaries
 
+Alpha.44 adds explicit per-file [Git index actions](git.md) through the same first-party
+owner. Native Git locks/applies one generated binary patch to the real index with isolated
+configuration; status/diff retain their disposable-copy path. Hosting services are independent.
+
 Alpha.43 adds the [read-only Git pilot](git.md) using the exact Explorer grant, disposable
 metadata and isolated installed Git builtins. One session serves Main/Sidebar widgets and
 the second Editor activity; independent Monaco Diff Editor models compare HEAD to saved disk.

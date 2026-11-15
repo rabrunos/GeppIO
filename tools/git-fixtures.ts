@@ -4,16 +4,17 @@ import { lstat, mkdir, opendir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { gitEnvironment, resolveGitExecutable } from '../src/main/git.ts'
 
-/** Mutations are exclusively fixture setup; never used by application production code. */
+/** Fixture setup/verifier only, never application code. Keep verification itself
+ * from executing the malicious fsmonitor/hooks deliberately stored by tests. */
 export async function fixtureGit(root: string): Promise<(args: string[]) => string> {
   const executable = await resolveGitExecutable()
-  return args => execFileSync(executable, args, { cwd: root, env: gitEnvironment(root), encoding: 'utf8', windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] })
+  return args => execFileSync(executable, ['-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=' + join(root, '.git', 'geppio-fixture-no-hooks'), ...args], { cwd: root, env: gitEnvironment(root), encoding: 'utf8', windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] })
 }
 export async function initializeGit(root: string) {
   await mkdir(root, { recursive: true })
   const git = await fixtureGit(root)
   git(['init', '-b', 'main']); git(['config', 'user.name', 'Disposable Test']); git(['config', 'user.email', 'fixture@example.invalid']); git(['config', 'core.autocrlf', 'false'])
-  for (const name of ['modified.ts', 'deleted.txt', 'rename old.txt', 'both.txt', 'binary.dat', 'large.txt', 'café 😀.txt']) await writeFile(join(root, name), name === 'binary.dat' ? Buffer.from([0, 255]) : name === 'modified.ts' ? 'const answer = 1;\r\n' : 'before\n')
+  for (const name of ['modified.ts', 'deleted.txt', 'rename old.txt', 'both.txt', 'binary.dat', 'large.txt', 'café 😀.txt']) await writeFile(join(root, name), name === 'binary.dat' ? Buffer.from([0, 255]) : name === 'modified.ts' ? 'const answer = 1;\r\n' : name === 'deleted.txt' ? 'unique deleted content\n' : 'before\n')
   git(['add', '.']); git(['commit', '-m', 'Disposable fixture'])
   return git
 }

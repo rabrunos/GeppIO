@@ -28,18 +28,28 @@ export class GitSession {
   dispose() { this.unsubscribe?.(); this.unsubscribe = null; this.generation++ }
   async refresh() { await this.query() }
   async compare(id: string) { await this.query(id) }
+  async mutate(operation: 'stage' | 'unstage', id: string) { await this.query(id, operation) }
   close() { this.update({ comparison: null }) }
-  private async query(id?: string) {
+  private async query(id?: string, operation?: 'stage' | 'unstage') {
     const root = this.state.root
     if (!root || this.state.busy || this.locked) return
     const generation = ++this.generation
+    let confirmed = false
     this.update({ busy: true, error: null, comparison: null, ...(!id ? { status: null } : {}) })
     try {
-      const result = id ? await this.bridge.compare(root, id) : await this.bridge.status(root)
+      const result = id ? await (operation ? this.bridge[operation](root, id) : this.bridge.compare(root, id)) : await this.bridge.status(root)
       if (generation !== this.generation || root !== this.state.root) return
-      if (!result.ok) this.update({ error: result.error, ...(result.code === 'stale' ? { status: null } : {}) })
+      if (!result.ok) this.update({ error: result.error, ...(['stale', 'uncertain'].includes(result.code) ? { status: null } : {}) })
       else this.update({ ...(result.status ? { status: result.status } : {}), comparison: result.comparison ?? null })
-    } catch { if (generation === this.generation) this.update({ error: 'Não foi possível comunicar com o Git. Tente novamente.' }) }
+      if (result.ok && result.mutated) {
+        confirmed = true
+        this.update({ status: null })
+        const refreshed = await this.bridge.status(root)
+        if (generation !== this.generation || root !== this.state.root) return
+        if (refreshed.ok) this.update({ status: refreshed.status ?? null })
+        else this.update({ error: 'Índice atualizado; a nova consulta falhou. Atualize para conferir. ' + refreshed.error })
+      }
+    } catch { if (generation === this.generation) this.update({ ...(operation ? { status: null } : {}), error: confirmed ? 'Índice atualizado; não foi possível consultar o novo estado. Atualize para conferir.' : operation ? 'A comunicação foi interrompida e o índice pode ter mudado. Atualize para conferir antes de outra ação.' : 'Não foi possível comunicar com o Git. Tente novamente.' }) }
     finally { if (generation === this.generation) this.update({ busy: false }) }
   }
 }

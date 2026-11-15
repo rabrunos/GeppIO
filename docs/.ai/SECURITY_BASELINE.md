@@ -1,5 +1,12 @@
 # Selected security baseline
 
+Issue #51 adds two explicit per-file index operations to the [Git boundary](../architecture/git.md).
+Read-only snapshots remain isolated. The separate write path uses a Main-generated one-file
+binary patch, Git's native cached-apply index lock and exact blob preimage check, strict ordinary
+index/object validation, saved-file/metadata witnesses and conservative uncertain outcomes.
+Native working files/refs/config are never write targets; no provider or plugin capability is added.
+Residual same-user path/HEAD races are documented, not claimed as whole-index/HEAD atomic CAS.
+
 Issue #50 adds the first-party [read-only Git boundary](../architecture/git.md): exact Explorer
 root grant, two fixed caller-bound operations and a disposable bounded metadata copy. Installed
 Git builtins never load the original executable configuration or write the selected repository.

@@ -2,6 +2,13 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.44] — 2026-11-15
+
+- Added explicit per-file Stage/Unstage in the existing Git Changes activity and Main/Sidebar widget, using saved disk content and preserving dirty Monaco sessions.
+- Kept read-only status/diff on disposable metadata. The separate real-index write uses an isolated-config, one-file binary patch and Git's native cached-apply lock/preimage checks; no shell, provider service, remote authentication or plugin grant is added.
+- Added stale-snapshot/index/HEAD/file checks, strict ordinary-index/object-storage validation and conservative uncertain-outcome handling for native interruption. Renames, conflicts, special indices, unsupported accelerators and mode-only changes remain outside the write pilot.
+- Extended disposable real-Git and Windows Electron coverage for index transitions, saved-versus-draft bytes, non-target preservation, executable-config rejection and concurrency/interruption. Existing Monaco/DOMPurify advisory exception remains; no dependency changed.
+
 ## [0.1.0-alpha.43] — 2026-11-15
 
 - Added first-party read-only Git Changes in the ordinary Main/Sidebar catalog and the existing Editor activity rail, sharing one ephemeral state owner and the exact Explorer folder grant.

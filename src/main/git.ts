@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { lstat, mkdir, mkdtemp, open, opendir, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path'
@@ -8,6 +8,7 @@ import { GIT_LIMITS } from '../shared/git.ts'
 import type { GitChange, GitError, GitResult, GitStatus } from '../shared/git.ts'
 
 const messages: Record<GitError, string> = {
+  uncertain: 'O Git pode ter alterado o índice antes da interrupção. Atualize para conferir; a operação não será repetida nem desfeita automaticamente.',
   invalid: 'Solicitação Git inválida.', stale: 'A pasta ou a consulta Git mudou. Atualize ou selecione a pasta novamente.',
   busy: 'Aguarde a consulta Git em andamento.', unsupported: 'Repositório ou comparação não suportado neste piloto (raiz local comum, sem links, submódulos, filtros ou extensões).',
   limit: 'Limite Git excedido: 512 alterações, 256 KiB por texto, 64 MiB de metadados ou 20.000 entradas. Escolha um repositório menor.',
@@ -57,15 +58,21 @@ export function gitEnvironment(home: string): NodeJS.ProcessEnv {
   for (const key of ['SystemRoot', 'WINDIR', 'TEMP', 'TMP']) if (process.env[key]) env[key] = process.env[key]
   return env
 }
-/** No shell, stdin, inherited Git/Node/loader/config environment, stderr disclosure or generic bridge. */
-export function runGit(executable: string, args: readonly string[], home: string, signal: AbortSignal, cap: number = GIT_LIMITS.output, timeout: number = GIT_LIMITS.timeout): Promise<Buffer> {
+/** No shell, renderer-supplied stdin, inherited Git/Node/loader/config environment, stderr disclosure or generic bridge. */
+export function runGit(executable: string, args: readonly string[], home: string, signal: AbortSignal, cap: number = GIT_LIMITS.output, timeout: number = GIT_LIMITS.timeout, io?: { input: Buffer; index?: string; objects?: string }): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     if (signal.aborted) { reject(new GitFailure('stale')); return }
-    const child = spawn(executable, ['--no-optional-locks', '--no-pager', ...args], { cwd: home, env: gitEnvironment(home), shell: false, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] })
+    const env = gitEnvironment(home)
+    // Main-only, validated destinations. Never an environment/argument IPC surface.
+    if (io?.index) env.GIT_INDEX_FILE = io.index
+    if (io?.objects) env.GIT_OBJECT_DIRECTORY = io.objects
+    const child = spawn(executable, ['--no-optional-locks', '--no-pager', ...args], { cwd: home, env, shell: false, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] })
     const chunks: Buffer[] = []; let size = 0, failure: GitFailure | null = null
     const stop = (kind: GitError) => { failure ??= new GitFailure(kind); child.kill() }
     const abort = () => stop('stale'), timer = setTimeout(() => stop('timeout'), timeout)
     signal.addEventListener('abort', abort, { once: true })
+    child.stdin.on('error', () => { /* Early native rejection can close stdin (EPIPE). Close owns the outcome. */ })
+    child.stdin.end(io?.input)
     child.stdout.on('data', (data: Buffer) => { size += data.length; if (size > cap) stop('limit'); else chunks.push(data) })
     child.stderr.on('data', (data: Buffer) => { size += data.length; if (size > cap) stop('limit') })
     child.on('error', () => { failure ??= new GitFailure('unavailable') })
@@ -93,26 +100,146 @@ function text(bytes: Buffer): string {
   if ([...value].some(c => c.charCodeAt(0) < 32 && ![9, 10, 13].includes(c.charCodeAt(0)) || c.charCodeAt(0) === 127)) throw new GitFailure('unsupported')
   return value
 }
-/** Per-window owner. Disposable metadata isolates every Git parser from executable config and writes. */
+interface IndexEntry { name: string; mode: string; oid: string }
+const digest = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex')
+/** Documented v2/v3 index framing. Reject special flags/extensions before Git sees a real index. */
+export function ordinaryIndex(bytes: Buffer | null): IndexEntry[] {
+  if (!bytes) return []
+  const fail = () => { throw new GitFailure('unsupported') }
+  if (bytes.length < 32 || bytes.toString('ascii', 0, 4) !== 'DIRC' || ![2, 3].includes(bytes.readUInt32BE(4))) return fail()
+  const end = bytes.length - 20, count = bytes.readUInt32BE(8), entries: IndexEntry[] = [], names = new Set<string>(), parents = new Set<string>()
+  if (count > GIT_LIMITS.nodes || !createHash('sha1').update(bytes.subarray(0, end)).digest().equals(bytes.subarray(end))) return fail()
+  let offset = 12, tree = false
+  let previous: Buffer = Buffer.alloc(0)
+  for (let i = 0; i < count; i++) {
+    const start = offset
+    if (offset + 62 > end) return fail()
+    const flags = bytes.readUInt16BE(offset + 60), mode = bytes.readUInt32BE(offset + 24).toString(8), oid = bytes.subarray(offset + 40, offset + 60).toString('hex')
+    if (flags & 0xf000 || !['100644', '100755'].includes(mode) || /^0+$/.test(oid)) return fail()
+    const nul = bytes.indexOf(0, offset + 62)
+    if (nul < 0 || nul >= end) return fail()
+    const name = decode(bytes.subarray(offset + 62, nul)), key = name.toLowerCase()
+    const raw = bytes.subarray(offset + 62, nul), ancestors = key.split('/').slice(0, -1).map((_, index) => key.split('/').slice(0, index + 1).join('/'))
+    if (!gitRelativeName(name) || Buffer.byteLength(name) !== (flags & 0xfff) || names.has(key) || parents.has(key) || ancestors.some(parent => names.has(parent)) || previous.length && Buffer.compare(previous, raw) >= 0) return fail()
+    previous = raw; ancestors.forEach(parent => parents.add(parent))
+    names.add(key); entries.push({ name, mode, oid })
+    offset = start + Math.ceil((nul + 1 - start) / 8) * 8
+    if (offset > end || bytes.subarray(nul, offset).some(byte => byte !== 0)) return fail()
+  }
+  while (offset < end) {
+    if (offset + 8 > end) return fail()
+    const extension = bytes.toString('ascii', offset, offset + 4), length = bytes.readUInt32BE(offset + 4)
+    // TREE is a data-only cache. In particular no split-index, sparse, fsmonitor,
+    // untracked cache or path-bearing accelerator enters the mutation path.
+    if (extension !== 'TREE' || tree || length > end - offset - 8) return fail()
+    tree = true
+    offset += 8 + length
+  }
+  return entries
+}
+async function fileWitness(path: string): Promise<string> {
+  if (!await exists(path)) {
+    let parent = dirname(path)
+    while (!await exists(parent)) parent = dirname(parent)
+    return 'missing:' + (await inspectExplorerPath(parent, 'directory')).chain
+  }
+  const bytes = await boundedRead(path, GIT_LIMITS.text), stat = await lstat(path, { bigint: true })
+  return [stat.dev, stat.ino, stat.size, stat.mtimeNs, stat.ctimeNs, (await inspectExplorerPath(path, 'file')).chain, digest(bytes)].join(':')
+}
+async function actionWitness(root: string, name: string, check: () => void): Promise<string> {
+  check()
+  const hash = createHash('sha256').update(await fileWitness(join(root, ...name.split('/'))))
+  let directory = root
+  for (const component of ['', ...name.split('/').slice(0, -1)]) {
+    check()
+    if (component) directory = join(directory, component)
+    for (const rule of ['.gitignore', '.gitattributes']) { check(); hash.update(rule + ':' + await fileWitness(join(directory, rule))) }
+  }
+  return hash.digest('hex')
+}
+/** Snapshot includes the whole refs namespace, not just HEAD's symbolic name. */
+async function metadataWitness(git: string, check: () => void, includeIndex = true): Promise<string> {
+  const hash = createHash('sha256'); let bytes = 0, nodes = 0
+  hash.update((await inspectExplorerPath(git, 'directory')).chain)
+  const visit = async (path: string, depth: number): Promise<void> => {
+    check(); if (++nodes > GIT_LIMITS.nodes || depth > 32) throw new GitFailure('limit')
+    hash.update(relative(git, path) + '\0')
+    if (!await exists(path)) { hash.update('absent'); return }
+    const stat = await lstat(path, { bigint: true })
+    if (stat.isDirectory()) {
+      hash.update((await inspectExplorerPath(path, 'directory')).chain)
+      const directory = await opendir(path), children: string[] = []
+      for await (const entry of directory) { check(); if (children.length + nodes >= GIT_LIMITS.nodes) throw new GitFailure('limit'); if (!safeExplorerName(entry.name)) throw new GitFailure('unsupported'); children.push(entry.name) }
+      for (const name of children.sort()) await visit(join(path, name), depth + 1)
+    } else {
+      bytes += Number(stat.size); if (bytes > GIT_LIMITS.metadata) throw new GitFailure('limit')
+      const data = await boundedRead(path, Math.min(GIT_LIMITS.metadata, Number(stat.size)))
+      hash.update([stat.dev, stat.ino, stat.mtimeNs, stat.ctimeNs].join(':')).update(data)
+    }
+  }
+  for (const name of ['HEAD', 'config', 'packed-refs', 'refs', 'info/attributes', 'info/exclude', ...(includeIndex ? ['index'] : [])]) await visit(join(git, name), 0)
+  return hash.digest('hex')
+}
+async function validateObjectDestination(objects: string, check: () => void): Promise<void> {
+  let nodes = 0, size = 0
+  const walk = async (path: string, depth: number): Promise<void> => {
+    check(); await inspectExplorerPath(path, 'directory')
+    const directory = await opendir(path)
+    for await (const entry of directory) {
+      check()
+      if (++nodes > GIT_LIMITS.nodes || depth > 2) throw new GitFailure('limit')
+      const child = join(path, entry.name), parts = relative(objects, child).split(sep)
+      // Unlike the read-only copier, reject omitted accelerators too. The real
+      // object database cannot redirect a write/read through alternates or MIDX.
+      const allowed = parts.length === 1 ? /^(?:[a-f0-9]{2}|pack|info)$/.test(entry.name) : parts.length === 2 && (parts[0] === 'pack' ? /^pack-[a-f0-9]{40}\.(pack|idx)$/.test(entry.name) : /^[a-f0-9]{2}$/.test(parts[0]!) && /^[a-f0-9]{38}$/.test(entry.name))
+      if (!allowed) throw new GitFailure('unsupported')
+      const stat = await lstat(child)
+      if (stat.isDirectory() && parts.length === 1) await walk(child, depth + 1)
+      else {
+        await inspectExplorerPath(child, 'file'); size += stat.size
+        if (size > GIT_LIMITS.metadata) throw new GitFailure('limit')
+      }
+    }
+  }
+  await walk(objects, 0)
+}
+/** Per-window owner. Isolated inspection metadata; a separate explicit gate targets the real index. */
 export class GitStore {
   private controller: AbortController | null = null
   private status: GitStatus | null = null
+  private authority: { metadata: string; files: Map<string, string> } | null = null
   private busy = false
   private directories: DirectoryStore
   constructor(directories: DirectoryStore) { this.directories = directories }
-  revoke(): void { this.controller?.abort(); this.status = null }
-  async inspect(operation: 'status' | 'compare', root: string, id: string | undefined, current: () => boolean): Promise<GitResult> {
+  revoke(): void { this.controller?.abort(); this.status = null; this.authority = null }
+  async inspect(operation: 'status' | 'compare' | 'stage' | 'unstage', root: string, id: string | undefined, current: () => boolean): Promise<GitResult> {
     if (this.busy) throw new GitFailure('busy')
+    if (operation === 'status') { this.status = null; this.authority = null }
     this.busy = true
     const controller = new AbortController(); this.controller = controller
     const guard = this.directories.guard(), deadline = Date.now() + GIT_LIMITS.timeout
-    let temporary: string | undefined
+    let temporary: string | undefined, writeStarted = false
+    const finish = async () => {
+      try {
+        if (temporary) await rm(temporary, { recursive: true, force: true, maxRetries: 3 })
+        check(); await this.directories.folder(root, () => { check(); return true })
+      } catch (error) { if (writeStarted) throw new GitFailure('uncertain'); throw error }
+    }
     const check = () => { if (!guard() || !current() || controller.signal.aborted) throw new GitFailure('stale'); if (Date.now() > deadline) throw new GitFailure('timeout') }
     try {
       const path = await this.directories.folder(root, () => { check(); return true }), git = join(path, '.git')
       if (!await exists(git)) throw new GitFailure('unsupported')
       await inspectExplorerPath(git, 'directory')
       for (const name of ['commondir', 'gitdir', 'shallow', 'info/grafts', 'objects/info/alternates', 'objects/info/http-alternates', 'refs/replace']) if (await exists(join(git, name))) throw new GitFailure('unsupported')
+      const mutation = operation === 'stage' || operation === 'unstage'
+      const selected = this.status?.root === root ? this.status.changes.find(change => change.id === id) : undefined
+      const authority = this.authority
+      if (mutation && (!selected || !authority)) throw new GitFailure('stale')
+      const metadata = operation === 'compare' ? '' : await metadataWitness(git, check)
+      if (mutation && (metadata !== authority!.metadata || await actionWitness(path, selected!.name, check) !== authority!.files.get(selected!.id))) throw new GitFailure('stale')
+      if (mutation && !selected![operation]) throw new GitFailure('unsupported')
+      if (mutation && await exists(join(git, 'index.lock'))) throw new GitFailure('busy')
+      if (operation === 'status') { this.status = null; this.authority = null }
       const executable = await resolveGitExecutable()
       // Windows TEMP can use an OS alias or lie inside the selected working tree.
       // Resolve only host scratch here; never create temporary files inside the grant.
@@ -166,7 +293,7 @@ export class GitStore {
       await writeFile(join(shadow, 'config'), safe)
       // Bind even version/config parsing to private metadata: the host temporary
       // directory must never cause implicit discovery of another parent repository.
-      const invoke = async (args: string[], cap?: number) => { check(); const result = await runGit(executable, [...base, ...args], temporary!, controller.signal, cap, Math.max(1, deadline - Date.now())); check(); await this.directories.folder(root, () => { check(); return true }); return result }
+      const invoke = async (args: string[], cap?: number, io?: { input: Buffer; index?: string; objects?: string }) => { check(); const result = await runGit(executable, [...base, ...args], temporary!, controller.signal, cap, Math.max(1, deadline - Date.now()), io); check(); await this.directories.folder(root, () => { check(); return true }); return result }
       const version = decode(await invoke(['--version']))
       if (!/^git version 2\.(?:[4-9]\d|[1-9]\d{2,})\./.test(version)) throw new GitFailure('unsupported')
       const config = decode(await invoke(['config', '--no-includes', '--null', '--file', join(temporary, 'source-config'), '--list']))
@@ -188,8 +315,77 @@ export class GitStore {
         const ref = head.slice(5)
         if (detached ? !/^[a-f0-9]{40}$/.test(head) : ref.includes('..') || ref.includes('@{') || [...ref].some(c => c.charCodeAt(0) <= 32 || c.charCodeAt(0) === 127 || '~^:?*[\\'.includes(c)) || ref.split('/').some(part => !part || part.startsWith('.') || part.endsWith('.') || part.endsWith('.lock'))) throw new GitFailure('unsupported')
         if (!branch || branch.length > 255) throw new GitFailure('unsupported')
-        check(); this.status = { root, name: basename(path), branch, detached, changes }
+        const witnesses = new Map<string, string>()
+        let ordinary = true
+        try { ordinaryIndex(await exists(join(shadow, 'index')) ? await boundedRead(join(shadow, 'index'), GIT_LIMITS.metadata) : null) } catch { ordinary = false }
+        for (const change of changes) {
+          check()
+          const eligible = ordinary && !change.conflict && !change.previous && /^[ MAD?]{2}$/.test(change.index + change.working)
+          if (eligible) {
+            try {
+              witnesses.set(change.id, await actionWitness(path, change.name, check))
+              change.stage = change.untracked || change.working !== ' '
+              change.unstage = !change.untracked && change.index !== ' '
+            } catch { change.actionReason = 'Arquivo fora dos limites seguros para preparar (até 256 KiB, sem links).' }
+          } else change.actionReason = 'Renomes, conflitos, modos e índices especiais não permitem esta ação.'
+        }
+        if (metadata !== await metadataWitness(git, check)) throw new GitFailure('stale')
+        check(); this.status = { root, name: basename(path), branch, detached, changes }; this.authority = { metadata, files: witnesses }
         return { ok: true, status: this.status }
+      }
+      if (mutation) {
+        const change = selected!, working = join(path, ...change.name.split('/')), indexPath = join(git, 'index')
+        const fresh = parseGitStatus(await invoke(['status', '--porcelain=v1', '-z', '--untracked-files=all', '--ignore-submodules=all'])).find(entry => entry.name === change.name)
+        if (!fresh || fresh.index !== change.index || fresh.working !== change.working || fresh.previous !== change.previous || fresh.conflict || fresh.untracked !== change.untracked) throw new GitFailure('stale')
+        const entries = ordinaryIndex(await exists(join(shadow, 'index')) ? await boundedRead(join(shadow, 'index'), GIT_LIMITS.metadata) : null)
+        const old = entries.find(entry => entry.name === change.name)
+        if (old) await invoke(['cat-file', 'blob', old.oid], GIT_LIMITS.text)
+        let target: IndexEntry | undefined
+        if (operation === 'stage' && await exists(working)) {
+          const oid = decode(await invoke(['-C', path, 'hash-object', '-w', '--path=' + change.name, '--stdin'], 256, { input: await boundedRead(working, GIT_LIMITS.text) })).trim()
+          if (!/^[a-f0-9]{40}$/.test(oid)) throw new GitFailure('unsupported')
+          await invoke(['cat-file', 'blob', oid], GIT_LIMITS.text)
+          target = { name: change.name, mode: old?.mode ?? '100644', oid }
+        } else if (operation === 'unstage') {
+          const head = decode(await boundedRead(join(shadow, 'HEAD'), 4096)).trim(), ref = head.startsWith('ref: refs/heads/') ? head.slice(5) : null
+          const packed = await exists(join(shadow, 'packed-refs')) ? decode(await boundedRead(join(shadow, 'packed-refs'), GIT_LIMITS.metadata)) : ''
+          const unborn = ref && !await exists(join(shadow, ...ref.split('/'))) && !packed.split('\n').some(line => line.endsWith(' ' + ref))
+          if (!unborn) {
+            const tree = decode(await invoke(['ls-tree', '-z', 'HEAD', '--', change.name])).split('\0').filter(Boolean)
+            if (tree.length) {
+              const match = /^(100644|100755) blob ([a-f0-9]{40})\t(.+)$/.exec(tree[0]!)
+              if (tree.length !== 1 || !match || match[3] !== change.name) throw new GitFailure('unsupported')
+              target = { name: change.name, mode: match[1]!, oid: match[2]! }
+              await invoke(['cat-file', 'blob', target.oid], GIT_LIMITS.text)
+            }
+          }
+        }
+        if (old && target && old.mode !== target.mode) throw new GitFailure('unsupported')
+        const beforeTree = decode(await invoke(['write-tree'], 256)).trim()
+        if (target) await invoke(['update-index', '--add', '--cacheinfo', target.mode, target.oid, target.name])
+        else await invoke(['update-index', '--force-remove', '--', change.name])
+        const prospective = parseGitStatus(await invoke(['status', '--porcelain=v1', '-z', '--untracked-files=all', '--ignore-submodules=all']))
+        if (prospective.some(entry => (entry.name === change.name || entry.previous === change.name) && (entry.previous || entry.conflict))) throw new GitFailure('unsupported')
+        const afterTree = decode(await invoke(['write-tree'], 256)).trim()
+        await writeFile(join(shadow, 'info', 'attributes'), '* -diff\n')
+        let patch = await invoke(['diff-tree', '-p', '--binary', '--full-index', '--no-renames', '--no-ext-diff', '--no-textconv', beforeTree, afterTree, '--', change.name])
+        const rendered = decode(patch), empty = 'e69de29bb2d1d6434b8b29ae775ad8c2e48c5391'
+        if (!rendered.startsWith('diff --git ') || rendered.split('\ndiff --git ').length !== 1 || (!rendered.includes('\nGIT binary patch\n') && !(old?.oid === empty && !target || !old && target?.oid === empty))) throw new GitFailure('unsupported')
+        // Binary preimage OID is checked by Git under its native index lock. Omit
+        // unchanged modes so a racing executable-bit update is preserved by Git.
+        if (old && target) patch = Buffer.from(rendered.replace(/^(index [a-f0-9]{40}\.\.[a-f0-9]{40}) 100(?:644|755)$/m, '$1'))
+        await validateObjectDestination(join(git, 'objects'), check)
+        const fixed = await metadataWitness(git, check, false)
+        if (metadata !== await metadataWitness(git, check) || await actionWitness(path, change.name, check) !== authority!.files.get(change.id)) throw new GitFailure('stale')
+        await this.directories.folder(root, () => { check(); return true })
+        this.status = null; this.authority = null
+        writeStarted = true
+        await invoke(['apply', '--cached', '--binary', '--whitespace=nowarn'], undefined, { input: patch, index: indexPath, objects: join(git, 'objects') })
+        const actual = ordinaryIndex(await boundedRead(indexPath, GIT_LIMITS.metadata))
+        const expected = [...entries.filter(entry => entry.name !== change.name), ...(target ? [target] : [])].sort((a, b) => a.name.localeCompare(b.name))
+        actual.sort((a, b) => a.name.localeCompare(b.name))
+        if (JSON.stringify(actual) !== JSON.stringify(expected) || fixed !== await metadataWitness(git, check, false) || await actionWitness(path, change.name, check) !== authority!.files.get(change.id)) throw new GitFailure('uncertain')
+        return { ok: true, mutated: true }
       }
       const change = this.status?.root === root ? this.status.changes.find(change => change.id === id) : undefined
       if (!change) throw new GitFailure('stale')
@@ -206,10 +402,12 @@ export class GitStore {
       if (!await exists(working) && change.index !== 'D' && change.working !== 'D') throw new GitFailure('stale')
       check()
       return { ok: true, comparison: { name: change.name, original: text(original), modified: text(modified), basis: 'HEAD → arquivo salvo no disco; não representa o índice nem alterações não salvas do Editor.' } }
+    } catch (error) {
+      if (writeStarted) throw new GitFailure('uncertain')
+      throw error
     } finally {
       try {
-        if (temporary) await rm(temporary, { recursive: true, force: true, maxRetries: 3 })
-        check(); await this.directories.folder(root, () => { check(); return true })
+        await finish()
       } finally { if (this.controller === controller) this.controller = null; this.busy = false }
     }
   }

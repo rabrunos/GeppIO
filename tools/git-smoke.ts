@@ -15,7 +15,7 @@ import { enableDeveloperMode } from './plugin-dev-support.ts'
 
 const profile = await mkdtemp(join(tmpdir(), 'geppio-smoke-git-')), canonical = await realpath(profile), scope = join(canonical, 'repository')
 const dev = process.argv.includes('--dev'), scale125 = process.argv.includes('--scale125')
-const diagnostics = resolve('.local/diagnostics/git-alpha43-' + (dev ? 'dev' : scale125 ? '125' : '100'))
+const diagnostics = resolve('.local/diagnostics/git-alpha44-' + (dev ? 'dev' : scale125 ? '125' : '100'))
 await mkdir(diagnostics, { recursive: true })
 const git = await initializeGit(scope)
 await writeFile(join(scope, 'modified.ts'), 'const answer = 2;\r\n')
@@ -103,10 +103,33 @@ try {
   assert.equal(await page.locator('.git-file').filter({ hasText: 'both.txt' }).count(), 2)
   assert.deepEqual(await snapshot(), draft); await editor.press('Control+z'); assert.notEqual((await snapshot()).text, draft.text); await editor.press('Control+y'); assert.equal((await snapshot()).text, draft.text)
   assert.equal(await readFile(join(scope, 'modified.ts'), 'utf8'), 'const answer = 2;\r\n')
+  assert.deepEqual(await gitFingerprint(scope), before, 'Inherited read-only inspection still never mutates repository data')
+  const action = async (label: 'Preparar' | 'Despreparar', name: string) => {
+    await page.getByRole('button', { name: label + ' ' + name, exact: true }).click()
+    await page.waitForFunction(() => !document.querySelector('.git-changes [role="status"]') && !!document.querySelector('.git-branch'))
+    assert.equal(await page.locator('.git-changes [role="alert"]').count(), 0)
+    assert.deepEqual(await snapshot(), draft, 'Index writes never save or replace the active unsaved Monaco model')
+    await assert.rejects(readFile(join(scope, 'EXECUTED')), 'Application operation must not execute repository-controlled programs, before any native verifier command')
+  }
+  for (const name of ['modified.ts', 'deleted.txt', 'untracked.txt']) {
+    await action('Preparar', name)
+    assert.ok(git(['diff', '--cached', '--name-only', '--', name]).trim())
+    if (name === 'modified.ts') assert.equal(git(['show', ':modified.ts']), 'const answer = 2;\r\n', 'Stage contains saved bytes, never the dirty Monaco draft')
+    assert.equal(git(['show', ':both.txt']), 'staged\n', 'Unrelated staged blob remains exact')
+    await action('Despreparar', name)
+    assert.equal(git(['diff', '--cached', '--name-only', '--', name]), '')
+  }
+  assert.ok(await page.getByRole('button', { name: 'Preparar large.txt', exact: true }).isDisabled())
+  assert.ok(await page.getByRole('button', { name: 'Despreparar rename new.txt', exact: true }).isDisabled())
+  await editor.press('Control+z'); assert.notEqual((await snapshot()).text, draft.text); await editor.press('Control+y'); assert.equal((await snapshot()).text, draft.text)
+  git(['fsck', '--full'])
   const negatives = await app.evaluate(async ({ ipcMain, BrowserWindow }, root) => {
     const handlers = (ipcMain as unknown as { _invokeHandlers: Map<string, (event: unknown, ...args: unknown[]) => Promise<GitResult>> })._invokeHandlers
     const sender = BrowserWindow.getAllWindows()[0]!.webContents, senderFrame = sender.mainFrame, handler = handlers.get('git:status')!
-    return Promise.all([handler({ sender, senderFrame }, root, 'extra'), handler({ sender: {}, senderFrame }, root), handler({ sender, senderFrame: { url: senderFrame.url } }, root), handler({ sender, senderFrame: { url: 'https://example.invalid/' } }, root), handler({ sender, senderFrame }, '../escape')])
+    return Promise.all(['git:status', 'git:stage', 'git:unstage'].flatMap(channel => {
+      const call = handlers.get(channel)!, args = channel === 'git:status' ? [root] : [root, '00000000-0000-4000-8000-000000000000']
+      return [call({ sender, senderFrame }, ...args, 'extra'), call({ sender: {}, senderFrame }, ...args), call({ sender, senderFrame: { url: senderFrame.url } }, ...args), call({ sender, senderFrame: { url: 'https://example.invalid/' } }, ...args), handler({ sender, senderFrame }, '../escape')]
+    }))
   }, root)
   assert.ok(negatives.every(r => !r.ok && r.code === 'invalid'))
   const forged = await page.evaluate(({ root, id }) => window.geppio!.git.compare(root, id), { root, id: randomUUID() }); assert.ok(!forged.ok && forged.code === 'stale')
@@ -133,13 +156,15 @@ try {
   assert.equal(await page.locator('.git-changes').count(), 1)
   assert.equal(await page.locator('.git-changes').evaluate(node => node.closest('.widget-frame')?.getAttribute('data-owner-region')), 'main')
   await mode('Editor')
-  assert.deepEqual(await gitFingerprint(scope), before)
+  const protectedFiles = (value: Record<string, string>) => Object.fromEntries(Object.entries(value).filter(([name]) => name !== '.git/index' && !name.startsWith('.git/objects/')))
+  assert.deepEqual(protectedFiles(await gitFingerprint(scope)), protectedFiles(before), 'Only index and required Git objects may change; disk/config/refs remain exact')
   await rail.getByRole('button', { name: 'Explorador', exact: true }).click(); await page.getByRole('button', { name: 'Fechar pasta', exact: true }).click()
   const stale = await page.evaluate(root => window.geppio!.git.status(root), root); assert.ok(!stale.ok && stale.code === 'stale')
+  const staleWrite = await page.evaluate(({ root, id }) => window.geppio!.git.stage(root, id), { root, id: randomUUID() }); assert.ok(!staleWrite.ok && staleWrite.code === 'stale')
   await rail.getByRole('button', { name: 'Alterações Git', exact: true }).click(); assert.equal(await page.locator('.git-branch').count(), 0)
   assert.match(await page.locator('.git-changes').innerText(), /Abra uma pasta/)
   assert.deepEqual(errors, [])
-  evidence.result = 'passed: real Git status/diff, malicious config nonexecution, repository hashes/mtime, dirty Monaco identity/undo/selection/scroll, disposed models, caller negatives, grant release, shared Sidebar/activity and layout bytes'
+  evidence.result = 'passed: real index Stage/Unstage clicks, saved-disk content versus dirty draft, unrelated staged blob, index/object fsck, disk/refs/config fingerprints, inherited read-only status/diff, malicious config nonexecution, Monaco identity/undo/selection/scroll, disposed models, caller negatives, stale grants, shared Sidebar/Main/activity and layout bytes'
   evidence.coexistence = 'passed: nonempty installed plugin Worker identities retained; same live PowerShell UUID accepts a command after Git inspection and mode changes'
   evidence.environment = { platform: process.platform, development: dev, dpr: await page.evaluate(() => devicePixelRatio) }
   await writeFile(join(diagnostics, 'evidence.json'), JSON.stringify(evidence, null, 2)); console.log(JSON.stringify(evidence, null, 2))

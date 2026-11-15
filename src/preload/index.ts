@@ -53,7 +53,9 @@ const terminal = Object.freeze<import('../shared/terminal.ts').TerminalBridge>({
 })
 const git = Object.freeze<import('../shared/git.ts').GitBridge>({
   status: root => ipcRenderer.invoke('git:status', root),
-  compare: (root, change) => ipcRenderer.invoke('git:compare', root, change)
+  compare: (root, change) => ipcRenderer.invoke('git:compare', root, change),
+  stage: (root, change) => ipcRenderer.invoke('git:stage', root, change),
+  unstage: (root, change) => ipcRenderer.invoke('git:unstage', root, change)
 })
 contextBridge.exposeInMainWorld('geppio', Object.freeze({ name: IDENTITY.name, version: __APP_VERSION__, platform: process.platform, plugins, pluginData, windowControls, documents, explorer, terminal, git,
   demoFixtures: process.argv.includes('--geppio-demo-fixtures') }))

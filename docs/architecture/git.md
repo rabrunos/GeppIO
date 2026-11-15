@@ -1,15 +1,15 @@
-# Read-only Git pilot — alpha.43 / Issue #50
+# First-party Git pilot — alpha.43/44 / Issues #50/51
 
 The bundled `host:git-changes` widget is explicit, single-view and eligible in Main/Sidebar.
 Editor mode adds a second activity to the existing rail and measured Sidebar viewport. No
 placement, composition, workspace, document or plugin state is created by selecting Git.
 `GitSession` is one memory-only renderer owner; `GitStore` is one Main owner bound to the
-existing `DirectoryStore` grant. Two fixed app-only calls accept opaque root/change UUIDs.
+existing `DirectoryStore` grant. Two fixed inspection and two explicit index calls accept opaque root/change UUIDs.
 Main checks the owning WebContents, main frame, exact URL, shape and root identity.
 Selection/release/navigation/destruction abort native work and invalidate results. Nothing
 is added to the public plugin SDK or Worker facade.
 
-## Native execution and nonmutation
+## Read-only inspections: execution and nonmutation
 
 The Windows pilot resolves only the canonical machine installation `Git/cmd/git.exe` under
 Program Files, never PATH, a selected folder or a renderer-supplied executable. The installation
@@ -73,3 +73,64 @@ a clean audit, Linux application validation, untrusted-plugin boundary or owner 
 References: [Git status](https://git-scm.com/docs/git-status),
 [Git configuration](https://git-scm.com/docs/git-config),
 [Git environment](https://git-scm.com/docs/git).
+
+## Explicit index actions — alpha.44 / Issue #51
+
+Two additional fixed calls, `stage(rootUUID, changeUUID)` and `unstage(rootUUID, changeUUID)`,
+are first-party only. No path, executable, option or provider input crosses IPC. Each explicit
+UI action resolves the most recent Main snapshot; no watcher or refresh can trigger a write.
+Stage uses bounded saved disk bytes with the existing isolated local core options and Git's
+builtin attribute/EOL conversion. Undefined attribute filter names have no driver; any local
+filter configuration is rejected, and global/system/include settings remain inactive. Hashing
+uses `-C` at the exact validated root for truthful attribute resolution and writes only to the
+private object copy. The active Monaco model is never passed to this service.
+
+Main witnesses HEAD, the complete refs namespace, packed-refs, config, index and info rules,
+plus the selected file's canonical identity, timestamps and digest and ancestor working
+`.gitignore`/`.gitattributes` rules. It rechecks them and fresh selected porcelain status before
+writing and expires IDs after an attempt. A replaced root, saved-file/index/config change or
+preexisting native index.lock fails before mutation. Initial/unborn HEAD is supported: Unstage
+removes only the selected initial entry, retaining the saved file.
+
+The write gate accepts checksummed, ordered ordinary SHA-1 index v2/v3 entries with no special
+flags and only the TREE cache extension. Split/sparse/v4/assume-unchanged/skip-worktree/intent-to-add,
+conflicts, renames, deliberate mode changes and unsupported content/storage fail closed. Every
+real object path is checked; unlike inspection's copier, writes reject accelerators, promisor
+files, alternates and nonempty objects/info too. This can reject a repository after ordinary
+maintenance even when read-only inspection still works. Per-side/blob size is 256 KiB; original
+index blob and converted target are bounded before diff generation. Existing overall budgets apply.
+
+Git prepares two private trees differing in one exact literal path. A private `* -diff` attribute
+forces a full-OID binary patch via diff-tree, with external diff/textconv/renames disabled. A
+single generated patch is required; non-binary patches are rejected except proven empty-file
+creation/deletion. Existing-file unchanged modes are omitted so Git preserves the mode it reads
+under lock. Explicit mode changes are unsupported. Native `apply --cached --binary --whitespace=nowarn`
+then uses the private git-dir/config/hooks with only Main-validated GIT_INDEX_FILE and
+GIT_OBJECT_DIRECTORY pointing to the real authorized index/objects. No real configuration/hooks
+are loaded. There is no working-file, ref, configuration or remote write command.
+
+Git takes index.lock before reading the real index, verifies the complete binary blob preimage
+under that lock, preserves other entries and atomically replaces the index using its own lock
+protocol. It stores needed blob objects itself. Main never rewrites/renames index bytes or deletes
+an owner's lock. Postflight checks exact semantic index entries, working-file witness and fixed
+metadata. A racing selected-blob change is rejected by Git; racing mode/other-entry changes are
+preserved and detected postflight. This is not an atomic compare-and-swap of all index flags,
+HEAD, working files or paths. Same-user native writes can still race revalidation; the inherited
+private-local-folder, path-based IO and unverified reparse/special-storage limitations remain.
+
+Any error, abort, deadline, cleanup or grant failure after the real write starts reports an
+**uncertain outcome**, clears the snapshot and requires explicit Refresh. Git may have already
+committed the index or stored an unused blob, and a forcibly terminated Git may leave its lock.
+There is no automatic retry, rollback, lock deletion or draft save. Confirmed success refreshes
+real status through the unchanged read-only path. An error during that refresh reports that the
+index succeeded but the display needs refreshing. Power-loss durability is not certified.
+
+This is offline, provider-neutral local Git. GitHub/GitLab/other hosting, remote authentication,
+commits, whole-repository/hunk staging and working-file discard remain separate future scopes.
+No dependency, plugin SDK grant or Monaco version is added. The Monaco/DOMPurify advisory
+exception and physical owner acceptance remain separate from automated evidence.
+
+Write references: [Git apply](https://git-scm.com/docs/git-apply),
+[Git hash-object](https://git-scm.com/docs/git-hash-object),
+[Git index format](https://git-scm.com/docs/index-format),
+[Git for Windows native lock/preimage implementation](https://github.com/git-for-windows/git/blob/v2.53.0.windows.2/apply.c).

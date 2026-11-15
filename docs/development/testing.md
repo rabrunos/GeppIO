@@ -1,6 +1,17 @@
 # Validation guide
 
-## Read-only Git (alpha.43 / Issue #50)
+## Git inspection and index actions (alpha.43/44 / Issues #50/51)
+
+Index fixtures add Stage/Unstage of modified/deleted/untracked/mixed/binary/empty files,
+unborn HEAD, literal Unicode/spaces/leading dashes, EOL conversion, unrelated staged-entry
+preservation, native lock conflicts and deliberate concurrent content/mode/other-entry changes.
+Special-index parsing, stale saved bytes/config/index/roots, executable integrations and
+controlled native timeout/abort paths fail closed or report uncertainty after write start.
+Only the chosen index entry and needed in-repository objects may change; disk/ref/config
+fingerprints and Git fsck are checked. Electron explicitly clicks the actions with a dirty
+Monaco draft, then checks saved staged bytes, draft identity/undo/view, Terminal and Workers.
+Controlled timers/callbacks do not simulate a real power failure. Owner physical acceptance
+remains separate. Do not interact with mouse/keyboard/window focus during native desktop runs.
 
 After building, `pnpm test:git` runs disposable real-Git tests and real Electron production
 DPR 1/1.25 plus development. Fixtures cover clean/index/working/untracked/delete/rename,

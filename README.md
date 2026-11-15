@@ -16,10 +16,15 @@ ocupa a Sidebar; no modo Widgets, coloque seu widget explicitamente em Main ou S
 A árvore e o rascunho são compartilhados. Use **Atualizar árvore** após mudanças no disco ou
 antes de reabrir um item cujo arquivo foi substituído ao salvar. A navegação aceita até 512
 entradas por pasta e 32 níveis; não cria, move nem exclui arquivos. Veja os [limites](docs/architecture/explorer.md).
-Na alpha.43, **Alterações Git** consulta a raiz exata selecionada no Explorador, mostra branch,
+Na alpha.44, **Alterações Git** consulta a raiz exata selecionada no Explorador, mostra branch,
 índice, alterações no disco e arquivos novos. Está no catálogo (Main/Sidebar) e nas atividades
 do modo Editor. **Atualizar Git** renova os dados; selecionar um arquivo compatível abre a
 comparação Monaco somente leitura de **HEAD para o arquivo salvo**, sem incluir seu rascunho.
+**Preparar** e **Despreparar** alteram apenas a entrada escolhida no índice real. Preparar usa
+o arquivo salvo, com conversões internas de EOL/atributos aceitas pelo Git isolado; nunca salva
+o rascunho. Renomes, conflitos, índices especiais e conteúdo acima de 256 KiB não permitem
+essas ações. Em caso de interrupção, atualize para conferir o resultado; não há repetição ou
+reversão automática. Tudo funciona localmente, sem conta GitHub/GitLab ou acesso remoto.
 O piloto usa Git para Windows instalado em Arquivos de Programas, ignora configuração global e
 recusa formatos/limites não suportados. Veja [segurança e limites](docs/architecture/git.md).
 O Terminal local e o editor Monaco já são reais; projeto completo, ChatGPT, Codex e GitLayer
