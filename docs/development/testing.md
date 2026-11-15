@@ -13,6 +13,10 @@ unrelated plugin Worker continuity remains separate from Monaco language Worker 
 The smoke explicitly sets the initial native content viewport to 1920×1080 before catalog
 placement, like the existing document smoke, then checks narrow/wide resizing separately.
 This avoids depending on the hosted Windows desktop's initial display constraints.
+The native Terminal flood oracle captures an end cursor before reading its bounded interval.
+Later prompt/output bytes are excluded from that interval; complete/contiguous reads, transport
+page size and the original 262,144-unit retained-history cap remain strict. A pure regression
+appends output between pages and also rejects unbounded history/oversized transport fixtures.
 
 Run all Issue #49 regression commands after `pnpm check`. Production audit must be reported with
 the [known accepted exception](../architecture/monaco.md), not called clean. Windows CI runs

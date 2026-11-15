@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { emptyTerminal, terminalFailed, terminalLabel, TerminalOutput, TERMINAL_OUTPUT_LIMIT, TERMINAL_PAGE_LIMIT, validTerminalRequest } from '../src/shared/terminal.ts'
 import { TERMINAL_TYPE } from '../src/shared/terminal-widget.ts'
 import { widgetRegistry } from '../src/shared/workbench/model.ts'
+import { terminalOutputBudget } from '../tools/terminal-output-budget.ts'
 
 test('fixed terminal requests reject malformed fields, dimensions, input and stale token shapes', () => {
   const id = randomUUID()
@@ -39,4 +40,23 @@ test('status reports shell exit only and official widget is Main/Bottom eligible
   assert.match(terminalLabel({ ...running, phase: 'closed', exitCode: 1 }), /\(1\)/)
   assert.equal(terminalFailed({ ...running, phase: 'failed' }), true)
   assert.deepEqual(widgetRegistry([]).get(TERMINAL_TYPE)?.constraint.regions, ['main', 'bottom'])
+})
+test('output budget measures a fixed interval while later native output continues arriving', async () => {
+  const output = new TerminalOutput(); output.append('x'.repeat(TERMINAL_OUTPUT_LIMIT * 3))
+  let reads = 0
+  const budget = await terminalOutputBudget(async after => {
+    const result = { ok: true as const, value: { state: emptyTerminal(), ...output.read(after) } }
+    if (++reads === 2) output.append('p'.repeat(73))
+    return result
+  })
+  assert.equal(budget.complete, true); assert.equal(budget.dropped, true)
+  assert.equal(budget.retained, TERMINAL_OUTPUT_LIMIT)
+  assert.equal(budget.retained, budget.end - budget.start!); assert.ok(budget.after >= budget.end)
+  assert.equal(output.read(budget.end).data, 'p'.repeat(73))
+  const unbounded = await terminalOutputBudget(async after => {
+    const text = 'x'.repeat(TERMINAL_OUTPUT_LIMIT * 2), start = Math.min(after, text.length), data = text.slice(start, start + TERMINAL_PAGE_LIMIT)
+    return { ok: true, value: { state: emptyTerminal(), data, next: start + data.length, dropped: start > 0 } }
+  })
+  assert.equal(unbounded.complete, false); assert.ok(unbounded.retained > TERMINAL_OUTPUT_LIMIT)
+  await assert.rejects(terminalOutputBudget(async () => ({ ok: true, value: { state: emptyTerminal(), data: 'x'.repeat(TERMINAL_PAGE_LIMIT + 1), next: TERMINAL_PAGE_LIMIT + 1, dropped: false } })), /page exceeded/)
 })

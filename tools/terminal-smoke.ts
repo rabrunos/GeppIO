@@ -1,4 +1,5 @@
 import { fileEditor, pluginWorkers } from './monaco-support.ts'
+import { terminalOutputBudget } from './terminal-output-budget.ts'
 import assert from 'node:assert/strict'
 import { _electron as electron } from 'playwright'
 import type { ElectronApplication, Page } from 'playwright'
@@ -186,18 +187,11 @@ try {
   await page.evaluate(async () => { const result = await window.geppio!.terminal.read(null, 0); if (result.ok) await window.geppio!.terminal.input(result.value.state.id!, "1..4000 | ForEach-Object { 'long-output-' + $_ }; Write-Output ('LONG_' + 'done')\r") })
   await output('LONG_done')
   await send("1..20000 | ForEach-Object { 'bounded-output-{0:D8}-{1:D8}' -f $_, ($_ * 7) }; Write-Output ('BOUND_' + 'ok')"); await output('BOUND_ok')
-  const outputBudget = await page.evaluate(async () => {
-    let after = 0, retained = 0, dropped = false
-    for (let i = 0; i < 10; i++) {
-      const r = await window.geppio!.terminal.read(null, after)
-      if (!r.ok) throw new Error(r.error)
-      dropped ||= r.value.dropped; retained += r.value.data.length; after = r.value.next
-      if (!r.value.data) break
-    }
-    return { dropped, retained, end: after }
-  })
+  const outputBudget = await terminalOutputBudget(after => page.evaluate(after => window.geppio!.terminal.read(null, after), after))
   console.log('terminal smoke: output budget', outputBudget)
-  assert.equal(outputBudget.dropped, true); assert.ok(outputBudget.retained <= 262144)
+  assert.equal(outputBudget.dropped, true); assert.equal(outputBudget.complete, true)
+  assert.ok(outputBudget.retained > 0 && outputBudget.retained <= 262144)
+  assert.equal(outputBudget.retained, outputBudget.end - outputBudget.start!)
   await send("'AFTER_' + 'flood'"); await output('AFTER_flood')
   await send('Clear-Host'); await send("'CLEAR_' + 'ok'"); await output('CLEAR_ok')
   await page.waitForFunction(() => document.querySelector('.xterm-rows')?.textContent?.includes('CLEAR_ok'))
