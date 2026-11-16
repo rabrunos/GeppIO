@@ -2,6 +2,12 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.49] — 2026-11-16
+
+- Split required Windows CI into three independent runners, preserving the aggregate windows status and unchanged Secrets gate.
+- Run all Node suites once and reuse each runner's own validated builds; preserve every existing Electron production/development/DPR journey and public focused command.
+- Add exact CI coverage/failure-propagation regressions, per-suite timings and a three-level local validation guide without changing application behavior or dependencies.
+
 ## [0.1.0-alpha.48] — 2026-11-16
 
 - Replaced eager whole-worktree Git validation with bounded Git-native ignore queries, pruning ignored untracked dependency trees while retaining tracked paths and ancestors.

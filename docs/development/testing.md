@@ -1,5 +1,89 @@
 # Validation guide
 
+## Testing during implementation, integration and delivery
+
+1. **Implementation:** use the smallest relevant structure/type/lint gate and directly affected
+   Node test files before expensive journeys. For example, `pnpm typecheck`, `pnpm lint` and
+   `node --experimental-strip-types --test tests/git.test.ts tests/git-compatibility.test.ts`.
+   A Node test may exercise real filesystem/Git/process integration; it is not necessarily pure.
+2. **Feature integration:** run the related focused public commands after building current assets.
+   Cross-UI/native behavior requires actual Electron; sensitive changes also require applicable
+   negative IPC, authority, data-loss and persistence regressions. Use disposable fixtures.
+3. **Final integration:** run `pnpm check`, the complete required GitHub CI and the full local gates
+   mandated by the contract/risk. In particular, an explicitly required uninterrupted
+   `pnpm test:desktop` remains required even though CI distributes its suites across runners.
+   This advice does not waive TASK_POLICY, native/security gates or physical owner acceptance.
+
+Classify a failure before repairing it: product regression, superseded test expectation,
+environment/runner failure, or flaky interaction/timing. Check approved behavior and historical
+Issue evidence before changing an expectation. Do not change product behavior to satisfy an
+incorrect oracle, remove an assertion, force a click, add blind retries or inflate timeouts to
+make a failure green. Run final gates on final source; avoid repeating complete native matrices
+after every minor edit when direct checks already answer the implementation question.
+
+## Windows CI execution contract (alpha.49 / Issue #56)
+
+Three independent hosted Windows desktops run `pnpm test:ci:core`, `pnpm test:ci:ide` and
+`pnpm test:ci:workbench`. Within each desktop, suites execute sequentially. Matrix `fail-fast: false`
+lets other runners finish diagnosing failures. Every entry logs its exact command, duration and
+exit status; a failing entry stops that group and fails its job. Ignored `.local/ci-results/<group>.json`
+records expected/executed counts and individual results; unexecuted entries after a failure are
+not a successful validation. No retries, path filters or best-effort native suites are used.
+
+Each runner installs the frozen graph, builds its own plugin/application outputs and uses the
+existing disposable suite profiles. Core's `pnpm check` runs structure, full TypeScript, ESLint,
+every discovered Node suite, plugin builds and application build. Other groups only build assets;
+they do not repeat the same Node tests. There is no artifact sharing, credential cache or new
+dependency. The signed-package smoke's isolated temporary-public-key host build remains distinct
+from production's rejection of that key. Process restarts, independent profiles, Workers, DPR and
+development servers remain part of the original assertions.
+
+| Existing required command/coverage | CI group after alpha.49 |
+| --- | --- |
+| `pnpm check`: all 45 original Node files / 329 original cases, structure/types/lint/build | core, plus newly discovered CI-contract regression tests |
+| Terminal DPR 1/1.25, including ConPTY and 48 Editor regional geometry comparisons per DPR | core |
+| Signed plugin package / external plugin development / Sidebar stack | core |
+| Desktop Essentials / Time Tracker / Edit lock | core |
+| Monaco / Git / Workspace, each production DPR 1/1.25 and development | ide |
+| Document lifecycle + multi-document production DPR 1/1.25 and development | ide |
+| Explorer DPR 1/1.25 | ide |
+| Desktop retirement / identity / full desktop geometry + plugin/security journey | ide |
+| Maximize + 32 direct Editor/Notes geometry comparisons per DPR, 1/1.25 | ide |
+| Desktop alignment / groups / four workbench suites | workbench |
+| Host presentations and real Notes, each DPR 1/1.25 | workbench |
+| History whitespace / checksum-verified Gitleaks | unchanged Secrets job |
+
+The coverage unit is an Electron entrypoint plus arguments: **38 before and 38 after**, with all
+internal cases/assertions unchanged. `tests/ci-plan.test.ts` compares an independent alpha.48
+inventory against both the CI plan and expanded public commands, protects original Node files,
+checks workflow/security/failure wiring and executes a harmless child-failure fixture. This is
+bounded structural validation of this workflow, not a general YAML parser or GitHub scheduler
+simulation. Actual Actions success must still be verified at the exact pushed SHA.
+
+The old single-runner command chain repeated 10 Node files (97 cases) already run by `check`,
+two application builds and one plugin build. CI now calls the identical native entrypoints
+directly; public `check`, `test:desktop`, focused scripts and their pure/native expectations remain
+unchanged. Similar geometry, host fixtures/real Notes, read-only Git/index writes and DPR/dev/prod
+journeys are deliberately distinct. No assertions were removed as obsolete or redundant.
+Builds on separate runners are deliberately duplicated because their filesystems are independent.
+
+The legacy `windows` status is an aggregate job with `always()` and explicit success requirements
+for the entire Windows matrix and Secrets. Failed, canceled or skipped prerequisites cannot turn
+it green. Push/PR/dispatch triggers, read-only permissions, commit-pinned actions and concurrency
+intent are retained. No branch protection settings are changed. Check live required-status names
+before any future rename; matrix names are additional diagnostics, not replacements for the gate.
+
+`test:desktop:dev`, optional alignment/groups DPR variants, `--native-resize-only`, `--native-ui`
+and `--official-package` remain available; they were not required invocations in alpha.48 CI.
+Historical grid/layout/margin/composition helpers are retained. Security negative tests, historical
+layout recovery and plugin/native authority stay in their original suites. Monaco 0.57.0/DOMPurify
+audit remains explicitly **FAILED** under its existing exception when applicable. Windows CI is
+not Linux application validation, physical owner acceptance or hidden-desktop isolation.
+
+Compare exact-run job timestamps, workflow elapsed time, slowest Windows group, aggregate Windows
+runner-minutes, executed scenario counts and failures/retries in the active Issue. Parallelism can
+shorten feedback while increasing aggregate setup cost; do not promise a duration from estimates.
+
 ## Git ordinary-worktree interoperability (alpha.48 / Issue #55)
 
 `pnpm test:git` adds real-Git disposable compatibility fixtures to the existing authority/racy-stat/
@@ -124,8 +208,8 @@ The existing `test:terminal` built-Electron journey now runs `editor-region-geom
 while a real PowerShell, dirty JSON and unrelated Worker are alive. The existing Windows CI
 Terminal steps exercise 48 owner/port comparisons per DPR (1 and simulated 1.25): light/dark,
 1920×1080/1024×768, min/max splitter sizes, Sidebar dock/hidden/peek and Bottom dock/hidden.
-The Windows job retains a bounded 40-minute budget for these added native matrices; the
-previous successful alpha.40 workflow already took about 23 minutes without them.
+The alpha.41 Windows job used a bounded 40-minute budget for these native matrices; alpha.49
+distributes the unchanged coverage across independent runners with 25-minute ceilings per group.
 The oracle measures actual DOM owner padding, port client extents, stable native scrollbar
 reservation and clipping, comparing all six rectangle dimensions within .06 CSS px (subpixel
 layout precision), never comparing a widget's arbitrary height to the available panel height.

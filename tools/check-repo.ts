@@ -103,7 +103,8 @@ for (const file of forms) {
 const workflow = text('.github/workflows/checks.yml')
 check(workflow.includes('contents: read') && workflow.includes('persist-credentials: false'), 'CI must keep read-only permissions and avoid persisting credentials')
 for (const match of workflow.matchAll(/uses:\s*([^\s#]+)/g)) check(/@[a-f0-9]{40}$/.test(match[1] ?? ''), 'External CI action is not commit-pinned: ' + match[1])
-check(workflow.includes('--frozen-lockfile') && workflow.includes('pnpm test:desktop'), 'CI needs a real lock and built desktop validation')
+check(workflow.includes('--frozen-lockfile') && workflow.includes('run: pnpm test:ci:${{ matrix.group }}')
+  && existsSync('tests/ci-plan.test.ts'), 'CI needs a real lock and the coverage-verified built desktop groups')
 check(!workflow.includes('pull_request_target'), 'Do not execute untrusted PR code with elevated target context')
 const excluded = new Set(['node_modules', '.git', '.local', 'out', 'dist'])
 function walk(dir: string): string[] {

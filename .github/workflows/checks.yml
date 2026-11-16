@@ -9,9 +9,14 @@ concurrency:
   group: geppio-checks-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  windows:
+  windows-tests:
+    name: Windows ${{ matrix.group }}
     runs-on: windows-latest
-    timeout-minutes: 40
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [core, ide, workbench]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1, pinned from the inspected method
         with:
@@ -29,35 +34,27 @@ jobs:
       - name: Install the locked graph
         run: pnpm install --frozen-lockfile
       - name: Check structure, types, lint, tests and build
+        if: matrix.group == 'core'
         run: pnpm check
-      - name: Real Monaco shared editing, local Workers, DPR and development runtime
-        run: pnpm test:monaco
-      - name: Read-only Git authority, nonmutation and independent Monaco comparison
-        run: pnpm test:git
-      - name: Native PowerShell, Status Bar and measured Editor regional geometry
-        run: pnpm test:terminal && pnpm test:status-bar
-      - name: Shared terminal and Sidebar/Bottom geometry at simulated DPR 1.25
-        run: node --experimental-strip-types tools/terminal-smoke.ts --scale125
-      - name: Signed plugin package pilot in isolated profiles
-        run: pnpm test:plugin-package
-      - name: External plugin development in isolated profiles
-        run: pnpm test:plugin-dev
-      - name: Focused Sidebar stack smoke in an isolated profile
-        run: pnpm test:sidebar
-      - name: Built desktop smoke in an isolated profile
-        run: pnpm test:desktop
-      - name: Selected document lifecycle and modes in an isolated profile
-        run: pnpm test:documents
-      - name: Explorer authority, tree and activity rail in isolated fixtures
-        run: pnpm test:explorer
-      - name: Workspace recovery, independent grants and trusted native startup cwd
-        run: pnpm test:workspace
-      - name: Explorer responsiveness at simulated DPR 1.25
-        run: node --experimental-strip-types tools/explorer-smoke.ts --scale125
-      - name: Maximized widget and direct Editor geometry at simulated DPR 1.25
-        run: pnpm test:maximize --scale125
-      - name: Host presentation regression at simulated DPR 1.25
-        run: node --experimental-strip-types tools/presentation-smoke.ts --scale125
+      - name: Build independent runner assets
+        if: matrix.group != 'core'
+        run: pnpm plugins:build && pnpm build
+      # The union is exactly the existing pnpm test:desktop and focused native gates.
+      # No competing mouse/focus journeys within one interactive Windows desktop.
+      - name: Sequential Electron suites with individual timings and failure status
+        run: pnpm test:ci:${{ matrix.group }}
+  # Preserve the previous required-check identity; success requires every shard AND Secrets.
+  windows:
+    needs: [windows-tests, secrets]
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Require all Windows groups and Secrets
+        env:
+          WINDOWS_RESULT: ${{ needs.windows-tests.result }}
+          SECRETS_RESULT: ${{ needs.secrets.result }}
+        run: test "$WINDOWS_RESULT" = success && test "$SECRETS_RESULT" = success
   secrets:
     runs-on: ubuntu-24.04
     timeout-minutes: 8
