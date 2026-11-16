@@ -229,7 +229,10 @@ test('real bare, linked worktree, gitlink, conflict, ignored file and ambiguous 
   assert.ok(!success(await store.inspect('status', root, undefined, current)).status!.changes.some(c => c.name === 'ignored.txt'))
   const head = git(['rev-parse', 'HEAD']).trim()
   git(['update-index', '--add', '--cacheinfo', '160000,' + head + ',submodule'])
-  await assert.rejects(store.inspect('status', root, undefined, current), denied('unsupported'))
+  const gitlink = success(await store.inspect('status', root, undefined, current)).status!
+  const reference = parseGitStatus(Buffer.from(git(['status', '--porcelain=v1', '-z', '--untracked-files=all', '--ignore-submodules=all'])))
+  assert.deepEqual(gitlink.changes.map(({ name, index, working }) => ({ name, index, working })), reference.map(({ name, index, working }) => ({ name, index, working })))
+  assert.ok(gitlink.changes.every(change => !change.stage && !change.unstage), 'Read-only gitlink visibility does not authorize special-index writes')
   git(['update-index', '--force-remove', 'submodule'])
   git(['checkout', '-b', 'other']); await writeFile(join(scope, 'both.txt'), 'other\n'); git(['add', 'both.txt']); git(['commit', '-m', 'Other'])
   git(['checkout', 'main']); await writeFile(join(scope, 'both.txt'), 'main\n'); git(['add', 'both.txt']); git(['commit', '-m', 'Main'])

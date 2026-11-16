@@ -6,8 +6,10 @@ import { join, resolve } from 'node:path'
 import { _electron as electron } from 'playwright'
 import type { ElectronApplication, Page } from 'playwright'
 import type { GitResult } from '../src/shared/git.ts'
+import { parseGitStatus } from '../src/main/git.ts'
+import type { GitStatus } from '../src/shared/git.ts'
 import type { GitDiffHost, MonacoHost } from '../src/renderer/src/files-editor/monaco.ts'
-import { gitFingerprint, initializeGit } from './git-fixtures.ts'
+import { gitFingerprint, ignoredGitTrees, initializeGit } from './git-fixtures.ts'
 import { fileEditor, pluginWorkers } from './monaco-support.ts'
 import { portugueseFixture, settle } from './freeform-smoke.ts'
 import { WORKBENCH_KEY } from '../src/shared/workbench/model.ts'
@@ -29,6 +31,7 @@ await rm(join(scope, 'deleted.txt')); git(['mv', 'rename old.txt', 'rename new.t
 await writeFile(join(scope, 'untracked.txt'), 'new\n'); await writeFile(join(scope, 'binary.dat'), Buffer.from([0, 255, 1])); await writeFile(join(scope, 'large.txt'), 'x'.repeat(256 * 1024 + 1))
 git(['config', 'core.fsmonitor', 'cmd.exe /c echo executed > EXECUTED']); git(['config', 'diff.evil.textconv', 'cmd.exe /c echo executed > EXECUTED'])
 await writeFile(join(scope, '.gitattributes'), '*.ts diff=evil\n')
+await ignoredGitTrees(scope, join(canonical, 'outside-dependencies'))
 const before = await gitFingerprint(scope)
 const env = Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined))
 for (const key of ['ELECTRON_RUN_AS_NODE', 'ELECTRON_RENDERER_URL', 'NODE_OPTIONS', 'GEPPIO_TEST_DEMO_WIDGETS']) delete env[key]
@@ -49,6 +52,17 @@ try {
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()) })
   await app.evaluate(({ BrowserWindow }) => { const win = BrowserWindow.getAllWindows()[0]!; win.setContentSize(1600, 1000); win.show(); win.focus() })
   await page.getByTestId('edit-layout').waitFor(); await portugueseFixture(page)
+  await app.evaluate(({ ipcMain }) => {
+    // Observe the actual registered response without querying again and expiring
+    // the renderer's change IDs. No production hook or additional IPC surface.
+    const handlers = (ipcMain as unknown as { _invokeHandlers: Map<string, (event: unknown, ...args: unknown[]) => Promise<GitResult>> })._invokeHandlers
+    const original = handlers.get('git:status')!
+    handlers.set('git:status', async (event, ...args) => {
+      const result = await original(event, ...args)
+      if (result.ok && result.status) (globalThis as { gitSmokeSnapshot?: GitStatus }).gitSmokeSnapshot = structuredClone(result.status)
+      return result
+    })
+  })
   // Observe native Worker errors in this disposable fixture without changing the
   // runtime's fail-closed handler or accepting a failed plugin activation.
   await page.evaluate(() => {
@@ -86,6 +100,10 @@ try {
   const treeItem = (name: string) => page.getByRole('treeitem', { name, exact: true })
   const badge = (name: string) => treeItem(name).locator('.explorer-git-badge')
   await page.waitForFunction(() => document.querySelector('.explorer-git-status')?.textContent?.includes('arquivo(s) com alterações'))
+  const native = await app.evaluate(() => (globalThis as { gitSmokeSnapshot?: GitStatus }).gitSmokeSnapshot)
+  assert.ok(native && native.root === root)
+  const layers = (changes: GitStatus['changes']) => changes.map(({ name, previous, index, working }) => ({ name, previous, index, working }))
+  assert.deepEqual(layers(native.changes), layers(parseGitStatus(Buffer.from(git(['status', '--porcelain=v1', '-z', '--untracked-files=all', '--ignore-submodules=all'])))), 'Ignored linked dependencies never hide a tracked/index/working/untracked change')
   for (const [name, value] of [['modified.ts', 'M'], ['both.txt', 'M·M'], ['added.txt', 'A'], ['untracked.txt', 'U'], ['rename new.txt', 'R'], ['nested', '2']]) assert.equal(await badge(name!).innerText(), value)
   assert.match(await badge('both.txt').getAttribute('aria-label') ?? '', /Índice: Modificado; árvore de trabalho: Modificado/)
   assert.equal(await treeItem('.git').count(), 0); assert.equal(await treeItem('.env.example').count(), 1); assert.equal(await treeItem('deleted.txt').count(), 0)

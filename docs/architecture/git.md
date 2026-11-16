@@ -1,4 +1,51 @@
-# First-party Git pilot — alpha.43–45 / Issues #50–52
+# First-party Git pilot — alpha.43–48 / Issues #50–52, #55
+
+## Ordinary worktree interoperability — alpha.48
+
+Status no longer prewalks every ignored dependency/generated file. After the strict private
+metadata copy and isolated configuration/index parsing, Main visits worktree directories
+breadth-first and asks installed Git `check-ignore --no-index --stdin -z` about immediate children
+in one bounded batch per depth (at most 32 levels). Git supplies precedence, negation and nested
+ignore semantics; there is no custom ignore parser or package-directory allowlist. Ignored
+untracked subtrees are pruned before lstat/recursion. Every tracked path and ancestor overrides
+pruning, conservatively case-folded on Windows even when `core.ignorecase` is false.
+
+Each visited directory and its ordinary bounded `.gitignore`/`.gitattributes` are validated before
+querying children. Directory identities/timestamps, rule-file witnesses and accepted leaf-link
+witnesses are checked around status; changed rules refuse the entire snapshot rather than
+returning a falsely clean result. Aggregate input/output, relevant entries plus copied metadata,
+depth and deadline remain bounded. Ignored descendants consume no recursive budget. Git's
+documented no-match exit 1 is accepted only for this exact fixed check-ignore operation; its
+pathname protocol also requires omitting GIT_LITERAL_PATHSPECS, which Git rejects for this command.
+All other commands keep their original literal-pathspec/environment/exit handling.
+
+Ordinary hardlinked worktree files can appear in status; comparison and index actions still use
+single-link `boundedRead`/`actionWitness`. A leaf symlink is accepted only when Main can confirm an
+ordinary file target inside the root without following linked ancestors. Visible directory,
+outside-target and dangling links remain refused: Node does not distinguish all Windows junction
+and symlink types, and Git for Windows can recurse into a visible junction. Ignored dependency
+junctions are never entered. Native file-symlink creation/behavior depends on Windows privileges;
+do not equate a plain-file checkout of a 120000 index entry with native symlink coverage.
+
+Read-only index listings accept ordinary file, symlink (120000) and gitlink (160000) modes.
+Unique stage-0 gitlink worktrees are not traversed, matching fixed `--ignore-submodules=all`:
+their dirty worktree state is intentionally excluded, not full submodule support. Visible
+embedded repositories remain unsupported. V4 index status works; the stricter existing write
+parser still refuses v4/special indexes. Split indexes need uncopied shared-index metadata and
+receive an explicit index refusal; shallow/linked/bare roots, dangerous metadata redirects,
+active filters and unsupported extensions remain outside this boundary. Standard-client config
+such as branch/editor hints is inert; selected core EOL/case options retain their prior handling.
+
+Main-only refusal categories distinguish layout, metadata, configuration, index, worktree rules,
+redirects and budgets. Public errors use fixed path-free messages, never raw Git stderr or values.
+Metadata parents are validated before probing path-bearing children. Original metadata still
+gets strict no-link/single-link checks, and the alpha.47 private-index mtime fix remains unchanged.
+No engine, dependency, generic IPC, Worker grant, automatic repair or repository write is added.
+Index locks, blob preimages, semantic postflight and uncertain-outcome handling are unchanged.
+
+The implementation was diagnosed against a selected real source checkout and disposable cases;
+actual per-run outcomes belong in Issue #55. This is not universal support for every Git storage
+format, hostile same-user race isolation or physical/Linux acceptance. Path-based TOCTOU remains.
 
 ## Explorer presentation and recognition — alpha.45
 
@@ -23,12 +70,11 @@ into one successor; keystrokes never query Git. No watcher or background write i
 Same-root invalidation cannot erase a Stage/Unstage outcome. Uncertain/lost write acknowledgements
 hold automatic queries and further writes until explicit Git Refresh.
 
-Disposable ordinary repositories exercise activation without a Workspace service. The owner's
-specific nonrecognition report has no captured original root/error here and is not claimed
-reproduced or resolved. Subfolders, linked metadata, unsupported configuration, missing canonical
-Git or whole-tree/metadata budgets can explain refusal; these are diagnostic categories, not a
-diagnosis of the owner's machine. Ignored build/vendor trees still count toward the existing
-whole-tree security budget; the source checkout is not an application fixture.
+The earlier alpha.45 nonrecognition report was not captured at that time. Alpha.48 separately
+diagnoses the reported source-checkout failure; see Issue #55 for observed evidence. Subfolders,
+linked metadata, unsupported configuration, missing canonical Git and relevant-tree/metadata
+budgets remain distinct refusal categories. Alpha.48 prunes ignored untracked build/vendor trees
+using Git semantics. The owner checkout is read-only evidence, never a disposable mutation fixture.
 
 The bundled `host:git-changes` widget is explicit, single-view and eligible in Main/Sidebar.
 Editor mode adds a second activity to the existing rail and measured Sidebar viewport. No
@@ -44,14 +90,16 @@ is added to the public plugin SDK or Worker facade.
 The Windows pilot resolves only the canonical machine installation `Git/cmd/git.exe` under
 Program Files, never PATH, a selected folder or a renderer-supplied executable. The installation
 and its native ancestors must be ordinary canonical paths; installed Git launcher hardlinks
-are allowed only here, never for repository data. Git 2.40+ is required. The OS-installed
+are allowed for this fixed executable. Repository metadata remains single-link; the read-only
+worktree exceptions are described above. Git 2.40+ is required. The OS-installed
 executable remains trusted native code, not a bundled or independently sandboxed dependency.
 
 Only an exact selected normal top-level `.git` directory is supported. Bare/nested roots,
-linked worktrees/submodules, shallow/alternate object stores, replace directories, grafts,
+linked worktrees, shallow/alternate object stores, replace directories, grafts,
 extensions, filters, external attributes/excludes paths and unsupported names/storage fail
-closed. The bounded working tree is checked before inspection, refusing links/hardlinks and
-nested repositories. The metadata copier validates canonical ancestor/file identities and
+closed. The bounded relevant working tree is checked before status, pruning ignored untracked
+trees and refusing unsafe visible redirects/nested repositories as described above.
+The metadata copier validates canonical ancestor/file identities and
 bounded descriptor reads, refuses object redirects during copying and never follows links.
 
 Each request creates a disposable private metadata directory under the OS temporary root.
@@ -68,7 +116,7 @@ Only validated local boolean filemode/ignorecase/symlinks and autocrlf/eol value
 All other config, includes and global/system settings are ignored. No original hooks, aliases,
 fsmonitor, credentials, diff/textconv drivers, filters or network settings are activated.
 
-Builtin operations are fixed: version, explicit config parsing, ls-files, porcelain NUL status,
+Builtin operations are fixed: version, explicit config parsing, ls-files, bounded check-ignore, porcelain NUL status,
 ls-tree and raw cat-file blob. No shell, interactive stdin, inherited PATH/Git/Node/loader
 environment or generic command IPC is used. The environment disables optional locks, system
 attributes, replace objects, prompts and all network protocols. Git's git-dir is always the

@@ -2,6 +2,12 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.48] — 2026-11-16
+
+- Replaced eager whole-worktree Git validation with bounded Git-native ignore queries, pruning ignored untracked dependency trees while retaining tracked paths and ancestors.
+- Separated read-only status compatibility from existing single-file compare/index-action gates; retained strict metadata/configuration isolation, racy-index timestamp checks and native write integrity.
+- Added path-free refusal categories for unsupported layouts, metadata, configuration and visible redirects. No new engine, dependency, Worker grant or automatic repository repair was introduced.
+
 ## [0.1.0-alpha.47] — 2026-11-16
 
 - Added a single-root local Workspace with explicit open/close and bounded restoration of project file tabs and clean view state after native reauthorization.

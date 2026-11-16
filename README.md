@@ -42,6 +42,12 @@ essas ações. Em caso de interrupção, atualize para conferir o resultado; nã
 reversão automática. Tudo funciona localmente, sem conta GitHub/GitLab ou acesso remoto.
 O piloto usa Git para Windows instalado em Arquivos de Programas, ignora configuração global e
 recusa formatos/limites não suportados. Veja [segurança e limites](docs/architecture/git.md).
+Na alpha.48, árvores não rastreadas e ignoradas pelo Git são podadas antes da navegação nativa:
+dependências pnpm e outros diretórios gerados podem conter junctions/hardlinks sem impedir o
+status dos arquivos versionados. Regras de ignore continuam sendo decididas pelo Git instalado,
+inclusive quando há arquivos versionados sob uma pasta ignorada. Isso não libera Preparar ou
+comparar arquivos inseguros: índices especiais, links visíveis não confirmados, filtros ativos e
+metadados redirecionados continuam sujeitos a recusas específicas. Não há reparo automático.
 O Workspace local, Terminal e editor Monaco já são reais; IDE completa, ChatGPT, Codex e GitLayer
 continuam propostas. Não há conta GeppIO, backend,
 sincronização em nuvem ou API paga de IA.

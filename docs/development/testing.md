@@ -1,5 +1,36 @@
 # Validation guide
 
+## Git ordinary-worktree interoperability (alpha.48 / Issue #55)
+
+`pnpm test:git` adds real-Git disposable compatibility fixtures to the existing authority/racy-stat/
+write suite. They combine ignored pnpm-shaped and arbitrary dependency trees, junctions and hardlinks,
+ignored depth beyond the recursive budget, tracked modified files below ignored ancestors, Git
+negation, staged/unstaged/deleted/untracked/Unicode/case states, v4 index inspection, gitlink/symlink
+index modes, ordinary client configuration and detached HEAD. App rows must equal installed Git
+porcelain under the same isolated configuration and `--ignore-submodules=all` policy. Hardlinked
+targets remain unavailable for compare/write; safe ordinary targets preserve non-target blobs.
+
+Negative fixtures cover visible junction traversal, case-varied tracked redirected ancestors,
+linked rule files/metadata parents, active filters, object redirects, split-index refusal, fixed-only
+check-ignore exit/env handling, input/depth caps and a real rule change at native status spawn.
+Failure must not return partial/clean success. Original metadata/worktree and outside-fixture
+fingerprints test nonmutation; they are not an OS-level read audit. Visible junction refusal before
+status and absent outside sentinel entries separately exercise the no-traversal boundary.
+
+The existing real Electron Git journey includes ignored linked/deep dependencies in production
+DPR 1/1.25 and development. It observes the real registered Main status response without issuing
+an extra query that would expire UI action IDs, compares its complete layers with CLI, then checks
+Explorer badges, writes, dirty Monaco/Terminal/Worker continuity, layout bytes and caller negatives.
+No production diagnostic hook or additional bridge is added. Native file symlinks require Windows
+privileges; a plain-file 120000 index fixture is not claimed as native file-symlink coverage.
+
+Owner source-checkout diagnostics must be read-only and path/source-free, use an isolated app
+profile, distinguish sandbox CLI ownership refusal from app errors, and compare fingerprints
+around each query. Do not add global safe.directory exceptions, alter ignore rules, delete ignored
+dependencies or repair the owner's .git to make a fixture pass. Record actual alpha.47 failure and
+alpha.48 result in Issue #55. Full check/Explorer/Workspace/documents/Monaco/Terminal/Sidebar and
+uninterrupted desktop gates remain required; audit/physical/Linux limitations remain explicit.
+
 ## Local Workspace and clean-session restoration (alpha.47 / Issue #54)
 
 After `pnpm check`, `pnpm test:workspace` runs bounded real-filesystem tests and actual Windows

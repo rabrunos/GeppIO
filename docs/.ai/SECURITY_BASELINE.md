@@ -1,5 +1,12 @@
 # Selected security baseline
 
+Issue #55 separates [read-only Git worktree compatibility](../architecture/git.md) from the
+unchanged index mutation gate. Installed Git supplies ignore semantics in bounded immediate-child
+batches; ignored untracked trees are pruned, tracked ancestors remain validated, and rules and
+directory witnesses bracket status. Strict metadata/configuration isolation and alpha.47's index
+timestamp fix remain. Unsafe visible redirects, linked rules and special-index writes still fail
+closed. No new IPC or Worker authority is introduced; same-user path TOCTOU remains.
+
 Issue #54 adds the [single-root Workspace coordinator](../architecture/workspace.md), reusing
 native directory/document ownership. Six exact-window/frame/URL calls offer explicit native
 reauthorization and fresh grants after restart. Bounded app-owned metadata stores Main-only

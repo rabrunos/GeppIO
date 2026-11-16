@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { lstat, mkdir, opendir, readFile, writeFile } from 'node:fs/promises'
+import { link, lstat, mkdir, opendir, readFile, readlink, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { gitEnvironment, resolveGitExecutable } from '../src/main/git.ts'
 
@@ -18,13 +18,27 @@ export async function initializeGit(root: string) {
   git(['add', '.']); git(['commit', '-m', 'Disposable fixture'])
   return git
 }
+/** pnpm-shaped and arbitrary ignored trees, with only disposable destinations. */
+export async function ignoredGitTrees(root: string, outside: string) {
+  await mkdir(outside, { recursive: true }); await writeFile(join(outside, 'outside-sentinel.txt'), 'outside fixture\n')
+  for (const name of ['node_modules', 'vendor-cache', '.local']) {
+    const directory = join(root, name); await mkdir(directory, { recursive: true })
+    await symlink(outside, join(directory, 'linked-package'), 'junction')
+    await link(join(outside, 'outside-sentinel.txt'), join(directory, 'hardlinked-package.txt'))
+  }
+  let deep = join(root, 'vendor-cache')
+  for (let i = 0; i < 36; i++) { deep = join(deep, 'd'); await mkdir(deep) }
+  await writeFile(join(deep, 'beyond-worktree-depth.txt'), 'ignored\n')
+  await writeFile(join(root, '.gitignore'), 'node_modules/\nvendor-cache/\n.local/\n')
+}
 /** Detect byte or modification-time writes anywhere, including index/config/refs and working files. */
 export async function gitFingerprint(root: string): Promise<Record<string, string>> {
   const result: Record<string, string> = {}
   const visit = async (path: string, prefix: string) => {
     for await (const item of await opendir(path)) {
       const file = join(path, item.name), name = prefix + item.name, stat = await lstat(file, { bigint: true })
-      if (stat.isDirectory()) await visit(file, name + '/')
+      if (stat.isSymbolicLink()) result[name] = `${stat.ino}:${stat.mtimeNs}:link:` + createHash('sha256').update(await readlink(file)).digest('hex')
+      else if (stat.isDirectory()) await visit(file, name + '/')
       else result[name] = `${stat.ino}:${stat.mtimeNs}:${stat.size}:` + createHash('sha256').update(await readFile(file)).digest('hex')
     }
   }

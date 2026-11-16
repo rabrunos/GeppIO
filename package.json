@@ -1,6 +1,6 @@
 {
   "name": "geppio",
-  "version": "0.1.0-alpha.47",
+  "version": "0.1.0-alpha.48",
   "private": true,
   "license": "UNLICENSED",
   "description": "GeppIO — a local desktop workbench, Windows first.",
@@ -43,7 +43,7 @@
     "test:plugin-dev": "pnpm plugins:build && pnpm build && node --experimental-strip-types --test tests/plugin-dev.test.ts && node --experimental-strip-types tools/plugin-dev-smoke.ts",
     "test:terminal": "node --experimental-strip-types --test tests/terminal.test.ts && node --experimental-strip-types tools/terminal-smoke.ts",
     "test:status-bar": "node --experimental-strip-types --test tests/status-bar.test.ts",
-    "test:git": "node --experimental-strip-types --test tests/git.test.ts && node --experimental-strip-types tools/git-smoke.ts && node --experimental-strip-types tools/git-smoke.ts --scale125 && node --experimental-strip-types tools/git-smoke.ts --dev",
+    "test:git": "node --experimental-strip-types --test tests/git.test.ts tests/git-compatibility.test.ts && node --experimental-strip-types tools/git-smoke.ts && node --experimental-strip-types tools/git-smoke.ts --scale125 && node --experimental-strip-types tools/git-smoke.ts --dev",
     "test:monaco": "node --experimental-strip-types --test tests/monaco.test.ts && node --experimental-strip-types tools/monaco-smoke.ts && node --experimental-strip-types tools/monaco-smoke.ts --scale125 && node --experimental-strip-types tools/monaco-smoke.ts --dev"
   },
   "dependencies": {

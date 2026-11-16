@@ -1,8 +1,8 @@
 import { spawn } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
-import { lstat, mkdir, mkdtemp, open, opendir, realpath, rm, utimes, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, mkdtemp, open, opendir, readlink, realpath, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { DirectoryStore, ExplorerFailure, inspectExplorerPath, safeExplorerName } from './explorer.ts'
 import { GIT_LIMITS } from '../shared/git.ts'
 import type { GitChange, GitError, GitResult, GitStatus } from '../shared/git.ts'
@@ -12,17 +12,29 @@ const messages: Record<GitError, string> = {
   version: 'Versão do Git não suportada. Este piloto requer Git para Windows 2.40 ou superior na instalação padrão.',
   uncertain: 'O Git pode ter alterado o índice antes da interrupção. Atualize para conferir; a operação não será repetida nem desfeita automaticamente.',
   invalid: 'Solicitação Git inválida.', stale: 'A pasta ou a consulta Git mudou. Atualize ou selecione a pasta novamente.',
-  busy: 'Aguarde a consulta Git em andamento.', unsupported: 'Repositório ou comparação não suportado neste piloto (raiz local comum, sem links, submódulos, filtros ou extensões).',
+  busy: 'Aguarde a consulta Git em andamento.', unsupported: 'Operação Git não suportada para este formato ou arquivo. O status pode continuar disponível quando uma ação individual é recusada.',
   limit: 'Limite Git excedido: 512 alterações, 256 KiB por texto, 64 MiB de metadados ou 20.000 entradas. Escolha um repositório menor.',
   unavailable: 'Não foi possível consultar o Git. Atualize e tente novamente.', missing: 'Git para Windows não encontrado na instalação padrão em Arquivos de Programas.', timeout: 'A consulta Git excedeu 15 segundos. Tente um repositório menor.'
 }
+/** Main-only categories. Never contain filenames, configuration values or native paths. */
+export type GitFailureReason = 'layout' | 'metadata' | 'configuration' | 'index' | 'worktree-redirect' | 'worktree-special' | 'worktree-rules' | 'worktree-budget'
+const reasons: Partial<Record<GitFailureReason, string>> = {
+  layout: 'Formato de repositório não suportado: selecione uma raiz local com diretório .git próprio, sem worktree vinculado, repositório aninhado ou histórico raso.',
+  metadata: 'Metadados Git recusados: link, redirecionamento de objetos, arquivo especial ou estrutura incompatível. Nenhum reparo automático foi feito.',
+  configuration: 'Configuração Git não suportada: filtros, extensões ou redirecionamentos nativos exigem outro escopo seguro. Nenhum programa do projeto foi executado.',
+  index: 'Formato ou caminho do índice Git não suportado para esta consulta.',
+  'worktree-redirect': 'Um caminho visível redireciona a árvore de trabalho ou tem tipo de link que não pode ser confirmado com segurança. Dependências não rastreadas e ignoradas não são percorridas.',
+  'worktree-special': 'A árvore de trabalho visível contém um arquivo ou nome não suportado. Entradas ignoradas não são abertas.',
+  'worktree-rules': 'As regras locais de ignore/atributos não puderam ser confirmadas com segurança. Confira links, tamanho ou alterações simultâneas nesses arquivos.'
+}
 export class GitFailure extends Error {
   readonly kind: GitError
-  constructor(kind: GitError) { super(messages[kind]); this.kind = kind }
+  readonly reason?: GitFailureReason
+  constructor(kind: GitError, reason?: GitFailureReason) { super(messages[kind]); this.kind = kind; this.reason = reason }
 }
 export function gitFailure(error: unknown): GitResult {
   const code = error instanceof GitFailure || error instanceof ExplorerFailure ? error.kind : 'unavailable'
-  return { ok: false, code, error: messages[code] }
+  return { ok: false, code, error: code === 'unsupported' && error instanceof GitFailure && error.reason ? reasons[error.reason] ?? messages[code] : messages[code] }
 }
 const decode = (bytes: Buffer) => { try { return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes) } catch { throw new GitFailure('unsupported') } }
 export function gitRelativeName(name: string): boolean {
@@ -61,10 +73,15 @@ export function gitEnvironment(home: string): NodeJS.ProcessEnv {
   return env
 }
 /** No shell, renderer-supplied stdin, inherited Git/Node/loader/config environment, stderr disclosure or generic bridge. */
-export function runGit(executable: string, args: readonly string[], home: string, signal: AbortSignal, cap: number = GIT_LIMITS.output, timeout: number = GIT_LIMITS.timeout, io?: { input: Buffer; index?: string; objects?: string }): Promise<Buffer> {
+export function runGit(executable: string, args: readonly string[], home: string, signal: AbortSignal, cap: number = GIT_LIMITS.output, timeout: number = GIT_LIMITS.timeout, io?: { input: Buffer; index?: string; objects?: string; ignoreQuery?: true }): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     if (signal.aborted) { reject(new GitFailure('stale')); return }
+    const ignoreQuery = io?.ignoreQuery === true
+    if (ignoreQuery && (args.slice(-4).join('\0') !== 'check-ignore\0--no-index\0--stdin\0-z' || io.index || io.objects || io.input.length > GIT_LIMITS.output)) { reject(new GitFailure('invalid')); return }
     const env = gitEnvironment(home)
+    // check-ignore consumes literal pathname records, not pathspecs. Git rejects
+    // GIT_LITERAL_PATHSPECS for this command. Other commands retain it unchanged.
+    if (ignoreQuery) delete env.GIT_LITERAL_PATHSPECS
     // Main-only, validated destinations. Never an environment/argument IPC surface.
     if (io?.index) env.GIT_INDEX_FILE = io.index
     if (io?.objects) env.GIT_OBJECT_DIRECTORY = io.objects
@@ -78,7 +95,7 @@ export function runGit(executable: string, args: readonly string[], home: string
     child.stdout.on('data', (data: Buffer) => { size += data.length; if (size > cap) stop('limit'); else chunks.push(data) })
     child.stderr.on('data', (data: Buffer) => { size += data.length; if (size > cap) stop('limit') })
     child.on('error', () => { failure ??= new GitFailure('unavailable') })
-    child.on('close', code => { clearTimeout(timer); signal.removeEventListener('abort', abort); if (failure || code !== 0) reject(failure ?? new GitFailure('unavailable')); else resolve(Buffer.concat(chunks)) })
+    child.on('close', code => { clearTimeout(timer); signal.removeEventListener('abort', abort); if (failure || code !== 0 && !(ignoreQuery && code === 1)) reject(failure ?? new GitFailure('unavailable')); else resolve(Buffer.concat(chunks)) })
   })
 }
 async function boundedRead(path: string, cap: number): Promise<Buffer> {
@@ -205,6 +222,80 @@ async function validateObjectDestination(objects: string, check: () => void): Pr
   }
   await walk(objects, 0)
 }
+interface TrackedPath { name: string; mode: string; stage: number }
+/** Git decides ignores; Main validates only visited directories and relevant leaves.
+ * No descendant of a pruned untracked directory is enumerated or submitted to Git.
+ */
+async function inspectWorkingTree(root: string, tracked: readonly TrackedPath[], ignore: (names: string[]) => Promise<Set<string>>, check: () => void, spend: () => void): Promise<() => Promise<void>> {
+  const key = (name: string) => process.platform === 'win32' ? name.toLowerCase() : name
+  const held = new Map<string, { mode: string; stage: number }>(), ancestors = new Set<string>()
+  for (const file of tracked) {
+    const folded = key(file.name)
+    held.set(folded, held.has(folded) ? { mode: 'ambiguous', stage: -1 } : file)
+    const names = file.name.split('/')
+    for (let i = 1; i < names.length; i++) ancestors.add(key(names.slice(0, i).join('/')))
+  }
+  const folders = new Map<string, string>(), rules = new Map<string, string>(), links = new Map<string, string>()
+  const folderWitness = async (path: string) => {
+    const evidence = await inspectExplorerPath(path, 'directory'), stat = await lstat(path, { bigint: true })
+    return [evidence.chain, stat.mtimeNs, stat.ctimeNs].join(':')
+  }
+  const linkWitness = async (path: string) => { const stat = await lstat(path, { bigint: true }); if (!stat.isSymbolicLink()) throw new GitFailure('stale'); return [stat.dev, stat.ino, stat.mtimeNs, stat.ctimeNs, await readlink(path)].join(':') }
+  let level = [{ path: root, name: '', depth: 0 }]
+  while (level.length) {
+    const children: { path: string; name: string; depth: number }[] = []; let inputBytes = 0
+    for (const folder of level) {
+      check(); if (folder.depth > 32) throw new GitFailure('limit', 'worktree-budget')
+      folders.set(folder.path, await folderWitness(folder.path))
+      for (const name of ['.gitignore', '.gitattributes']) {
+        const path = join(folder.path, name)
+        try { rules.set(path, await fileWitness(path)) } catch { throw new GitFailure('unsupported', 'worktree-rules') }
+      }
+      const directory = await opendir(folder.path, { bufferSize: 32 })
+      for await (const entry of directory) {
+        check(); spend()
+        if (!folder.name && entry.name.toLowerCase() === '.git') continue
+        if (folder.name && entry.name.toLowerCase() === '.git') throw new GitFailure('unsupported', 'layout')
+        const name = (folder.name ? folder.name + '/' : '') + entry.name
+        if (folder.depth + 1 > 32) throw new GitFailure('limit', 'worktree-budget')
+        if (!gitRelativeName(name)) throw new GitFailure('unsupported', 'worktree-special')
+        inputBytes += Buffer.byteLength(name) + 1
+        if (inputBytes > GIT_LIMITS.output) throw new GitFailure('limit', 'worktree-budget')
+        children.push({ path: join(folder.path, entry.name), name, depth: folder.depth + 1 })
+      }
+    }
+    const ignored = children.length ? await ignore(children.map(child => child.name)) : new Set<string>()
+    const next: typeof level = []
+    for (const child of children) {
+      check()
+      const folded = key(child.name), mode = held.get(folded), parent = ancestors.has(folded)
+      if (ignored.has(child.name) && !mode && !parent) continue
+      // Ignore submodule worktrees completely, matching the fixed Git status flag.
+      // Their index entries still prevent ordinaryIndex from authorizing writes.
+      if (mode?.mode === '160000' && mode.stage === 0 && !parent) continue
+      const stat = await lstat(child.path)
+      if (stat.isSymbolicLink()) {
+        if (parent) throw new GitFailure('unsupported', 'worktree-redirect')
+        // Node does not distinguish Windows junctions from leaf symlinks here.
+        // Confirm an ordinary inside-root file target without inspecting outside
+        // the grant. Visible directory/dangling/outside redirects fail closed.
+        const target = resolve(dirname(child.path), await readlink(child.path)), inside = relative(root, target)
+        if (!inside || isAbsolute(inside) || inside === '..' || inside.startsWith('..' + sep)) throw new GitFailure('unsupported', 'worktree-redirect')
+        try { await inspectExplorerPath(target, 'file') } catch { throw new GitFailure('unsupported', 'worktree-redirect') }
+        links.set(child.path, await linkWitness(child.path))
+      } else if (stat.isDirectory()) next.push(child)
+      else if (!stat.isFile()) throw new GitFailure('unsupported', 'worktree-special')
+      // A regular hardlink can be inspected by Git. Native file reads and index
+      // actions still use the original single-link actionWitness/boundedRead.
+    }
+    level = next
+  }
+  return async () => {
+    for (const [path, witness] of folders) { check(); if (witness !== await folderWitness(path)) throw new GitFailure('stale') }
+    for (const [path, witness] of rules) { check(); if (witness !== await fileWitness(path)) throw new GitFailure('stale') }
+    for (const [path, witness] of links) { check(); if (witness !== await linkWitness(path)) throw new GitFailure('stale') }
+  }
+}
 /** Per-window owner. Isolated inspection metadata; a separate explicit gate targets the real index. */
 export class GitStore {
   private controller: AbortController | null = null
@@ -220,7 +311,7 @@ export class GitStore {
     this.busy = true
     const controller = new AbortController(); this.controller = controller
     const guard = this.directories.guard(), deadline = Date.now() + GIT_LIMITS.timeout
-    let temporary: string | undefined, writeStarted = false
+    let temporary: string | undefined, writeStarted = false, phase: GitFailureReason = 'layout'
     const finish = async () => {
       try {
         if (temporary) await rm(temporary, { recursive: true, force: true, maxRetries: 3 })
@@ -237,7 +328,11 @@ export class GitStore {
       const metadataKind = await lstat(git)
       if (!metadataKind.isDirectory() || metadataKind.isSymbolicLink()) throw new GitFailure('unsupported')
       await inspectExplorerPath(git, 'directory')
-      for (const name of ['commondir', 'gitdir', 'shallow', 'info/grafts', 'objects/info/alternates', 'objects/info/http-alternates', 'refs/replace']) if (await exists(join(git, name))) throw new GitFailure('unsupported')
+      phase = 'metadata'
+      // Validate parents before even probing path-bearing metadata children.
+      for (const name of ['info', 'refs', 'objects', 'objects/info']) if (await exists(join(git, name))) await inspectExplorerPath(join(git, name), 'directory')
+      for (const name of ['commondir', 'gitdir', 'shallow']) if (await exists(join(git, name))) throw new GitFailure('unsupported', 'layout')
+      for (const name of ['info/grafts', 'objects/info/alternates', 'objects/info/http-alternates', 'refs/replace']) if (await exists(join(git, name))) throw new GitFailure('unsupported', 'metadata')
       const mutation = operation === 'stage' || operation === 'unstage'
       const selected = this.status?.root === root ? this.status.changes.find(change => change.id === id) : undefined
       const authority = this.authority
@@ -255,8 +350,8 @@ export class GitStore {
       temporary = await mkdtemp(join(scratchBase, 'geppio-git-read-'))
       const shadow = join(temporary, 'repository'); await mkdir(shadow)
       let nodes = 0, bytes = 0
-      // Validate the complete bounded working tree before Git can inspect it. No following links.
-      const walk = async (source: string, target?: string, depth = 0): Promise<void> => {
+      // Native metadata remains fully validated, including ignored metadata files.
+      const walk = async (source: string, target: string, depth = 0): Promise<void> => {
         check(); if (depth > 32) throw new GitFailure('limit')
         await inspectExplorerPath(source, 'directory')
         const directory = await opendir(source, { bufferSize: 32 })
@@ -274,15 +369,12 @@ export class GitStore {
           }
           // Never let a racing redirect enter the private object database.
           if (target && source.toLowerCase() === join(git, 'objects', 'info').toLowerCase() && ['alternates', 'http-alternates'].includes(entry.name.toLowerCase())) throw new GitFailure('unsupported')
-          if (!target && source === path && entry.name.toLowerCase() === '.git') continue
-          if (!target && entry.name.toLowerCase() === '.git') throw new GitFailure('unsupported')
           const child = join(source, entry.name), stat = await lstat(child)
           if (stat.isSymbolicLink() || !stat.isDirectory() && (!stat.isFile() || stat.nlink !== 1)) throw new GitFailure('unsupported')
-          if (stat.isDirectory()) { const destination = target ? join(target, entry.name) : undefined; if (destination) await mkdir(destination); await walk(child, destination, depth + 1) }
+          if (stat.isDirectory()) { const destination = join(target, entry.name); await mkdir(destination); await walk(child, destination, depth + 1) }
           else if (target) { bytes += stat.size; if (bytes > GIT_LIMITS.metadata) throw new GitFailure('limit'); await writeFile(join(target, entry.name), await boundedRead(child, Math.min(GIT_LIMITS.metadata - bytes + stat.size, stat.size))) }
         }
       }
-      await walk(path)
       // Copy only data used by builtin inspection. Original config is parsed explicitly without includes.
       for (const name of ['HEAD', 'index', 'packed-refs', 'refs', 'objects']) {
         const source = join(git, name), target = join(shadow, name)
@@ -307,9 +399,10 @@ export class GitStore {
       await writeFile(join(shadow, 'config'), safe)
       // Bind even version/config parsing to private metadata: the host temporary
       // directory must never cause implicit discovery of another parent repository.
-      const invoke = async (args: string[], cap?: number, io?: { input: Buffer; index?: string; objects?: string }) => { check(); const result = await runGit(executable, [...base, ...args], temporary!, controller.signal, cap, Math.max(1, deadline - Date.now()), io); check(); await this.directories.folder(root, () => { check(); return true }); return result }
+      const invoke = async (args: string[], cap?: number, io?: { input: Buffer; index?: string; objects?: string; ignoreQuery?: true }) => { check(); const result = await runGit(executable, [...base, ...args], temporary!, controller.signal, cap, Math.max(1, deadline - Date.now()), io); check(); await this.directories.folder(root, () => { check(); return true }); return result }
       const version = decode(await invoke(['--version']))
       if (!/^git version 2\.(?:[4-9]\d|[1-9]\d{2,})\./.test(version)) throw new GitFailure('version')
+      phase = 'configuration'
       const config = decode(await invoke(['config', '--no-includes', '--null', '--file', join(temporary, 'source-config'), '--list']))
       for (const record of config.split('\0').filter(Boolean)) {
         const newline = record.indexOf('\n'), key = record.slice(0, newline).toLowerCase(), value = record.slice(newline + 1)
@@ -319,11 +412,25 @@ export class GitStore {
         if (key === 'core.eol') { if (!/^(lf|crlf|native)$/.test(value)) throw new GitFailure('unsupported'); safe += 'eol = ' + value + '\n' }
       }
       await writeFile(join(shadow, 'config'), safe)
-      const files = decode(await invoke(['ls-files', '--stage', '-z'])).split('\0').filter(Boolean)
-      if (files.some(row => !/^(100644|100755) [a-f0-9]{40} [0-3]\t/.test(row) || !gitRelativeName(row.slice(row.indexOf('\t') + 1)))) throw new GitFailure('unsupported')
+      phase = 'index'
+      let indexListing: Buffer
+      try { indexListing = await invoke(['ls-files', '--stage', '-z']) }
+      catch (error) { if (error instanceof GitFailure && error.kind === 'unavailable') throw new GitFailure('unsupported', 'index'); throw error }
+      const files = decode(indexListing).split('\0').filter(Boolean)
+      if (files.length > GIT_LIMITS.nodes) throw new GitFailure('limit')
+      if (files.some(row => !/^(100644|100755|120000|160000) [a-f0-9]{40} [0-3]\t/.test(row) || !gitRelativeName(row.slice(row.indexOf('\t') + 1)))) throw new GitFailure('unsupported')
+      phase = 'worktree-special'
+      const verifyWorktree = await inspectWorkingTree(path, files.map(row => ({ mode: row.slice(0, 6), stage: Number(row[48]), name: row.slice(row.indexOf('\t') + 1) })), async names => {
+        const input = Buffer.from(names.join('\0') + '\0'), requested = new Set(names)
+        const output = await invoke(['-C', path, 'check-ignore', '--no-index', '--stdin', '-z'], GIT_LIMITS.output, { input, ignoreQuery: true })
+        const ignored = decode(output).split('\0')
+        if (ignored.pop() !== '' || ignored.some(name => !requested.has(name))) throw new GitFailure('unsupported', 'worktree-rules')
+        return new Set(ignored)
+      }, check, () => { if (++nodes > GIT_LIMITS.nodes) throw new GitFailure('limit', 'worktree-budget') })
+      const status = async () => { await verifyWorktree(); const result = parseGitStatus(await invoke(['status', '--porcelain=v1', '-z', '--untracked-files=all', '--ignore-submodules=all'])); await verifyWorktree(); return result }
       if (operation === 'status') {
         this.status = null
-        const changes = parseGitStatus(await invoke(['status', '--porcelain=v1', '-z', '--untracked-files=all', '--ignore-submodules=all']))
+        const changes = await status()
         const head = text(await boundedRead(join(shadow, 'HEAD'), 4096)).trim()
         const detached = !head.startsWith('ref: refs/heads/'), branch = detached ? 'HEAD destacado · ' + head.slice(0, 12) : head.slice(16)
         const ref = head.slice(5)
@@ -349,7 +456,7 @@ export class GitStore {
       }
       if (mutation) {
         const change = selected!, working = join(path, ...change.name.split('/')), indexPath = join(git, 'index')
-        const fresh = parseGitStatus(await invoke(['status', '--porcelain=v1', '-z', '--untracked-files=all', '--ignore-submodules=all'])).find(entry => entry.name === change.name)
+        const fresh = (await status()).find(entry => entry.name === change.name)
         if (!fresh || fresh.index !== change.index || fresh.working !== change.working || fresh.previous !== change.previous || fresh.conflict || fresh.untracked !== change.untracked) throw new GitFailure('stale')
         const entries = ordinaryIndex(await exists(join(shadow, 'index')) ? await boundedRead(join(shadow, 'index'), GIT_LIMITS.metadata) : null)
         const old = entries.find(entry => entry.name === change.name)
@@ -378,7 +485,7 @@ export class GitStore {
         const beforeTree = decode(await invoke(['write-tree'], 256)).trim()
         if (target) await invoke(['update-index', '--add', '--cacheinfo', target.mode, target.oid, target.name])
         else await invoke(['update-index', '--force-remove', '--', change.name])
-        const prospective = parseGitStatus(await invoke(['status', '--porcelain=v1', '-z', '--untracked-files=all', '--ignore-submodules=all']))
+        const prospective = await status()
         if (prospective.some(entry => (entry.name === change.name || entry.previous === change.name) && (entry.previous || entry.conflict))) throw new GitFailure('unsupported')
         const afterTree = decode(await invoke(['write-tree'], 256)).trim()
         await writeFile(join(shadow, 'info', 'attributes'), '* -diff\n')
@@ -418,6 +525,8 @@ export class GitStore {
       return { ok: true, comparison: { name: change.name, original: text(original), modified: text(modified), basis: 'HEAD → arquivo salvo no disco; não representa o índice nem alterações não salvas do Editor.' } }
     } catch (error) {
       if (writeStarted) throw new GitFailure('uncertain')
+      if (error instanceof GitFailure && error.kind === 'unsupported' && !error.reason) throw new GitFailure(error.kind, phase)
+      if (error instanceof ExplorerFailure && error.kind === 'unsupported') throw new GitFailure(error.kind, phase)
       throw error
     } finally {
       try {
