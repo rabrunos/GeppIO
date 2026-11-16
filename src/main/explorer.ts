@@ -91,6 +91,9 @@ export class DirectoryStore {
     const candidates: Node[] = [], children: ExplorerNode[] = []
     const directory = await opendir(parent.path, { bufferSize: 32 })
     for await (const entry of directory) {
+      // Navigation exclusion only, before stat and visible-entry/node budgets.
+      // Hide files/links too: linked worktree metadata is never a navigation grant.
+      if (entry.name.toLowerCase() === '.git') continue
       if (children.length >= EXPLORER_LIMITS.entries) throw new ExplorerFailure('limit')
       if (!safeExplorerName(entry.name)) throw new ExplorerFailure('unsupported')
       const path = join(parent.path, entry.name)

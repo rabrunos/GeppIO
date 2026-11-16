@@ -8,6 +8,8 @@ import { GIT_LIMITS } from '../shared/git.ts'
 import type { GitChange, GitError, GitResult, GitStatus } from '../shared/git.ts'
 
 const messages: Record<GitError, string> = {
+  'not-repository': 'A pasta selecionada não contém .git. Selecione a raiz exata do repositório; pastas internas não são descobertas automaticamente.',
+  version: 'Versão do Git não suportada. Este piloto requer Git para Windows 2.40 ou superior na instalação padrão.',
   uncertain: 'O Git pode ter alterado o índice antes da interrupção. Atualize para conferir; a operação não será repetida nem desfeita automaticamente.',
   invalid: 'Solicitação Git inválida.', stale: 'A pasta ou a consulta Git mudou. Atualize ou selecione a pasta novamente.',
   busy: 'Aguarde a consulta Git em andamento.', unsupported: 'Repositório ou comparação não suportado neste piloto (raiz local comum, sem links, submódulos, filtros ou extensões).',
@@ -32,7 +34,7 @@ export function parseGitStatus(bytes: Buffer): GitChange[] {
   if (records.pop() !== '') throw new GitFailure('unsupported')
   for (let i = 0; i < records.length; i++) {
     const row = records[i]!, index = row[0]!, working = row[1]!, name = row.slice(3)
-    if (!/^[ MADRCU?!]{2} /.test(row) || !gitRelativeName(name)) throw new GitFailure('unsupported')
+    if (!/^[ MADRCUT?!]{2} /.test(row) || !gitRelativeName(name)) throw new GitFailure('unsupported')
     const previous = /[RC]/.test(index + working) ? records[++i] : undefined
     if (previous !== undefined && !gitRelativeName(previous) || /[RC]/.test(index + working) && !previous) throw new GitFailure('unsupported')
     changes.push({ id: randomUUID(), name, ...(previous ? { previous } : {}), index, working, conflict: index === 'U' || working === 'U' || ['AA', 'DD'].includes(index + working), untracked: index + working === '??' })
@@ -228,7 +230,12 @@ export class GitStore {
     const check = () => { if (!guard() || !current() || controller.signal.aborted) throw new GitFailure('stale'); if (Date.now() > deadline) throw new GitFailure('timeout') }
     try {
       const path = await this.directories.folder(root, () => { check(); return true }), git = join(path, '.git')
-      if (!await exists(git)) throw new GitFailure('unsupported')
+      if (!await exists(git)) {
+        if (await exists(join(path, 'HEAD')) && await exists(join(path, 'objects')) && await exists(join(path, 'config'))) throw new GitFailure('unsupported')
+        throw new GitFailure('not-repository')
+      }
+      const metadataKind = await lstat(git)
+      if (!metadataKind.isDirectory() || metadataKind.isSymbolicLink()) throw new GitFailure('unsupported')
       await inspectExplorerPath(git, 'directory')
       for (const name of ['commondir', 'gitdir', 'shallow', 'info/grafts', 'objects/info/alternates', 'objects/info/http-alternates', 'refs/replace']) if (await exists(join(git, name))) throw new GitFailure('unsupported')
       const mutation = operation === 'stage' || operation === 'unstage'
@@ -295,7 +302,7 @@ export class GitStore {
       // directory must never cause implicit discovery of another parent repository.
       const invoke = async (args: string[], cap?: number, io?: { input: Buffer; index?: string; objects?: string }) => { check(); const result = await runGit(executable, [...base, ...args], temporary!, controller.signal, cap, Math.max(1, deadline - Date.now()), io); check(); await this.directories.folder(root, () => { check(); return true }); return result }
       const version = decode(await invoke(['--version']))
-      if (!/^git version 2\.(?:[4-9]\d|[1-9]\d{2,})\./.test(version)) throw new GitFailure('unsupported')
+      if (!/^git version 2\.(?:[4-9]\d|[1-9]\d{2,})\./.test(version)) throw new GitFailure('version')
       const config = decode(await invoke(['config', '--no-includes', '--null', '--file', join(temporary, 'source-config'), '--list']))
       for (const record of config.split('\0').filter(Boolean)) {
         const newline = record.indexOf('\n'), key = record.slice(0, newline).toLowerCase(), value = record.slice(newline + 1)

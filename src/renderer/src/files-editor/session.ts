@@ -4,10 +4,10 @@ import { DOCUMENT_LANGUAGES } from '../../../shared/document-status.ts'
 import type { DocumentLanguage } from '../../../shared/document-status.ts'
 import { editorText } from '../../../shared/documents.ts'
 
-export interface EditorState { document: DocumentSnapshot | null; text: string; busy: boolean; error: string | null; code: DocumentError | null; cursor: number; language: DocumentLanguage | null }
+export interface EditorState { document: DocumentSnapshot | null; text: string; busy: boolean; error: string | null; code: DocumentError | null; cursor: number; language: DocumentLanguage | null; diskVersion: number }
 /** One editable buffer, independent of views, layout, plugin storage and Worker lifecycle. */
 export class EditorSession {
-  private state: EditorState = { document: null, text: '', busy: false, error: null, code: null, cursor: 0, language: null }
+  private state: EditorState = { document: null, text: '', busy: false, error: null, code: null, cursor: 0, language: null, diskVersion: 0 }
   private listeners = new Set<() => void>()
   readonly bridge: DocumentBridge
   locked = false
@@ -40,9 +40,14 @@ export class EditorSession {
   feedback(error: string) { this.update({ error }) }
   private async run(action: () => Promise<DocumentResult>): Promise<boolean> {
     if (this.state.busy) return false
+    const before = this.state.document
     this.update({ busy: true, error: null, code: null })
     try {
       const result = await action()
+      // Also covers an implicit Save followed by a canceled/failed Open. Ordinary
+      // successful document operations conservatively invalidate saved-disk Git.
+      const confirmed = result.ok ? result.document : result.confirmed
+      if (result.ok && !result.canceled || confirmed && confirmed.revision !== before?.revision) this.update({ diskVersion: this.state.diskVersion + 1 })
       if (!result.ok) {
         this.update({ error: result.error, code: result.code, ...(result.confirmed?.id === this.state.document?.id ? { document: result.confirmed } : {}) })
       } else if (result.canceled) {

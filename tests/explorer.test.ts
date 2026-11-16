@@ -45,6 +45,21 @@ test('lazy directories, empty listing, folders-first deterministic order, stable
   await assert.rejects(store.file(selected.id, randomUUID(), current), denied('stale'))
   await assert.rejects(store.file(selected.id, children[0]!.id, current), denied('unsupported'))
 }))
+test('Git metadata is excluded before visible budgets, retaining other dotfiles and native identities', async () => fixture(async path => {
+  await mkdir(join(path, '.GiT')); await writeFile(join(path, '.GiT', 'sentinel'), 'preserved')
+  await writeFile(join(path, '.gitignore'), 'rule'); await writeFile(join(path, '.env.example'), 'example')
+  await Promise.all(Array.from({ length: EXPLORER_LIMITS.entries - 2 }, (_, i) => writeFile(join(path, `f${i}.txt`), '')))
+  const store = new DirectoryStore(), selected = root(await store.select(path, current)), before = await store.folder(selected.id, current)
+  const children = result(await store.list(selected.id, selected.id, current)).children!
+  assert.equal(children.length, EXPLORER_LIMITS.entries)
+  assert.ok(!children.some(node => node.name.toLowerCase() === '.git'))
+  assert.ok(children.some(node => node.name === '.gitignore')); assert.ok(children.some(node => node.name === '.env.example'))
+  assert.equal(await readFile(join(path, '.GiT', 'sentinel'), 'utf8'), 'preserved')
+  assert.equal(await store.folder(selected.id, current), before)
+  const nested = join(path, 'f0.txt'); await rm(nested); await mkdir(nested); await writeFile(join(nested, '.git'), 'gitdir: unsupported')
+  const next = result(await store.list(selected.id, selected.id, current)).children!.find(node => node.name === 'f0.txt')!
+  assert.deepEqual(result(await store.list(selected.id, next.id, current)).children, [])
+}))
 test('revocation, replacement, missing targets and changed ancestry fail closed', async () => fixture(async path => {
   const scope = join(path, 'scope'); await mkdir(scope); await mkdir(join(scope, 'nested')); await writeFile(join(scope, 'nested', 'one.ts'), 'one')
   const store = new DirectoryStore(), selected = root(await store.select(scope, current))

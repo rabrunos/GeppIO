@@ -15,9 +15,14 @@ import { enableDeveloperMode } from './plugin-dev-support.ts'
 
 const profile = await mkdtemp(join(tmpdir(), 'geppio-smoke-git-')), canonical = await realpath(profile), scope = join(canonical, 'repository')
 const dev = process.argv.includes('--dev'), scale125 = process.argv.includes('--scale125')
-const diagnostics = resolve('.local/diagnostics/git-alpha44-' + (dev ? 'dev' : scale125 ? '125' : '100'))
+const diagnostics = resolve('.local/diagnostics/git-alpha45-' + (dev ? 'dev' : scale125 ? '125' : '100'))
 await mkdir(diagnostics, { recursive: true })
 const git = await initializeGit(scope)
+await mkdir(join(scope, 'nested')); await writeFile(join(scope, 'nested', 'tracked.ts'), 'before\n')
+git(['add', 'nested/tracked.ts']); git(['commit', '-m', 'Nested fixture'])
+await writeFile(join(scope, 'nested', 'tracked.ts'), 'after\n'); await writeFile(join(scope, 'nested', 'new.ts'), 'new\n')
+await writeFile(join(scope, 'added.txt'), 'added\n'); git(['add', 'added.txt'])
+await writeFile(join(scope, '.env.example'), 'example\n')
 await writeFile(join(scope, 'modified.ts'), 'const answer = 2;\r\n')
 await writeFile(join(scope, 'both.txt'), 'staged\n'); git(['add', 'both.txt']); await writeFile(join(scope, 'both.txt'), 'saved\r\n')
 await rm(join(scope, 'deleted.txt')); git(['mv', 'rename old.txt', 'rename new.txt'])
@@ -44,6 +49,18 @@ try {
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()) })
   await app.evaluate(({ BrowserWindow }) => { const win = BrowserWindow.getAllWindows()[0]!; win.setContentSize(1600, 1000); win.show(); win.focus() })
   await page.getByTestId('edit-layout').waitFor(); await portugueseFixture(page)
+  // Observe native Worker errors in this disposable fixture without changing the
+  // runtime's fail-closed handler or accepting a failed plugin activation.
+  await page.evaluate(() => {
+    const events: { message: string; filename: string; line: number; column: number }[] = [], Original = window.Worker
+    ;(window as unknown as { gitSmokeWorkerErrors: unknown[] }).gitSmokeWorkerErrors = events
+    window.Worker = class extends Original {
+      constructor(url: string | URL, options?: WorkerOptions) {
+        super(url, options)
+        this.addEventListener('error', event => { if (events.length < 8) events.push({ message: event.message.slice(0, 512), filename: event.filename.slice(0, 512), line: event.lineno, column: event.colno }) })
+      }
+    }
+  })
   await page.getByRole('button', { name: 'Plugins', exact: true }).click()
   const manager = page.getByRole('dialog', { name: 'Plugins', exact: true }); await enableDeveloperMode(manager)
   await app.evaluate(({ dialog }, path) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }) }, resolve('.local/plugin-packages/time-tracker'))
@@ -66,6 +83,16 @@ try {
   await page.locator('.explorer-toolbar').getByRole('button', { name: 'Abrir pasta', exact: true }).click()
   await page.waitForFunction(() => document.querySelector('[data-explorer-node]'))
   const root = await page.getByRole('treeitem', { name: 'repository', exact: true }).getAttribute('data-explorer-node'); assert.ok(root)
+  const treeItem = (name: string) => page.getByRole('treeitem', { name, exact: true })
+  const badge = (name: string) => treeItem(name).locator('.explorer-git-badge')
+  await page.waitForFunction(() => document.querySelector('.explorer-git-status')?.textContent?.includes('arquivo(s) com alterações'))
+  for (const [name, value] of [['modified.ts', 'M'], ['both.txt', 'M·M'], ['added.txt', 'A'], ['untracked.txt', 'U'], ['rename new.txt', 'R'], ['nested', '2']]) assert.equal(await badge(name!).innerText(), value)
+  assert.match(await badge('both.txt').getAttribute('aria-label') ?? '', /Índice: Modificado; árvore de trabalho: Modificado/)
+  assert.equal(await treeItem('.git').count(), 0); assert.equal(await treeItem('.env.example').count(), 1); assert.equal(await treeItem('deleted.txt').count(), 0)
+  await treeItem('nested').click(); await treeItem('tracked.ts').waitFor()
+  assert.equal(await badge('tracked.ts').innerText(), 'M'); assert.equal(await badge('new.ts').innerText(), 'U')
+  await treeItem('nested').focus(); await page.keyboard.press('ArrowLeft'); assert.equal(await treeItem('tracked.ts').count(), 0)
+  await page.screenshot({ path: join(diagnostics, 'explorer-decorations.png') })
   await picker(join(scope, 'modified.ts')); await page.getByRole('button', { name: 'Abrir arquivo', exact: true }).click()
   const editor = fileEditor(page); await editor.waitFor()
   await editor.fill('unsaved\n' + Array.from({ length: 80 }, (_, i) => 'line ' + i).join('\n'))
@@ -158,17 +185,43 @@ try {
   await mode('Editor')
   const protectedFiles = (value: Record<string, string>) => Object.fromEntries(Object.entries(value).filter(([name]) => name !== '.git/index' && !name.startsWith('.git/objects/')))
   assert.deepEqual(protectedFiles(await gitFingerprint(scope)), protectedFiles(before), 'Only index and required Git objects may change; disk/config/refs remain exact')
-  await rail.getByRole('button', { name: 'Explorador', exact: true }).click(); await page.getByRole('button', { name: 'Fechar pasta', exact: true }).click()
+  // Successful index action and save must update Explorer without opening Git activity.
+  await action('Preparar', 'modified.ts')
+  await rail.getByRole('button', { name: 'Explorador', exact: true }).click()
+  assert.equal(await badge('modified.ts').innerText(), 'M')
+  assert.match(await badge('modified.ts').getAttribute('aria-label') ?? '', /árvore de trabalho: sem alteração/)
+  await editor.press('Control+s')
+  await page.waitForFunction(() => document.querySelector('[role="treeitem"][aria-label="modified.ts"] .explorer-git-badge')?.textContent === 'M·M')
+  assert.equal(await readFile(join(scope, 'modified.ts'), 'utf8'), draft.text.replaceAll('\n', '\r\n'), 'Save retains the source CRLF convention behind the LF Monaco projection')
+  await writeFile(join(scope, 'added.txt'), 'external disk change\n')
+  await page.getByRole('button', { name: 'Atualizar árvore', exact: true }).click()
+  await page.waitForFunction(() => document.querySelector('[role="treeitem"][aria-label="added.txt"] .explorer-git-badge')?.textContent === 'A·M')
+  await page.getByRole('button', { name: 'Fechar pasta', exact: true }).click()
   const stale = await page.evaluate(root => window.geppio!.git.status(root), root); assert.ok(!stale.ok && stale.code === 'stale')
   const staleWrite = await page.evaluate(({ root, id }) => window.geppio!.git.stage(root, id), { root, id: randomUUID() }); assert.ok(!staleWrite.ok && staleWrite.code === 'stale')
   await rail.getByRole('button', { name: 'Alterações Git', exact: true }).click(); assert.equal(await page.locator('.git-branch').count(), 0)
   assert.match(await page.locator('.git-changes').innerText(), /Abra uma pasta/)
+  await rail.getByRole('button', { name: 'Explorador', exact: true }).click()
+  const neutral = join(canonical, 'neutral'); await mkdir(neutral); await writeFile(join(neutral, '.env.example'), 'retained')
+  await picker(neutral); await page.locator('.explorer-toolbar').getByRole('button', { name: 'Abrir pasta', exact: true }).click()
+  await page.waitForFunction(() => document.querySelector('.explorer-git-status')?.textContent?.includes('não contém .git'))
+  assert.equal(await page.locator('.explorer-git-badge').count(), 0); assert.equal(await treeItem('.env.example').count(), 1)
+  await writeFile(join(neutral, '.git'), 'gitdir: unsupported-linked-root')
+  await page.getByRole('button', { name: 'Atualizar árvore', exact: true }).click()
+  await page.waitForFunction(() => document.querySelector('.explorer-git-status')?.textContent?.includes('não suportado'))
+  assert.equal(await treeItem('.git').count(), 0)
+  const clean = join(canonical, 'clean'); await initializeGit(clean); await picker(clean)
+  await page.locator('.explorer-toolbar').getByRole('button', { name: 'Abrir pasta', exact: true }).click()
+  await page.waitForFunction(() => document.querySelector('.explorer-git-status')?.textContent?.includes('árvore limpa'))
+  assert.equal(await page.locator('.explorer-git-badge').count(), 0)
   assert.deepEqual(errors, [])
   evidence.result = 'passed: real index Stage/Unstage clicks, saved-disk content versus dirty draft, unrelated staged blob, index/object fsck, disk/refs/config fingerprints, inherited read-only status/diff, malicious config nonexecution, Monaco identity/undo/selection/scroll, disposed models, caller negatives, stale grants, shared Sidebar/Main/activity and layout bytes'
   evidence.coexistence = 'passed: nonempty installed plugin Worker identities retained; same live PowerShell UUID accepts a command after Git inspection and mode changes'
+  evidence.explorer = 'passed: M/U/A/R and mixed M·M/A·M, unique descendant counts, hidden .git/retained dotfile, no deleted filesystem row, keyboard collapse, stage/save/tree refresh, root release/replacement, nonrepo/unsupported/clean diagnostics'
   evidence.environment = { platform: process.platform, development: dev, dpr: await page.evaluate(() => devicePixelRatio) }
   await writeFile(join(diagnostics, 'evidence.json'), JSON.stringify(evidence, null, 2)); console.log(JSON.stringify(evidence, null, 2))
 } catch (error) {
+  await writeFile(join(diagnostics, 'worker-errors.json'), JSON.stringify(await page?.evaluate(() => (window as unknown as { gitSmokeWorkerErrors?: unknown[] }).gitSmokeWorkerErrors ?? []).catch(() => []), null, 2) ?? '[]')
   console.error(errors)
   console.error(await app?.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map(win => ({ url: win.webContents.getURL(), loading: win.webContents.isLoading(), destroyed: win.webContents.isDestroyed() }))).catch(() => []))
   await page?.screenshot({ path: join(diagnostics, 'failure.png') }).catch(() => {})

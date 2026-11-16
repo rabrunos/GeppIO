@@ -2,12 +2,12 @@ import type { ExplorerBridge, ExplorerNode } from '../../../shared/explorer.ts'
 import type { EditorSession } from './session.ts'
 
 export interface ExplorerState {
-  root: ExplorerNode | null; children: ReadonlyMap<string, ExplorerNode[]>; expanded: ReadonlySet<string>
+  root: ExplorerNode | null; children: ReadonlyMap<string, ExplorerNode[]>; expanded: ReadonlySet<string>; diskVersion: number
   errors: ReadonlyMap<string, string>; busy: boolean; error: string | null; active: string | null; document: string | null
 }
 /** One navigation owner for the activity view and the explicitly placed official widget. */
 export class ExplorerSession {
-  private state: ExplorerState = { root: null, children: new Map(), expanded: new Set(), errors: new Map(), busy: false, error: null, active: null, document: null }
+  private state: ExplorerState = { root: null, children: new Map(), expanded: new Set(), diskVersion: 0, errors: new Map(), busy: false, error: null, active: null, document: null }
   private listeners = new Set<() => void>()
   scroll = 0
   focus: string | null = null
@@ -36,7 +36,7 @@ export class ExplorerSession {
     const root = this.state.root
     if (!root) return
     const result = await this.bridge.list(root.id, id), errors = new Map(this.state.errors)
-    if (!result.ok) { errors.set(id, result.error); this.update({ errors }); return }
+    if (!result.ok) { errors.set(id, result.error); this.update({ errors, diskVersion: this.state.diskVersion + 1 }); return }
     errors.delete(id)
     const children = new Map(this.state.children); children.set(id, result.children ?? [])
     this.update({ children, errors })
@@ -47,12 +47,12 @@ export class ExplorerSession {
     if (expanded.has(node.id)) { expanded.delete(node.id); this.update({ expanded }); return }
     this.update({ busy: true })
     try { if (!this.state.children.has(node.id) || this.state.errors.has(node.id)) await this.load(node.id); expanded.add(node.id); this.update({ expanded }) }
-    catch { this.update({ error: 'Não foi possível ler a pasta. Tente novamente.' }) }
+    catch { this.update({ error: 'Não foi possível ler a pasta. Tente novamente.', diskVersion: this.state.diskVersion + 1 }) }
     finally { this.update({ busy: false }) }
   }
   async refresh() {
     if (this.state.busy || this.locked || this.editor.snapshot().busy || !this.state.root) return
-    this.update({ busy: true, error: null })
+    this.update({ busy: true, error: null, diskVersion: this.state.diskVersion + 1 })
     try {
       const visit = async (id: string) => {
         await this.load(id)
@@ -85,7 +85,7 @@ export class ExplorerSession {
     try {
       const opened = await this.editor.openAuthorized(draft => this.bridge.open(root, node.id, draft))
       if (opened) this.update({ active: node.id, document: this.editor.snapshot().document?.id ?? null })
-      else this.update({ error: this.editor.snapshot().error })
+      else this.update({ error: this.editor.snapshot().error, diskVersion: this.state.diskVersion + 1 })
     } finally { this.update({ busy: false }) }
   }
 }

@@ -1,18 +1,23 @@
-import { useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { KeyboardEvent } from 'react'
 import { ArrowPathIcon, ChevronRightIcon, DocumentIcon, FolderIcon, FolderOpenIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import type { ExplorerNode } from '../../../shared/explorer.ts'
 import type { ExplorerSession } from './explorer-session.ts'
+import type { GitSession } from '../git/session.ts'
+import { gitDecorations } from '../git/decorations.ts'
 import './explorer.css'
 
-export function Explorer({ session }: { session: ExplorerSession }) {
+export function Explorer({ session, git }: { session: ExplorerSession; git: GitSession }) {
   const state = useSyncExternalStore(session.subscribe, session.snapshot), editor = useSyncExternalStore(session.editor.subscribe, session.editor.snapshot)
+  const gitState = useSyncExternalStore(git.subscribe, git.snapshot)
+  const status = gitState.status?.root === state.root?.id ? gitState.status : null
+  const decorations = useMemo(() => gitDecorations(status), [status])
   const viewport = useRef<HTMLDivElement>(null), tree = useRef<HTMLDivElement>(null)
   const [, renderFocus] = useState(0)
   const disabled = state.busy || editor.busy || session.locked
-  const rows: { node: ExplorerNode; level: number; parent: string | null; position: number; count: number }[] = []
-  function append(nodes: ExplorerNode[], level: number, parent: string | null) {
-    nodes.forEach((node, i) => { rows.push({ node, level, parent, position: i + 1, count: nodes.length }); if (state.expanded.has(node.id)) append(state.children.get(node.id) ?? [], level + 1, node.id) })
+  const rows: { node: ExplorerNode; path: string; level: number; parent: string | null; position: number; count: number }[] = []
+  function append(nodes: ExplorerNode[], level: number, parent: string | null, prefix = '') {
+    nodes.forEach((node, i) => { const path = level === 1 ? '' : prefix ? prefix + '/' + node.name : node.name; rows.push({ node, path, level, parent, position: i + 1, count: nodes.length }); if (state.expanded.has(node.id)) append(state.children.get(node.id) ?? [], level + 1, node.id, path) })
   }
   if (state.root) append([state.root], 1, null)
   const focused = rows.some(row => row.node.id === session.focus) ? session.focus : rows[0]?.node.id
@@ -35,18 +40,23 @@ export function Explorer({ session }: { session: ExplorerSession }) {
       <button className="ui-button ui-icon-button" title="Abrir pasta" aria-label="Abrir pasta" disabled={disabled} onClick={() => { void session.select() }}><FolderOpenIcon className="icon" /></button>
       {state.root && <><button className="ui-button ui-icon-button" title="Atualizar árvore" aria-label="Atualizar árvore" disabled={disabled} onClick={() => { void session.refresh() }}><ArrowPathIcon className="icon" /></button><button className="ui-button ui-icon-button" title="Fechar pasta" aria-label="Fechar pasta" disabled={disabled} onClick={() => { void session.release() }}><XMarkIcon className="icon" /></button></>}
     </header>
+    {state.root && <div className="explorer-git-status" role="status" title={gitState.error ?? 'Git usa o disco salvo; configuração global ignorada. Selecione a raiz exata de um repositório local comum.'}>
+      {gitState.busy ? 'Git: consultando…' : gitState.error ? 'Git: ' + gitState.error : status ? `Git · ${status.branch} · ${status.changes.length ? status.changes.length + ' arquivo(s) com alterações' : 'árvore limpa'}` : 'Git: aguardando consulta'}
+      <button className="ui-button" disabled={gitState.busy || disabled} onClick={() => { void git.refresh() }} aria-label="Atualizar Git no Explorador">Atualizar</button>
+    </div>}
     {!state.root && <div className="explorer-empty"><p>Escolha uma pasta local para navegar pelos arquivos.</p><button className="ui-button tool-button" disabled={disabled} onClick={() => { void session.select() }}>Abrir pasta</button></div>}
     <div ref={viewport} className="explorer-scroll ui-scrollbar" onScroll={event => { session.scroll = event.currentTarget.scrollTop }}>
-      {state.root && <div ref={tree} role="tree" aria-label="Arquivos da pasta">{rows.map(({ node, level, position, count }, index) => <div key={node.id}>
-        <div role="treeitem" data-explorer-node={node.id} aria-label={node.name} title={node.name + (node.kind === 'blocked' ? ' — item não suportado' : '')} aria-level={level} aria-posinset={position} aria-setsize={count}
+      {state.root && <div ref={tree} role="tree" aria-label="Arquivos da pasta">{rows.map(({ node, path, level, position, count }, index) => { const decoration = node.kind === 'directory' ? decorations.folders.get(path) : node.kind === 'file' ? decorations.files.get(path) : undefined; return <div key={node.id}>
+        <div role="treeitem" data-explorer-node={node.id} aria-label={node.name} aria-description={decoration?.description} title={node.name + (node.kind === 'blocked' ? ' — item não suportado' : decoration ? ' — ' + decoration.description : '')} aria-level={level} aria-posinset={position} aria-setsize={count}
           aria-expanded={node.kind === 'directory' ? state.expanded.has(node.id) : undefined} aria-selected={state.active === node.id && state.document === editor.document?.id} aria-disabled={node.kind === 'blocked' || disabled}
           tabIndex={focused === node.id ? 0 : -1} className="explorer-row" style={{ paddingLeft: `min(${6 + (level - 1) * 12}px, max(6px, calc(100% - 70px)))` }} onFocus={() => { session.focus = node.id; renderFocus(value => value + 1) }}
           onKeyDown={event => key(event, index)} onClick={() => { focus(node.id); if (node.kind === 'directory') void session.toggle(node); else void session.open(node) }}>
           {node.kind === 'directory' ? <><ChevronRightIcon className={'explorer-chevron ' + (state.expanded.has(node.id) ? 'is-open' : '')} /><FolderIcon className="explorer-node-icon" /></> : <><span className="explorer-chevron" /><DocumentIcon className="explorer-node-icon" /></>}<span className="explorer-name">{node.name}</span>
+          {decoration && <span className="explorer-git-badge" aria-label={decoration.description} title={decoration.description}>{decoration.badge}</span>}
         </div>
         {state.expanded.has(node.id) && state.errors.has(node.id) && <p className="explorer-inline-error" role="alert">{state.errors.get(node.id)} <button className="ui-button" disabled={disabled} onClick={() => { void session.refresh() }}>Tentar novamente</button></p>}
         {node.kind === 'directory' && state.expanded.has(node.id) && state.children.get(node.id)?.length === 0 && <p className="explorer-directory-empty">Pasta vazia</p>}
-      </div>)}</div>}
+      </div> })}</div>}
     </div>
     <div className="explorer-feedback" role="status">{state.busy ? 'Carregando…' : state.error}</div>
   </section>

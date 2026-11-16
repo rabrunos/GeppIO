@@ -2,6 +2,13 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.45] — 2026-11-15
+
+- Added compact Explorer Git letters and unique ancestor counts from the existing bounded snapshot, preserving index/working-tree layers, untracked and conflict semantics with Portuguese descriptions.
+- Excluded only `.git` metadata from native Explorer navigation before visible listing budgets; retained unrelated dotfiles and unchanged native authority checks.
+- Exposed Git recognition, clean state and path-free failure diagnostics in Explorer. Distinguished missing root metadata, unsupported linked metadata and unsupported installed Git versions without parent discovery or relaxed configuration rules.
+- Connected saved-document and Explorer refresh invalidations to one coalesced, generation-aware Git query; uncertainty from index writes still requires an explicit Git refresh. No watcher, dependency or plugin capability was added.
+
 ## [0.1.0-alpha.44] — 2026-11-15
 
 - Added explicit per-file Stage/Unstage in the existing Git Changes activity and Main/Sidebar widget, using saved disk content and preserving dirty Monaco sessions.

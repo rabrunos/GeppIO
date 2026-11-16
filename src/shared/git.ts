@@ -5,7 +5,7 @@ export const GIT_LIMITS = { entries: 512, output: 512 * 1024, text: 256 * 1024, 
 export interface GitChange { id: string; name: string; previous?: string; index: string; working: string; conflict: boolean; untracked: boolean; stage?: boolean; unstage?: boolean; actionReason?: string }
 export interface GitStatus { root: string; name: string; branch: string; detached: boolean; changes: GitChange[] }
 export interface GitComparison { name: string; original: string; modified: string; basis: string }
-export type GitError = 'invalid' | 'stale' | 'busy' | 'unsupported' | 'limit' | 'unavailable' | 'missing' | 'timeout' | 'uncertain'
+export type GitError = 'invalid' | 'stale' | 'busy' | 'unsupported' | 'limit' | 'unavailable' | 'missing' | 'not-repository' | 'version' | 'timeout' | 'uncertain'
 export type GitResult = { ok: true; status?: GitStatus; comparison?: GitComparison; mutated?: boolean } | { ok: false; code: GitError; error: string }
 export interface GitBridge {
   status(root: string): Promise<GitResult>

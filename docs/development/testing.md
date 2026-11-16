@@ -1,6 +1,14 @@
 # Validation guide
 
-## Git inspection and index actions (alpha.43/44 / Issues #50/51)
+## Git inspection and index actions (alpha.43–45 / Issues #50–52)
+
+Alpha.45 adds pure projections for all letters/layers, ignored/conflict policy and unique folder
+rollups; hidden case-insensitive `.git` at the visible-entry limit with other dotfiles retained;
+coalesced refresh after saves/tree actions; and delayed/failed requests. Regression tests require
+same-root uncertain/lost index acknowledgements to survive concurrent saves until explicit Git
+Refresh. The Git Electron journey checks real Explorer badges/nested counts, hidden metadata,
+keyboard collapse, stage/save/tree refresh and nonrepo/unsupported/clean root transitions in all
+three existing runtime variants. These fixtures do not diagnose an uncaptured owner repository.
 
 Index fixtures add Stage/Unstage of modified/deleted/untracked/mixed/binary/empty files,
 unborn HEAD, literal Unicode/spaces/leading dashes, EOL conversion, unrelated staged-entry

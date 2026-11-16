@@ -12,9 +12,12 @@ import { GitSession } from '../src/renderer/src/git/session.ts'
 import { ExplorerSession } from '../src/renderer/src/files-editor/explorer-session.ts'
 import { EditorSession } from '../src/renderer/src/files-editor/session.ts'
 import type { ExplorerBridge } from '../src/shared/explorer.ts'
+import type { DocumentDraft } from '../src/shared/documents.ts'
 import { fixtureGit, gitFingerprint, initializeGit } from '../tools/git-fixtures.ts'
+import { fileDecoration, gitDecorations } from '../src/renderer/src/git/decorations.ts'
 
 const current = () => true
+const turn = () => new Promise(resolve => setImmediate(resolve))
 function success(result: GitResult) { assert.ok(result.ok); return result }
 const denied = (kind: string) => (error: unknown) => error instanceof GitFailure && error.kind === kind
 async function fixture(run: (root: string) => Promise<void>) {
@@ -37,6 +40,88 @@ test('Git fixed requests, path-free failures, NUL status and bounded relative na
   assert.throws(() => parseGitStatus(Buffer.from(' M a')), denied('unsupported'))
   assert.throws(() => parseGitStatus(Buffer.from('?? x\0'.repeat(513))), denied('limit'))
   assert.throws(() => parseGitStatus(Buffer.from([32, 77, 32, 255, 0])))
+})
+test('Explorer decorations preserve actual porcelain layers, conflict semantics and unique ancestor counts', () => {
+  const changes = parseGitStatus(Buffer.from(' M src/modified.ts\0?? src/new.ts\0A  src/added.ts\0AM src/both.ts\0 D deleted.ts\0R  moved/new.ts\0src/old.ts\0C  copied.ts\0src/source.ts\0 T type.ts\0UU conflict.ts\0!! ignored.ts\0'))
+  const projection = gitDecorations({ root: randomUUID(), name: 'scope', branch: 'main', detached: false, changes })
+  const badges = Object.fromEntries([...projection.files].map(([name, decoration]) => [name, decoration.badge]))
+  assert.deepEqual(badges, { 'src/modified.ts': 'M', 'src/new.ts': 'U', 'src/added.ts': 'A', 'src/both.ts': 'A·M', 'deleted.ts': 'D', 'moved/new.ts': 'R', 'copied.ts': 'C', 'type.ts': 'T', 'conflict.ts': '!', 'ignored.ts': 'I' })
+  assert.match(projection.files.get('src/both.ts')!.description, /Índice: Adicionado; árvore de trabalho: Modificado/)
+  assert.match(projection.files.get('src/new.ts')!.description, /não rastreado/)
+  assert.match(projection.files.get('copied.ts')!.description, /Copiado de src\/source\.ts/)
+  assert.doesNotMatch(projection.files.get('copied.ts')!.description, /Renomeado/)
+  assert.equal(projection.folders.get('src')!.badge, '5', 'Copies leave the source unchanged')
+  assert.equal(projection.folders.get('')!.badge, String(changes.length - 1), 'Ignored files are not changes')
+  assert.equal(projection.folders.has('clean'), false)
+  assert.equal(gitDecorations(null).files.size, 0)
+  assert.equal(fileDecoration(parseGitStatus(Buffer.from('MM same.ts\0'))[0]!).badge, 'M·M')
+  assert.equal(gitDecorations({ root: randomUUID(), name: 'scope', branch: 'main', detached: false, changes: parseGitStatus(Buffer.from('R  src/new.ts\0src/old.ts\0')) }).folders.get('src')!.badge, '1')
+  for (const xy of ['AA', 'DD', 'AU', 'UA', 'DU', 'UD', 'UU']) assert.equal(fileDecoration(parseGitStatus(Buffer.from(xy + ' conflict\0'))[0]!).badge, '!')
+})
+test('ordinary non-repository and linked metadata diagnostics remain distinct and path-free', async () => fixture(async path => {
+  const { root, store } = await selected(path)
+  await assert.rejects(store.inspect('status', root, undefined, current), denied('not-repository'))
+  await writeFile(join(path, '.git'), 'gitdir: private-location')
+  await assert.rejects(store.inspect('status', root, undefined, current), denied('unsupported'))
+  for (const code of ['not-repository', 'version', 'missing', 'stale', 'unsupported'] as const) {
+    const result = gitFailure(new GitFailure(code)); assert.ok(!result.ok && result.code === code)
+    assert.doesNotMatch(JSON.stringify(result), /private-location/)
+  }
+}))
+test('saved-disk and Explorer invalidations coalesce, ignore drafts, and discard stale in-flight snapshots', async () => {
+  const root = randomUUID(), id = randomUUID(), revision = randomUUID()
+  const document = { id, revision, name: 'one.ts', text: 'old', bom: false }
+  const editor = new EditorSession({ open: async () => ({ ok: true, document }), save: async (draft: DocumentDraft) => ({ ok: true, document: { ...document, revision: randomUUID(), text: draft.text } }) } as never)
+  const explorer = new ExplorerSession({ select: async () => ({ ok: true, root: { id: root, name: 'scope', kind: 'directory' } }), list: async () => ({ ok: true, root: null, children: [] }), release: async () => ({ ok: true, root: null }) } as unknown as ExplorerBridge, editor)
+  const pending: ((result: GitResult) => void)[] = []; let reads = 0, concurrent = 0, maximum = 0
+  const session = new GitSession({ status: () => { reads++; maximum = Math.max(maximum, ++concurrent); return new Promise<GitResult>(resolve => pending.push(result => { concurrent--; resolve(result) })) } } as never, explorer)
+  const status = (branch: string): GitResult => ({ ok: true, status: { root, name: 'scope', branch, detached: false, changes: [] } })
+  session.connect(); await explorer.select(); assert.equal(reads, 1)
+  await editor.open(); editor.edit('draft')
+  await session.refresh(); await session.refresh(); await explorer.refresh()
+  assert.equal(reads, 1, 'One query in flight, with one coalesced successor')
+  pending.shift()!(status('obsolete')); await turn()
+  assert.equal(session.snapshot().status, null); assert.equal(reads, 2)
+  pending.shift()!(status('current')); await turn()
+  assert.equal(session.snapshot().status?.branch, 'current')
+  editor.edit('more draft'); await turn(); assert.equal(reads, 2, 'Keystrokes are never Git invalidations')
+  await editor.save(); assert.equal(reads, 3); assert.equal(session.snapshot().status, null)
+  pending.shift()!(status('saved')); await turn(); assert.equal(session.snapshot().status?.branch, 'saved')
+  session.locked = true; await explorer.refresh(); assert.equal(reads, 3)
+  session.locked = false; await turn(); assert.equal(reads, 4)
+  await explorer.release(); pending.shift()!(status('revoked')); await turn()
+  assert.equal(session.snapshot().root, null); assert.equal(session.snapshot().status, null); assert.equal(maximum, 1)
+  session.dispose()
+})
+test('concurrent save cannot erase an uncertain index outcome or trigger automatic recovery', async () => {
+  for (const lost of [false, true]) {
+    const root = randomUUID(), document = { id: randomUUID(), revision: randomUUID(), name: 'one.ts', text: 'old', bom: false }
+    const editor = new EditorSession({ open: async () => ({ ok: true, document }), save: async (draft: DocumentDraft) => ({ ok: true, document: { ...document, revision: randomUUID(), text: draft.text } }) } as never)
+    const explorer = new ExplorerSession({ select: async () => ({ ok: true, root: { id: root, name: 'scope', kind: 'directory' } }), list: async () => ({ ok: true, root: null, children: [] }) } as unknown as ExplorerBridge, editor)
+    let finish!: (result: GitResult) => void, reject!: (error: Error) => void, reads = 0, writes = 0
+    const session = new GitSession({ status: async () => { reads++; return { ok: true, status: { root, name: 'scope', branch: 'main', detached: false, changes: [] } } }, stage: () => { writes++; return new Promise<GitResult>((resolve, failure) => { finish = resolve; reject = failure }) } } as never, explorer)
+    session.connect(); await explorer.select(); await turn(); await editor.open(); await turn()
+    const before = reads, mutation = session.mutate('stage', randomUUID())
+    editor.edit('saved during mutation'); await editor.save()
+    if (lost) reject(new Error('lost acknowledgement'))
+    else finish({ ok: false, code: 'uncertain', error: 'Índice pode ter mudado; atualize para conferir.' })
+    await mutation; await turn()
+    assert.equal(session.snapshot().status, null); assert.equal(session.snapshot().code, 'uncertain'); assert.match(session.snapshot().error!, /pode ter mudado/)
+    await explorer.refresh(); await turn(); assert.equal(reads, before, 'Automatic refresh is held until explicit Git Refresh')
+    await session.mutate('stage', randomUUID()); assert.equal(writes, 1)
+    await session.refresh(); assert.equal(reads, before + 1); assert.equal(session.snapshot().error, null)
+    session.dispose()
+  }
+})
+test('failed native listing revokes old decorations even for missing or redirected roots', async () => {
+  for (const code of ['unavailable', 'unsupported', 'stale', 'thrown'] as const) {
+    const root = randomUUID(); let bad = false
+    const explorer = new ExplorerSession({ select: async () => ({ ok: true, root: { id: root, name: 'scope', kind: 'directory' } }), list: async () => { if (bad && code === 'thrown') throw new Error('lost response'); return bad ? { ok: false, code, error: 'Refused' } : { ok: true, root: null, children: [{ id: randomUUID(), name: 'folder', kind: 'directory' }] } } } as unknown as ExplorerBridge, new EditorSession({} as never))
+    const session = new GitSession({ status: async () => bad ? { ok: false, code: 'stale', error: 'Revoked' } : { ok: true, status: { root, name: 'scope', branch: 'main', detached: false, changes: parseGitStatus(Buffer.from(' M folder/a.ts\0')) } } } as never, explorer)
+    session.connect(); await explorer.select(); await turn(); assert.equal(session.snapshot().status?.changes.length, 1)
+    bad = true; await explorer.toggle(explorer.snapshot().children.get(root)![0]!); await turn()
+    assert.equal(session.snapshot().status, null); session.dispose()
+  }
 })
 test('real Git: clean/staged/unstaged/untracked/delete/rename/detached; exact HEAD-to-disk; no writes', async () => fixture(async path => {
   const git = await initializeGit(path), { root, store } = await selected(path)
@@ -76,7 +161,7 @@ test('binary/large comparison, stale IDs/grants, nested/bare/worktree/submodule 
   assert.deepEqual(await gitFingerprint(path), before)
   directories.revoke(); await assert.rejects(store.inspect('status', root, undefined, current))
   await mkdir(join(path, 'nested')); const nested = await selected(join(path, 'nested'))
-  await assert.rejects(nested.store.inspect('status', nested.root, undefined, current), denied('unsupported'))
+  await assert.rejects(nested.store.inspect('status', nested.root, undefined, current), denied('not-repository'))
   const linked = join(path, 'nested', '.git'); await writeFile(linked, 'gitdir: ../../.git\n')
   await assert.rejects(nested.store.inspect('status', nested.root, undefined, current))
   await rm(linked); await symlink(join(path, '.git'), linked, 'junction')
@@ -168,6 +253,7 @@ test('shared renderer state discards delayed results after root replacement/rele
   session.connect(); await explorer.select(); const old = finish
   selectedRoot = randomUUID(); await explorer.select(); old({ ok: true, status: { root: randomUUID(), name: 'stale', branch: 'stale', detached: false, changes: [] } }); await Promise.resolve()
   assert.equal(session.snapshot().status, null)
+  await new Promise(resolve => setImmediate(resolve))
   await explorer.release(); finish({ ok: true, status: { root: selectedRoot, name: 'stale', branch: 'stale', detached: false, changes: [] } }); await Promise.resolve()
   assert.equal(session.snapshot().root, null); assert.equal(session.snapshot().status, null); session.dispose()
 })

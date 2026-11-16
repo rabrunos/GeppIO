@@ -1,4 +1,34 @@
-# First-party Git pilot — alpha.43/44 / Issues #50/51
+# First-party Git pilot — alpha.43–45 / Issues #50–52
+
+## Explorer presentation and recognition — alpha.45
+
+Explorer joins the same single GitSession snapshot by repository-relative display names, without
+new IPC or native path grants. File badges retain both porcelain columns (`A·M`, `M·M`) with
+Portuguese index/disk descriptions; untracked is `U`, conflicts are `!`. Ignored is projected
+only from an actual `!!` record; normal status does not request ignored records. `T` is accepted
+for inspection, never silently admitted to index writes. Deleted disk files stay in Git Changes.
+Ancestor sets count each change once across layers and rename paths. Projection is memoized per
+bounded snapshot; clean folders have no badge. Exact names avoid ambiguous case folding.
+
+The selected-root Git result is visible in Explorer, including clean state and manual refresh.
+Missing `.git` has its own diagnostic instructing selection of the exact root. Bare repositories
+and `.git` files/links are unsupported; no parent discovery is attempted. Missing canonical Git
+for Windows and unsupported versions (2.40 minimum) have distinct errors. Unsupported configuration,
+storage, limits and revoked selections retain path-free fail-closed messages.
+
+Root changes immediately discard old snapshots. Explorer refresh and native listing/open failures,
+successful document operations and confirmed revision changes (including implicit Save during Open)
+invalidate saved-disk state. Queries wait for file/tree operations to settle, serialize and coalesce
+into one successor; keystrokes never query Git. No watcher or background write is introduced.
+Same-root invalidation cannot erase a Stage/Unstage outcome. Uncertain/lost write acknowledgements
+hold automatic queries and further writes until explicit Git Refresh.
+
+Disposable ordinary repositories exercise activation without a Workspace service. The owner's
+specific nonrecognition report has no captured original root/error here and is not claimed
+reproduced or resolved. Subfolders, linked metadata, unsupported configuration, missing canonical
+Git or whole-tree/metadata budgets can explain refusal; these are diagnostic categories, not a
+diagnosis of the owner's machine. Ignored build/vendor trees still count toward the existing
+whole-tree security budget; the source checkout is not an application fixture.
 
 The bundled `host:git-changes` widget is explicit, single-view and eligible in Main/Sidebar.
 Editor mode adds a second activity to the existing rail and measured Sidebar viewport. No

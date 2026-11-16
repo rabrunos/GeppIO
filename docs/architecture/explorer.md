@@ -7,6 +7,11 @@ Both presentations render the same `Explorer`. No manifest, Worker, dependency o
 change is involved. Packaging and future third-party activity contributions remain provisional.
 A selected folder is a navigation scope, not a Workspace or automatic session restore.
 
+Alpha.45 hides `.git` case-insensitively (directory, file or link) before stat and visible-entry,
+byte and node budgets. This is only a navigation exclusion; metadata is never modified and
+other dotfiles remain visible. Exact-root Git authorization still validates its own metadata.
+The existing shared Git snapshot supplies badges and unique ancestor counts; see [Git](git.md).
+
 ## Presentation and storage
 
 Alpha.41 places the direct activity panel in the host's measured usable Sidebar viewport,
