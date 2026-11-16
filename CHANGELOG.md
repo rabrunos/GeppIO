@@ -2,6 +2,12 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.46] — 2026-11-16
+
+- Added bounded native document ownership and internal Editor tabs, with independent drafts, save targets, revisions, Monaco models, undo, language and view state.
+- Protected inactive dirty documents during tab/window close; canceled or failed saves retain drafts. Existing file grants survive Explorer root changes.
+- Kept one shared Editor presentation across modes, with active-document Status Bar/Explorer association and saved-disk Git refresh. No dependency or public plugin capability was added.
+
 ## [0.1.0-alpha.45] — 2026-11-15
 
 - Added compact Explorer Git letters and unique ancestor counts from the existing bounded snapshot, preserving index/working-tree layers, untracked and conflict semantics with Portuguese descriptions.

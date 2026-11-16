@@ -131,7 +131,15 @@ with direct Editor at the same window size. Open/edit a disposable JSON/TXT, swi
 Editor with a dirty buffer, then Ctrl+S and inspect the file. Repeat narrow/wide, both themes and
 Sidebar/Bottom open/collapsed; expanded Main intentionally follows the host's unpadded right edge.
 
-Build with `pnpm check`, then run `pnpm test:documents`. Pure tests cover UTF-8/BOM/mixed EOL,
+Build with `pnpm check`, then run `pnpm test:documents`. Alpha.46 adds the multi-document
+Electron journey in production DPR 1/1.25 and development. It asserts independent native
+identities/drafts/save targets, stable models and undo/view/language, active-only save,
+inactive dirty close Cancel/Save, all-dirty window close with partial Save/Cancel/conflict,
+complete close-set rejection, root-switch independence, duplicate basenames, eight-tab cap,
+recoverable retained-history limit, keyboard selection/close, stale closed IDs and exact
+layout/model continuity in Editor/Widgets, both themes and narrow/wide widths. The existing
+Git journey retains a second dirty model while opening read-only comparisons and staging
+saved disk bytes. Pure tests cover UTF-8/BOM/mixed EOL,
 exact bytes, equal-size conflicts, identical-byte replacement, missing/read-only files, links,
 malformed/oversized requests, revocation, Save/Discard/Cancel and draft retention. Electron uses
 disposable files/profile, real preload/Main handlers, controlled native-dialog responses, Ctrl+S,

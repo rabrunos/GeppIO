@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { DocumentStore, DocumentFailure, documentFailure } from '../src/main/documents.ts'
-import { DOCUMENT_LIMIT, applyEditorText, editorText, validDocumentRequest } from '../src/shared/documents.ts'
+import { DOCUMENT_LIMIT, DOCUMENT_SESSION_LIMITS, applyEditorText, editorText, validDocumentRequest } from '../src/shared/documents.ts'
 import type { DocumentBridge, DocumentDraft, DocumentSnapshot } from '../src/shared/documents.ts'
 import { EditorSession } from '../src/renderer/src/files-editor/session.ts'
 import { widgetRegistry, initialWorkbench } from '../src/shared/workbench/model.ts'
@@ -18,7 +18,7 @@ async function fixture(run: (root: string, path: string, store: DocumentStore) =
   if (temporary.toLowerCase() !== root.toLowerCase()) console.info('Document fixture normalized a noncanonical temporary root')
   try { await writeFile(path, '\ufeffolá 😀\r\nsecond\nlast'); await run(root, path, new DocumentStore()) } finally { await chmod(path, 0o600).catch(() => {}); await rm(root, { recursive: true, force: true }) }
 }
-const cancel = async () => 'cancel' as const, discard = async () => 'discard' as const, save = async () => 'save' as const
+const cancel = async () => 'cancel' as const, discard = async () => 'discard' as const
 const draft = (store: DocumentStore, text = store.snapshot!.text): DocumentDraft => ({ id: store.snapshot!.id, revision: store.snapshot!.revision, text })
 async function selected(store: DocumentStore, path: string) { const result = await store.select(path, null, cancel, store.guard()); assert.equal(result.ok, true); return store.snapshot! }
 const failure = (kind: string) => (error: unknown) => error instanceof DocumentFailure && error.kind === kind
@@ -26,7 +26,7 @@ const failure = (kind: string) => (error: unknown) => error instanceof DocumentF
 test('native document reads exact UTF-8/BOM/mixed EOL, saves and explicitly reopens without paths', () => fixture(async (_root, path, store) => {
   const value = await selected(store, path)
   assert.equal(value.text, 'olá 😀\r\nsecond\nlast'); assert.equal(value.bom, true)
-  assert.deepEqual(Object.keys(value).sort(), ['bom', 'id', 'name', 'revision', 'text'])
+  assert.deepEqual(Object.keys(value).sort(), ['bom', 'id', 'label', 'name', 'revision', 'text']); assert.ok(!value.label?.includes(_root))
   const next = await store.save(draft(store, 'á 😀\r\nnew\nend'), store.guard())
   assert.equal(next.id, value.id); assert.notEqual(next.revision, value.revision)
   assert.deepEqual(await readFile(path), Buffer.from('\ufeffá 😀\r\nnew\nend'))
@@ -67,23 +67,58 @@ test('invalid UTF-8, binary, oversized file/draft and read-only writes preserve 
   store.revoke(); await selected(store, path)
   await assert.rejects(store.save(draft(store, 'dirty'), store.guard()), failure('write')); assert.deepEqual(await readFile(path), bytes)
 }))
-test('dirty Save/Discard/Cancel, same-file Save reopen, stale revision and in-flight revocation', () => fixture(async (root, path, store) => {
+test('independent grants, duplicate activation, dirty close decisions, stale revisions and revocation', () => fixture(async (root, path, store) => {
   const original = await selected(store, path), other = join(root, 'other.ts'); await writeFile(other, 'const x = 1\n')
-  const result = await store.select(other, draft(store, 'dirty'), cancel, store.guard()); assert.ok(result.ok && result.canceled); assert.deepEqual(store.snapshot, original)
-  await store.select(path, draft(store, 'saved same file'), save, store.guard()); assert.equal(store.snapshot!.text, 'saved same file')
+  const first = { id: original.id, revision: original.revision, text: 'dirty first' }
+  let decisions = 0
+  await store.select(other, first, async () => { decisions++; return 'save' }, store.guard())
+  const second = store.snapshot!
+  assert.equal(decisions, 0); assert.equal(store.snapshots.length, 2); assert.equal(await readFile(path, 'utf8'), '\ufeff' + original.text)
+  await store.save(first, store.guard()); assert.equal(store.snapshot!.id, second.id); assert.equal(await readFile(other, 'utf8'), 'const x = 1\n')
+  await store.select(path, draft(store), cancel, store.guard()); assert.equal(store.snapshot!.id, original.id); assert.equal(store.snapshot!.text, first.text); assert.equal(store.snapshots.length, 2)
+  const canceled = await store.release(draft(store, 'kept draft'), cancel, store.guard()); assert.ok(canceled.ok && canceled.canceled); assert.equal(store.snapshots.length, 2)
   const old = draft(store); await store.save(draft(store, 'next'), store.guard()); await assert.rejects(store.save(old, store.guard()), failure('stale'))
   const guard = store.guard()
-  await assert.rejects(store.select(other, draft(store, 'dirty'), async () => { store.revoke(); return 'discard' }, guard), failure('stale'))
+  await assert.rejects(store.release(draft(store, 'dirty'), async () => { store.revoke(); return 'discard' }, guard), failure('stale'))
   await selected(store, path)
   let count = 0
   await assert.rejects(store.save(draft(store, 'never committed'), () => ++count < 2), failure('stale'))
   assert.equal(await readFile(path, 'utf8'), '\ufeffnext')
   await store.select(other, draft(store, 'discarded'), discard, store.guard()); assert.equal(store.snapshot!.name, 'other.ts')
 }))
+test('all-draft close validates the complete set before writing; cancellation retains inactive grants', () => fixture(async (root, path, store) => {
+  const first = await selected(store, path), other = join(root, 'other.txt'); await writeFile(other, 'second')
+  await store.select(other, null, cancel, store.guard()); const second = store.snapshot!
+  const drafts = [first, second].map(value => ({ id: value.id, revision: value.revision, text: 'dirty ' + value.name }))
+  let decisions = 0
+  const decide = async () => { decisions++; return 'save' as const }
+  for (const invalid of [drafts.slice(0, 1), [drafts[0]!, drafts[0]!], [drafts[0]!, { ...drafts[1]!, revision: randomUUID() }]]) await assert.rejects(store.resolveAll(invalid, decide, store.guard()), failure('stale'))
+  assert.equal(decisions, 0); assert.equal(await readFile(other, 'utf8'), 'second')
+  const resolved = await store.resolveAll(drafts, async value => value.id === first.id ? 'save' : 'cancel', store.guard())
+  assert.equal(resolved, false); assert.equal(store.snapshots.length, 2); assert.equal(store.snapshot!.id, second.id)
+  assert.equal(await readFile(path, 'utf8'), '\ufeffdirty document.txt'); assert.equal(await readFile(other, 'utf8'), 'second')
+  const updated = store.snapshots.map(value => ({ id: value.id, revision: value.revision, text: value.id === second.id ? drafts[1]!.text : value.text }))
+  await writeFile(other, 'external')
+  await assert.rejects(store.resolveAll(updated, async () => 'save', store.guard()), failure('conflict'))
+  assert.equal(store.snapshots.length, 2); assert.equal(await readFile(other, 'utf8'), 'external')
+}))
+test('open-document limits are recoverable and never evict a grant or bypass duplicate identity', () => fixture(async (root, path, store) => {
+  const first = await selected(store, path)
+  for (let i = 1; i < DOCUMENT_SESSION_LIMITS.count; i++) { const file = join(root, `doc-${i}.txt`); await writeFile(file, 'text'); await store.select(file, null, cancel, store.guard()) }
+  const extra = join(root, 'extra.txt'); await writeFile(extra, 'extra')
+  await assert.rejects(store.select(extra, null, cancel, store.guard()), failure('limit'))
+  assert.equal(store.snapshots.length, DOCUMENT_SESSION_LIMITS.count)
+  await store.select(path, null, cancel, store.guard()); assert.equal(store.snapshot!.id, first.id)
+  await store.release(draft(store), discard, store.guard()); await store.select(extra, null, cancel, store.guard())
+  assert.equal(store.snapshots.length, DOCUMENT_SESSION_LIMITS.count); assert.equal(store.snapshot!.name, 'extra.txt')
+}))
 test('protocol accepts only exact bounded argument shapes, never paths/channels', () => {
   const value = { id: randomUUID(), revision: randomUUID(), text: '😀' }
   assert.ok(validDocumentRequest('open', [null])); assert.ok(validDocumentRequest('save', [value]))
   assert.ok(validDocumentRequest('close', [randomUUID(), value]))
+  assert.ok(validDocumentRequest('activate', [value.id])); assert.ok(validDocumentRequest('close', [randomUUID(), [value]]))
+  for (const args of [[], ['C:\\private.txt'], [value], [value.id, 'extra']]) assert.equal(validDocumentRequest('activate', args), false)
+  for (const drafts of [[value, value], Array.from({ length: 9 }, () => ({ ...value, id: randomUUID() })), [{ ...value, path: 'C:\\private.txt' }]]) assert.equal(validDocumentRequest('close', [randomUUID(), drafts]), false)
   for (const args of [[], [value, 'extra'], [{ ...value, path: 'C:\\private.txt' }], [{ ...value, id: 'path' }], [{ ...value, text: '\ud800' }], [{ ...value, text: 'x'.repeat(DOCUMENT_LIMIT + 1) }], [null]]) assert.equal(validDocumentRequest('save', args), false)
   assert.equal(validDocumentRequest('read-path', ['C:\\private.txt']), false)
   const error = documentFailure(new Error('C:\\private\\secret.txt'))
@@ -98,6 +133,7 @@ test('single renderer session keeps dirty draft on canceled/failed operations an
   let disk: DocumentSnapshot = { id: randomUUID(), revision: randomUUID(), name: 'one.ts', text: 'old\r\n', bom: false }
   let canceled = false, denied = false, pending: (() => void) | undefined
   const bridge: DocumentBridge = {
+    activate: async () => ({ ok: true, document: disk }),
     open: async () => ({ ok: true, document: disk, canceled }),
     save: async value => { await new Promise<void>(resolve => { pending = resolve }); if (denied) return { ok: false, code: 'write', error: 'denied' }; disk = { ...disk, revision: randomUUID(), text: value.text }; return { ok: true, document: disk } },
     release: async () => ({ ok: true, document: disk, canceled: true }), close: async () => ({ ok: true, document: disk, canceled: true }), onCloseRequested: () => () => {}

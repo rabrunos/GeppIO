@@ -9,9 +9,17 @@ import { DocumentStore, documentFailure } from '../src/main/documents.ts'
 import { EXPLORER_LIMITS, validExplorerRequest } from '../src/shared/explorer.ts'
 import type { ExplorerNode, ExplorerResult } from '../src/shared/explorer.ts'
 import { EditorSession } from '../src/renderer/src/files-editor/session.ts'
-import { ExplorerSession } from '../src/renderer/src/files-editor/explorer-session.ts'
+import type { DocumentResult } from '../src/shared/documents.ts'
+import { ExplorerSession, findExplorerChild } from '../src/renderer/src/files-editor/explorer-session.ts'
 
 const current = () => true
+test('display following uses exact names first and only unique case-folded Windows associations', () => {
+  const first: ExplorerNode = { id: randomUUID(), name: 'file.ts', kind: 'file' }, second: ExplorerNode = { id: randomUUID(), name: 'FILE.TS', kind: 'file' }
+  assert.equal(findExplorerChild([first], 'FILE.TS'), undefined)
+  assert.equal(findExplorerChild([first], 'FILE.TS', true), first)
+  assert.equal(findExplorerChild([first, second], 'FILE.TS', true), second)
+  assert.equal(findExplorerChild([first, second], 'File.ts', true), undefined)
+})
 function result(value: ExplorerResult) { assert.ok(value.ok); return value }
 function root(value: ExplorerResult) { const node = result(value).root; assert.ok(node); return node }
 const denied = (kind: string) => (error: unknown) => error instanceof ExplorerFailure && error.kind === kind
@@ -109,33 +117,44 @@ test('large directories refuse the whole result; depth and global metadata budge
   await rm(join(budget, 'd0'), { recursive: true }); await store.list(budgetRoot.id, budgetRoot.id, current)
   assert.equal(result(await store.list(budgetRoot.id, dirs[7]!.id, current)).children!.length, 512)
 }))
-test('authorized document selection retains dirty buffer on Cancel, unsupported file and changed grant after decision', async () => fixture(async path => {
+test('independent file grants survive root revocation; dirty tab Cancel and invalid candidates preserve both files', async () => fixture(async path => {
   const first = join(path, 'first.ts'), next = join(path, 'next.json'); await writeFile(first, '\ufeffone\r\n'); await writeFile(next, '{"v":1}\n')
   const dirs = new DirectoryStore(), documents = new DocumentStore(), selected = root(await dirs.select(path, current))
   const entries = result(await dirs.list(selected.id, selected.id, current)).children!, node = entries.find(n => n.name === 'next.json')!
   await documents.select(first, null, async () => 'discard', current)
   const draft = { id: documents.snapshot!.id, revision: documents.snapshot!.revision, text: 'dirty\r\n' }
   const open = (decision: 'save' | 'discard' | 'cancel') => documents.select(next, draft, async () => decision, current, async () => { await dirs.file(selected.id, node.id, current) })
-  const canceled = await open('cancel'); assert.ok(canceled.ok && canceled.canceled); assert.equal(documents.snapshot!.id, draft.id)
-  await writeFile(next, Buffer.from([0, 1, 255])); await assert.rejects(open('discard')); assert.equal(documents.snapshot!.id, draft.id)
+  await open('cancel'); const second = documents.snapshot!
+  assert.notEqual(second.id, draft.id); assert.equal(documents.snapshots.length, 2); assert.equal(await readFile(first, 'utf8'), '\ufeffone\r\n')
+  const canceled = await documents.release({ id: second.id, revision: second.revision, text: 'dirty second' }, async () => 'cancel', current)
+  assert.ok(canceled.ok && canceled.canceled); assert.equal(documents.snapshots.length, 2)
+  await writeFile(next, Buffer.from([0, 1, 255])); await assert.rejects(open('discard')); assert.equal(documents.snapshot!.id, second.id)
   await writeFile(next, '{"v":1}\n'); const guard = dirs.guard()
-  await assert.rejects(documents.select(next, draft, async () => { dirs.revoke(); return 'discard' }, guard, async () => { await dirs.file(selected.id, node.id, guard) }))
-  assert.equal(documents.snapshot!.id, draft.id); assert.equal(await readFile(first, 'utf8'), '\ufeffone\r\n')
+  await assert.rejects(documents.select(next, draft, async () => 'cancel', guard, async () => { dirs.revoke(); await dirs.file(selected.id, node.id, guard) }))
+  assert.equal(documents.snapshot!.id, second.id); assert.equal(documents.snapshots.length, 2); assert.equal(await readFile(first, 'utf8'), '\ufeffone\r\n')
   await documents.save(draft, current); assert.equal(await readFile(first, 'utf8'), '\ufeffdirty\r\n')
   const failure = documentFailure(new Error(first)); assert.doesNotMatch(JSON.stringify(failure), /first\.ts/)
 }))
-test('shared Explorer state commits active file only after confirmed EditorSession opening', async () => fixture(async path => {
+test('shared Explorer follows active tabs and refreshed identity without saving other dirty drafts', async () => fixture(async path => {
   await writeFile(join(path, 'one.txt'), 'one'); await writeFile(join(path, 'two.txt'), 'two')
-  const dirs = new DirectoryStore(), docs = new DocumentStore(); let decision: 'save' | 'discard' | 'cancel' = 'cancel'
-  const editor = new EditorSession({ open: async () => ({ ok: true, document: null }), save: async draft => ({ ok: true, document: await docs.save(draft, current) }), release: async () => ({ ok: true, document: null }), close: async () => ({ ok: true, document: null }), onCloseRequested: () => () => {} })
+  const dirs = new DirectoryStore(), docs = new DocumentStore(); const decision: 'save' | 'discard' | 'cancel' = 'cancel'
+  const reply = (value: DocumentResult): DocumentResult => {
+    const locate = (document: import('../src/shared/documents.ts').DocumentSnapshot) => ({ ...document, ...(dirs.snapshot ? { location: { root: dirs.snapshot.id, names: [document.name] } } : {}) })
+    return value.ok ? { ...value, document: value.document ? locate(value.document) : null, documents: docs.snapshots.map(locate) } : value
+  }
+  const editor = new EditorSession({ activate: async id => reply(docs.activate(id)), open: async () => ({ ok: true, document: null }), save: async draft => { await docs.save(draft, current); return reply(docs.result()) }, release: async draft => reply(await docs.release(draft, async () => decision, current)), close: async () => ({ ok: true, document: null }), onCloseRequested: () => () => {} })
   const explorer = new ExplorerSession({ select: () => dirs.select(path, current), list: (r, n) => dirs.list(r, n, current), release: async r => dirs.release(r), open: async (r, n, draft) => {
-    try { return await docs.select(await dirs.file(r, n, current), draft, async () => decision, current, async () => { await dirs.file(r, n, current) }) } catch (error) { return documentFailure(error) }
+    try { return reply(await docs.select(await dirs.file(r, n, current), draft, async () => decision, current, async () => { await dirs.file(r, n, current) })) } catch (error) { return documentFailure(error) }
   } }, editor)
+  explorer.connect()
   await explorer.select(); const selected = explorer.snapshot().root!, [one, two] = explorer.snapshot().children.get(selected.id) as ExplorerNode[]
-  await explorer.open(one!); editor.edit('draft'); await explorer.open(two!)
-  assert.equal(explorer.snapshot().active, one!.id); assert.equal(editor.snapshot().text, 'draft')
-  decision = 'save'; await explorer.open(two!); assert.equal(explorer.snapshot().active, two!.id); assert.equal(await readFile(join(path, 'one.txt'), 'utf8'), 'draft')
+  await explorer.open(one!); const first = editor.snapshot().document!.id; editor.edit('draft'); await explorer.open(two!)
+  assert.equal(explorer.snapshot().active, two!.id); assert.equal(editor.snapshot().text, 'two'); assert.equal(editor.documentState(first)!.text, 'draft')
+  assert.equal(await readFile(join(path, 'one.txt'), 'utf8'), 'one'); assert.equal(editor.snapshot().tabs.length, 2)
+  await editor.activate(first); assert.equal(explorer.snapshot().active, one!.id); assert.equal(editor.snapshot().text, 'draft')
+  await editor.save(); assert.equal(await readFile(join(path, 'one.txt'), 'utf8'), 'draft')
   await assert.rejects(dirs.file(selected.id, one!.id, current), denied('stale')); await explorer.refresh()
   const refreshed = explorer.snapshot().children.get(selected.id)!.find(n => n.name === 'one.txt')!; assert.notEqual(refreshed.id, one!.id)
-  await explorer.release(); assert.equal(explorer.snapshot().root, null); assert.equal(editor.snapshot().text, 'two')
+  await explorer.release(); assert.equal(explorer.snapshot().root, null); assert.equal(editor.snapshot().text, 'draft'); assert.equal(editor.snapshot().tabs.length, 2)
+  explorer.dispose()
 }))

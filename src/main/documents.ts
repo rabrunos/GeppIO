@@ -2,23 +2,25 @@ import { randomUUID } from 'node:crypto'
 import { lstat, open, realpath, rename, unlink } from 'node:fs/promises'
 import type { BigIntStats } from 'node:fs'
 import { basename, dirname, isAbsolute, join, parse, resolve } from 'node:path'
-import { DOCUMENT_LIMIT, wellFormedText } from '../shared/documents.ts'
+import { DOCUMENT_LIMIT, DOCUMENT_SESSION_LIMITS, wellFormedText } from '../shared/documents.ts'
 import type { DocumentDraft, DocumentError, DocumentResult, DocumentSnapshot } from '../shared/documents.ts'
 
 const messages: Record<DocumentError, string> = {
   invalid: 'Solicitação de documento inválida.', stale: 'Autorização expirada. Reabra o arquivo explicitamente.', busy: 'Aguarde a operação de arquivo em andamento.',
   unsupported: 'Arquivo não suportado. Selecione texto UTF-8 válido, sem dados binários, links ou caminhos especiais.',
   oversized: 'O arquivo excede o limite de 1 MiB.', unavailable: 'Arquivo indisponível. O rascunho foi mantido.',
-  conflict: 'O arquivo ou seu destino mudou no disco. Copie o rascunho antes de reabrir; nenhuma alteração externa foi sobrescrita.',
+  limit: 'Limite de 8 arquivos abertos ou 8 MiB de conteúdo. Feche uma aba antes de abrir outro arquivo.',
+  conflict: 'O arquivo ou seu destino mudou no disco. Copie o rascunho, feche a aba e reabra; nenhuma alteração externa foi sobrescrita.',
   write: 'Não foi possível confirmar a gravação. O rascunho foi mantido. Verifique o arquivo e as permissões antes de tentar novamente.'
 }
 export class DocumentFailure extends Error {
   readonly kind: DocumentError
-  constructor(kind: DocumentError) { super(messages[kind]); this.kind = kind }
+  readonly document?: string
+  constructor(kind: DocumentError, document?: string) { super(messages[kind]); this.kind = kind; this.document = document }
 }
 export function documentFailure(error: unknown): DocumentResult {
   const code = error instanceof DocumentFailure ? error.kind : 'unavailable'
-  return { ok: false, code, error: messages[code] }
+  return { ok: false, code, error: messages[code], ...(error instanceof DocumentFailure && error.document ? { failed: error.document } : {}) }
 }
 type Evidence = { path: string; chain: string; stat: BigIntStats; bytes: Buffer; text: string; bom: boolean }
 type Selection = { evidence: Evidence; snapshot: DocumentSnapshot }
@@ -65,41 +67,52 @@ async function inspect(path: string): Promise<Evidence> {
 }
 const sameEvidence = (a: Evidence, b: Evidence) => a.path === b.path && a.chain === b.chain && sameStat(a.stat, b.stat) && a.bytes.equals(b.bytes)
 export type DocumentDecision = 'save' | 'discard' | 'cancel'
-/** Exactly one window's native selection. Paths never cross the preload boundary. */
+/** One window's bounded native grants. Adding/activating a tab never replaces another grant. */
 export class DocumentStore {
-  private selection: Selection | null = null
+  private selections = new Map<string, Selection>()
+  private active: string | null = null
   private generation = 0
-  get snapshot(): DocumentSnapshot | null { return this.selection ? { ...this.selection.snapshot } : null }
+  get snapshot(): DocumentSnapshot | null { const selected = this.active ? this.selections.get(this.active) : null; return selected ? { ...selected.snapshot } : null }
+  get snapshots(): DocumentSnapshot[] { return [...this.selections.values()].map(value => ({ ...value.snapshot })) }
+  result(canceled = false): DocumentResult { return { ok: true, document: this.snapshot, documents: this.snapshots, ...(canceled ? { canceled: true } : {}) } }
+  /** Main-only display association. Never returned through IPC. */
+  filePath(id: string): string | null { return this.selections.get(id)?.evidence.path ?? null }
   guard(): () => boolean { const generation = this.generation; return () => generation === this.generation }
-  revoke(): void { this.generation++; this.selection = null }
+  revoke(): void { this.generation++; this.selections.clear(); this.active = null }
   private current(draft: DocumentDraft | null): Selection | null {
-    if (!this.selection && draft === null) return null
-    if (!draft || !this.selection || draft.id !== this.selection.snapshot.id || draft.revision !== this.selection.snapshot.revision) throw new DocumentFailure('stale')
-    return this.selection
+    if (!this.selections.size && draft === null) return null
+    const selected = draft ? this.selections.get(draft.id) : undefined
+    if (!draft || !selected || draft.revision !== selected.snapshot.revision) throw new DocumentFailure('stale', draft?.id)
+    return selected
   }
-  async select(path: string, draft: DocumentDraft | null, decide: () => Promise<DocumentDecision>, current: () => boolean, authorize?: () => Promise<void>): Promise<DocumentResult> {
-    this.current(draft)
-    let candidate = await inspect(path)
-    const previous = this.selection
-    const sameTarget = previous && sameEvidence(candidate, previous.evidence), revision = previous?.snapshot.revision
+  activate(id: string): DocumentResult {
+    if (!this.selections.has(id)) throw new DocumentFailure('stale')
+    this.active = id; return { ok: true, document: this.snapshot }
+  }
+  async select(path: string, draft: DocumentDraft | null, _decide: () => Promise<DocumentDecision>, current: () => boolean, authorize?: () => Promise<void>): Promise<DocumentResult> {
+    if (draft) this.current(draft)
+    const candidate = await inspect(path)
     if (!current()) throw new DocumentFailure('stale')
-    if (!await this.resolveDraft(draft, decide, current)) return { ok: true, document: this.snapshot, canceled: true }
-    if (!current()) throw new DocumentFailure('stale')
-    if (previous && sameTarget && previous.snapshot.revision !== revision) candidate = previous.evidence
-    // A dialog may have been open for minutes. Revalidate the candidate before granting it.
+    // Native picker/Explorer selection authorizes just this candidate, never an
+    // implicit Save/Discard of another document. Revalidate before granting it.
     if (!sameEvidence(candidate, await inspect(path))) throw new DocumentFailure('conflict')
     await authorize?.()
     if (!current()) throw new DocumentFailure('stale')
-    this.generation++
-    this.selection = { evidence: candidate, snapshot: { id: randomUUID(), revision: randomUUID(), name: basename(path).slice(0, 255), text: candidate.text, bom: candidate.bom } }
-    return { ok: true, document: this.snapshot }
+    const key = (value: string) => process.platform === 'win32' ? value.toLowerCase() : value
+    const existing = [...this.selections.values()].find(value => key(value.evidence.path) === key(path))
+    if (existing && existing.evidence.path !== path && identity(existing.evidence.stat) !== identity(candidate.stat)) throw new DocumentFailure('conflict', existing.snapshot.id)
+    if (existing) return this.activate(existing.snapshot.id)
+    if (this.selections.size >= DOCUMENT_SESSION_LIMITS.count || [...this.selections.values()].reduce((sum, value) => sum + value.evidence.bytes.length, candidate.bytes.length) > DOCUMENT_SESSION_LIMITS.bytes) throw new DocumentFailure('limit')
+    const snapshot = { id: randomUUID(), revision: randomUUID(), name: basename(path).slice(0, 255), label: [basename(dirname(path)), basename(path)].filter(Boolean).join('/').slice(0, 511), text: candidate.text, bom: candidate.bom }
+    this.selections.set(snapshot.id, { evidence: candidate, snapshot }); this.active = snapshot.id
+    return this.result()
   }
   async save(draft: DocumentDraft, current: () => boolean): Promise<DocumentSnapshot> {
     const selected = this.current(draft)!, original = selected.evidence, bytes = encode(draft.text, original.bom)
     const check = async () => {
       const disk = await inspect(original.path)
       if (!sameEvidence(original, disk)) throw new DocumentFailure('conflict')
-      if (!current() || selected !== this.selection) throw new DocumentFailure('stale')
+      if (!current() || selected !== this.selections.get(draft.id)) throw new DocumentFailure('stale')
     }
     await check()
     if (bytes.equals(original.bytes)) return { ...selected.snapshot }
@@ -114,7 +127,7 @@ export class DocumentStore {
       await check()
       await rename(temporary, original.path); committed = true
       const evidence = await inspect(original.path)
-      if (!evidence.bytes.equals(bytes) || !current() || this.selection !== selected) throw new DocumentFailure('conflict')
+      if (!evidence.bytes.equals(bytes) || !current() || this.selections.get(draft.id) !== selected) throw new DocumentFailure('conflict')
       selected.evidence = evidence
       selected.snapshot = { ...selected.snapshot, revision: randomUUID(), text: draft.text }
       return { ...selected.snapshot }
@@ -129,6 +142,27 @@ export class DocumentStore {
     if (!current()) throw new DocumentFailure('stale')
     if (decision === 'cancel') return false
     if (decision === 'save') await this.save(draft!, current)
+    return true
+  }
+  async release(draft: DocumentDraft, decide: () => Promise<DocumentDecision>, current: () => boolean): Promise<DocumentResult> {
+    const selected = this.current(draft)!, ids = [...this.selections.keys()], index = ids.indexOf(draft.id)
+    if (!await this.resolveDraft(draft, decide, current)) return this.result(true)
+    if (!current() || this.selections.get(draft.id) !== selected) throw new DocumentFailure('stale')
+    this.selections.delete(draft.id)
+    if (this.active === draft.id) this.active = (index > 0 ? ids[index - 1] : ids[1]) ?? null
+    return this.result()
+  }
+  async resolveAll(drafts: readonly DocumentDraft[], decide: (document: DocumentSnapshot) => Promise<DocumentDecision>, current: () => boolean): Promise<boolean> {
+    // Validate the complete set before any decision/write: inactive drafts cannot
+    // be omitted, duplicated or rebound to another file/revision.
+    if (drafts.length !== this.selections.size || new Set(drafts.map(value => value.id)).size !== drafts.length) throw new DocumentFailure('stale')
+    let bytes = 0
+    for (const draft of drafts) { const selected = this.current(draft)!; bytes += encode(draft.text, selected.snapshot.bom).length }
+    if (bytes > DOCUMENT_SESSION_LIMITS.bytes || !current()) throw new DocumentFailure('stale')
+    for (const draft of drafts) {
+      try { if (!await this.resolveDraft(draft, () => decide(this.selections.get(draft.id)!.snapshot), current)) return false }
+      catch (error) { throw new DocumentFailure(error instanceof DocumentFailure ? error.kind : 'unavailable', draft.id) }
+    }
     return true
   }
 }

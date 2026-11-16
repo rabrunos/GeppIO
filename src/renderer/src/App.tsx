@@ -98,6 +98,7 @@ function Workbench({ plugins }: { plugins: ReturnType<typeof usePlugins> }) {
   const fileSession = useFileEditor(tx.editing), [fileMode, setFileMode] = useState<'editor' | 'widgets'>('widgets')
   const [explorer] = useState(() => new ExplorerSession(window.geppio!.explorer, fileSession))
   const [git] = useState(() => new GitSession(window.geppio!.git, explorer))
+  useEffect(() => { explorer.connect(); return () => explorer.dispose() }, [explorer])
   const [editorActivity, setEditorActivity] = useState<'explorer' | 'git'>('explorer')
   useEffect(() => { git.connect(); return () => git.dispose() }, [git])
   git.locked = tx.editing

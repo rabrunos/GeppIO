@@ -15,6 +15,7 @@ test('session-only language and cursor do not edit buffer or disk draft; dirty/e
   const document: DocumentSnapshot = { id: randomUUID(), revision: randomUUID(), name: 'test.json', text: '{\r\n}\r\n', bom: true }
   let submitted = '', complete!: () => void
   const bridge: DocumentBridge = {
+    activate: async () => ({ ok: true, document }),
     open: async () => ({ ok: true, document }),
     save: async draft => { submitted = draft.text; await new Promise<void>(resolve => { complete = resolve }); return { ok: false, code: 'write', error: 'Disposable write failure' } },
     release: async () => ({ ok: true, document: null }), close: async () => ({ ok: true, document: null }), onCloseRequested: () => () => {}

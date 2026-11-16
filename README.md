@@ -10,10 +10,15 @@ persistência de layout. Há um runtime experimental real para plugins locais co
 O perfil novo abre Main, Sidebar e Bottom vazios; escolha widgets dos plugins instalados
 no catálogo. Os sete demos foram retirados do uso normal. Layouts anteriores preservam
 plugins, barras e composições; referências dos demos ficam guardadas para recuperação.
-Arquivos & Editor oferece edição real de um documento UTF-8 de até 1 MiB e, na alpha.39,
-Explorador para uma pasta local selecionada em diálogo nativo. No modo Editor, o Explorador
+Na alpha.46, Arquivos & Editor oferece até oito abas de arquivos UTF-8, com limite de 1 MiB
+por arquivo e 8 MiB de fonte na sessão. Cada aba preserva rascunho, linguagem, desfazer/refazer
+e posição; **Ctrl+S** salva apenas a ativa. Abrir outro arquivo não salva o anterior. Fechar
+uma aba alterada pede Salvar/Descartar/Cancelar; fechar a janela protege também abas inativas.
+Os rascunhos ainda ficam somente na sessão. O histórico tem limite explícito e, ao atingi-lo,
+orienta salvar ou copiar e fechar/reabrir, sem expulsar abas. Veja os [limites de edição](docs/architecture/documents.md).
+O Explorador usa uma pasta local selecionada em diálogo nativo. No modo Editor, o Explorador
 ocupa a Sidebar; no modo Widgets, coloque seu widget explicitamente em Main ou Sidebar.
-A árvore e o rascunho são compartilhados. Use **Atualizar árvore** após mudanças no disco ou
+A árvore e as abas são compartilhadas; trocar de pasta conserva os arquivos abertos. Use **Atualizar árvore** após mudanças no disco ou
 antes de reabrir um item cujo arquivo foi substituído ao salvar. A navegação aceita até 512
 entradas por pasta e 32 níveis; não cria, move nem exclui arquivos. Veja os [limites](docs/architecture/explorer.md).
 Na alpha.44, **Alterações Git** consulta a raiz exata selecionada no Explorador, mostra branch,

@@ -55,7 +55,13 @@ try {
     const id = await state().getAttribute('data-document-id')
     await text().fill('const café = "editado 😀";\n'); assert.equal(await state().getAttribute('data-document-dirty'), 'true')
     await open(null); assert.equal(await text().inputValue(), 'const café = "editado 😀";\n'); assert.equal(await state().getAttribute('data-document-id'), id)
-    await open(other, 2); assert.equal(await state().getAttribute('data-document-id'), id)
+    await open(other, 2); assert.notEqual(await state().getAttribute('data-document-id'), id)
+    assert.equal(await page.getByRole('tab', { name: /document.ts/ }).count(), 1)
+    assert.equal(await page.locator(`[data-document-tab="${id}"] .file-editor-dirty`).count(), 1)
+    assert.equal(await page.getByRole('tablist', { name: 'Arquivos abertos' }).getByRole('tab').count(), 2)
+    assert.equal(await readFile(path, 'utf8'), '\ufeffconst café = "😀";\r\n', 'Opening another file never saves the first draft')
+    await page.getByRole('button', { name: 'Fechar arquivo', exact: true }).click(); await idle()
+    assert.equal(await state().getAttribute('data-document-id'), id); assert.equal(await text().inputValue(), 'const café = "editado 😀";\n')
     await text().press('Control+s'); await idle(); assert.equal(await state().getAttribute('data-document-dirty'), 'false')
     assert.equal(await readFile(path, 'utf8'), '\ufeffconst café = "editado 😀";\r\n')
     evidence.lifecycle = 'passed: native picker boundary, cancellation, exact BOM/CRLF/non-BMP bytes and Ctrl+S'
@@ -123,25 +129,27 @@ try {
     await save(); assert.equal(await state().getAttribute('data-document-status'), 'conflict'); assert.equal(await text().inputValue(), 'local draft')
     await picker(path, 0); await nativeClose(); assert.equal(await text().inputValue(), 'local draft'); assert.equal(await readFile(path, 'utf8'), '\ufeffSHARED FINAL\r\n')
     await picker(path, 2); await page.getByRole('button', { name: 'Fechar', exact: true }).click(); await idle(); assert.equal(await text().inputValue(), 'local draft')
+    await picker(path, 1); await page.getByRole('button', { name: 'Fechar arquivo', exact: true }).click(); await idle()
     await open(path, 1); assert.equal(await text().inputValue(), 'SHARED FINAL\n')
     await text().fill('missing draft'); await rm(path); await save(); assert.equal(await text().inputValue(), 'missing draft')
     assert.equal(await state().getAttribute('data-document-status'), 'unavailable')
-    await open(other, 1); await chmod(other, 0o444); await open(other, 1); await text().fill('denied draft'); await save()
+    await picker(other, 1); await page.getByRole('button', { name: 'Fechar arquivo', exact: true }).click(); await idle()
+    await open(other, 1); await chmod(other, 0o444); await page.getByRole('button', { name: 'Fechar arquivo', exact: true }).click(); await idle(); await open(other, 1); await text().fill('denied draft'); await save()
     assert.equal(await state().getAttribute('data-document-status'), 'write'); assert.equal(await text().inputValue(), 'denied draft'); await chmod(other, 0o600)
-    await open(other, 1); await text().fill('final saved\n'); await save()
+    await page.getByRole('button', { name: 'Fechar arquivo', exact: true }).click(); await idle(); await open(other, 1); await text().fill('final saved\n'); await save()
     evidence.failures = 'passed: equal-size external conflict, native/app close Cancel and failed Save stay open, missing target and read-only write retain drafts'
 
     // Capture a real capability, revoke by actual navigation, then reject it through the fixed bridge.
     await picker(path); await writeFile(path, 'revocable')
     const old = await page.evaluate(async () => window.geppio!.documents.open(null))
-    // Existing selection requires its current capability; null must be denied.
-    assert.ok(!old.ok && old.code === 'stale')
+    // A new native picker can add a separate grant, without replacing the open file.
+    assert.ok(old.ok && old.document && old.documents?.length === 2)
     await page.getByRole('button', { name: 'Fechar arquivo', exact: true }).click(); await idle()
     const opened = await page.evaluate(async () => window.geppio!.documents.open(null)); assert.ok(opened.ok && opened.document)
     const stale: DocumentDraft = { id: opened.document.id, revision: opened.document.revision, text: 'forbidden' }
     await page.reload(); await page.getByTestId('edit-layout').waitFor(); await settle(page)
     const rejected = await page.evaluate(draft => window.geppio!.documents.save(draft), stale); assert.ok(!rejected.ok && rejected.code === 'stale')
-    evidence.revocation = 'passed: real renderer navigation revokes capability; null cannot replace an active authorization'
+    evidence.revocation = 'passed: separate native picker grants; real renderer navigation revokes every old capability'
 
     for (const theme of ['light', 'dark']) {
       await page.evaluate(theme => localStorage.setItem('geppio:theme:v1', theme), theme); await page.reload(); await page.getByTestId('edit-layout').waitFor(); await settle(page)

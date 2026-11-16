@@ -1,10 +1,48 @@
-# Essential Files & Editor — alpha.42
+# Essential Files & Editor — alpha.46
+
+## Multiple documents — alpha.46 / Issue #53
+
+DocumentStore now retains up to eight independent native file grants, each with its own
+opaque ID/revision, validated file/ancestor identity and confirmed bytes. EditorSession
+retains one exact draft per grant, and one active-document facade for existing Status Bar,
+Explorer and Git subscribers. Opening another file never saves or replaces a held draft;
+opening the same canonical path activates its existing grant, including a conflicted draft.
+Close and reopen explicitly to reread a changed target. No force-save or merge is implied.
+
+Compact internal tabs select by click or ArrowLeft/ArrowRight/Home/End; Delete or the close
+button requests native Save/Discard/Cancel. Active close selects the preceding tab, otherwise
+the next tab. Closing an inactive tab preserves the current model. Every open tab has its
+own stable Monaco model, language override, undo/redo and saved multi-selection/scroll view.
+Switching Editor/Widgets reattaches the same editor DOM and leaves all models alive. Only
+confirmed close disposes the corresponding model and subscriptions; final teardown releases all.
+
+The source cap remains 1 MiB including BOM per file, eight files and 8 MiB aggregate exact
+source. Retained edit text/EOL metadata has a conservative 96 MiB session budget: 64 MiB
+reserved in advance for initial EOL patterns and one corrective refusal recovery per slot,
+plus a 32 MiB accepted edit/EOL ledger, with at most 20,000 accepted versions per model.
+A corrective recovery or exhausted ledger makes that model read-only for new typing; retained
+undo/redo, copying, saving and explicit close remain available. Feedback explains close/reopen
+to continue. No silent history/model eviction occurs. This bounds retained text bookkeeping,
+not total Electron/Monaco heap, transient clipboard input or language-service overhead.
+
+Native window close receives the complete unique ID/revision/draft set under a one-use ticket.
+Main validates every draft and its byte cap before any dialog/write, then resolves dirty files
+sequentially. Cancel or failed/conflicted Save leaves every grant and draft open. Earlier
+explicitly saved files remain saved and their acknowledged revisions are returned, so a later
+Cancel does not incorrectly mark them dirty. Draft text stays renderer-owned until saved.
+
+Explorer root select/release preserves independent file grants and drafts. A safe Main-derived
+root-relative association lets Explorer follow the active tab through lazy ancestors; files
+outside the current root clear the highlight. Root failure clears stale tree/Git state while
+retaining file drafts. Renderer DTOs contain bounded basenames/parent labels or validated
+relative names, never absolute paths. Only the native unsaved-changes dialog shows the full
+path for disambiguation. No Workspace persistence, recovery or terminal-cwd changes occur here.
 
 ## Monaco integration — alpha.42 / Issue #49
 
 The official FileEditor now attaches a session-owned Monaco presentation from
 `renderer/src/files-editor/monaco.ts`. It uses public ESM editor/model/worker APIs only.
-EditorSession remains the single exact editable draft and functional document identity;
+EditorSession remains the single owner of exact editable drafts and functional document identities;
 DocumentStore still owns native paths, revisions, confirmed bytes and file authority.
 The LF Monaco model is an editing projection, not a second file service. It uses an opaque
 `inmemory://geppio/<document UUID>` URI without a native path or basename.
@@ -16,8 +54,8 @@ The existing shared host viewport remains authoritative; ResizeObserver lays out
 its actual container. Themes select stock `vs`/`vs-dark`. Monaco-specific code stays in this
 small adapter; native document service and public plugin SDK do not import Monaco.
 
-On actual document replacement/release the adapter detaches and disposes the obsolete model,
-clears its format history and creates at most one new active model. Save keeps the same model,
+On confirmed document release the adapter disposes only that model and its format history.
+Inactive open models remain alive. Save keeps the same model,
 URI and undo history while EditorSession receives the confirmed revision. Canceled/failed
 operations retain the draft and model. Final app teardown disposes observers, subscriptions,
 editor/model and locally created Workers; React StrictMode effect replay does not dispose an
@@ -40,7 +78,7 @@ debugger, extension host or additional native capability is implied. The interna
 a read-only editor association for real built-runtime inspection, not a window/preload/plugin SDK.
 See [Monaco dependency/asset boundary](monaco.md) for the explicit advisory exception and upgrades.
 
-Issue #45 authorizes one real selected file, not a complete IDE. The essential official module
+Issue #45 introduced one real selected file; Issue #53 extends it to bounded tabs. The essential official module
 comprises `shared/files-editor.ts` (host registration) and renderer `files-editor/` (session/UI).
 The Core owns `main/documents.ts` and `main/document-bridge.ts`. Final essential-plugin packaging
 is provisional: this bundled module is not installable/uninstallable and has no Worker or manifest.
@@ -54,8 +92,8 @@ model language without editing document bytes. [Terminal](terminal.md) has a sep
 owner and survives mode changes alongside the existing unsaved draft.
 
 `DocumentStore` owns the absolute path, file/ancestor identities, exact confirmed bytes and opaque
-UUID/revision. Only bounded text, basename, BOM flag, ID and revision reach the renderer.
-`EditorSession` owns one editable buffer and dirty/busy/error state outside layout/plugin storage.
+UUID/revision per file. Only bounded text, display labels, relative association, BOM flag, ID and revision reach the renderer.
+`EditorSession` owns per-file editable buffers and dirty/error state outside layout/plugin storage.
 Main accepts a frozen draft only for an explicit operation, not another independently editable copy.
 Both adapters render the same `FileEditor`, only one at a time, attaching the same Monaco DOM;
 selection/scroll, undo/redo, shared draft, confirmed bytes and document identity survive.
@@ -72,11 +110,11 @@ session-only. The Main-only single-view widget is catalogued but never automatic
 
 ## Native boundary
 
-Four fixed calls (`open`, `save`, `release`, `close`) and one close-request subscription exist only
+Five fixed calls (`open`, `activate`, `save`, `release`, `close`) and one close-request subscription exist only
 in app preload. No renderer path/channel/directory argument or Worker facade exists. Main checks
 exact WebContents/main-frame/app URL, argument count, fields, types and bounds. Native selection
-authorizes one ordinary regular file. Replacement/release/navigation/renderer loss/destruction
-revoke handles and queued guards. Calls are serialized; closing cannot race an accepted operation.
+authorizes one ordinary regular file. Release revokes that grant; navigation/renderer loss/destruction
+revoke all handles and queued guards. Calls are serialized; closing cannot race an accepted operation.
 
 The cap is 1,048,576 bytes including BOM. Fatal UTF-8 decoding and control-character rejection
 refuse unsupported/binary inputs regardless of extension. Empty and ordinary TXT/JS/TS/JSON/other
@@ -112,10 +150,10 @@ revocation. This is not protection against hostile same-user native processes. T
 not complete directory/OS crash durability. Remote/cloud-synchronized storage is not certified.
 Unsaved buffers are memory-only, with no crash recovery or automatic session restoration.
 
-Native/app close both request the current draft with a one-use ticket, then Main presents
-Save/Discard/Cancel. Cancel/failed Save keeps the app and draft. Opening another file uses the same
-decision after candidate validation; picker cancellation changes nothing. Conflict recovery is
-explicit: copy the draft, reopen and decide what to retain. No force-save or merge tool exists.
+Native/app close request all drafts with a one-use ticket, then Main presents Save/Discard/Cancel
+for each dirty target. Cancel/failed Save keeps the app and drafts. Opening another file never
+prompts to save the existing tab; picker cancellation changes nothing. Conflict recovery is
+explicit: copy the draft, close its tab and reopen. No force-save or merge tool exists.
 
 References: [Electron security](https://www.electronjs.org/docs/latest/tutorial/security),
 [Node 24 filesystem](https://nodejs.org/docs/latest-v24.x/api/fs.html),
@@ -128,6 +166,6 @@ These platform references do not replace application tests or owner acceptance.
 Alpha.39 adds the [bounded first-party Explorer](explorer.md) through this same store/session.
 Its directory grant is independent from the open document and adds no Worker authority.
 
-Full project roots, tabs/splits, search, Git, LSP/debug/build, OS associations/CLI
+Full project context, splits, search, LSP/debug/build, OS associations/CLI
 routing, second windows, automatic restoration, crash recovery, metadata-preserving native writes,
 public rich UI/grants, marketplace/distribution and layout portability remain separate scopes.

@@ -94,7 +94,7 @@ try {
   assert.equal(await page.evaluate(() => window.geppio!.demoFixtures), true, 'This geometry suite explicitly opts into disposable-profile fixtures')
   assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.plugins).sort()), ['install', 'installFile', 'link', 'list', 'reload', 'remove', 'setDeveloperMode', 'setEnabled'])
   assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.pluginData).sort()), ['begin', 'end', 'read', 'write'])
-  assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.documents).sort()), ['close', 'onCloseRequested', 'open', 'release', 'save'], 'Only the selected-document pilot contract is exposed; no filesystem/path API')
+  assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.documents).sort()), ['activate', 'close', 'onCloseRequested', 'open', 'release', 'save'], 'Only the bounded document contract with ID-only activation is exposed; no filesystem/path API')
   assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.explorer).sort()), ['list', 'open', 'release', 'select'], 'Only opaque selected-directory operations are exposed; no arbitrary path/channel API')
   assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.terminal).sort()), ['close', 'input', 'read', 'resize', 'start'], 'Only the five fixed app-owned terminal operations are exposed')
   assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.git).sort()), ['compare', 'stage', 'status', 'unstage'], 'Only fixed root/change opaque Git operations are exposed')

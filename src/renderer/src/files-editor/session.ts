@@ -1,71 +1,111 @@
-import { applyEditorText, DOCUMENT_LIMIT, wellFormedText } from '../../../shared/documents.ts'
+import { applyEditorText, DOCUMENT_LIMIT, DOCUMENT_SESSION_LIMITS, wellFormedText } from '../../../shared/documents.ts'
 import type { DocumentBridge, DocumentDraft, DocumentError, DocumentResult, DocumentSnapshot } from '../../../shared/documents.ts'
 import { DOCUMENT_LANGUAGES } from '../../../shared/document-status.ts'
 import type { DocumentLanguage } from '../../../shared/document-status.ts'
 import { editorText } from '../../../shared/documents.ts'
 
-export interface EditorState { document: DocumentSnapshot | null; text: string; busy: boolean; error: string | null; code: DocumentError | null; cursor: number; language: DocumentLanguage | null; diskVersion: number }
-/** One editable buffer, independent of views, layout, plugin storage and Worker lifecycle. */
+export interface EditorSelection { start: number; end: number; top: number; left: number }
+export interface EditorDocument { document: DocumentSnapshot; text: string; cursor: number; language: DocumentLanguage | null; selection: EditorSelection; error: string | null; code: DocumentError | null; bytes: number }
+export interface EditorState { document: DocumentSnapshot | null; text: string; busy: boolean; error: string | null; code: DocumentError | null; cursor: number; language: DocumentLanguage | null; diskVersion: number; tabs: readonly EditorDocument[]; notice: string | null; invalidRoot: string | null }
+const emptySelection = (): EditorSelection => ({ start: 0, end: 0, top: 0, left: 0 })
+/** One bounded registry of drafts, each backed by its own native grant/revision. */
 export class EditorSession {
-  private state: EditorState = { document: null, text: '', busy: false, error: null, code: null, cursor: 0, language: null, diskVersion: 0 }
+  private state: EditorState = { document: null, text: '', busy: false, error: null, code: null, cursor: 0, language: null, diskVersion: 0, tabs: [], notice: null, invalidRoot: null }
+  private entries = new Map<string, EditorDocument>()
+  private navigationBusy = false
+  private navigationWaiters = new Set<() => void>()
   private listeners = new Set<() => void>()
   readonly bridge: DocumentBridge
   locked = false
-  selection = { start: 0, end: 0, top: 0, left: 0 }
+  get selection(): EditorSelection { return this.state.document ? this.entries.get(this.state.document.id)?.selection ?? emptySelection() : emptySelection() }
   constructor(bridge: DocumentBridge) { this.bridge = bridge }
   snapshot = () => this.state
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener) } }
   private update(patch: Partial<EditorState>) { this.state = { ...this.state, ...patch }; for (const listener of this.listeners) listener() }
-  rememberSelection(value: typeof this.selection) {
-    this.selection = value
-    if (value.end !== this.state.cursor) this.update({ cursor: value.end })
+  private view(id = this.state.document?.id, patch: Partial<EditorState> = {}) {
+    const entry = id ? this.entries.get(id) : undefined
+    this.update({ document: entry?.document ?? null, text: entry?.text ?? '', cursor: entry?.cursor ?? 0, language: entry?.language ?? null, error: entry?.error ?? null, code: entry?.code ?? null, tabs: [...this.entries.values()], ...patch })
   }
-  setLanguage(language: DocumentLanguage) { if (this.state.document && DOCUMENT_LANGUAGES.includes(language)) this.update({ language }) }
+  private change(id: string, patch: Partial<EditorDocument>) { const entry = this.entries.get(id); if (entry) this.entries.set(id, { ...entry, ...patch }) }
+  rememberSelection(value: typeof this.selection) {
+    if (!this.state.document) return
+    this.change(this.state.document.id, { selection: value, cursor: value.end })
+    if (value.end !== this.state.cursor) this.view()
+  }
+  setLanguage(language: DocumentLanguage) { if (this.state.document && DOCUMENT_LANGUAGES.includes(language)) { this.change(this.state.document.id, { language }); this.view() } }
   get dirty() { return !!this.state.document && this.state.text !== this.state.document.text }
+  documentState(id: string): Readonly<EditorDocument> | undefined { return this.entries.get(id) }
+  setNavigationBusy(value: boolean) {
+    this.navigationBusy = value
+    if (!value) { for (const resolve of this.navigationWaiters) resolve(); this.navigationWaiters.clear() }
+  }
   private draft(): DocumentDraft | null { return this.state.document ? { id: this.state.document.id, revision: this.state.document.revision, text: this.state.text } : null }
+  drafts(): DocumentDraft[] { return [...this.entries.values()].map(value => ({ id: value.document.id, revision: value.document.revision, text: value.text })) }
   edit(value: string) {
     return this.accept(applyEditorText(this.state.text, value))
   }
-  editExact(value: string) {
-    if (!this.state.document) return false
-    const text = editorText(value) === editorText(this.state.document.text) ? this.state.document.text : value
-    return this.accept(text)
+  editExact(value: string, id = this.state.document?.id) {
+    const entry = id ? this.entries.get(id) : undefined
+    if (!entry) return false
+    const text = editorText(value) === editorText(entry.document.text) ? entry.document.text : value
+    return this.accept(text, id)
   }
-  private accept(text: string) {
-    if (!this.state.document || this.state.busy || this.locked) return false
-    if (!wellFormedText(text) || new TextEncoder().encode(text).length + (this.state.document.bom ? 3 : 0) > DOCUMENT_LIMIT) { this.feedback('Edição recusada: Unicode inválido ou limite de 1 MiB em UTF-8. O rascunho anterior foi mantido.'); return false }
-    this.update({ text })
+  private accept(text: string, id = this.state.document?.id) {
+    const target = id ? this.entries.get(id) : undefined
+    if (!target || this.state.busy || this.locked) return false
+    const bytes = new TextEncoder().encode(text).length + (target.document.bom ? 3 : 0)
+    if (!wellFormedText(text) || bytes > DOCUMENT_LIMIT || [...this.entries.values()].reduce((sum, entry) => sum + (entry.document.id === id ? bytes : entry.bytes), 0) > DOCUMENT_SESSION_LIMITS.bytes) {
+      this.change(target.document.id, { error: 'Edição recusada: Unicode inválido ou limite de 1 MiB por arquivo / 8 MiB na sessão. O rascunho anterior foi mantido.', code: 'oversized' }); this.view(); return false
+    }
+    this.change(target.document.id, { text, bytes }); this.view()
     return true
   }
-  feedback(error: string) { this.update({ error }) }
-  private async run(action: () => Promise<DocumentResult>): Promise<boolean> {
+  feedback(notice: string) { this.update({ notice }) }
+  private merge(document: DocumentSnapshot) {
+    const previous = this.entries.get(document.id)
+    this.entries.set(document.id, previous ? { ...previous, document, ...(previous.document.revision !== document.revision ? { error: null, code: null } : {}) } : { document, text: document.text, cursor: 0, language: null, selection: emptySelection(), error: null, code: null, bytes: new TextEncoder().encode(document.text).length + (document.bom ? 3 : 0) })
+  }
+  private async run(action: () => Promise<DocumentResult>, kind: 'open' | 'save' | 'release' | 'close' | 'activate', target = this.state.document?.id, ownsNavigation = false): Promise<boolean> {
     if (this.state.busy) return false
-    const before = this.state.document
-    this.update({ busy: true, error: null, code: null })
+    const before = new Map([...this.entries].map(([id, entry]) => [id, entry.document.revision])), active = this.state.document?.id
+    this.update({ busy: true, notice: null })
     try {
+      if (this.navigationBusy && !ownsNavigation) await new Promise<void>(resolve => this.navigationWaiters.add(resolve))
       const result = await action()
-      // Also covers an implicit Save followed by a canceled/failed Open. Ordinary
-      // successful document operations conservatively invalidate saved-disk Git.
-      const confirmed = result.ok ? result.document : result.confirmed
-      if (result.ok && !result.canceled || confirmed && confirmed.revision !== before?.revision) this.update({ diskVersion: this.state.diskVersion + 1 })
-      if (!result.ok) {
-        this.update({ error: result.error, code: result.code, ...(result.confirmed?.id === this.state.document?.id ? { document: result.confirmed } : {}) })
-      } else if (result.canceled) {
-        if (result.document?.id === this.state.document?.id) this.update({ document: result.document })
-      } else {
-        if (result.document?.id !== this.state.document?.id) { this.selection = { start: 0, end: 0, top: 0, left: 0 }; this.update({ cursor: 0, language: null }) }
-        this.update({ document: result.document, text: result.document?.text ?? '' })
+      const snapshots = result.documents ?? (result.ok ? result.document ? [result.document] : [] : result.confirmed ? [result.confirmed] : [])
+      for (const document of snapshots) this.merge(document)
+      // Failed/revoked responses never silently remove a recoverable local draft.
+      if (result.ok && !result.canceled) {
+        if (result.documents) for (const id of this.entries.keys()) { if (!snapshots.some(value => value.id === id)) this.entries.delete(id) }
+        else if (kind === 'release' && !result.document && target) this.entries.delete(target)
+        else if (kind === 'close' && !result.document) this.entries.clear()
+        if (kind === 'save' && target) this.change(target, { error: null, code: null })
       }
+      const diskChanged = snapshots.some(value => before.has(value.id) && before.get(value.id) !== value.revision)
+      const diskVersion = this.state.diskVersion + (diskChanged || result.invalidRoot || result.ok && !result.canceled && ['save', 'release', 'close'].includes(kind) ? 1 : 0), invalidRoot = result.invalidRoot ?? null
+      if (!result.ok) {
+        const failed = result.failed ?? (['save', 'release', 'activate'].includes(kind) ? target : undefined)
+        if (failed) this.change(failed, { error: result.error, code: result.code })
+        this.view(active, { diskVersion, invalidRoot, notice: result.error })
+      } else this.view(result.canceled ? active : result.document?.id, { diskVersion, invalidRoot, notice: invalidRoot ? 'A pasta do Explorador mudou. Reabra a pasta; as abas foram mantidas.' : null })
       return result.ok && !result.canceled
-    } catch { this.update({ error: 'A comunicação com o Core falhou. Mantenha o rascunho aberto e copie seu conteúdo.', code: 'unavailable' }); return false }
+    } catch {
+      const error = 'A comunicação com o Core falhou. Mantenha as abas abertas e copie os rascunhos.'
+      if (target) this.change(target, { error, code: 'unavailable' })
+      this.view(active, { notice: error }); return false
+    }
     finally { this.update({ busy: false }) }
   }
-  open = () => this.locked ? Promise.resolve() : this.run(() => this.bridge.open(this.draft()))
-  openAuthorized = (action: (draft: DocumentDraft | null) => Promise<DocumentResult>) => this.locked ? Promise.resolve(false) : this.run(() => action(this.draft()))
-  save = () => this.locked || !this.state.document ? Promise.resolve() : this.run(() => this.bridge.save(this.draft()!))
-  release = () => this.locked || !this.state.document ? Promise.resolve() : this.run(() => this.bridge.release(this.draft()!))
+  open = () => this.locked ? Promise.resolve() : this.run(() => this.bridge.open(this.draft()), 'open')
+  openAuthorized = (action: (draft: DocumentDraft | null) => Promise<DocumentResult>) => this.locked ? Promise.resolve(false) : this.run(() => action(this.draft()), 'open', this.state.document?.id, true)
+  activate = (id: string) => this.locked || this.state.busy || !this.entries.has(id) ? Promise.resolve(false) : this.run(() => this.bridge.activate(id), 'activate', id)
+  save = () => this.locked || !this.state.document ? Promise.resolve() : this.run(() => this.bridge.save(this.draft()!), 'save')
+  release = (id = this.state.document?.id) => {
+    const entry = id ? this.entries.get(id) : undefined
+    return this.locked || !entry ? Promise.resolve() : this.run(() => this.bridge.release({ id: entry.document.id, revision: entry.document.revision, text: entry.text }), 'release', id)
+  }
   close = async (ticket: string): Promise<void> => {
     if (this.state.busy) await new Promise<void>(resolve => { const stop = this.subscribe(() => { if (!this.state.busy) { stop(); resolve() } }) })
-    await this.run(() => this.bridge.close(ticket, this.draft()))
+    await this.run(() => this.bridge.close(ticket, this.drafts()), 'close')
   }
 }

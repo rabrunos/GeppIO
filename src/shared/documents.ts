@@ -1,14 +1,16 @@
-/** App-owned, single-document contract. Never part of the Worker/plugin SDK. */
+/** App-owned document registry. Never part of the Worker/plugin SDK. */
 export const DOCUMENT_LIMIT = 1024 * 1024
-export interface DocumentSnapshot { id: string; revision: string; name: string; text: string; bom: boolean }
+export const DOCUMENT_SESSION_LIMITS = { count: 8, bytes: 8 * DOCUMENT_LIMIT } as const
+export interface DocumentSnapshot { id: string; revision: string; name: string; text: string; bom: boolean; label?: string; location?: { root: string; names: string[]; caseInsensitive?: boolean } }
 export interface DocumentDraft { id: string; revision: string; text: string }
-export type DocumentError = 'invalid' | 'stale' | 'busy' | 'unsupported' | 'oversized' | 'unavailable' | 'conflict' | 'write'
-export type DocumentResult = { ok: true; document: DocumentSnapshot | null; canceled?: boolean } | { ok: false; code: DocumentError; error: string; confirmed?: DocumentSnapshot }
+export type DocumentError = 'invalid' | 'stale' | 'busy' | 'unsupported' | 'oversized' | 'limit' | 'unavailable' | 'conflict' | 'write'
+export type DocumentResult = ({ ok: true; document: DocumentSnapshot | null; canceled?: boolean } | { ok: false; code: DocumentError; error: string; confirmed?: DocumentSnapshot; failed?: string }) & { documents?: DocumentSnapshot[]; invalidRoot?: string }
 export interface DocumentBridge {
   open(draft: DocumentDraft | null): Promise<DocumentResult>
   save(draft: DocumentDraft): Promise<DocumentResult>
   release(draft: DocumentDraft): Promise<DocumentResult>
-  close(ticket: string, draft: DocumentDraft | null): Promise<DocumentResult>
+  activate(id: string): Promise<DocumentResult>
+  close(ticket: string, drafts: DocumentDraft[] | DocumentDraft | null): Promise<DocumentResult>
   onCloseRequested(listener: (ticket: string) => void): () => void
 }
 export const documentToken = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(value)
@@ -20,7 +22,8 @@ export function validDraft(value: unknown): value is DocumentDraft {
     && typeof draft.text === 'string' && draft.text.length <= DOCUMENT_LIMIT && wellFormedText(draft.text)
 }
 export function validDocumentRequest(operation: string, args: readonly unknown[]): boolean {
-  if (operation === 'close') return args.length === 2 && documentToken(args[0]) && (args[1] === null || validDraft(args[1]))
+  if (operation === 'activate') return args.length === 1 && documentToken(args[0])
+  if (operation === 'close') return args.length === 2 && documentToken(args[0]) && (args[1] === null || validDraft(args[1]) || Array.isArray(args[1]) && args[1].length <= DOCUMENT_SESSION_LIMITS.count && args[1].every(validDraft) && new Set(args[1].map(value => value.id)).size === args[1].length)
   return args.length === 1 && (operation === 'open' && args[0] === null || ['open', 'save', 'release'].includes(operation) && validDraft(args[0]))
 }
 export const editorText = (text: string) => text.replace(/\r\n?/g, '\n')

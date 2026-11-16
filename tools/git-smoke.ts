@@ -93,8 +93,19 @@ try {
   assert.equal(await badge('tracked.ts').innerText(), 'M'); assert.equal(await badge('new.ts').innerText(), 'U')
   await treeItem('nested').focus(); await page.keyboard.press('ArrowLeft'); assert.equal(await treeItem('tracked.ts').count(), 0)
   await page.screenshot({ path: join(diagnostics, 'explorer-decorations.png') })
-  await picker(join(scope, 'modified.ts')); await page.getByRole('button', { name: 'Abrir arquivo', exact: true }).click()
+  await picker(join(scope, 'both.txt')); await page.getByRole('button', { name: 'Abrir arquivo', exact: true }).click()
   const editor = fileEditor(page); await editor.waitFor()
+  await editor.fill('inactive unsaved Git comparison draft\n')
+  const inactive = await page.locator('.monaco-host').evaluateHandle(node => (node as MonacoHost).monacoEditor!.getModel()!)
+  const inactiveVersion = await page.evaluate(model => model.getAlternativeVersionId(), inactive)
+  const inactiveIntact = async () => {
+    assert.equal(await page.evaluate(model => model.isDisposed(), inactive), false)
+    assert.equal(await page.evaluate(model => model.getValue(), inactive), 'inactive unsaved Git comparison draft\n')
+    assert.equal(await page.evaluate(model => model.getAlternativeVersionId(), inactive), inactiveVersion)
+    assert.equal(await readFile(join(scope, 'both.txt'), 'utf8'), 'saved\r\n')
+  }
+  await picker(join(scope, 'modified.ts')); await page.getByRole('button', { name: 'Abrir arquivo', exact: true }).click()
+  await page.waitForFunction(() => document.querySelector('.file-editor')?.getAttribute('data-document-status') !== 'busy')
   await editor.fill('unsaved\n' + Array.from({ length: 80 }, (_, i) => 'line ' + i).join('\n'))
   await page.locator('.monaco-host').evaluate(node => { const e = (node as MonacoHost).monacoEditor!; e.setPosition({ lineNumber: 40, column: 4 }); e.revealLineInCenter(40); e.getModel()!.pushStackElement() })
   await editor.press('x')
@@ -117,7 +128,7 @@ try {
     await page.screenshot({ path: join(diagnostics, 'comparison-' + name.replaceAll(' ', '-') + '.png') })
     await page.getByRole('dialog').getByRole('button', { name: 'Fechar', exact: true }).click()
     assert.ok(await page.evaluate(models => models.original.isDisposed() && models.modified.isDisposed(), models))
-    await models.dispose(); assert.deepEqual(await snapshot(), draft)
+    await models.dispose(); assert.deepEqual(await snapshot(), draft); await inactiveIntact()
     return values
   }
   assert.deepEqual(await diff('both.txt'), { original: 'before\n', modified: 'saved\r\n', readOnly: true, originalReadOnly: true })
@@ -136,6 +147,7 @@ try {
     await page.waitForFunction(() => !document.querySelector('.git-changes [role="status"]') && !!document.querySelector('.git-branch'))
     assert.equal(await page.locator('.git-changes [role="alert"]').count(), 0)
     assert.deepEqual(await snapshot(), draft, 'Index writes never save or replace the active unsaved Monaco model')
+      await inactiveIntact()
     await assert.rejects(readFile(join(scope, 'EXECUTED')), 'Application operation must not execute repository-controlled programs, before any native verifier command')
   }
   for (const name of ['modified.ts', 'deleted.txt', 'untracked.txt']) {

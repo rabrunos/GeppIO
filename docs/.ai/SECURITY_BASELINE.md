@@ -37,7 +37,14 @@ The current app is local and has no account, remote content, database or
 secret vault. Issue #21 adds only explicitly trusted local development plugins. Offline does not mean trusted input. JSON layout import, saved layout bytes,
 asset URLs and build dependencies are relevant inputs. See the [control map](../architecture/security.md).
 
-Issue #45 adds four fixed app-owned document operations and a close-request event, limited to one
+Issue #53 extends this boundary to eight independent native grants and one fixed ID-only activate
+operation. Complete unique ID/revision/draft sets are validated before close decisions or writes;
+partial saves acknowledge revisions without dropping later canceled/failed drafts. Explorer root
+changes do not expand or revoke independent file grants. Relative display associations never
+expose native paths; full paths remain Main-only, including native confirmation dialogs. Source,
+retained history and model lifecycles remain bounded; no generic path or Worker capability is added.
+
+Issue #45 introduced four fixed app-owned document operations and a close-request event, limited to one
 native-selected UTF-8 file (1 MiB), exact owner/main frame and revocable opaque handle. No renderer
 path or plugin file grant exists. Follow the [document boundary](../architecture/documents.md) for
 byte/identity checks, failure retention and explicit Windows ACL/metadata/crash limitations.

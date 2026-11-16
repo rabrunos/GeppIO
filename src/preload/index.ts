@@ -31,6 +31,7 @@ const documents = Object.freeze<DocumentBridge>({
   open: draft => ipcRenderer.invoke('document:open', draft),
   save: draft => ipcRenderer.invoke('document:save', draft),
   release: draft => ipcRenderer.invoke('document:release', draft),
+  activate: id => ipcRenderer.invoke('document:activate', id),
   close: (ticket, draft) => ipcRenderer.invoke('document:close', ticket, draft),
   onCloseRequested(listener) {
     const receive = (_event: Electron.IpcRendererEvent, ticket: string) => listener(ticket)

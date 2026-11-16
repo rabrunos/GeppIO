@@ -1,10 +1,19 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
-import { applyDocumentChanges } from '../src/shared/document-edits.ts'
+import { applyDocumentChanges, DocumentHistoryBudget } from '../src/shared/document-edits.ts'
 import { EditorSession } from '../src/renderer/src/files-editor/session.ts'
 import { DOCUMENT_LIMIT } from '../src/shared/documents.ts'
 import type { DocumentBridge } from '../src/shared/documents.ts'
+
+test('history limits reject growth without evicting other tabs and release only an explicitly closed owner', () => {
+  const budget = new DocumentHistoryBudget(100, 2)
+  assert.ok(budget.retain('first', 40)); assert.ok(budget.retain('second', 50))
+  assert.equal(budget.retain('first', 11), false); assert.equal(budget.retain('first', Infinity), false); assert.equal(budget.retain('first', -1), false)
+  assert.ok(budget.retain('first', 10)); assert.equal(budget.retain('first', 0), false)
+  budget.release('second'); assert.ok(budget.retain('third', 50)); assert.equal(budget.retain('first', 0), false)
+  budget.release('first'); assert.ok(budget.retain('first', 20)); assert.throws(() => new DocumentHistoryBudget(0, 1))
+})
 
 test('simultaneous model ranges preserve untouched mixed EOL tokens and surrogate pairs', () => {
   const source = 'a\r\nb\nc\rd😀'
@@ -16,7 +25,7 @@ test('simultaneous model ranges preserve untouched mixed EOL tokens and surrogat
 })
 test('exact editor proposals retain the byte cap, BOM, Unicode and busy/failed-save protections', async () => {
   const document = { id: randomUUID(), revision: randomUUID(), name: 'fixture.json', bom: true, text: 'a\r\nb\nc\r' }
-  const bridge: DocumentBridge = { open: async () => ({ ok: true, document }), save: async () => ({ ok: false, code: 'write', error: 'fixture refusal' }), release: async () => ({ ok: true, document: null }), close: async () => ({ ok: true, document: null }), onCloseRequested: () => () => {} }
+  const bridge: DocumentBridge = { activate: async () => ({ ok: true, document }), open: async () => ({ ok: true, document }), save: async () => ({ ok: false, code: 'write', error: 'fixture refusal' }), release: async () => ({ ok: true, document: null }), close: async () => ({ ok: true, document: null }), onCloseRequested: () => () => {} }
   const session = new EditorSession(bridge); await session.open()
   assert.equal(session.editExact('A\r\nb\nc\r'), true); assert.equal(session.dirty, true)
   assert.equal(session.editExact('\ud800'), false); assert.equal(session.snapshot().text, 'A\r\nb\nc\r')

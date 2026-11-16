@@ -37,7 +37,10 @@ The only protocol MIME addition is `.ttf: font/ttf` for the bundled codicon font
 Production keeps script-src/worker-src 'self', font-src 'self', connect-src 'none' and the remote
 request block. Development uses the existing exact loopback Vite origin. There is no remote
 grammar download, eval allowance, blob script allowance or plugin Worker/native grant.
-Monaco's included TypeScript services are local single-model facilities, not a full project IDE.
+Monaco's included TypeScript services operate on bounded local models, not a full project IDE.
+Alpha.46 retains one model per open native grant (up to eight), with one shared editor and
+per-model undo/view/language ownership. Exact source and retained history budgets, corrective
+refusal handling and disposal are described in [document ownership](documents.md).
 
 The complete upstream MIT license and ThirdPartyNotices are retained in
 [legal notices](../legal/monaco-LICENSE.txt) and [third-party notices](../legal/monaco-ThirdPartyNotices.txt).

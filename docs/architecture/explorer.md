@@ -45,7 +45,7 @@ opaque-root/node plus validated document draft `open`, and opaque-root `release`
 document broker validates exact WebContents/main-frame/app URL, argument count/shape/UUIDs, and
 serializes directory operations with document operations and native close. Only Main receives the
 picker path. Cancellation/failed selection preserves the previous grant. Replacement, release,
-navigation, renderer loss and destruction revoke references and queued guards. Paths never appear
+navigation, renderer loss and destruction revoke references and queued guards. Absolute native paths never appear
 in metadata, failures, logs or Worker messages.
 
 Every accessed target and lexical ancestor through the volume root is checked with `lstat`/`realpath`.
@@ -62,10 +62,16 @@ These conservative pilot limits bound UI/native work, not a performance SLA. `op
 32-entry buffers, stops at the first excess entry and closes on error. Failed listings never partially
 commit grant metadata. IO is asynchronous. No watchers, background scans or directory writes exist.
 
-`open` delegates to `DocumentStore.select` with a final grant-identity callback after the dirty
-Save/Discard/Cancel decision and byte revalidation. `EditorSession` preserves the old document/draft
-on refusal or cancellation. Active file changes only on confirmed open. Folder replacement/release
-leaves an open document intact. BOM/EOL, 1 MiB UTF-8, conflict, save and close controls retain the
+`open` delegates to `DocumentStore.select` with byte revalidation and a final grant-identity
+callback. Alpha.46 adds or activates an independently held document grant without saving or
+replacing another tab. Refusal/cancellation retains every draft. Active file changes only on
+confirmed open/activation. Folder replacement/release leaves all file grants and drafts intact.
+Main supplies validated root-relative associations; the active tab expands its lazy ancestors
+and selects the matching file, clearing selection outside the current root. On Windows,
+Main marks the display association case-insensitive: exact names win, then a unique folded
+match is allowed; ambiguous matches clear selection. This never authorizes a native operation.
+Stale root failures
+clear navigation/Git state without discarding tabs. BOM/EOL, 1 MiB UTF-8, conflict, save and close controls retain the
 [document contract](documents.md). Atomic Save changes file identity: refresh before opening an old
 tree reference again. Refresh never silently reopens or discards a document.
 
