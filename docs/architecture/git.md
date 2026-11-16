@@ -57,8 +57,12 @@ bounded descriptor reads, refuses object redirects during copying and never foll
 Each request creates a disposable private metadata directory under the OS temporary root.
 Host temporary aliases are canonicalized; a temporary root inside the selected working tree
 is refused before creating any scratch file, preserving the no-working-tree-write contract.
-Only HEAD/index/refs/packed-refs, loose objects, pack/idx pairs and bounded info/exclude/attributes data are copied;
-optional object accelerators (multi-pack-index, commit-graph, bitmap and promisor data) are omitted;
+Only HEAD/index/refs/packed-refs, loose objects, pack/idx pairs and bounded info/exclude/attributes data are copied.
+Alpha.47 preserves a conservatively rounded-down original index timestamp in that private copy.
+A newly dated copy could suppress Git's [racy-stat content check](https://git-scm.com/docs/racy-git)
+for fast same-size edits. A deterministic valid-index regression compares actual Git status and
+unchanged original fingerprints. No original index timestamp is written by inspection.
+Optional object accelerators (multi-pack-index, commit-graph, bitmap and promisor data) are omitted;
 original config is copied as non-active data and parsed using `config --file --no-includes`.
 Only validated local boolean filemode/ignorecase/symlinks and autocrlf/eol values are reconstructed.
 All other config, includes and global/system settings are ignored. No original hooks, aliases,

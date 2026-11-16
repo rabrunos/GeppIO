@@ -50,6 +50,8 @@ jobs:
         run: pnpm test:documents
       - name: Explorer authority, tree and activity rail in isolated fixtures
         run: pnpm test:explorer
+      - name: Workspace recovery, independent grants and trusted native startup cwd
+        run: pnpm test:workspace
       - name: Explorer responsiveness at simulated DPR 1.25
         run: node --experimental-strip-types tools/explorer-smoke.ts --scale125
       - name: Maximized widget and direct Editor geometry at simulated DPR 1.25

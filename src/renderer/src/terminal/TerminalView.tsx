@@ -26,6 +26,6 @@ export function TerminalView({ session, theme, focusRequest = 0 }: { session: Te
       <button className="ui-button tool-button" disabled={!['running', 'starting'].includes(phase)} onClick={session.close}>Encerrar</button>
     </div>
     <div className="terminal-host" ref={host} />
-    {(state.native.error || state.feedback) && <p className="terminal-feedback" role="status">{state.native.error ?? state.feedback}</p>}
+    {(state.native.error || state.feedback || state.native.startupNote) && <p className="terminal-feedback" role="status">{state.native.error ?? state.feedback ?? state.native.startupNote}</p>}
   </section>
 }

@@ -58,5 +58,13 @@ const git = Object.freeze<import('../shared/git.ts').GitBridge>({
   stage: (root, change) => ipcRenderer.invoke('git:stage', root, change),
   unstage: (root, change) => ipcRenderer.invoke('git:unstage', root, change)
 })
-contextBridge.exposeInMainWorld('geppio', Object.freeze({ name: IDENTITY.name, version: __APP_VERSION__, platform: process.platform, plugins, pluginData, windowControls, documents, explorer, terminal, git,
+const workspace = Object.freeze<import('../shared/workspace.ts').WorkspaceBridge>({
+  read: () => ipcRenderer.invoke('workspace:read'),
+  restore: () => ipcRenderer.invoke('workspace:restore'),
+  standalone: () => ipcRenderer.invoke('workspace:standalone'),
+  configure: remember => ipcRenderer.invoke('workspace:configure', remember),
+  forget: () => ipcRenderer.invoke('workspace:forget'),
+  remember: editor => ipcRenderer.invoke('workspace:remember', editor)
+})
+contextBridge.exposeInMainWorld('geppio', Object.freeze({ name: IDENTITY.name, version: __APP_VERSION__, platform: process.platform, plugins, pluginData, windowControls, documents, explorer, terminal, git, workspace,
   demoFixtures: process.argv.includes('--geppio-demo-fixtures') }))

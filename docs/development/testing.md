@@ -1,5 +1,34 @@
 # Validation guide
 
+## Local Workspace and clean-session restoration (alpha.47 / Issue #54)
+
+After `pnpm check`, `pnpm test:workspace` runs bounded real-filesystem tests and actual Windows
+Electron production DPR 1/1.25 plus development. Disposable roots/profiles cover first launch,
+explicit/canceled open, project switch/close with two dirty files and a live PTY, native root
+identity, actual new-terminal project/new-project/home cwd, stale Git IDs/current decorations,
+independent file grants and active-only save. A poisoned project module must never execute.
+Project/Git fingerprints, unrelated Worker identity and saved layout bytes must remain unchanged.
+
+Clean restart offers history with native consent, fresh grants, active tab and unchanged clean
+language/primary selection/scroll. Tests exercise changed-file Cancel/Current/Skip, replaced or
+moved roots, missing/hardlinked files, corrupt/future/oversized metadata, explicit forgetting,
+external replacement, queued cancellation, project/profile overlap, standalone precedence,
+closed-last-tab immediate exit and wrong owner/frame/URL/extra path/source requests. Pure tests
+capture changed root generations across the asynchronous startup-directory boundary. Actual
+shell commands check startup cwd without submitting `cd`. Both themes/narrow/wide context-bar
+geometry and real public Monaco view state are checked. Native dialog stubs are not physical
+owner picker evidence. Launch timing is diagnostic, not a performance SLA.
+
+The regression for Git private-index timestamps constructs a valid ordinary racy-stat fixture,
+compares actual CLI and app status, and requires unchanged original metadata/working files.
+This catches falsely clean same-size edits without adding repository writes or weakening budgets.
+
+Run documents, Explorer, Git, Monaco, Terminal, Status Bar, Sidebar and the entire uninterrupted
+desktop gate as well. Windows CI includes the new command. Audit remains explicitly FAILED under
+the existing Monaco/DOMPurify exception when present. Unsaved source, undo and processes are not
+persisted; no automated test establishes power-loss durability, Linux application support or
+owner physical acceptance. The [Workspace contract](../architecture/workspace.md) records limits.
+
 ## Git inspection and index actions (alpha.43–45 / Issues #50–52)
 
 Alpha.45 adds pure projections for all letters/layers, ignored/conflict policy and unique folder

@@ -1,6 +1,6 @@
 {
   "name": "geppio",
-  "version": "0.1.0-alpha.46",
+  "version": "0.1.0-alpha.47",
   "private": true,
   "license": "UNLICENSED",
   "description": "GeppIO — a local desktop workbench, Windows first.",
@@ -29,6 +29,7 @@
     "test:essentials": "node --experimental-strip-types tools/workspace-essentials-smoke.ts",
     "test:documents": "node --experimental-strip-types --test tests/documents.test.ts && node --experimental-strip-types tools/document-smoke.ts && node --experimental-strip-types tools/multi-document-smoke.ts && node --experimental-strip-types tools/multi-document-smoke.ts --scale125 && node --experimental-strip-types tools/multi-document-smoke.ts --dev",
     "test:explorer": "node --experimental-strip-types --test tests/explorer.test.ts && node --experimental-strip-types tools/explorer-smoke.ts",
+    "test:workspace": "node --experimental-strip-types --test tests/workspace.test.ts && node --experimental-strip-types tools/workspace-smoke.ts && node --experimental-strip-types tools/workspace-smoke.ts --scale125 && node --experimental-strip-types tools/workspace-smoke.ts --dev",
     "test:time-tracker": "node --experimental-strip-types tools/time-tracker-smoke.ts",
     "test:maximize": "node --experimental-strip-types tools/maximize-smoke.ts",
     "test:alignment": "node --experimental-strip-types tools/alignment-smoke.ts",

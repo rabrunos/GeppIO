@@ -1,4 +1,4 @@
-import { dialog, ipcMain } from 'electron'
+import { app, dialog, ipcMain } from 'electron'
 import type { BrowserWindow } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { isAbsolute, relative, sep } from 'node:path'
@@ -10,14 +10,19 @@ import { validExplorerRequest } from '../shared/explorer.ts'
 import type { ExplorerResult } from '../shared/explorer.ts'
 import { GitStore, GitFailure, gitFailure } from './git.ts'
 import { validGitRequest } from '../shared/git.ts'
+import { WorkspaceOwner } from './workspace.ts'
+import { WorkspaceRecovery } from './workspace-recovery.ts'
+import { validWorkspaceRequest } from '../shared/workspace.ts'
+import type { WorkspaceEditor, WorkspaceResult } from '../shared/workspace.ts'
 
 /** Installed for the exact app window, never a recovery window or another WebContents. */
-export function bindDocuments(win: BrowserWindow, expectedURL: string): void {
+export function bindDocuments(win: BrowserWindow, expectedURL: string): WorkspaceOwner {
   const store = new DocumentStore()
   const directories = new DirectoryStore()
   const git = new GitStore(directories)
-  let busy = false, closing = false, ticket: string | null = null
-  const revoke = () => { git.revoke(); store.revoke(); directories.revoke(); ticket = null }
+  const workspace = new WorkspaceOwner(directories, store, new WorkspaceRecovery(app.getPath('userData')), () => git.revoke())
+  let busy = false, closing = false, remembering = false, ticket: string | null = null
+  const revoke = () => { workspace.revoke(); git.revoke(); store.revoke(); directories.revoke(); ticket = null }
   const decide = async (name = store.snapshot?.label ?? store.snapshot?.name ?? 'arquivo', id = store.snapshot?.id) => {
     const path = id ? store.filePath(id) : null
     const result = await dialog.showMessageBox(win, { type: 'question', title: 'Alterações não salvas', message: 'Salvar as alterações de ' + name + ' antes de continuar?', detail: (path ? 'Arquivo: ' + path + '\n\n' : '') + 'Cancelar mantém as abas e os rascunhos abertos. Nenhum outro arquivo será salvo automaticamente.', buttons: ['Salvar', 'Descartar', 'Cancelar'], defaultId: 2, cancelId: 2, noLink: true })
@@ -44,7 +49,7 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): void {
   win.webContents.on('did-start-navigation', (_event, _url, _inPlace, mainFrame) => { if (mainFrame) revoke() })
   win.webContents.on('render-process-gone', revoke)
   win.on('close', event => {
-    if (closing || !store.snapshot && !busy) return
+    if (closing || !store.snapshot && !directories.snapshot && !busy) return
     event.preventDefault()
     if (busy || ticket) return
     ticket = randomUUID()
@@ -72,10 +77,15 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): void {
       if (operation === 'save') { await store.save(draft!, current); return await response(store.result(), current) }
       if (operation === 'release') {
         const document = store.snapshots.find(value => value.id === draft!.id)
-        return await response(await store.release(draft!, () => decide(document?.label ?? document?.name, draft!.id), current), current)
+        const result = await store.release(draft!, () => decide(document?.label ?? document?.name, draft!.id), current)
+        if (result.ok && !result.canceled) await workspace.persist(current)
+        return await response(result, current)
       }
       const supplied = args[1] as DocumentDraft[] | DocumentDraft | null, drafts = supplied === null ? [] : Array.isArray(supplied) ? supplied : [supplied]
       if (!await store.resolveAll(drafts, document => decide(document.label ?? document.name, document.id), current)) return await response(store.result(true), current)
+      await workspace.persist(current, true)
+      if (workspace.recovery.snapshot.error && current()) await dialog.showMessageBox(win, { type: 'warning', title: 'Sessão local', message: 'Os arquivos foram resolvidos, mas a lembrança da sessão não pôde ser confirmada.', detail: 'Rascunhos não são armazenados para recuperação. Os metadados existentes foram preservados.' })
+      if (!current()) throw new DocumentFailure('stale')
       store.revoke()
       if (operation === 'close') { closing = true; setImmediate(() => { if (!win.isDestroyed()) win.close() }) }
       return store.result()
@@ -98,18 +108,19 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): void {
     if (busy || closing) return operation === 'open' ? documentFailure(new DocumentFailure('busy')) : explorerFailure(new ExplorerFailure('busy'))
     busy = true
     const directoryCurrent = directories.guard(), documentCurrent = store.guard()
-    const current = () => !win.isDestroyed() && !win.webContents.isDestroyed() && frame === win.webContents.mainFrame && frame.url === expectedURL && directoryCurrent() && documentCurrent()
+    const contextCurrent = () => !win.isDestroyed() && !win.webContents.isDestroyed() && frame === win.webContents.mainFrame && frame.url === expectedURL && documentCurrent()
+    const current = () => contextCurrent() && directoryCurrent()
     try {
       if (operation === 'select') {
         const selected = await dialog.showOpenDialog(win, { title: 'Abrir pasta', buttonLabel: 'Abrir pasta', properties: ['openDirectory'] })
         if (!current()) throw new ExplorerFailure('stale')
         if (selected.canceled || selected.filePaths.length !== 1) return { ok: true, root: directories.snapshot, canceled: true }
-        const result = await directories.select(selected.filePaths[0]!, current)
-        git.revoke()
-        return result
+        const value = await workspace.opened(selected.filePaths[0]!, contextCurrent)
+        if (!contextCurrent()) throw new ExplorerFailure('stale')
+        return { ok: true, root: value.root }
       }
       const root = args[0] as string, node = args[1] as string
-      if (operation === 'release') { const result = directories.release(root); git.revoke(); return result }
+      if (operation === 'release') { const value = await workspace.close(root, contextCurrent); if (!contextCurrent()) throw new ExplorerFailure('stale'); return { ok: true, root: value.root } }
       if (operation === 'list') return await directories.list(root, node, current)
       const path = await directories.file(root, node, current)
       return await response(await store.select(path, args[2] as DocumentDraft | null, decide, current, async () => { await directories.file(root, node, current) }), current)
@@ -117,6 +128,47 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): void {
       const result = fail(error)
       return operation === 'open' ? await response(!result.ok ? { ...result, documents: store.snapshots, ...(store.snapshot ? { confirmed: store.snapshot } : {}) } : documentFailure(new DocumentFailure('invalid')), current) : result
     } finally { busy = false }
+  })
+  const workspaceOperations = ['read', 'restore', 'standalone', 'configure', 'forget', 'remember'] as const
+  for (const operation of workspaceOperations) ipcMain.handle(`workspace:${operation}`, async (event, ...args: unknown[]): Promise<WorkspaceResult> => {
+    const frame = event.senderFrame
+    const fail = (error = 'Operação de projeto recusada. A pasta, a sessão local ou a autorização mudou. Rascunhos e arquivos existentes foram preservados.'): WorkspaceResult => ({ ok: false, error })
+    if (win.isDestroyed() || event.sender !== win.webContents || frame !== win.webContents.mainFrame || frame?.url !== expectedURL || !validWorkspaceRequest(operation, args)) return fail('Solicitação de projeto inválida.')
+    if (closing || busy && operation !== 'read') return fail('Aguarde a operação de arquivo em andamento.')
+    if (operation === 'remember' && remembering) return fail('Atualização de sessão em andamento.')
+    const ownerCurrent = workspace.guard()
+    const current = () => !win.isDestroyed() && !win.webContents.isDestroyed() && frame === win.webContents.mainFrame && frame.url === expectedURL && ownerCurrent()
+    const exclusive = !['read', 'remember'].includes(operation)
+    if (exclusive) busy = true
+    if (operation === 'remember') remembering = true
+    try {
+      if (operation === 'read') { const value = await workspace.read(); return current() ? { ok: true, value } : fail() }
+      if (operation === 'restore') {
+        const result = await workspace.restore(current, async (name, path, unsaved) => {
+          const choice = await dialog.showMessageBox(win, { type: 'question', title: 'Restaurar projeto', message: 'Restaurar ' + name + '?', detail: 'Pasta: ' + path + '\n\nSomente arquivos salvos, abas e estado limpo de visualização serão reabertos após validação. Rascunhos, undo e processos não são recuperados.' + (unsaved ? ` Há indicação de ${unsaved} rascunho(s) não salvo(s) na última lembrança do projeto; o conteúdo deles não foi armazenado.` : ''), buttons: ['Restaurar', 'Cancelar'], defaultId: 1, cancelId: 1, noLink: true })
+          return choice.response === 0
+        }, async name => {
+          const choice = await dialog.showMessageBox(win, { type: 'question', title: 'Arquivo alterado', message: name + ' mudou desde a sessão anterior.', detail: 'Nenhum conteúdo será gravado. Escolha abrir a versão atual do disco sem restaurar a posição antiga, ignorar esta aba ou cancelar toda a restauração.', buttons: ['Abrir versão atual', 'Ignorar arquivo', 'Cancelar restauração'], defaultId: 2, cancelId: 2, noLink: true })
+          return (['current', 'skip', 'cancel'] as const)[choice.response] ?? 'cancel'
+        })
+        if (!current()) return fail()
+        return result.ok && result.documents ? { ...result, documents: await response(result.documents, current) } : result
+      }
+      if (operation === 'standalone') {
+        const selected = await dialog.showOpenDialog(win, { title: 'Abrir arquivo avulso', buttonLabel: 'Abrir arquivo', properties: ['openFile'] })
+        if (!current()) return fail()
+        if (selected.canceled || selected.filePaths.length !== 1) return { ok: true, value: workspace.status(), canceled: true }
+        const document = await store.select(selected.filePaths[0]!, null, decide, current)
+        if (directories.snapshot) await workspace.close(directories.snapshot.id, current, document.ok ? document.document?.id : undefined)
+        else await workspace.persist(current)
+        if (!current()) return fail()
+        return { ok: true, value: workspace.status(), documents: await response(document, current) }
+      }
+      const value = operation === 'remember' ? await workspace.remember(args[0] as WorkspaceEditor, current)
+        : operation === 'configure' ? await workspace.configure(args[0] as boolean, current) : await workspace.forget(current)
+      return current() ? { ok: true, value } : fail()
+    } catch { return current() ? { ...fail(), value: workspace.status() } : fail() }
+    finally { if (exclusive) busy = false; if (operation === 'remember') remembering = false }
   })
   const gitOperations = ['status', 'compare', 'stage', 'unstage'] as const
   for (const operation of gitOperations) ipcMain.handle(`git:${operation}`, async (event, ...args: unknown[]) => {
@@ -130,5 +182,7 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): void {
     for (const operation of operations) ipcMain.removeHandler(`document:${operation}`)
     for (const operation of directoryOperations) ipcMain.removeHandler(`explorer:${operation}`)
     for (const operation of gitOperations) ipcMain.removeHandler(`git:${operation}`)
+    for (const operation of workspaceOperations) ipcMain.removeHandler(`workspace:${operation}`)
   })
+  return workspace
 }

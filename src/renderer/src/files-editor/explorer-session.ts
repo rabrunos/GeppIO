@@ -1,5 +1,6 @@
 import type { ExplorerBridge, ExplorerNode } from '../../../shared/explorer.ts'
 import type { EditorSession } from './session.ts'
+import type { WorkspaceBridge, WorkspaceResult, WorkspaceStatus } from '../../../shared/workspace.ts'
 
 /** Display association only; native open/save still validate exact grants. */
 export function findExplorerChild(nodes: readonly ExplorerNode[], name: string, caseInsensitive = false): ExplorerNode | undefined {
@@ -12,23 +13,30 @@ export function findExplorerChild(nodes: readonly ExplorerNode[], name: string, 
 export interface ExplorerState {
   root: ExplorerNode | null; children: ReadonlyMap<string, ExplorerNode[]>; expanded: ReadonlySet<string>; diskVersion: number
   errors: ReadonlyMap<string, string>; busy: boolean; error: string | null; active: string | null; document: string | null
+  workspace: WorkspaceStatus | null
 }
 /** One navigation owner for the activity view and the explicitly placed official widget. */
 export class ExplorerSession {
-  private state: ExplorerState = { root: null, children: new Map(), expanded: new Set(), diskVersion: 0, errors: new Map(), busy: false, error: null, active: null, document: null }
+  private state: ExplorerState = { root: null, children: new Map(), expanded: new Set(), diskVersion: 0, errors: new Map(), busy: false, error: null, active: null, document: null, workspace: null }
   private listeners = new Set<() => void>()
   private stop: (() => void) | null = null
   private generation = 0
   private followKey: string | null = null
+  private interval: ReturnType<typeof setInterval> | null = null
+  private rememberTimer: ReturnType<typeof setTimeout> | null = null
+  private remembering = false
+  private rememberWork: Promise<void> | null = null
+  private remembered = ''
   scroll = 0
   focus: string | null = null
   locked = false
   readonly bridge: ExplorerBridge
   readonly editor: EditorSession
-  constructor(bridge: ExplorerBridge, editor: EditorSession) { this.bridge = bridge; this.editor = editor }
+  readonly workspace?: WorkspaceBridge
+  constructor(bridge: ExplorerBridge, editor: EditorSession, workspace?: WorkspaceBridge) { this.bridge = bridge; this.editor = editor; this.workspace = workspace }
   snapshot = () => this.state
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener) } }
-  private update(patch: Partial<ExplorerState>) { this.state = { ...this.state, ...patch }; if (patch.busy !== undefined) this.editor.setNavigationBusy(patch.busy); for (const listener of this.listeners) listener() }
+  private update(patch: Partial<ExplorerState>) { this.state = { ...this.state, ...patch }; if (patch.busy !== undefined) this.editor.setNavigationBusy(patch.busy); if ('root' in patch) this.editor.setProjectRoot(patch.root?.id ?? null); for (const listener of this.listeners) listener() }
   connect() {
     if (this.stop) return
     const sync = () => {
@@ -42,10 +50,70 @@ export class ExplorerSession {
       if (!root || !document || location?.root !== root.id) { this.update({ active: null, document: document?.id ?? null }); return }
       void this.follow(document.id, location.names, location.caseInsensitive)
     }
-    const editor = this.editor.subscribe(sync), tree = this.subscribe(sync)
-    this.stop = () => { editor(); tree() }; sync()
+    const editor = this.editor.subscribe(() => { sync(); this.scheduleRemember() }), tree = this.subscribe(sync)
+    const flush = async () => {
+      await this.rememberWork
+      if (!this.workspace) return
+      try { const result = await this.workspace.remember(this.editor.workspaceState()); if (result.ok) this.update({ workspace: result.value }) }
+      catch { /* Native close still protects every source draft separately. */ }
+    }
+    if (this.workspace) this.editor.beforeClose = flush
+    this.stop = () => { editor(); tree(); if (this.editor.beforeClose === flush) this.editor.beforeClose = null }; sync()
+    if (this.workspace) this.interval = setInterval(() => this.scheduleRemember(), 1500)
   }
-  dispose() { this.stop?.(); this.stop = null; this.generation++; this.editor.setNavigationBusy(false) }
+  dispose() { this.stop?.(); this.stop = null; this.generation++; this.editor.setNavigationBusy(false); if (this.interval) clearInterval(this.interval); if (this.rememberTimer) clearTimeout(this.rememberTimer); this.interval = null; this.rememberTimer = null }
+  async initialize() {
+    if (!this.workspace) return
+    const generation = this.generation
+    try { const result = await this.workspace.read(); if (generation === this.generation) { if (result.ok) await this.adoptWorkspace(result.value); else this.update({ error: result.error }) } }
+    catch { if (generation === this.generation) this.update({ error: 'Não foi possível ler a sessão de projeto. Arquivos avulsos continuam disponíveis.' }) }
+  }
+  private async adoptWorkspace(workspace: WorkspaceStatus) {
+    this.update({ workspace })
+    if (workspace.root?.id === this.state.root?.id) return
+    this.generation++; this.followKey = null; this.remembered = ''; this.scroll = 0; this.focus = workspace.root?.id ?? null
+    this.update({ root: workspace.root, children: new Map(), expanded: new Set(), errors: new Map(), active: null, document: null })
+    if (workspace.root) { await this.load(workspace.root.id); this.update({ expanded: new Set([workspace.root.id]) }) }
+  }
+  private scheduleRemember() {
+    if (!this.workspace || !this.stop || !this.state.root || !this.state.workspace?.remember || this.state.busy || this.editor.snapshot().busy || this.remembering) return
+    if (this.rememberTimer) clearTimeout(this.rememberTimer)
+    this.rememberTimer = setTimeout(() => { this.rememberTimer = null; const work = this.remember(); this.rememberWork = work; void work.finally(() => { if (this.rememberWork === work) this.rememberWork = null }) }, 600)
+  }
+  private async remember() {
+    if (!this.workspace || this.remembering || this.state.busy || this.editor.snapshot().busy || !this.stop) return
+    const state = this.editor.workspaceState(), signature = JSON.stringify(state), generation = this.generation
+    if (signature === this.remembered) return
+    this.remembering = true
+    try {
+      const result = await this.workspace.remember(state)
+      if (generation === this.generation && result.ok) { this.remembered = signature; this.update({ workspace: result.value }) }
+    } catch { /* A later bounded metadata update retries; no source text is sent. */ }
+    finally { this.remembering = false }
+  }
+  async workspaceAction(action: 'restore' | 'standalone' | 'forget' | boolean): Promise<boolean> {
+    if (!this.workspace || this.state.busy || this.editor.snapshot().busy || this.locked) return false
+    this.update({ busy: true, error: null })
+    let completed = false
+    try {
+      const invoke = () => typeof action === 'boolean' ? this.workspace!.configure(action) : this.workspace![action]()
+      const receive = async (): Promise<WorkspaceResult> => {
+        const result = await invoke()
+        if (result.ok) { await this.adoptWorkspace(result.value); if (result.views) this.editor.restoreViews(result.views) }
+        else { if (result.value) await this.adoptWorkspace(result.value); this.update({ error: result.error }) }
+        completed = result.ok && !result.canceled
+        return result
+      }
+      if (action === 'restore' || action === 'standalone') await this.editor.openAuthorized(async () => {
+        const result = await receive()
+        return result.ok ? result.documents ?? { ok: true, document: null, canceled: true } : { ok: false, code: 'unavailable', error: result.error }
+      })
+      else await receive()
+      this.remembered = ''
+    } catch { this.update({ error: 'Não foi possível concluir a operação de projeto. As abas foram mantidas.' }) }
+    finally { this.update({ busy: false }) }
+    return completed
+  }
   private async follow(document: string, names: string[], caseInsensitive = false) {
     const root = this.state.root, generation = this.generation
     if (!root) return
@@ -87,6 +155,7 @@ export class ExplorerSession {
     } catch { this.update({ error: 'Não foi possível comunicar com o Explorador. Tente novamente.' }) }
     finally {
       this.update({ busy: false })
+      if (this.workspace) await this.initialize()
       const id = this.editor.snapshot().document?.id
       if (id && !this.editor.snapshot().busy) await this.editor.activate(id)
     }
@@ -141,7 +210,7 @@ export class ExplorerSession {
       if (!result.ok) this.update({ error: result.error })
       else { this.generation++; this.followKey = null; this.scroll = 0; this.focus = null; this.update({ root: null, children: new Map(), expanded: new Set(), errors: new Map(), active: null, document: null }) }
     } catch { this.update({ error: 'Não foi possível liberar a pasta. Tente novamente.' }) }
-    finally { this.update({ busy: false }) }
+    finally { this.update({ busy: false }); if (this.workspace) await this.initialize() }
   }
   async open(node: ExplorerNode) {
     if (this.state.busy || this.locked || this.editor.snapshot().busy || node.kind !== 'file' || !this.state.root) return

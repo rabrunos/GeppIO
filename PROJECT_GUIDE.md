@@ -40,8 +40,11 @@ Since alpha.20, normal startup and built-in compositions have empty regions. Sev
 synthetic types remain compatibility identities and opt-in disposable-profile test fixtures.
 API 1 plugin contributions use Main-only, single-view declarative cards. The host also permits
 Workspace Essentials notes/checklist/prompts in Sidebar since alpha.22; host metadata is not
-automatically an author-facing SDK capability. Project names, Git indicators, avatar and the
-presentation test panel do not implement filesystem projects, Git, accounts or a terminal.
+automatically an author-facing SDK capability. The original illustrative project/profile and
+presentation controls are separate from the first-party Files/Monaco, native Terminal and Git
+owners. Alpha.47's [local Workspace](docs/architecture/workspace.md) binds actual root identity,
+clean-session restoration and new-terminal cwd; display-only layout names never grant native access.
+Avatar/profile controls remain illustrative and do not implement accounts.
 
 The owner's recorded product direction retains Electron for Windows and Linux; the currently
 validated platform/profile is Windows x64. Linux app smoke, packaging and distribution remain

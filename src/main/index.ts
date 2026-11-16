@@ -49,8 +49,8 @@ async function createWindow(): Promise<void> {
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   win.webContents.on('will-navigate', event => event.preventDefault())
   win.webContents.on('will-attach-webview', event => event.preventDefault())
-  bindDocuments(win, devURL ?? `${IDENTITY.protocol}://${IDENTITY.host}/index.html`)
-  bindTerminal(win, devURL ?? `${IDENTITY.protocol}://${IDENTITY.host}/index.html`)
+  const workspace = bindDocuments(win, devURL ?? `${IDENTITY.protocol}://${IDENTITY.host}/index.html`)
+  bindTerminal(win, devURL ?? `${IDENTITY.protocol}://${IDENTITY.host}/index.html`, () => workspace.startupDirectory())
   const owner = win.webContents.id
   const revokeData = () => plugins.revokeOwner(owner)
   win.webContents.on('did-start-navigation', (_event, _url, _inPlace, mainFrame) => { if (mainFrame) revokeData() })

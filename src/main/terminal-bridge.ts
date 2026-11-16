@@ -3,10 +3,15 @@ import type { BrowserWindow } from 'electron'
 import { TerminalService } from './terminal.ts'
 import { validTerminalRequest } from '../shared/terminal.ts'
 import type { TerminalResult } from '../shared/terminal.ts'
+import type { TerminalDirectory } from './terminal.ts'
 
-export function bindTerminal(win: BrowserWindow, expectedURL: string) {
-  let service = new TerminalService()
-  const revoke = () => { service.dispose(); service = new TerminalService() }
+export function bindTerminal(win: BrowserWindow, expectedURL: string, directory?: () => TerminalDirectory) {
+  const create = () => new TerminalService(directory ? () => {
+    const frame = win.webContents.mainFrame, selected = directory()
+    return { resolve: () => selected.resolve(), current: () => !win.isDestroyed() && !win.webContents.isDestroyed() && frame === win.webContents.mainFrame && frame.url === expectedURL && selected.current() }
+  } : undefined)
+  let service = create()
+  const revoke = () => { service.dispose(); service = create() }
   win.webContents.on('did-start-navigation', (_event, _url, _inPlace, mainFrame) => { if (mainFrame) revoke() })
   win.webContents.on('render-process-gone', revoke)
   const shutdown = () => service.dispose()

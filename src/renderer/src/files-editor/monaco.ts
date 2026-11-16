@@ -151,6 +151,11 @@ class MonacoPresentation {
         const owner = this.id ? this.models.get(this.id) : undefined
         this.model = owner?.model ?? null; this.editor.setModel(this.model)
         if (owner?.view) this.editor.restoreViewState(owner.view)
+        else if (this.model) {
+          const selection = this.session.selection, start = this.model.getPositionAt(selection.start), end = this.model.getPositionAt(selection.end)
+          this.editor.setSelection(new monaco.Selection(start.lineNumber, start.column, end.lineNumber, end.column))
+          this.editor.setScrollPosition({ scrollTop: selection.top, scrollLeft: selection.left })
+        }
       }
     } finally { this.changing = false }
     if (this.model && state.document) {
@@ -171,7 +176,7 @@ class MonacoPresentation {
   private remember() {
     if (this.changing || !this.model || this.id !== this.session.snapshot().document?.id) return
     const selection = this.editor.getSelection(), position = this.editor.getPosition()
-    if (selection && position) this.session.rememberSelection({ start: this.model.getOffsetAt(selection.getStartPosition()), end: this.model.getOffsetAt(position), top: this.editor.getScrollTop(), left: this.editor.getScrollLeft() })
+    if (selection && position) this.session.rememberSelection({ start: this.model.getOffsetAt({ lineNumber: selection.selectionStartLineNumber, column: selection.selectionStartColumn }), end: this.model.getOffsetAt(position), top: this.editor.getScrollTop(), left: this.editor.getScrollLeft() })
   }
   private theme() { monaco.editor.setTheme(document.querySelector('.workbench')?.getAttribute('data-theme') === 'light' ? 'vs' : 'vs-dark') }
   private layout() { if (this.host) { this.editor.layout({ width: this.host.clientWidth, height: this.host.clientHeight }); this.diagnostics() } }

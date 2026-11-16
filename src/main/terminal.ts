@@ -1,10 +1,12 @@
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { IPty } from 'node-pty'
 import { emptyTerminal, TerminalOutput } from '../shared/terminal.ts'
 import type { TerminalRead, TerminalState } from '../shared/terminal.ts'
+
+export interface TerminalDirectory { current(): boolean; resolve(): Promise<{ path: string; note: string | null }> }
 
 /** Native session belongs to Core, never to a presentation. One process per app window. */
 export class TerminalService {
@@ -14,6 +16,8 @@ export class TerminalService {
   private disposed = false
   private inputBudget = 0
   private budgetSince = 0
+  private directory: () => TerminalDirectory
+  constructor(directory: () => TerminalDirectory = () => ({ current: () => true, resolve: async () => ({ path: homedir(), note: null }) })) { this.directory = directory }
   read(id: string | null, after: number): TerminalRead {
     if (id !== null && id !== this.state.id) throw new Error('Sessão de terminal expirada.')
     return { state: { ...this.state }, ...this.output.read(after) }
@@ -22,10 +26,11 @@ export class TerminalService {
     if (this.disposed) throw new Error('Terminal indisponível nesta janela.')
     if (['starting', 'running', 'closing'].includes(this.state.phase)) return this.read(null, 0)
     const id = randomUUID()
+    const directory = this.directory()
     this.output = new TerminalOutput(); this.inputBudget = 0
     this.state = { ...emptyTerminal(), id, phase: 'starting' }
     // Yield once so the starting phase is observable; cancellation revokes this generation.
-    setImmediate(() => {
+    setImmediate(() => { void (async () => {
       if (this.disposed || this.state.id !== id || this.state.phase !== 'starting') return
       try {
         const shell = process.platform === 'win32' ? [
@@ -39,16 +44,25 @@ export class TerminalService {
         // Load lazily: a missing native binary produces terminal feedback, not app startup failure.
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const pty = require('node-pty') as typeof import('node-pty')
+        // Project cwd must not turn relative/user module lookup into automatic
+        // project code execution during the fixed PSReadLine configuration.
+        if (process.platform === 'win32') {
+          for (const key of Object.keys(env)) if (key.toLowerCase() === 'psmodulepath') delete env[key]
+          env.PSModulePath = [join(dirname(shell), 'Modules'), join(process.env.ProgramFiles ?? 'C:\\Program Files', 'WindowsPowerShell', 'Modules')].join(';')
+        }
         // Fixed launch configuration only: no profile, project command or persistent PSReadLine history.
         // NUL also prevents loading the owner's existing command-history file before the first prompt.
         const args = process.platform === 'win32' ? ['-NoLogo', '-NoProfile', '-NoExit', '-Command',
           "try { if (Get-Module -ListAvailable -Name PSReadLine) { Import-Module PSReadLine -ErrorAction Stop; Set-PSReadLineOption -HistorySaveStyle SaveNothing -HistorySavePath 'NUL' -ErrorAction Stop } } catch { Write-Error 'Falha ao desativar o historico do shell.'; exit 1 }"] : ['--noprofile', '--norc']
+        const initial = await directory.resolve()
+        if (this.disposed || this.state.id !== id || this.state.phase !== 'starting') return
+        if (!directory.current()) throw new Error('project changed')
         const child = pty.spawn(shell, args, {
-          name: 'xterm-256color', cols: this.state.cols, rows: this.state.rows, cwd: homedir(), env,
+          name: 'xterm-256color', cols: this.state.cols, rows: this.state.rows, cwd: initial.path, env,
           useConpty: true, useConptyDll: false
         })
         this.process = child
-        this.state = { ...this.state, phase: 'running', shell: process.platform === 'win32' ? shell.endsWith('pwsh.exe') ? 'PowerShell 7' : 'Windows PowerShell' : 'bash', cwd: homedir() }
+        this.state = { ...this.state, phase: 'running', shell: process.platform === 'win32' ? shell.endsWith('pwsh.exe') ? 'PowerShell 7' : 'Windows PowerShell' : 'bash', cwd: initial.path, startupNote: initial.note }
         child.onData(data => { if (this.state.id === id && !this.disposed) this.output.append(data) })
         child.onExit(({ exitCode }) => {
           if (this.state.id !== id) return
@@ -56,10 +70,11 @@ export class TerminalService {
           this.state = { ...this.state, phase: this.state.phase === 'closing' ? 'closed' : 'exited', exitCode }
         })
       } catch {
+        if (this.disposed || this.state.id !== id || this.state.phase !== 'starting') return
         this.process = null
-        this.state = { ...this.state, phase: 'failed', error: 'Não foi possível iniciar PowerShell/ConPTY. Verifique a instalação nativa e a disponibilidade do shell.' }
+        this.state = { ...this.state, phase: 'failed', error: 'Não foi possível iniciar PowerShell/ConPTY. O projeto pode ter mudado durante a inicialização; confira a pasta e reinicie explicitamente. Verifique também a instalação nativa do shell.' }
       }
-    })
+    })() })
     return this.read(null, 0)
   }
   private running(id: string) {

@@ -39,9 +39,10 @@ export function FileEditor({ session }: { session: EditorSession }) {
     const id = session.snapshot().document?.id
     if (id) tabs.current?.querySelector<HTMLElement>(`[data-document-tab="${id}"]`)?.focus()
   }
-  return <section className="file-editor" aria-label="Arquivos & Editor" data-document-id={state.document?.id} data-document-dirty={session.dirty} data-document-status={state.busy ? 'busy' : state.code ?? (session.dirty ? 'dirty' : 'clean')}>
+  const scope = state.document?.location?.root === state.projectRoot && state.projectRoot ? 'No projeto' : 'Arquivo avulso'
+  return <section className="file-editor" aria-label="Arquivos & Editor" data-document-id={state.document?.id} data-document-scope={state.document ? scope : undefined} data-document-dirty={session.dirty} data-document-status={state.busy ? 'busy' : state.code ?? (session.dirty ? 'dirty' : 'clean')}>
     <div className="file-editor-toolbar">
-      <strong title={state.document?.name}>{state.document?.name ?? 'Nenhum arquivo aberto'}{session.dirty ? ' •' : ''}</strong>
+      <strong title={state.document ? state.document.name + ' · ' + scope : undefined}>{state.document?.name ?? 'Nenhum arquivo aberto'}{session.dirty ? ' •' : ''}{state.document && <small> · {scope}</small>}</strong>
       <button className="ui-button tool-button" disabled={state.busy || session.locked} onClick={() => { void session.open() }}>Abrir arquivo</button>
       <button className="ui-button tool-button" aria-keyshortcuts="Control+S" disabled={!state.document || state.busy || session.locked} onClick={() => { void session.save() }}>Salvar arquivo</button>
       {state.document && <button className="ui-button tool-button" disabled={state.busy || session.locked} onClick={() => { void session.release() }}>Fechar arquivo</button>}

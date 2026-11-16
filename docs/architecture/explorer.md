@@ -5,7 +5,8 @@ The bundled first-party module in `shared/files-editor.ts` owns editor and Explo
 renderer navigation, metadata, expansion, focus, scroll and confirmed active-file state.
 Both presentations render the same `Explorer`. No manifest, Worker, dependency or public SDK
 change is involved. Packaging and future third-party activity contributions remain provisional.
-A selected folder is a navigation scope, not a Workspace or automatic session restore.
+Since alpha.47, [WorkspaceOwner](workspace.md) coordinates this same selected-folder grant
+as the single real project root, with explicit clean-session restoration; no parallel FS owner.
 
 Alpha.45 hides `.git` case-insensitively (directory, file or link) before stat and visible-entry,
 byte and node budgets. This is only a navigation exclusion; metadata is never modified and
@@ -85,8 +86,9 @@ files/private folders are supported. Cloud placeholders, custom reparse storage,
 and special storage are unsupported/unverified. Existing Windows save ACL/ADS/metadata and crash
 limitations remain. This is not an untrusted-plugin isolation platform.
 
-No create/rename/move/copy/delete, filesystem drag/drop, multiple roots, project management,
-restore, watchers, tabs/splits, Git, search, terminal or public panel SDK are added by Explorer.
+No create/rename/move/copy/delete, filesystem drag/drop, multiple roots,
+watchers, splits, search or public panel SDK are added by Explorer. Workspace, tabs, Git and
+Terminal are separate first-party owners coordinated through their existing grants.
 The shared Editor supplies alpha.42 Monaco highlighting independently; project-wide LSP remains deferred.
 
 `tests/explorer.test.ts` and `pnpm test:explorer` use disposable directories and the actual registered

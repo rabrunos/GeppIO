@@ -15,7 +15,9 @@ import { WORKBENCH_KEY } from '../src/shared/workbench/model.ts'
 import type { TerminalRead, TerminalResult } from '../src/shared/terminal.ts'
 import { editorRegionGeometry } from './editor-region-geometry-smoke.ts'
 
-const profile = await mkdtemp(join(tmpdir(), 'geppio-smoke-terminal-')), root = await realpath(profile)
+const profile = await mkdtemp(join(tmpdir(), 'geppio-smoke-terminal-')), root = join(await realpath(profile), 'project')
+// The selected project must be separate from app-owned profile/recovery storage.
+await mkdir(root)
 const scale125 = process.argv.includes('--scale125'), diagnostics = resolve('.local/diagnostics/terminal-alpha40-' + (scale125 ? '125' : '100'))
 await mkdir(diagnostics, { recursive: true })
 const fixture = join(root, 'draft.json'); await writeFile(fixture, '\ufeff{\r\n  "saved": true\r\n}\r\n')
@@ -247,7 +249,7 @@ try {
   for (const [file, language, eol] of [[textFixture, 'Texto simples', 'LF'], [typeFixture, 'TypeScript', 'CR']]) {
     await app.evaluate(({ dialog }, file) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [file!] }) }, file)
     await page.getByRole('button', { name: 'Abrir arquivo', exact: true }).click()
-    await page.waitForFunction(name => document.querySelector('.file-editor-toolbar strong')?.textContent === name, file!.split(/[\\/]/).pop())
+    await page.waitForFunction(name => document.querySelector('.file-editor-toolbar strong')?.firstChild?.textContent === name && document.querySelector('.file-editor')?.getAttribute('data-document-scope') === 'No projeto', file!.split(/[\\/]/).pop())
     assert.equal(await page.getByRole('combobox', { name: 'Linguagem do documento' }).inputValue(), language)
     assert.equal(await page.locator('.status-eol').innerText(), eol)
     assert.equal(await page.locator('.status-encoding').innerText(), 'UTF-8')

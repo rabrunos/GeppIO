@@ -3,7 +3,7 @@ export const TERMINAL_INPUT_LIMIT = 8192
 export const TERMINAL_OUTPUT_LIMIT = 262144
 export const TERMINAL_PAGE_LIMIT = 32768
 export type TerminalPhase = 'none' | 'starting' | 'running' | 'closing' | 'closed' | 'exited' | 'failed'
-export interface TerminalState { id: string | null; phase: TerminalPhase; shell: string; cwd: string; exitCode: number | null; error: string | null; cols: number; rows: number }
+export interface TerminalState { id: string | null; phase: TerminalPhase; shell: string; cwd: string; exitCode: number | null; error: string | null; cols: number; rows: number; startupNote?: string | null }
 export interface TerminalRead { state: TerminalState; data: string; next: number; dropped: boolean }
 export type TerminalResult = { ok: true; value: TerminalRead } | { ok: false; error: string }
 export interface TerminalBridge {

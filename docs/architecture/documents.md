@@ -1,4 +1,8 @@
-# Essential Files & Editor — alpha.46
+# Essential Files & Editor — alpha.46–47
+
+Alpha.47 coordinates these independent grants through a [single-root Workspace](workspace.md).
+Project transitions retain drafts, while clean project tabs and bounded primary views can be
+offered after restart with fresh native authorization. Unsaved source/undo remains memory-only.
 
 ## Multiple documents — alpha.46 / Issue #53
 
@@ -36,7 +40,8 @@ root-relative association lets Explorer follow the active tab through lazy ances
 outside the current root clear the highlight. Root failure clears stale tree/Git state while
 retaining file drafts. Renderer DTOs contain bounded basenames/parent labels or validated
 relative names, never absolute paths. Only the native unsaved-changes dialog shows the full
-path for disambiguation. No Workspace persistence, recovery or terminal-cwd changes occur here.
+path for disambiguation. The original alpha.46 batch did not add Workspace persistence or cwd;
+the alpha.47 coordinator adds them without changing independent file authority.
 
 ## Monaco integration — alpha.42 / Issue #49
 
@@ -148,7 +153,8 @@ guarantees are outside this pilot. No library/native helper is adopted to imply 
 TOCTOU remains between validation and rename; a submitted syscall cannot be recalled by later
 revocation. This is not protection against hostile same-user native processes. Temporary flush is
 not complete directory/OS crash durability. Remote/cloud-synchronized storage is not certified.
-Unsaved buffers are memory-only, with no crash recovery or automatic session restoration.
+Unsaved buffers are memory-only, with no source crash recovery. Alpha.47's explicit clean-session
+restoration never writes a remembered draft over a disk file.
 
 Native/app close request all drafts with a one-use ticket, then Main presents Save/Discard/Cancel
 for each dirty target. Cancel/failed Save keeps the app and drafts. Opening another file never
@@ -166,6 +172,6 @@ These platform references do not replace application tests or owner acceptance.
 Alpha.39 adds the [bounded first-party Explorer](explorer.md) through this same store/session.
 Its directory grant is independent from the open document and adds no Worker authority.
 
-Full project context, splits, search, LSP/debug/build, OS associations/CLI
-routing, second windows, automatic restoration, crash recovery, metadata-preserving native writes,
+Splits, search, LSP/debug/build, OS associations/CLI
+routing, second windows, automatic unsaved restoration, crash recovery, metadata-preserving native writes,
 public rich UI/grants, marketplace/distribution and layout portability remain separate scopes.

@@ -51,6 +51,8 @@ export class DirectoryStore {
   private nodes = new Map<string, Node>()
   private generation = 0
   get snapshot(): ExplorerNode | null { return this.root ? { ...this.root.display } : null }
+  /** Remembering a path does not authorize it; restoration revalidates this witness. */
+  get descriptor(): { path: string; chain: string } | null { return this.root ? { path: this.root.path, chain: this.root.chain } : null }
   guard(): () => boolean { const generation = this.generation; return () => generation === this.generation }
   revoke(): void { this.generation++; this.root = null; this.nodes.clear() }
   async select(path: string, current: () => boolean): Promise<ExplorerResult> {
@@ -79,6 +81,22 @@ export class DirectoryStore {
   /** Main-only reuse of the exact selected root; never a renderer path grant. */
   async folder(root: string, current: () => boolean): Promise<string> {
     return (await this.target(root, root, current)).path
+  }
+  /** Main-only restoration through the same lazy nodes, budgets and file checks. */
+  async resolveFile(root: string, names: readonly string[], current: () => boolean): Promise<string> {
+    if (!names.length || names.length > EXPLORER_LIMITS.depth || !names.every(name => safeExplorerName(name) && name.toLowerCase() !== '.git')) throw new ExplorerFailure('invalid')
+    let parent = root
+    for (let i = 0; i < names.length; i++) {
+      const result = await this.list(root, parent, current)
+      if (!result.ok) throw new ExplorerFailure('unavailable')
+      const exact = result.children?.find(node => node.name === names[i])
+      const folded = process.platform === 'win32' ? result.children?.filter(node => node.name.toLowerCase() === names[i]!.toLowerCase()) : []
+      const node = exact ?? (folded?.length === 1 ? folded[0] : undefined)
+      if (!node || node.kind !== (i === names.length - 1 ? 'file' : 'directory')) throw new ExplorerFailure('stale')
+      if (i === names.length - 1) return this.file(root, node.id, current)
+      parent = node.id
+    }
+    throw new ExplorerFailure('stale')
   }
   release(root: string): ExplorerResult {
     if (!this.root || root !== this.root.display.id) throw new ExplorerFailure('stale')

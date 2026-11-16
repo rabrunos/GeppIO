@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { CSSProperties } from 'react'
 import { MotionConfig } from 'motion/react'
 import { PlusIcon, ArrowsPointingOutIcon, ArrowsPointingInIcon } from '@heroicons/react/24/outline'
@@ -49,6 +49,8 @@ import { FILE_EDITOR_TYPE, EXPLORER_TYPE } from '../../shared/files-editor.ts'
 import { FileEditor, EditorModeSwitch, useFileEditor } from './files-editor/FileEditor.tsx'
 import { ExplorerSession } from './files-editor/explorer-session.ts'
 import { Explorer } from './files-editor/Explorer.tsx'
+import { WorkspaceControls } from './files-editor/WorkspaceControls.tsx'
+import type { MonacoHost } from './files-editor/monaco.ts'
 import { GitSession } from './git/session.ts'
 import { GitChanges, GitComparisonDialog } from './git/GitChanges.tsx'
 import { GIT_TYPE } from '../../shared/git-widget.ts'
@@ -96,9 +98,11 @@ function Workbench({ plugins }: { plugins: ReturnType<typeof usePlugins> }) {
     }
   })
   const fileSession = useFileEditor(tx.editing), [fileMode, setFileMode] = useState<'editor' | 'widgets'>('widgets')
-  const [explorer] = useState(() => new ExplorerSession(window.geppio!.explorer, fileSession))
+  const [explorer] = useState(() => new ExplorerSession(window.geppio!.explorer, fileSession, window.geppio!.workspace))
+  const projectRoot = useSyncExternalStore(explorer.subscribe, explorer.snapshot).root
   const [git] = useState(() => new GitSession(window.geppio!.git, explorer))
-  useEffect(() => { explorer.connect(); return () => explorer.dispose() }, [explorer])
+  const gitState = useSyncExternalStore(git.subscribe, git.snapshot), projectGit = gitState.status?.root === projectRoot?.id ? gitState.status : null
+  useEffect(() => { explorer.connect(); void explorer.initialize(); return () => explorer.dispose() }, [explorer])
   const [editorActivity, setEditorActivity] = useState<'explorer' | 'git'>('explorer')
   useEffect(() => { git.connect(); return () => git.dispose() }, [git])
   git.locked = tx.editing
@@ -118,8 +122,9 @@ function Workbench({ plugins }: { plugins: ReturnType<typeof usePlugins> }) {
   function changeFileMode(mode: 'editor' | 'widgets', focusEditor = true) {
     if (tx.editing || tx.saving || interaction.active() || regions.active() || panelUI.active() || swapping.active()) return
     maximize.clear(); setFileMode(mode)
-    if (focusEditor) requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>('[data-file-editor]')?.focus())
+    if (focusEditor) requestAnimationFrame(() => document.querySelector<MonacoHost>('.monaco-host')?.monacoEditor?.focus())
   }
+  function projectEditor() { setEditorSidebar(previous => ({ ...previous, visible: true })); setEditorActivity('explorer'); changeFileMode('editor') }
   function revealTerminal() {
     if (tx.editing || tx.saving || interaction.active() || regions.active() || panelUI.active() || swapping.active()) return
     // Status routes to the direct presentation; never inserts a widget or changes a composition.
@@ -264,8 +269,8 @@ function Workbench({ plugins }: { plugins: ReturnType<typeof usePlugins> }) {
       if (!textInput && tx.editing && (event.ctrlKey || event.metaKey) && ['z', 'y'].includes(event.key.toLowerCase())) { event.preventDefault(); if (tx.gestureActive || interaction.active() || regions.active() || panelUI.active() || swapping.active()) return; regions.commitKeyboard(); interaction.visual.after(event.shiftKey || event.key.toLowerCase() === 'y' ? tx.redo : tx.undo); setSwapSelection(null); setSelectedViews([]) }
       if (event.key === 'Escape') { if (interaction.active()) interaction.end(true); else if (slot) setSlot(null); else if (selectedViews.length || swapSelection) { setSwapSelection(null); setSelectedViews([]) } else if (regions.sidebarMode === 'peek') regions.closePeek(); else if (tx.editing) tx.cancel() }
     }}>
-    <Header projectName={project.name ?? t('Laboratório')} openProject={() => setProjectMenu(true)} menu={headerMenu} setMenu={setHeaderMenu} history={interaction.visual.after} plugins={plugins} tx={tx} theme={theme} toggleTheme={toggleTheme} openSettings={() => setSettingsOpen(true)} begin={begin} save={() => confirmLayout(false)} conclude={() => confirmLayout(true)} /><ContextBar projectName={project.name ?? t('Laboratório')} projectAnchor={projectAnchor} openProject={() => setProjectMenu(!projectMenu)} begin={() => tx.editing ? setEditorOpen(!editorOpen) : begin()} editing={tx.editing} recovery={tx.recovery} feedback={tx.setMessage}><EditorModeSwitch mode={fileMode} disabled={tx.editing || tx.saving} change={changeFileMode} /><button className="ui-button tool-button" disabled={tx.editing || tx.saving} onClick={revealTerminal}>Mostrar Terminal</button></ContextBar>
-    <ProjectMenu open={projectMenu} close={() => setProjectMenu(false)} anchor={projectAnchor} name={project.name ?? t('Laboratório')} rename={value => { const name = value.trim(); if (!name || name.length > 60) return false; if (tx.editing) { tx.changeLocal({ projectName: name }); return true }; return project.rename(name) }} snapshot={tx.snapshot} feedback={tx.setMessage} />
+    <Header projectName={projectRoot?.name ?? project.name ?? t('Laboratório')} openProject={() => setProjectMenu(true)} menu={headerMenu} setMenu={setHeaderMenu} history={interaction.visual.after} plugins={plugins} tx={tx} theme={theme} toggleTheme={toggleTheme} openSettings={() => setSettingsOpen(true)} begin={begin} save={() => confirmLayout(false)} conclude={() => confirmLayout(true)} /><ContextBar projectName={projectRoot?.name ?? project.name ?? t('Laboratório')} projectAnchor={projectAnchor} openProject={() => setProjectMenu(!projectMenu)} begin={() => tx.editing ? setEditorOpen(!editorOpen) : begin()} editing={tx.editing} recovery={tx.recovery} feedback={tx.setMessage} browseProject={projectEditor} projectStatus={{ active: !!projectRoot, branch: projectGit?.branch, changes: projectGit?.changes.length, busy: gitState.busy, error: gitState.error }}><EditorModeSwitch mode={fileMode} disabled={tx.editing || tx.saving} change={changeFileMode} /><WorkspaceControls session={explorer} editing={tx.editing || tx.saving} edited={projectEditor} /><button className="ui-button tool-button" disabled={tx.editing || tx.saving} onClick={revealTerminal}>Mostrar Terminal</button></ContextBar>
+    <ProjectMenu layoutOnly={!!projectRoot} open={projectMenu} close={() => setProjectMenu(false)} anchor={projectAnchor} name={project.name ?? t('Laboratório')} rename={value => { const name = value.trim(); if (!name || name.length > 60) return false; if (tx.editing) { tx.changeLocal({ projectName: name }); return true }; return project.rename(name) }} snapshot={tx.snapshot} feedback={tx.setMessage} />
       <div ref={element => { regions.area.current = element; surfaces.root.current = element }} className="work-area" onPointerDown={event => { const box = regions.area.current?.getBoundingClientRect(); const safeGap = box && event.clientX >= box.left + 48 && event.clientX <= box.left + 59; if (regions.sidebarMode === 'peek' && !safeGap && !(event.target as HTMLElement).closest('.host-sidebar-content, .sidebar-rail, .editor-explorer-panel')) regions.closePeek() }}>
       <Sidebar editorMode={fileMode === 'editor'} editorActivity={editorActivity} selectEditorActivity={activity => { if (activity === editorActivity) regions.toggle('sidebar'); else { setEditorActivity(activity); regions.revealSidebar() } }} tx={tx} registry={registry} regions={regions} sidebarWidth={surfaces.measures.sidebar.width} theme={theme} toggleTheme={toggleTheme} saveBar={saveBar}><ScrollArea as="aside" className="sidebar-region ui-scrollbar" data-region="sidebar" inert={fileMode === 'editor'} onScroll={surfaces.measure} tabIndex={0} aria-label={t('Barra lateral')}>{port('sidebar')}</ScrollArea></Sidebar>
       {fileMode === 'editor' && <div className="editor-explorer-panel editor-region-panel" style={fullSidebar} hidden={fullSidebar.width <= 0 || fullSidebar.height <= 0} inert={regions.sidebarMode === 'hidden' || tx.editing} onPointerEnter={() => regions.hover(true)} onPointerLeave={() => regions.hover(false)}>{editorActivity === 'git' ? <GitChanges session={git} /> : <Explorer session={explorer} git={git} />}</div>}

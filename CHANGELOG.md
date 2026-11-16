@@ -2,6 +2,13 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.47] — 2026-11-16
+
+- Added a single-root local Workspace with explicit open/close and bounded restoration of project file tabs and clean view state after native reauthorization.
+- Preserved the private Git index timestamp conservatively so fast same-size edits cannot be hidden by copying metadata; added a deterministic actual-Git nonmutation regression.
+- Kept standalone drafts and running terminals independent from project transitions; unsaved source, undo history and processes are not persisted.
+- Started new terminals in the revalidated project root, with home fallback and explicit startup-directory information. No renderer-supplied cwd, automatic project command or new dependency was added.
+
 ## [0.1.0-alpha.46] — 2026-11-16
 
 - Added bounded native document ownership and internal Editor tabs, with independent drafts, save targets, revisions, Monaco models, undo, language and view state.

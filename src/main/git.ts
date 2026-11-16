@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
-import { lstat, mkdir, mkdtemp, open, opendir, realpath, rm, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, mkdtemp, open, opendir, realpath, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path'
 import { DirectoryStore, ExplorerFailure, inspectExplorerPath, safeExplorerName } from './explorer.ts'
@@ -289,7 +289,14 @@ export class GitStore {
         if (!await exists(source)) { if (['HEAD', 'objects', 'refs'].includes(name)) throw new GitFailure('unsupported'); continue }
         const stat = await lstat(source)
         if (stat.isDirectory()) { await mkdir(target); await walk(source, target) }
-        else { bytes += stat.size; if (bytes > GIT_LIMITS.metadata) throw new GitFailure('limit'); await writeFile(target, await boundedRead(source, Math.min(stat.size, GIT_LIMITS.metadata))) }
+        else {
+          bytes += stat.size; if (bytes > GIT_LIMITS.metadata) throw new GitFailure('limit')
+          await writeFile(target, await boundedRead(source, Math.min(stat.size, GIT_LIMITS.metadata)))
+          // Git uses the index timestamp to detect racily clean stat-cache entries.
+          // A newly dated copy can hide same-size edits. Round down conservatively
+          // so copying never makes that check less strict; the real index is untouched.
+          if (name === 'index') await utimes(target, stat.atime, Math.floor(stat.mtimeMs / 1000))
+        }
       }
       await mkdir(join(shadow, 'info'))
       for (const name of ['exclude', 'attributes']) if (await exists(join(git, 'info', name))) await writeFile(join(shadow, 'info', name), await boundedRead(join(git, 'info', name), 64 * 1024))

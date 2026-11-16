@@ -90,7 +90,7 @@ try {
   if (await page.locator('[data-widget]').count() !== 7) throw new Error('Expected seven main fixtures')
   for (const region of ['sidebar', 'main', 'bottom']) if (await page.locator(`[data-region="${region}"]`).count() !== 1) throw new Error('Missing region: ' + region)
   const privileged = await page.evaluate(() => ({ require: 'require' in window, process: 'process' in window, bridge: Object.keys(window.geppio ?? {}) }))
-  if (privileged.require || privileged.process || privileged.bridge.some(key => !['name', 'version', 'platform', 'plugins', 'pluginData', 'windowControls', 'documents', 'explorer', 'terminal', 'git', 'demoFixtures'].includes(key))) throw new Error('Unexpected privileged renderer surface')
+  if (privileged.require || privileged.process || privileged.bridge.some(key => !['name', 'version', 'platform', 'plugins', 'pluginData', 'windowControls', 'documents', 'explorer', 'terminal', 'git', 'workspace', 'demoFixtures'].includes(key))) throw new Error('Unexpected privileged renderer surface')
   assert.equal(await page.evaluate(() => window.geppio!.demoFixtures), true, 'This geometry suite explicitly opts into disposable-profile fixtures')
   assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.plugins).sort()), ['install', 'installFile', 'link', 'list', 'reload', 'remove', 'setDeveloperMode', 'setEnabled'])
   assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.pluginData).sort()), ['begin', 'end', 'read', 'write'])
@@ -98,6 +98,7 @@ try {
   assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.explorer).sort()), ['list', 'open', 'release', 'select'], 'Only opaque selected-directory operations are exposed; no arbitrary path/channel API')
   assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.terminal).sort()), ['close', 'input', 'read', 'resize', 'start'], 'Only the five fixed app-owned terminal operations are exposed')
   assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.git).sort()), ['compare', 'stage', 'status', 'unstage'], 'Only fixed root/change opaque Git operations are exposed')
+  assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.workspace).sort()), ['configure', 'forget', 'read', 'remember', 'restore', 'standalone'], 'Workspace has only fixed path-free app operations and bounded view metadata')
   assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.windowControls).sort()), ['close', 'maximize', 'minimize'], 'Only the three owner-authorized host chrome actions are exposed')
   const nativeBoundary = await application!.evaluate(({ BrowserWindow }) => {
     const contents = BrowserWindow.getAllWindows()[0]!.webContents

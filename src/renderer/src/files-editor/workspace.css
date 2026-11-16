@@ -1,0 +1,7 @@
+.workspace-controls { position: relative; max-width: 230px; min-width: 0; font-size: 12px; }
+.workspace-controls > button { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workspace-session-popover { width: min(360px, calc(100vw - 22px)); }
+.workspace-actions { display: flex; flex-direction: column; align-items: stretch; gap: 8px; padding: 12px; }
+.workspace-actions p { margin: 0; white-space: normal; font-size: 12px; line-height: 1.45; }
+.workspace-actions label { display: flex; align-items: center; gap: 8px; }
+.workspace-recovery { display: grid; gap: 8px; padding-top: 8px; border-top: 1px solid var(--color-border); }

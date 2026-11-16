@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { lstat, open, realpath, rename, unlink } from 'node:fs/promises'
 import type { BigIntStats } from 'node:fs'
 import { basename, dirname, isAbsolute, join, parse, resolve } from 'node:path'
@@ -77,6 +77,12 @@ export class DocumentStore {
   result(canceled = false): DocumentResult { return { ok: true, document: this.snapshot, documents: this.snapshots, ...(canceled ? { canceled: true } : {}) } }
   /** Main-only display association. Never returned through IPC. */
   filePath(id: string): string | null { return this.selections.get(id)?.evidence.path ?? null }
+  /** Main-only recovery witness; neither source nor old grants are persisted. */
+  fingerprint(id: string): string | null { const selected = this.selections.get(id); return selected ? createHash('sha256').update(selected.evidence.bytes).digest('hex') : null }
+  async validate(id: string, current: () => boolean): Promise<void> {
+    const selected = this.selections.get(id)
+    if (!selected || !sameEvidence(selected.evidence, await inspect(selected.evidence.path)) || !current() || this.selections.get(id) !== selected) throw new DocumentFailure('conflict', id)
+  }
   guard(): () => boolean { const generation = this.generation; return () => generation === this.generation }
   revoke(): void { this.generation++; this.selections.clear(); this.active = null }
   private current(draft: DocumentDraft | null): Selection | null {

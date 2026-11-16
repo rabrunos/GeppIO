@@ -1,5 +1,15 @@
 # Selected security baseline
 
+Issue #54 adds the [single-root Workspace coordinator](../architecture/workspace.md), reusing
+native directory/document ownership. Six exact-window/frame/URL calls offer explicit native
+reauthorization and fresh grants after restart. Bounded app-owned metadata stores Main-only
+paths and clean view/fingerprint data, never draft source or old grant IDs. Corruption/external
+changes fail closed until explicit Forget. New-terminal cwd derives only from the validated
+Main root, with generation checks immediately before spawn; existing PTYs remain independent.
+No Worker capability, renderer path/cwd argument or project startup command is added. Same-user
+TOCTOU, plaintext local path metadata, no durable unsaved source recovery and unverified
+power-loss/cross-instance durability remain disclosed limitations.
+
 Issue #51 adds two explicit per-file index operations to the [Git boundary](../architecture/git.md).
 Read-only snapshots remain isolated. The separate write path uses a Main-generated one-file
 binary patch, Git's native cached-apply index lock and exact blob preimage check, strict ordinary

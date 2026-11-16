@@ -9,8 +9,12 @@ Bottom has no outer scrollbar. Native ownership, bridge and emulator continuity 
 
 `main/terminal.ts` owns one persistent native `node-pty` session per app window. Windows uses
 the OS ConPTY implementation, preferring the existing Program Files PowerShell 7 executable,
-otherwise System32 Windows PowerShell. The initial directory is the actual OS user home, unrelated
-to illustrative project metadata or Explorer grants. `-NoLogo -NoProfile` avoids executing a user
+otherwise System32 Windows PowerShell. Since alpha.47 the initial directory is the Main-validated
+active [Workspace root](workspace.md), otherwise actual OS user home. Captured root/owner generations
+are checked after asynchronous resolution and immediately before native spawn. Changing a project
+leaves an existing PTY untouched. Startup cwd is reported truthfully; later user `cd` is not tracked.
+PSModulePath is rebuilt from absolute trusted machine/shell module directories so the project cwd
+cannot supply an automatically imported PSReadLine module. `-NoLogo -NoProfile` avoids executing a user
 profile. The fixed `-NoExit -Command` launch configuration sets the existing PSReadLine module to
 `SaveNothing` with `HistorySavePath NUL` before the first prompt: no owner history is loaded or saved.
 Configuration failure exits with a real failure rather than silently enabling history. No user/project

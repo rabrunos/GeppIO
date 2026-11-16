@@ -3,19 +3,22 @@ import type { DocumentBridge, DocumentDraft, DocumentError, DocumentResult, Docu
 import { DOCUMENT_LANGUAGES } from '../../../shared/document-status.ts'
 import type { DocumentLanguage } from '../../../shared/document-status.ts'
 import { editorText } from '../../../shared/documents.ts'
+import type { WorkspaceEditor, WorkspaceSelection } from '../../../shared/workspace.ts'
 
 export interface EditorSelection { start: number; end: number; top: number; left: number }
 export interface EditorDocument { document: DocumentSnapshot; text: string; cursor: number; language: DocumentLanguage | null; selection: EditorSelection; error: string | null; code: DocumentError | null; bytes: number }
-export interface EditorState { document: DocumentSnapshot | null; text: string; busy: boolean; error: string | null; code: DocumentError | null; cursor: number; language: DocumentLanguage | null; diskVersion: number; tabs: readonly EditorDocument[]; notice: string | null; invalidRoot: string | null }
+export interface EditorState { document: DocumentSnapshot | null; text: string; busy: boolean; error: string | null; code: DocumentError | null; cursor: number; language: DocumentLanguage | null; diskVersion: number; tabs: readonly EditorDocument[]; notice: string | null; invalidRoot: string | null; projectRoot: string | null }
 const emptySelection = (): EditorSelection => ({ start: 0, end: 0, top: 0, left: 0 })
 /** One bounded registry of drafts, each backed by its own native grant/revision. */
 export class EditorSession {
-  private state: EditorState = { document: null, text: '', busy: false, error: null, code: null, cursor: 0, language: null, diskVersion: 0, tabs: [], notice: null, invalidRoot: null }
+  private state: EditorState = { document: null, text: '', busy: false, error: null, code: null, cursor: 0, language: null, diskVersion: 0, tabs: [], notice: null, invalidRoot: null, projectRoot: null }
   private entries = new Map<string, EditorDocument>()
+  private initialViews = new Map<string, { language: DocumentLanguage | null; selection: WorkspaceSelection }>()
   private navigationBusy = false
   private navigationWaiters = new Set<() => void>()
   private listeners = new Set<() => void>()
   readonly bridge: DocumentBridge
+  beforeClose: (() => Promise<void>) | null = null
   locked = false
   get selection(): EditorSelection { return this.state.document ? this.entries.get(this.state.document.id)?.selection ?? emptySelection() : emptySelection() }
   constructor(bridge: DocumentBridge) { this.bridge = bridge }
@@ -33,8 +36,11 @@ export class EditorSession {
     if (value.end !== this.state.cursor) this.view()
   }
   setLanguage(language: DocumentLanguage) { if (this.state.document && DOCUMENT_LANGUAGES.includes(language)) { this.change(this.state.document.id, { language }); this.view() } }
+  setProjectRoot(root: string | null) { if (root !== this.state.projectRoot) this.update({ projectRoot: root }) }
   get dirty() { return !!this.state.document && this.state.text !== this.state.document.text }
   documentState(id: string): Readonly<EditorDocument> | undefined { return this.entries.get(id) }
+  workspaceState(): WorkspaceEditor { return { active: this.state.document?.id ?? null, tabs: [...this.entries.values()].map(entry => ({ id: entry.document.id, revision: entry.document.revision, dirty: entry.text !== entry.document.text, language: entry.language, selection: { ...entry.selection } })) } }
+  restoreViews(views: { id: string; language: DocumentLanguage | null; selection: WorkspaceSelection }[]) { this.initialViews = new Map(views.map(view => [view.id, view])) }
   setNavigationBusy(value: boolean) {
     this.navigationBusy = value
     if (!value) { for (const resolve of this.navigationWaiters) resolve(); this.navigationWaiters.clear() }
@@ -63,7 +69,10 @@ export class EditorSession {
   feedback(notice: string) { this.update({ notice }) }
   private merge(document: DocumentSnapshot) {
     const previous = this.entries.get(document.id)
-    this.entries.set(document.id, previous ? { ...previous, document, ...(previous.document.revision !== document.revision ? { error: null, code: null } : {}) } : { document, text: document.text, cursor: 0, language: null, selection: emptySelection(), error: null, code: null, bytes: new TextEncoder().encode(document.text).length + (document.bom ? 3 : 0) })
+    const initial = this.initialViews.get(document.id), length = editorText(document.text).length
+    const selection = initial ? { ...initial.selection, start: Math.min(initial.selection.start, length), end: Math.min(initial.selection.end, length) } : emptySelection()
+    this.entries.set(document.id, previous ? { ...previous, document, ...(previous.document.revision !== document.revision ? { error: null, code: null } : {}) } : { document, text: document.text, cursor: selection.end, language: initial?.language ?? null, selection, error: null, code: null, bytes: new TextEncoder().encode(document.text).length + (document.bom ? 3 : 0) })
+    this.initialViews.delete(document.id)
   }
   private async run(action: () => Promise<DocumentResult>, kind: 'open' | 'save' | 'release' | 'close' | 'activate', target = this.state.document?.id, ownsNavigation = false): Promise<boolean> {
     if (this.state.busy) return false
@@ -106,6 +115,6 @@ export class EditorSession {
   }
   close = async (ticket: string): Promise<void> => {
     if (this.state.busy) await new Promise<void>(resolve => { const stop = this.subscribe(() => { if (!this.state.busy) { stop(); resolve() } }) })
-    await this.run(() => this.bridge.close(ticket, this.drafts()), 'close')
+    await this.run(async () => { await this.beforeClose?.(); return this.bridge.close(ticket, this.drafts()) }, 'close')
   }
 }

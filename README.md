@@ -10,7 +10,17 @@ persistência de layout. Há um runtime experimental real para plugins locais co
 O perfil novo abre Main, Sidebar e Bottom vazios; escolha widgets dos plugins instalados
 no catálogo. Os sete demos foram retirados do uso normal. Layouts anteriores preservam
 plugins, barras e composições; referências dos demos ficam guardadas para recuperação.
-Na alpha.46, Arquivos & Editor oferece até oito abas de arquivos UTF-8, com limite de 1 MiB
+Na alpha.47, o menu **Projeto local** abre, troca e fecha uma pasta real; o cabeçalho acompanha
+essa raiz e o Git. Trocar/fechar projeto mantém abas, rascunhos e o Terminal já aberto. **Abrir
+arquivo avulso** deixa o contexto do projeto após a escolha e revela o Editor; cancelar mantém tudo.
+O próximo Terminal inicia na pasta autorizada; sem projeto válido, usa a pasta pessoal. O Terminal
+em execução conserva seu diretório e processo. Não há execução automática de scripts do projeto.
+**Lembrar projeto e abas salvas** guarda metadados locais e oferece restauração após reiniciar,
+com nova confirmação nativa. Arquivos alterados exigem uma decisão; nada é sobrescrito pela
+restauração. Desmarque a opção ou use **Esquecer recuperação local** para remover essa lembrança.
+**Rascunhos não salvos e desfazer/refazer não sobrevivem a uma falha/reinício**; a proteção ao
+fechar normalmente continua. Veja [restauração, privacidade e limites](docs/architecture/workspace.md).
+Arquivos & Editor oferece até oito abas de arquivos UTF-8, com limite de 1 MiB
 por arquivo e 8 MiB de fonte na sessão. Cada aba preserva rascunho, linguagem, desfazer/refazer
 e posição; **Ctrl+S** salva apenas a ativa. Abrir outro arquivo não salva o anterior. Fechar
 uma aba alterada pede Salvar/Descartar/Cancelar; fechar a janela protege também abas inativas.
@@ -32,7 +42,7 @@ essas ações. Em caso de interrupção, atualize para conferir o resultado; nã
 reversão automática. Tudo funciona localmente, sem conta GitHub/GitLab ou acesso remoto.
 O piloto usa Git para Windows instalado em Arquivos de Programas, ignora configuração global e
 recusa formatos/limites não suportados. Veja [segurança e limites](docs/architecture/git.md).
-O Terminal local e o editor Monaco já são reais; projeto completo, ChatGPT, Codex e GitLayer
+O Workspace local, Terminal e editor Monaco já são reais; IDE completa, ChatGPT, Codex e GitLayer
 continuam propostas. Não há conta GeppIO, backend,
 sincronização em nuvem ou API paga de IA.
 

@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { randomUUID } from 'node:crypto'
-import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises'
+import { createHash, randomUUID } from 'node:crypto'
+import { mkdir, mkdtemp, readFile, realpath, rm, symlink, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DirectoryStore } from '../src/main/explorer.ts'
@@ -67,6 +67,29 @@ test('ordinary non-repository and linked metadata diagnostics remain distinct an
     const result = gitFailure(new GitFailure(code)); assert.ok(!result.ok && result.code === code)
     assert.doesNotMatch(JSON.stringify(result), /private-location/)
   }
+}))
+
+test('private index inspection preserves Git racy-stat detection without changing original metadata', async () => fixture(async path => {
+  const git = await fixtureGit(path)
+  git(['init', '-b', 'main']); git(['config', 'user.name', 'Disposable']); git(['config', 'user.email', 'test@example.invalid']); git(['config', 'core.autocrlf', 'false'])
+  const file = join(path, 'same.txt'), indexPath = join(path, '.git', 'index')
+  await writeFile(file, 'a\n'); git(['add', '.']); git(['commit', '-m', 'Fixture'])
+  const original = git(['rev-parse', 'HEAD:same.txt']).trim()
+  await writeFile(file, 'b\n'); await utimes(file, 1000000000, 1000000000); git(['add', 'same.txt'])
+  // A valid one-entry ordinary index with matching stat cache but the previous
+  // blob models a same-size edit within the index timestamp's granularity.
+  const index = await readFile(indexPath)
+  assert.equal(index.readUInt32BE(8), 1)
+  Buffer.from(original, 'hex').copy(index, 12 + 40)
+  createHash('sha1').update(index.subarray(0, -20)).digest().copy(index, index.length - 20)
+  await writeFile(indexPath, index)
+  const seconds = index.readUInt32BE(12 + 8)
+  await utimes(indexPath, seconds, seconds)
+  assert.equal(git(['status', '--porcelain=v1', '--untracked-files=all']), ' M same.txt\n')
+  const before = await gitFingerprint(path), { root, store } = await selected(path)
+  const result = success(await store.inspect('status', root, undefined, current))
+  assert.deepEqual(result.status!.changes.map(({ name, index, working }) => ({ name, index, working })), [{ name: 'same.txt', index: ' ', working: 'M' }])
+  assert.deepEqual(await gitFingerprint(path), before)
 }))
 test('saved-disk and Explorer invalidations coalesce, ignore drafts, and discard stale in-flight snapshots', async () => {
   const root = randomUUID(), id = randomUUID(), revision = randomUUID()
