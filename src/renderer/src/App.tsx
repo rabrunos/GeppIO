@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { CSSProperties } from 'react'
 import { MotionConfig } from 'motion/react'
 import { PlusIcon, ArrowsPointingOutIcon, ArrowsPointingInIcon } from '@heroicons/react/24/outline'
@@ -49,8 +49,11 @@ import { FILE_EDITOR_TYPE, EXPLORER_TYPE } from '../../shared/files-editor.ts'
 import { FileEditor } from './files-editor/FileEditor.tsx'
 import { Explorer } from './files-editor/Explorer.tsx'
 import { WorkspaceControls } from './files-editor/WorkspaceControls.tsx'
-import { GitChanges, GitComparisonDialog } from './git/GitChanges.tsx'
-import { GIT_TYPE } from '../../shared/git-widget.ts'
+import { GitComparisonDialog } from './git/GitChanges.tsx'
+import { FloatingView } from './shared-views/FloatingView.tsx'
+import { gitSharedView } from './shared-views/GitView.ts'
+import { openFloatingPresentation } from './shared-views/definition.ts'
+import type { FloatingPresentation } from './shared-views/definition.ts'
 import { TERMINAL_TYPE } from '../../shared/terminal-widget.ts'
 import { TerminalView } from './terminal/TerminalView.tsx'
 import { useCoreSessions } from './core/useCoreSessions.ts'
@@ -60,6 +63,12 @@ import './fixtures.css'
 import './freeform/freeform.css'
 import './workbench/design/index.css'
 import './workbench/host.css'
+
+function focusAvailable(button: HTMLButtonElement | null) {
+  if (!button?.isConnected || button.disabled || button.closest('[inert],[hidden]') || !button.checkVisibility({ visibilityProperty: true })) return false
+  button.focus({ preventScroll: true })
+  return document.activeElement === button
+}
 
 /** The runtime is mounted once. Inventory loading never remounts an existing workbench. */
 export function App() {
@@ -100,13 +109,43 @@ function GeppIOShell({ plugins }: { plugins: ReturnType<typeof usePlugins> }) {
   const gitState = useSyncExternalStore(git.subscribe, git.snapshot), projectGit = gitState.status?.root === projectRoot?.id ? gitState.status : null
   const appHost = useAppHost(tx.snapshot.organization.chrome), presentation = appHost.presentation
   const workbenchVisible = !presentation, concealed = presentation ? '' : undefined
+  const [floatingGit, setFloatingGit] = useState<FloatingPresentation | null>(null)
+  const floatingClose = useRef<HTMLButtonElement>(null), floatingTrigger = useRef<HTMLButtonElement | null>(null)
+  const comparisonTrigger = useRef<HTMLButtonElement | null>(null)
+  useLayoutEffect(() => { if (floatingGit) floatingClose.current?.focus({ preventScroll: true }) }, [floatingGit])
+  function compareGit(id: string, trigger: HTMLButtonElement) {
+    comparisonTrigger.current = trigger
+    void git.compare(id)
+  }
+  function closeGitComparison() {
+    const trigger = comparisonTrigger.current
+    comparisonTrigger.current = null
+    git.close()
+    // The result is asynchronous and disables its opener while pending. Restore
+    // that opener after the native modal has left the top layer.
+    requestAnimationFrame(() => { if (!document.querySelector('dialog:modal')) focusAvailable(trigger) })
+  }
+  function openGitWindow(trigger: HTMLButtonElement | null) {
+    floatingTrigger.current = trigger
+    setFloatingGit(previous => openFloatingPresentation(previous, gitSharedView.id, 'floating-window'))
+    floatingClose.current?.focus({ preventScroll: true })
+  }
+  function closeGitWindow() {
+    setFloatingGit(null)
+    const trigger = floatingTrigger.current
+    floatingTrigger.current = null
+    if (!focusAvailable(trigger)) {
+      const fallback = workbenchVisible ? projectAnchor.current : document.querySelector<HTMLButtonElement>('[data-git-window-trigger-fallback]')
+      fallback?.focus({ preventScroll: true })
+    }
+  }
   const confirmedChrome = presentation?.chrome ?? tx.snapshot.organization.chrome
   const regions = useRegions(tx.editing, confirmedChrome, async chrome => {
     const current = tx.live.current
     const next = presentation ? presentation.chromeForWorkbench(chrome, current.organization.chrome) : chrome
     return next ? tx.commitOrganization({ ...current, organization: { ...current.organization, chrome: next } }) : true
   }), surfaces = useSurfaces()
-  const panels = presentation?.panels({ sessions, measures: surfaces.measures, regions, theme })
+  const panels = presentation?.panels({ sessions, measures: surfaces.measures, regions, theme, compareGit, openGitWindow })
   const pairGesture = useRef(false)
   function changingExperienceBlocked() {
     return tx.blocksExperienceChange() || pairGesture.current || interaction.active()
@@ -271,7 +310,7 @@ function GeppIOShell({ plugins }: { plugins: ReturnType<typeof usePlugins> }) {
       if (event.key === 'Escape') { if (interaction.active()) interaction.end(true); else if (slot) setSlot(null); else if (selectedViews.length || swapSelection) { setSwapSelection(null); setSelectedViews([]) } else if (regions.sidebarMode === 'peek') regions.closePeek(); else if (tx.editing) tx.cancel() }
     }}>
     <Header projectName={projectRoot?.name ?? project.name ?? t('Laboratório')} openProject={() => setProjectMenu(true)} menu={headerMenu} setMenu={setHeaderMenu} history={interaction.visual.after} plugins={plugins} tx={tx} theme={theme} toggleTheme={toggleTheme} openSettings={() => setSettingsOpen(true)} begin={begin} save={() => confirmLayout(false)} conclude={() => confirmLayout(true)} /><ContextBar showLayoutActions={workbenchVisible} projectName={projectRoot?.name ?? project.name ?? t('Laboratório')} projectAnchor={projectAnchor} openProject={() => setProjectMenu(!projectMenu)} begin={() => tx.editing ? setEditorOpen(!editorOpen) : begin()} editing={tx.editing} recovery={tx.recovery} feedback={tx.setMessage} browseProject={projectEditor} projectStatus={{ active: !!projectRoot, branch: projectGit?.branch, changes: projectGit?.changes.length, busy: gitState.busy, error: gitState.error }}><ExperienceSwitch experience={appHost.experience} disabled={tx.editing || tx.saving} changing={changingExperienceBlocked} select={selectExperience} /><WorkspaceControls session={explorer} editing={tx.editing || tx.saving} edited={projectEditor} /><button className="ui-button tool-button" disabled={tx.editing || tx.saving} onClick={revealTerminal}>Mostrar Terminal</button></ContextBar>
-    <ProjectMenu layoutOnly={!!projectRoot} open={projectMenu} close={() => setProjectMenu(false)} anchor={projectAnchor} name={project.name ?? t('Laboratório')} rename={value => { const name = value.trim(); if (!name || name.length > 60) return false; if (tx.editing) { tx.changeLocal({ projectName: name }); return true }; return project.rename(name) }} snapshot={tx.snapshot} feedback={tx.setMessage} />
+    <ProjectMenu layoutOnly={!!projectRoot} open={projectMenu} close={() => setProjectMenu(false)} anchor={projectAnchor} name={project.name ?? t('Laboratório')} rename={value => { const name = value.trim(); if (!name || name.length > 60) return false; if (tx.editing) { tx.changeLocal({ projectName: name }); return true }; return project.rename(name) }} snapshot={tx.snapshot} feedback={tx.setMessage} openGitWindow={workbenchVisible ? () => openGitWindow(projectAnchor.current) : undefined} />
       <div ref={element => { regions.area.current = element; surfaces.root.current = element }} className="work-area" onPointerDown={event => { const box = regions.area.current?.getBoundingClientRect(); const safeGap = box && event.clientX >= box.left + 48 && event.clientX <= box.left + 59; if (regions.sidebarMode === 'peek' && !safeGap && !(event.target as HTMLElement).closest('.host-sidebar-content, .sidebar-rail, [data-sidebar-interactive]')) regions.closePeek() }}>
       <Sidebar rail={panels?.rail} tx={tx} registry={registry} regions={regions} sidebarWidth={surfaces.measures.sidebar.width} theme={theme} toggleTheme={toggleTheme} saveBar={saveBar}><ScrollArea as="aside" className="sidebar-region ui-scrollbar" data-region="sidebar" inert={!workbenchVisible} data-workbench-concealed={concealed} onScroll={surfaces.measure} tabIndex={0} aria-label={t('Barra lateral')}>{port('sidebar')}</ScrollArea></Sidebar>
       {panels?.sidebar}
@@ -322,7 +361,7 @@ function GeppIOShell({ plugins }: { plugins: ReturnType<typeof usePlugins> }) {
           editing={isFrame && tx.editing && feasible[placement.region] && !panelFrame} inactive={(placement.region === 'sidebar' && (regions.sidebarMode === 'hidden')) || (placement.region === 'bottom' && (regions.collapsed.bottom))} ghosted={!!picture && (record.id === picture.viewId || !!group?.members.includes(picture.viewId ?? '')) && (!picture.catalog || picture.released) && (!picture.sourceBar || picture.released || picture.sourceBar === tx.snapshot.organization.activeBar)} withheld={!!group && !isFrame && group.active !== record.id || (tx.recovery && !tx.editing) || !current || (!isMaximized && !shown && !panelFrame && interaction.movingId !== record.id)} unavailable={placement.region === 'bottom' && !feasible.bottom}
           interaction={interaction} swapping={swapping} motionRevision={tx.motionRevision} motion={tx.motion} remove={() => setRemoving(group?.active ?? record.id)} swapSelected={selectedViews.includes(record.id)} swapAvailable={selectedViews.length >= 2} swap={() => { if (swapSelection && swapSelection !== record.id) { const next = swapViews(view, registry, swapSelection, record.id); if (next) tx.action(next); else tx.setMessage(t('Troca incompatível ou sem espaço.')); setSwapSelection(null) } else setSwapSelection(record.id) }}
           wheel={(dx, dy) => { const element = surfaces.scroller(placement.region); if (!element) return; if (placement.region === 'main' && expanded) element.scrollLeft += dx; if (placement.region === 'sidebar') element.scrollTop += dy }}>
-          {definition.id === FILE_EDITOR_TYPE ? workbenchVisible && <FileEditor session={fileSession} /> : definition.id === EXPLORER_TYPE ? workbenchVisible && <Explorer session={explorer} git={git} /> : definition.id === GIT_TYPE ? workbenchVisible && <GitChanges session={git} /> : definition.id === TERMINAL_TYPE ? workbenchVisible && <TerminalView session={terminal} theme={theme} /> : definition.widgetId ? <PluginBody definition={definition} plugins={plugins} region={placement.region} /> : undefined}
+          {definition.id === FILE_EDITOR_TYPE ? workbenchVisible && <FileEditor session={fileSession} /> : definition.id === EXPLORER_TYPE ? workbenchVisible && <Explorer session={explorer} git={git} /> : definition.id === gitSharedView.widgetTypeId ? workbenchVisible && <gitSharedView.Content session={git} compare={compareGit} /> : definition.id === TERMINAL_TYPE ? workbenchVisible && <TerminalView session={terminal} theme={theme} /> : definition.widgetId ? <PluginBody definition={definition} plugins={plugins} region={placement.region} /> : undefined}
         </WidgetFrame>
       })}{sessionSlots.map(item => { const m = surfaces.measures[item.region], left = m.left + item.x - m.scrollLeft, top = m.top + item.y - m.scrollTop; return <button key={item.id} className="ui-button host-format-slot layout-empty-slot" data-session-slot={item.id} data-slot-bar={item.sidebarBar} data-owner-region={item.region} data-catalog-slot-target={chosenSlot?.id === item.id ? '' : undefined} aria-pressed={chosenSlot?.id === item.id} style={{ left, top, width: item.width, height: item.height,
         clipPath: `inset(${Math.max(0, m.top - top)}px ${Math.max(0, left + item.width - m.left - (m.clipWidth ?? m.width))}px ${Math.max(0, top + item.height - m.top - (m.clipHeight ?? m.height))}px ${Math.max(0, m.left - left)}px round var(--card-radius))` }} onClick={() => { if (!editorOpen) { setEditorOpen(true); if (chosenSlot?.id !== item.id) setSlot(item) } else setSlot(chosenSlot?.id === item.id ? null : item) }} aria-label={t('Escolher widget')}><PlusIcon className="icon" /><strong>{t('Adicionar widget')}</strong><small>{t('Espaço {0}', sessionSlots.filter(slot => slot.region === item.region).findIndex(slot => slot.id === item.id) + 1)}</small></button> })}</div>
@@ -335,9 +374,13 @@ function GeppIOShell({ plugins }: { plugins: ReturnType<typeof usePlugins> }) {
       {picture && <DragLayer picture={picture} pointer={interaction.visual.pointer} controller={interaction.visual.controller} measure={interaction.visual.measure} complete={interaction.visual.complete} label={t(picture.catalog ? 'Adicionando widget' : picture.sourceBar ? 'Movendo da barra lateral' : (interaction.gestureLabel?.region ?? picture.source?.dataset.ownerRegion) === 'bottom' ? 'Movendo da barra inferior' : 'Movendo da área principal')}><section className="widget drag-picture-content"><header className="widget-heading"><strong>{registry.get(picture.typeId)?.owner === 'host' ? t(registry.get(picture.typeId)!.title) : registry.get(picture.typeId)?.title}</strong></header><div className="widget-content">{registry.get(picture.typeId)?.fixture ? <WidgetContent id={registry.get(picture.typeId)!.fixture!} /> : <PluginBody definition={registry.get(picture.typeId)!} plugins={plugins} preview />}</div></section></DragLayer>}
       {dropZones?.targets.map(region => { const m = surfaces.measures[region], width = m.width + 6, height = m.height + 6; return <div key={region} className="layout-edit-zone" data-over={dropZones.over === region ? '' : undefined} style={{ left: m.left - 3, top: m.top - 3, width, height }}><EditOutline width={width} height={height} /></div> })}
       </div>
+      {floatingGit && <FloatingView instance={floatingGit} title={gitSharedView.title} size={gitSharedView.floatingSize}
+        close={closeGitWindow} closeButton={floatingClose} canDismissWithEscape={() => !changingExperienceBlocked()}>
+        <gitSharedView.Content session={git} compare={compareGit} />
+      </FloatingView>}
     </div><StatusBar editor={fileSession} terminal={terminal} reveal={revealTerminal} locked={tx.editing || tx.saving} />
     <div className={'workspace-feedback ' + (showFeedback || workbenchVisible && (tx.recovery || geometryWarning || panelNotice) ? 'workspace-toast' : 'sr-only')} role="status" aria-live="polite">{[workbenchVisible && panelNotice ? t(panelNotice) : '', workbenchVisible && geometryWarning ? t('Espaço insuficiente para os mínimos. Composição preservada; amplie ou reabra a região.') : '', t(tx.message)].filter(Boolean).join(' ')}</div>
-    <GitComparisonDialog session={git} />
+    <GitComparisonDialog session={git} close={closeGitComparison} />
     {removing && <Confirm title="Remover widget?" text={t('Remover esta presença? Os dados e plugins continuam disponíveis.')} confirm={() => {
       const typeId = view.organization.views.find(record => record.id === removing)?.typeId
       tx.action(removePresence(panelActive ? tx.snapshot : view, removing, registry)); setRemoving(null)

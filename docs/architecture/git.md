@@ -1,4 +1,20 @@
-# First-party Git pilot — alpha.43–48 / Issues #50–52, #55
+# First-party Git pilot — Issues #50–52, #55, #67
+
+## Shared View pilot — alpha.54
+
+The renderer host registers Git Changes as a first-party definition with Widget and floating-window
+presentations. Workbench retains the existing `host:git-changes` widget type and persisted
+`View` (`id`, `typeId`, `modelId`). The floating instance belongs to the shell and keeps its
+position only while open. The Code sidebar, Workbench widget and floating window render the same
+`GitChanges` with the Core-owned `GitSession`. Explorer and Workspace still own the root grant.
+
+Open via **Abrir Git em janela** in the Code Git activity or the Workbench project menu.
+Opening again focuses the existing instance. The title bar moves by pointer in CSS pixels within
+the work area, with automatic bounds on viewport changes. Keyboard repositioning is outside this
+pilot. Tab leaves the window naturally. Close or Escape from within it returns focus to the opener
+or an available host control. Escape cancels an active title-bar drag first and leaves blocking
+dialogs and other host gestures to their existing handlers. The native HTML comparison dialog
+retains modal focus and stacks above the floating window.
 
 ## Ordinary worktree interoperability — alpha.48
 

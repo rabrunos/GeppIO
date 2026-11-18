@@ -13,6 +13,8 @@ pnpm.cmd test:isolated:desktop
 pnpm.cmd test:isolated monaco --scale125
 pnpm.cmd test:isolated monaco --dev
 pnpm.cmd test:isolated git
+pnpm.cmd test:isolated git-window
+pnpm.cmd test:isolated git-window --scale125
 pnpm.cmd test:isolated workspace
 pnpm.cmd test:isolated conpty
 pnpm.cmd test:isolation:negative
@@ -23,6 +25,12 @@ It is not the entire public `test:desktop` chain. No full-gate equivalence is im
 suite retains its original assertions. Git/Monaco/Workspace selections run one runtime variant;
 select `--scale125` or `--dev` explicitly where supported. Original public focused commands retain
 their pure/native chains, and all 38 alpha.49 Electron entries remain required in hosted CI.
+
+Alpha.54 adds two `git-window` entries to the IDE shard, alongside the 38 original and two App
+Host entries. The isolated built-app journey uses disposable Git roots and covers direct opening,
+singleton focus, drag and bounds, the blocking comparison, per-file stage/unstage, grant
+invalidation, and preservation of the dirty Monaco draft, Workbench storage, PTY and plugin Worker.
+The DPR 1 and 1.25 runs are automated device-scale coverage. Physical display acceptance is separate.
 
 The TypeScript controller compiles a small first-party Win32 ABI bridge with the installed
 Windows/.NET Framework x64 `csc.exe`. It creates a unique inactive desktop in WinSta0, starts a

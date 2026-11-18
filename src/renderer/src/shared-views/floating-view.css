@@ -1,0 +1,40 @@
+.internal-view-layer {
+  position: absolute;
+  inset: 0 0 0 48px;
+  z-index: 100;
+  pointer-events: none;
+}
+.internal-view {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  pointer-events: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--card-radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-panel-side);
+  overflow: hidden;
+  -webkit-app-region: no-drag;
+}
+.internal-view-titlebar {
+  flex: 0 0 36px;
+  display: flex;
+  align-items: center;
+  padding-right: 4px;
+  border-bottom: 1px solid var(--color-border);
+}
+.internal-view-grip {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  align-self: stretch;
+  padding-inline: 10px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.internal-view-grip:active { cursor: grabbing; }
+.internal-view-grip h2 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 0; font-size: 13px; }
+.internal-view-content { flex: 1; min-height: 0; overflow: auto; }

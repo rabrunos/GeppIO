@@ -2,6 +2,11 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.54] — 2026-11-18
+
+- Register Git Changes as a shared host View and open it directly in one movable, non-blocking internal window from GeppIO Code or the Workbench project menu.
+- Share the Core Git session with the existing sidebar and widget while keeping window geometry in memory and the blocking Git comparison above the floating presentation.
+
 ## [0.1.0-alpha.53] — 2026-11-18
 
 - Synchronize the native PTY with xterm when a Terminal session starts or restarts, preserving keyboard focus and the shared Terminal across GeppIO Code and the Workbench.

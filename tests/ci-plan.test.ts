@@ -31,8 +31,9 @@ function expand(name: string): string[] {
 test('CI preserves all 38 distinct alpha.48 Electron invocations and public commands', () => {
   const actual = Object.values(ciGroups).flat().map(step => [step.file, ...(step.args ?? [])].join(' ')).sort()
   assert.equal(alpha48.length, 38)
-  assert.deepEqual(actual, [...alpha48, 'tools/app-host-smoke.ts', 'tools/app-host-smoke.ts --scale125'].sort(),
-    'No omission, duplicate execution or changed DPR/runtime flag. App Host coverage is additive.')
+  assert.deepEqual(actual, [...alpha48, 'tools/app-host-smoke.ts', 'tools/app-host-smoke.ts --scale125',
+    'tools/git-window-smoke.ts', 'tools/git-window-smoke.ts --scale125'].sort(),
+    'No omission, duplicate execution or changed DPR/runtime flag. App Host and Shared View coverage are additive.')
   const publicSmokes = [
     'test:desktop', 'test:monaco', 'test:git', 'test:terminal', 'test:documents',
     'test:explorer', 'test:workspace', 'test:sidebar', 'test:plugin-package', 'test:plugin-dev'
