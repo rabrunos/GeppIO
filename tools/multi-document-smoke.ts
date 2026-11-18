@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { _electron as electron } from 'playwright'
+import { electron } from './test-electron.ts'
 import type { ElectronApplication } from 'playwright'
 import { mkdtemp, realpath, mkdir, readFile, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

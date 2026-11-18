@@ -1,4 +1,4 @@
-import { _electron as electron } from 'playwright'
+import { electron } from './test-electron.ts'
 import { settle as settleShell, portugueseFixture } from './freeform-smoke.ts'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

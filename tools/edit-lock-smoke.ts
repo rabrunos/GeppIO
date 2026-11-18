@@ -1,6 +1,6 @@
 import { enableDeveloperMode } from './plugin-dev-support.ts'
 import assert from 'node:assert/strict'
-import { _electron as electron } from 'playwright'
+import { electron } from './test-electron.ts'
 import type { ElectronApplication, Locator, Page } from 'playwright'
 import { mkdtemp, mkdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

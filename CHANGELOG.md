@@ -2,6 +2,13 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.50] — 2026-11-16
+
+- Added an opt-in local isolated Electron smoke runner using an inactive Windows desktop and a disposable first-party Win32 bridge, with owned process jobs and fail-closed launch/cleanup.
+- Routed test launches through one shared guard; local visible debugging requires explicit opt-in, while the existing hosted Windows CI groups and assertions remain intact.
+- Refused shared-clipboard/paste suites in desktop-only isolation and added a distinct real application ConPTY probe without claiming replacement coverage for the complete Terminal gate.
+- Corrected the desktop resize test's integer-only measurement oracle to preserve the existing fractional CSS-pixel surface contract and tolerance at DPR 1.25.
+
 ## [0.1.0-alpha.49] — 2026-11-16
 
 - Split required Windows CI into three independent runners, preserving the aggregate windows status and unchanged Secrets gate.

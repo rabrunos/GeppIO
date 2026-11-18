@@ -1,5 +1,103 @@
 # Validation guide
 
+## Isolated local Windows smokes (alpha.50 / Issue #57)
+
+Build current application/plugin assets first with `pnpm check`, or use
+`pnpm plugins:build && pnpm build` when the relevant Node/type/lint checks already passed.
+The isolated selector reuses those local outputs; it does not replace the full validation gate.
+
+Use `pnpm test:isolated --help` for the closed suite catalog. Examples:
+
+```powershell
+pnpm.cmd test:isolated:desktop
+pnpm.cmd test:isolated monaco --scale125
+pnpm.cmd test:isolated monaco --dev
+pnpm.cmd test:isolated git
+pnpm.cmd test:isolated workspace
+pnpm.cmd test:isolated conpty
+pnpm.cmd test:isolation:negative
+```
+
+`test:isolated:desktop` selects **desktop-core**, the existing `tools/desktop-smoke.ts` journey.
+It is not the entire public `test:desktop` chain. No full-gate equivalence is implied. Each selected
+suite retains its original assertions. Git/Monaco/Workspace selections run one runtime variant;
+select `--scale125` or `--dev` explicitly where supported. Original public focused commands retain
+their pure/native chains, and all 38 alpha.49 Electron entries remain required in hosted CI.
+
+The TypeScript controller compiles a small first-party Win32 ABI bridge with the installed
+Windows/.NET Framework x64 `csc.exe`. It creates a unique inactive desktop in WinSta0, starts a
+suspended Node worker with explicit `STARTUPINFOEX.lpDesktop`, assigns its Job Object before
+resuming it, and permits only stdin/stdout/stderr handle inheritance. The job forbids breakaway
+and terminates remaining descendants on close. A shared launch guard checks the worker, injects
+a test-only attestation preload before app Main, and binds each actual Electron HWND to its exact
+process, job and private desktop. This adds no renderer/Worker/native IPC capability or application
+runtime switch. No external implementation/library was adopted.
+
+Non-GUI V8 threads can have unavailable desktop query results; these are **not** reported as
+attested. Proof is the supported startup/inheritance contract plus exact live Electron HWND
+checks. The root also observes the input desktop for job-owned windows, without reading unrelated
+window titles or contents. This is escape detection, not a prevention boundary against malicious
+or newly introduced code deliberately opening GUI elsewhere. Only trusted allowlisted test scripts
+are supported. New external-window/OS-input scenarios require separate validation/session routing.
+
+Missing compiler/helper, blocked execution, wrong desktop/job, dropped isolation environment,
+unverifiable HWND, timeout or cleanup error produces nonzero failure. There is **no visible
+fallback**, no automatic gesture retry and no successful empty/no-window run. Cancellation closes
+the ownership pipe; controller death also closes it. Killing the native root closes its sole
+persistent job handle. Temporary attestation helpers hold query handles only during a bounded
+query. Cleanup terminates only the exact owned job, verifies zero active processes and waits up
+to five seconds for its own desktop to disappear. Unknown/access-denied results do not prove release.
+Simultaneous isolated invocations in one repository are refused by a named mutex because ports
+and existing screenshot paths are shared. No unrelated process-name killing or global settings
+changes are used.
+
+### Scenarios requiring the original CI or a separate environment
+
+An inactive desktop shares the window station's clipboard. `workspace-essentials`, the complete
+`terminal` suite and `edit-lock` paste tests are refused **before GUI launch**. They retain every
+assertion in the original visible/CI gates. `conpty` is an additional focused real-application
+PowerShell/keyboard/output/termination probe, not replacement coverage for Terminal's clipboard,
+geometry or security journey. Native physical pickers (`--native-ui`), OS SendInput, external
+browsers and arbitrary commands are not accepted isolated selectors. Automated native-dialog
+stubs remain supported where the original smoke uses them.
+
+A separate noninteractive window station was investigated but unique creation was denied in the
+normal user token. Job UI clipboard restrictions interfere with Chromium's nested sandbox jobs.
+Neither administrative elevation nor disabling the Electron sandbox is an accepted workaround.
+Full physical clipboard/picker scenarios need their original hosted gate or an approved separate
+interactive session/VM. Do not install infrastructure or change security policies automatically.
+
+For deliberate visible debugging only, opt in and retain the original public command:
+
+```powershell
+$env:GEPPIO_TEST_VISIBLE = '1'
+try { pnpm.cmd test:desktop } finally { Remove-Item Env:GEPPIO_TEST_VISIBLE }
+```
+
+That mode clearly warns and can affect focus, windows and clipboard. Ordinary local launches
+without an isolation context or explicit opt-in refuse before Electron. Hosted GitHub Actions
+keeps its existing visible runner behavior because those desktops are already separate from the
+owner; alpha.49 jobs, triggers, Secrets and legacy aggregate status are unchanged.
+
+Windows x64, the normal interactive session, installed .NET compiler and permission to create a
+desktop/job are required. A locked/secure desktop, restricted execution token, Defender/EDR or
+application-control policy may block execution; report the actual refusal, never bypass policy.
+The Codex restricted token/desktop can require a bounded technical execution approval; do not
+change global Codex access or Windows settings. Repository paths containing `%` or `!` are refused
+because Playwright 1.56's existing Windows shell layer could expand them.
+
+Diagnostics are retained under ignored `.local/isolation/run-*`: compiler output, execution log,
+request and final native/GUI/cleanup results. Existing smoke screenshots remain at their documented
+ignored diagnostic paths. Inspect only disposable fixture data; no owner clipboard snapshots,
+process environments or unrelated window contents are collected. `test:isolation:negative` uses
+fixed first-party fixtures to exercise real exit status, timeout, EOF cancellation, conflict,
+root-helper death/orphan cleanup and deliberately failed startup/cleanup. It requests no GUI.
+
+GUI focus isolation does not reserve CPU, RAM, GPU, disk or network. Heavy games and tests still
+compete for resources; no zero-impact/frame-rate guarantee is made. Actual simultaneous owner
+input observations and remaining physical acceptance belong in Issue #57, separately from unit
+checks and CI. Linux application support remains unverified.
+
 ## Testing during implementation, integration and delivery
 
 1. **Implementation:** use the smallest relevant structure/type/lint gate and directly affected

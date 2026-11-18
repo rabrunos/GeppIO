@@ -1,5 +1,5 @@
 import { enableDeveloperMode } from './plugin-dev-support.ts'
-import { _electron as electron } from 'playwright'
+import { electron } from './test-electron.ts'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -135,7 +135,12 @@ try {
     }
     await page.waitForFunction(() => {
       const port = document.querySelector<HTMLElement>('[data-surface="main"]')!
-      return Math.abs(Number(port.dataset.usableWidth) - port.clientWidth) < .1 && Math.abs(Number(port.dataset.usableHeight) - port.clientHeight) < .1
+      // Main's approved CSS-pixel surface retains fractional DOM bounds (Issue #29).
+      // clientWidth/clientHeight round to integers at DPR 1.25; only subtract real gutters.
+      const rect = port.getBoundingClientRect(), style = getComputedStyle(port)
+      const vertical = ['auto', 'scroll'].includes(style.overflowY) && port.scrollHeight > port.clientHeight ? port.offsetWidth - port.clientWidth : 0
+      const horizontal = ['auto', 'scroll'].includes(style.overflowX) && port.scrollWidth > port.clientWidth ? port.offsetHeight - port.clientHeight : 0
+      return Math.abs(Number(port.dataset.usableWidth) - (rect.width - vertical)) < .1 && Math.abs(Number(port.dataset.usableHeight) - (rect.height - horizontal)) < .1
     })
   }
   if (process.argv.includes('--native-resize-only')) {

@@ -1,6 +1,6 @@
 {
   "name": "geppio",
-  "version": "0.1.0-alpha.49",
+  "version": "0.1.0-alpha.50",
   "private": true,
   "license": "UNLICENSED",
   "description": "GeppIO — a local desktop workbench, Windows first.",
@@ -18,6 +18,9 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src tools tests examples sdk electron.vite.config.ts",
     "test": "node --experimental-strip-types tools/test.ts",
+    "test:isolated": "node --experimental-strip-types tools/isolation/cli.ts",
+    "test:isolated:desktop": "node --experimental-strip-types tools/isolation/cli.ts desktop-core",
+    "test:isolation:negative": "node --experimental-strip-types tools/isolation/self-test.ts",
     "test:ci:core": "node --experimental-strip-types tools/ci-tests.ts core",
     "test:ci:ide": "node --experimental-strip-types tools/ci-tests.ts ide",
     "test:ci:workbench": "node --experimental-strip-types tools/ci-tests.ts workbench",
