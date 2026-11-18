@@ -4,7 +4,7 @@ import type { TerminalSession } from './session.ts'
 import '@xterm/xterm/css/xterm.css'
 import './terminal.css'
 
-export function TerminalView({ session, theme, focusRequest = 0 }: { session: TerminalSession; theme: 'light' | 'dark'; focusRequest?: number }) {
+export function TerminalView({ session, theme }: { session: TerminalSession; theme: 'light' | 'dark' }) {
   const state = useSyncExternalStore(session.subscribe, session.snapshot), host = useRef<HTMLDivElement>(null)
   const phase = state.native.phase, running = phase === 'running'
   useLayoutEffect(() => { if (host.current) return session.attach(host.current, theme) }, [session])
@@ -15,7 +15,6 @@ export function TerminalView({ session, theme, focusRequest = 0 }: { session: Te
     void document.fonts.ready.then(() => session.fit())
     return () => observer.disconnect()
   }, [session])
-  useEffect(() => { if (focusRequest || running) session.focus() }, [session, focusRequest, running])
   return <section className="terminal-view" aria-label="Terminal interativo" data-terminal-id={state.native.id} data-terminal-phase={phase}>
     <div className="terminal-toolbar">
       <strong title={state.native.cwd ? 'Diretório inicial: ' + state.native.cwd : undefined}>{state.native.shell || 'Terminal'}</strong>

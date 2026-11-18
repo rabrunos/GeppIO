@@ -82,7 +82,9 @@ native identity recovery still uses its v1 contract. `src/shared/identity.ts` ce
 | Managed package snapshots and installation preferences | `src/main/plugins.ts` |
 | Plugin lifecycle, Worker adapter and Settings/widgets | `plugin-runtime.ts`, `plugin-worker.ts`, `Plugins.tsx` in `src/renderer/src/` |
 | Versioned plugin contract and validators | `src/shared/plugins.ts`, `sdk/plugin.d.ts` |
-| Workbench composition, header/sidebar and pixel region splitters | `App.tsx`, `workbench/` in `src/renderer/src/` |
+| Renderer shell, experience-independent document, Workspace/Explorer, Git and Terminal sessions | `App.tsx`, `core/useCoreSessions.ts` in `src/renderer/src/` |
+| Official App identity, experience selection and GeppIO Code presentation | `src/renderer/src/apps/` |
+| Workbench composition, header/sidebar and pixel region splitters | `src/renderer/src/workbench/`, `App.tsx` |
 | Freeform rendering, stable fixture frames, pointer/keyboard capture and edit transaction | `src/renderer/src/freeform/` |
 | Modal and Development controls, independently composed plugin settings | `src/renderer/src/settings/`, `Plugins.tsx` |
 | Synthetic content, host types/models/views and current initial composition | `src/renderer/src/WidgetContent.tsx`, `src/shared/workbench/model.ts`; legacy fixtures in `src/renderer/src/fixtures.ts` |

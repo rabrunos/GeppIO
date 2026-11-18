@@ -16,7 +16,7 @@ const args = ['.', ...(process.argv.includes('--scale125') ? ['--force-device-sc
 const app = await electron.launch({ args, env })
 try {
   const page = await app.firstWindow(); page.setDefaultTimeout(15000); await page.getByTestId('edit-layout').waitFor(); await portugueseFixture(page)
-  await page.locator('.file-mode-switch').getByRole('button', { name: 'Editor', exact: true }).click()
+  await page.locator('.experience-switch').getByRole('button', { name: 'GeppIO Code', exact: true }).click()
   const show = page.getByRole('button', { name: 'Mostrar Terminal', exact: true })
   if (await show.count()) await show.click()
   await page.getByRole('button', { name: /^(Iniciar|Reiniciar) terminal$/ }).click()

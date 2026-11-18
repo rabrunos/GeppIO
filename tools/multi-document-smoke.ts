@@ -39,7 +39,7 @@ try {
   await page.getByTestId('edit-layout').waitFor(); await portugueseFixture(page); await settle(page)
   const editor = fileEditor(page), host = page.locator('.monaco-host'), state = page.locator('.file-editor')
   const idle = () => page.waitForFunction(() => !document.querySelector('.file-explorer[aria-busy="true"]') && document.querySelector('.file-editor')?.getAttribute('data-document-status') !== 'busy')
-  const mode = async (name: 'Editor' | 'Widgets') => { await page.locator('.file-mode-switch').getByRole('button', { name, exact: true }).click(); await settle(page) }
+  const mode = async (name: 'GeppIO Code' | 'Bancada de Trabalho') => { await page.locator('.experience-switch').getByRole('button', { name, exact: true }).click(); await settle(page) }
   const picker = async (file: string, responses = [2]) => app!.evaluate(({ dialog }, { file, responses }) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [file] })
     dialog.showMessageBox = (async () => ({ response: responses.shift() ?? 2, checkboxChecked: false })) as typeof dialog.showMessageBox
@@ -50,7 +50,7 @@ try {
   const closeTab = async (id: string, choices = [2]) => { await picker(first, choices); await tab(id).locator('..').getByRole('button', { name: /^Fechar aba/ }).click(); await idle() }
   const id = async () => (await state.getAttribute('data-document-id'))!
   const view = () => host.evaluate(node => { const e = (node as MonacoHost).monacoEditor!, model = e.getModel()!; return { text: model.getValue(), version: model.getAlternativeVersionId(), uri: model.uri.toString(), language: model.getLanguageId(), selection: e.getSelections(), top: e.getScrollTop(), left: e.getScrollLeft() } })
-  await mode('Editor'); await folder(scope)
+  await mode('GeppIO Code'); await folder(scope)
   await page.getByRole('treeitem', { name: 'first.txt', exact: true }).click(); await idle()
   const a = await id(), firstModel = await host.evaluateHandle(node => (node as MonacoHost).monacoEditor!.getModel()!)
   await editor.press('Control+Home'); await page.keyboard.insertText('prefix\n')
@@ -142,11 +142,11 @@ try {
   await editor.press('Control+y'); assert.equal(await editor.inputValue(), '{"second":"close draft"}\n')
   evidence.limits = 'Eight-tab cap refuses the ninth without eviction; confirmed close frees capacity; keyboard Home/End/Delete and stale closed ID rejection; complete close-set validation'
 
-  await mode('Widgets'); await page.getByTestId('edit-layout').click(); await settle(page)
+  await mode('Bancada de Trabalho'); await page.getByTestId('edit-layout').click(); await settle(page)
   await page.locator('[data-catalog-type="host:file-editor"]').click(); await page.locator('[data-widget-place="main"]').click(); await settle(page)
   await page.getByTestId('conclude-layout').click(); await page.getByTestId('edit-layout').waitFor(); await settle(page)
   const layout = await page.evaluate(key => localStorage.getItem(key), WORKBENCH_KEY), beforeModes = await view()
-  for (const name of ['Editor', 'Widgets', 'Editor', 'Widgets'] as const) {
+  for (const name of ['GeppIO Code', 'Bancada de Trabalho', 'GeppIO Code', 'Bancada de Trabalho'] as const) {
     await mode(name); assert.deepEqual(await view(), beforeModes); assert.equal(await page.getByRole('tab').count(), 7)
     assert.equal(await page.evaluate(key => localStorage.getItem(key), WORKBENCH_KEY), layout)
     assert.equal(await host.evaluate((node, model) => (node as MonacoHost).monacoEditor!.getModel() === model, secondModel), true)

@@ -7,8 +7,6 @@
 .terminal-emulator { width: 100%; height: 100%; }
 .terminal-emulator .xterm { height: 100%; }
 .terminal-feedback { flex: none; margin: 1px 0; font-size: 11px; max-height: 36px; overflow: auto; }
-.direct-terminal { z-index: 35; }
-.workbench[data-file-mode="editor"] .widget-frame[data-owner-region="bottom"] { visibility: hidden; pointer-events: none; }
 .widget-frame:has(.terminal-view) .widget-content { overflow: hidden; }
 .status-bar .status-left, .status-bar .status-right { min-width: 0; gap: 10px; overflow: hidden; }
 .status-bar .status-left { flex: 0 1 auto; max-width: 55%; }

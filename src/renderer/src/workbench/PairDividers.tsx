@@ -8,7 +8,7 @@ import type { Surfaces } from '../freeform/useSurfaces.ts'
 import { useLocale } from './Locale.tsx'
 
 type Pair = { first: string; second: string; axis: 'x' | 'y' }
-export function PairDividers({ tx, registry, view, surfaces, preview, snap, suspendMain = false }: { suspendMain?: boolean; tx: Transaction; registry: Registry; view: WorkbenchSnapshot; surfaces: Surfaces; preview(value: WorkbenchSnapshot | null): void; snap: boolean }) {
+export function PairDividers({ tx, registry, view, surfaces, preview, onGesture, snap, suspendMain = false }: { suspendMain?: boolean; tx: Transaction; registry: Registry; view: WorkbenchSnapshot; surfaces: Surfaces; preview(value: WorkbenchSnapshot | null): void; onGesture(active: boolean): void; snap: boolean }) {
   const { t } = useLocale(), [active, setActive] = useState<string | null>(null)
   const [guide, setGuide] = useState<{ left: number; top: number; height: number; zIndex: number } | null>(null), snapped = useRef(false)
   const gesture = useRef<{ pair: Pair; source: WorkbenchSnapshot; delta: number; x: number; y: number; pointer: number; scale: number; target: HTMLButtonElement } | null>(null)
@@ -40,6 +40,7 @@ export function PairDividers({ tx, registry, view, surfaces, preview, snap, susp
   function end(cancel: boolean) {
     const a = gesture.current; if (!a) return
     cancelAnimationFrame(frame.current); frame.current = 0; gesture.current = null; setActive(null); setGuide(null); snapped.current = false
+    onGesture(false)
     if (tx.editing) { if (cancel) tx.cancelGesture(); else tx.finishGesture() }
     else { preview(null); if (!cancel && a.delta !== 0) void tx.commitPair({ kind: 'resizePair', ...a.pair, delta: a.delta }) }
     if (a.target.hasPointerCapture(a.pointer)) a.target.releasePointerCapture(a.pointer)
@@ -59,6 +60,7 @@ export function PairDividers({ tx, registry, view, surfaces, preview, snap, susp
     if (tx.editing) tx.beginGesture()
     gesture.current = { pair, source, delta: 0, x: event.clientX, y: event.clientY, pointer: event.pointerId, target: event.currentTarget,
       scale: tx.editing ? 1 : source.reference[placement.region][dimension] / view.reference[placement.region][dimension] }
+    onGesture(true)
     latest.current = { x: event.clientX, y: event.clientY }; setActive(pair.first + pair.second)
   }
   function keyResize(event: React.KeyboardEvent<HTMLButtonElement>, pair: Pair) {

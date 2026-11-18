@@ -156,8 +156,8 @@ try {
   assert.equal(await group().getByRole('tab', { name: 'Checklist', exact: true }).evaluate(node => node === document.activeElement && node.getAttribute('aria-selected') === 'true'), true)
   await compare(); await pendingSelectionProbe()
   const beforeModes = await raw(), modeTabs = await titles(), modeActive = await group().getByRole('tab', { selected: true }).getAttribute('id')
-  for (const mode of ['Editor', 'Widgets', 'Editor', 'Widgets']) {
-    await page.locator('.file-mode-switch').getByRole('button', { name: mode, exact: true }).click(); await settle(page)
+  for (const mode of ['GeppIO Code', 'Bancada de Trabalho', 'GeppIO Code', 'Bancada de Trabalho']) {
+    await page.locator('.experience-switch').getByRole('button', { name: mode, exact: true }).click(); await settle(page)
     assert.equal(await raw(), beforeModes); assert.deepEqual(page.workers(), workers)
     assert.deepEqual(await group().locator('[role="tab"]').allTextContents(), modeTabs)
     assert.equal(await group().locator('[role="tab"][aria-selected="true"]').getAttribute('id'), modeActive)

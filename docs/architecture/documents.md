@@ -17,7 +17,7 @@ Compact internal tabs select by click or ArrowLeft/ArrowRight/Home/End; Delete o
 button requests native Save/Discard/Cancel. Active close selects the preceding tab, otherwise
 the next tab. Closing an inactive tab preserves the current model. Every open tab has its
 own stable Monaco model, language override, undo/redo and saved multi-selection/scroll view.
-Switching Editor/Widgets reattaches the same editor DOM and leaves all models alive. Only
+Switching between GeppIO Code and the Workbench reattaches the same editor DOM and leaves all models alive. Only
 confirmed close disposes the corresponding model and subscriptions; final teardown releases all.
 
 The source cap remains 1 MiB including BOM per file, eight files and 8 MiB aggregate exact

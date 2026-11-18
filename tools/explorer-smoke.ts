@@ -33,7 +33,7 @@ const errors: string[] = [], evidence: Record<string, string> = {}
 const tree = () => page.getByRole('tree', { name: 'Arquivos da pasta' })
 const item = (name: string) => tree().getByRole('treeitem', { name, exact: true })
 const text = () => fileEditor(page)
-const mode = async (value: 'Editor' | 'Widgets') => { await page.locator('.file-mode-switch').getByRole('button', { name: value, exact: true }).click(); await settle(page) }
+const mode = async (value: 'GeppIO Code' | 'Bancada de Trabalho') => { await page.locator('.experience-switch').getByRole('button', { name: value, exact: true }).click(); await settle(page) }
 const idle = () => page.waitForFunction(() => !document.querySelector('.file-explorer[aria-busy="true"]') && document.querySelector('.file-editor')?.getAttribute('data-document-status') !== 'busy')
 const raw = () => page.evaluate(key => localStorage.getItem(key), WORKBENCH_KEY)
 async function picker(path: string | null = scope, response = 2) {
@@ -51,7 +51,7 @@ try {
   page.on('pageerror', error => errors.push(error.message))
   await app.evaluate(({ BrowserWindow }) => { const win = BrowserWindow.getAllWindows()[0]!; win.setContentSize(1600, 1000); win.show(); win.focus() })
   await page.getByTestId('edit-layout').waitFor(); await portugueseFixture(page); await settle(page)
-  await mode('Editor')
+  await mode('GeppIO Code')
   const rail = page.getByRole('navigation', { name: 'Atividades do Editor' })
   assert.equal(await rail.getByRole('button', { name: 'Explorador', exact: true }).count(), 1)
   assert.equal(await rail.locator('[data-bar-id]').count(), 0)
@@ -157,7 +157,7 @@ try {
   const forged = await page.evaluate(id => window.geppio!.explorer.list(id, id), randomUUID()); assert.ok(!forged.ok && forged.code === 'stale')
   evidence.native = 'passed: actual handlers refuse malformed shape, paths, forged reference, wrong window/main frame/origin'
 
-  await mode('Widgets'); assert.equal(await page.locator('.sidebar-rail [data-bar-id="home"]').count(), 1)
+  await mode('Bancada de Trabalho'); assert.equal(await page.locator('.sidebar-rail [data-bar-id="home"]').count(), 1)
   await page.getByTestId('edit-layout').click(); await settle(page)
   await page.getByRole('button', { name: 'Nova barra', exact: true }).click()
   const barDialog = page.getByRole('dialog', { name: 'Nova barra', exact: true })
@@ -172,7 +172,7 @@ try {
   const scroll = page.locator('.explorer-scroll')
   await scroll.evaluate(node => { node.scrollTop = 180 }); await page.waitForFunction(() => (document.querySelector('.explorer-scroll')?.scrollTop ?? 0) > 100)
   const scrollTop = await scroll.evaluate(node => node.scrollTop)
-  for (const value of ['Editor', 'Widgets', 'Editor', 'Widgets'] as const) {
+  for (const value of ['GeppIO Code', 'Bancada de Trabalho', 'GeppIO Code', 'Bancada de Trabalho'] as const) {
     await mode(value); await idle(); assert.equal(await text().inputValue(), 'shared dirty draft'); assert.equal(await raw(), layout)
     assert.equal(await page.locator('.workbench').getAttribute('data-active-bar'), activeBar)
     assert.equal(await item('nested').getAttribute('aria-expanded'), 'true'); assert.equal(await tree().count(), 1)
@@ -186,7 +186,7 @@ try {
   assert.equal(await tree().count(), 1); assert.equal(await item('nested').getAttribute('aria-expanded'), 'true')
   evidence.modes = 'passed: explicit Sidebar/Main widget, one tree, same navigation/scroll/draft and exact layout bytes through repeated mode switches'
 
-  await mode('Editor'); await page.locator('.explorer-scroll').evaluate(node => { node.scrollTop = 0 })
+  await mode('GeppIO Code'); await page.locator('.explorer-scroll').evaluate(node => { node.scrollTop = 0 })
   // A changed authorized ancestor is refused by the native bridge and does not drop the current draft.
   await rename(join(scope, 'nested'), join(scope, 'renamed')); await mkdir(join(scope, 'nested')); await writeFile(join(scope, 'nested', 'inside.txt'), 'replacement')
   await item('inside.txt').click(); await idle(); assert.equal(await text().inputValue(), 'shared dirty draft')
@@ -205,7 +205,7 @@ try {
 
   for (const theme of ['light', 'dark']) {
     await page.evaluate(theme => localStorage.setItem('geppio:theme:v1', theme), theme); await page.reload(); await page.getByTestId('edit-layout').waitFor(); await settle(page)
-    await mode('Editor'); await picker(); await page.locator('.explorer-toolbar').getByRole('button', { name: 'Abrir pasta', exact: true }).click(); await idle()
+    await mode('GeppIO Code'); await picker(); await page.locator('.explorer-toolbar').getByRole('button', { name: 'Abrir pasta', exact: true }).click(); await idle()
     await page.screenshot({ path: join(diagnostics, theme + '.png') })
     const size = await item('scope').boundingBox(); assert.ok(size && size.height === 24)
     assert.equal(await item('scope').evaluate(node => getComputedStyle(node).fontSize), '12px')

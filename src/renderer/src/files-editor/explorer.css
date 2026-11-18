@@ -21,6 +21,3 @@
 .explorer-feedback:empty { display: none; }
 .widget-content:has(> .file-explorer) { overflow: hidden; }
 .editor-explorer-panel { z-index: 41; }
-.workbench[data-file-mode="editor"] .sidebar-region,
-.workbench[data-file-mode="editor"] .widget-frame[data-owner-region="sidebar"] { visibility: hidden !important; pointer-events: none !important; }
-.workbench[data-file-mode="editor"] .sidebar-region { overflow-y: hidden; }

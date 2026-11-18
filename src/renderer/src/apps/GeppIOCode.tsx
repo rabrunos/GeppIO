@@ -1,0 +1,69 @@
+import { useState } from 'react'
+import { FolderIcon } from '@heroicons/react/24/outline'
+import type { WorkbenchChrome } from '../../../shared/workbench/chrome.ts'
+import type { CoreSessions } from '../core/useCoreSessions.ts'
+import { regionViewport } from '../freeform/frame-layout.ts'
+import type { Surfaces } from '../freeform/useSurfaces.ts'
+import { FileEditor } from '../files-editor/FileEditor.tsx'
+import type { MonacoHost } from '../files-editor/monaco.ts'
+import { Explorer } from '../files-editor/Explorer.tsx'
+import { GitChanges } from '../git/GitChanges.tsx'
+import { TerminalView } from '../terminal/TerminalView.tsx'
+import { BarIcon } from '../workbench/Sidebar.tsx'
+import { IconButton } from '../workbench/Primitives.tsx'
+import type { useRegions } from '../workbench/useRegions.ts'
+
+interface CodePanels {
+  sessions: CoreSessions
+  measures: Surfaces['measures']
+  regions: ReturnType<typeof useRegions>
+  theme: 'light' | 'dark'
+}
+
+/** Official presentation borrowing Core sessions and the shell's measured regions. */
+export function useCodePresentation(workbenchChrome: WorkbenchChrome) {
+  const [sidebar, setSidebar] = useState(() => ({ ...workbenchChrome.sidebar, visible: true }))
+  const [activity, setActivity] = useState<'explorer' | 'git'>('explorer')
+
+  return {
+    chrome: { ...workbenchChrome, sidebar },
+    chromeForWorkbench(chrome: WorkbenchChrome, saved: WorkbenchChrome) {
+      setSidebar(chrome.sidebar)
+      if (chrome.bottom.size === saved.bottom.size && chrome.bottom.visible === saved.bottom.visible) return null
+      return { ...saved, bottom: chrome.bottom }
+    },
+    openExplorer() {
+      setSidebar(previous => ({ ...previous, visible: true })); setActivity('explorer')
+      requestAnimationFrame(() => document.querySelector<MonacoHost>('.direct-file-editor .monaco-host')?.monacoEditor?.focus())
+    },
+    panels({ sessions, measures, regions, theme }: CodePanels) {
+      const sidebar = regionViewport('sidebar', measures.sidebar)
+      const main = regionViewport('main', measures.main)
+      const bottom = regionViewport('bottom', measures.bottom)
+      function selectActivity(next: typeof activity) {
+        if (next === activity) regions.toggle('sidebar')
+        else { setActivity(next); regions.revealSidebar() }
+      }
+      return {
+        rail: {
+          label: 'Atividades do Editor',
+          heading: activity === 'git' ? 'Alterações Git' : 'Explorador',
+          primary: <IconButton label="Explorador" literalLabel className="sidebar-rail-button sidebar-main-button"
+            aria-pressed={activity === 'explorer' && regions.sidebarMode !== 'hidden'} onClick={() => selectActivity('explorer')}><FolderIcon className="icon" /></IconButton>,
+          tools: <IconButton label="Alterações Git" literalLabel className="sidebar-rail-button"
+            aria-pressed={activity === 'git' && regions.sidebarMode !== 'hidden'} onClick={() => selectActivity('git')}><BarIcon icon="git" /></IconButton>
+        },
+        sidebar: <div className="editor-explorer-panel editor-region-panel" style={sidebar} data-sidebar-interactive
+          hidden={sidebar.width <= 0 || sidebar.height <= 0} inert={regions.sidebarMode === 'hidden'}
+          onPointerEnter={() => regions.hover(true)} onPointerLeave={() => regions.hover(false)}>
+          {activity === 'git' ? <GitChanges session={sessions.git} /> : <Explorer session={sessions.explorer} git={sessions.git} />}
+        </div>,
+        main: <div className="direct-file-editor" style={main}><FileEditor session={sessions.editor} /></div>,
+        bottom: <div className="direct-terminal editor-region-panel" style={bottom}
+          hidden={bottom.width <= 0 || bottom.height <= 0} inert={regions.collapsed.bottom}>
+          <TerminalView session={sessions.terminal} theme={theme} />
+        </div>
+      }
+    }
+  }
+}

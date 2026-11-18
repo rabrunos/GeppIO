@@ -82,10 +82,10 @@ try {
   await manager.locator('[data-plugin="geppio.time-tracker"]').getByRole('switch').click()
   await page.waitForFunction(() => document.querySelector('[data-plugin="geppio.time-tracker"]')?.getAttribute('data-status') === 'active')
   await manager.getByRole('button', { name: 'Fechar', exact: true }).click()
-  const mode = async (name: 'Editor' | 'Widgets') => { await page.locator('.file-mode-switch').getByRole('button', { name, exact: true }).click(); await settle(page) }
+  const mode = async (name: 'GeppIO Code' | 'Bancada de Trabalho') => { await page.locator('.experience-switch').getByRole('button', { name, exact: true }).click(); await settle(page) }
   const picker = async (path: string) => app!.evaluate(({ dialog }, path) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }) }, path)
   const rail = page.getByRole('navigation', { name: 'Atividades do Editor' })
-  await mode('Editor')
+  await mode('GeppIO Code')
   await page.getByRole('button', { name: 'Mostrar Terminal', exact: true }).click()
   await page.getByRole('button', { name: 'Iniciar terminal', exact: true }).click()
   await page.waitForFunction(async () => { const r = await window.geppio!.terminal.read(null, 0); return r.ok && r.value.state.phase === 'running' })
@@ -190,11 +190,11 @@ try {
   }, root)
   assert.ok(negatives.every(r => !r.ok && r.code === 'invalid'))
   const forged = await page.evaluate(({ root, id }) => window.geppio!.git.compare(root, id), { root, id: randomUUID() }); assert.ok(!forged.ok && forged.code === 'stale')
-  await mode('Widgets'); await page.getByTestId('edit-layout').click(); await settle(page)
+  await mode('Bancada de Trabalho'); await page.getByTestId('edit-layout').click(); await settle(page)
   await page.locator('[data-catalog-type="host:git-changes"]').click(); await page.locator('[data-widget-place="sidebar"]').click(); await settle(page)
   await page.getByTestId('conclude-layout').click(); await page.getByTestId('edit-layout').waitFor(); await settle(page)
   const confirmed = await page.evaluate(key => localStorage.getItem(key), WORKBENCH_KEY); assert.notEqual(confirmed, layout)
-  for (const name of ['Editor', 'Widgets', 'Editor'] as const) { await mode(name); assert.equal(await page.locator('.git-changes').count(), 1); assert.equal(await page.evaluate(key => localStorage.getItem(key), WORKBENCH_KEY), confirmed) }
+  for (const name of ['GeppIO Code', 'Bancada de Trabalho', 'GeppIO Code'] as const) { await mode(name); assert.equal(await page.locator('.git-changes').count(), 1); assert.equal(await page.evaluate(key => localStorage.getItem(key), WORKBENCH_KEY), confirmed) }
   assert.ok(await page.locator('.monaco-host').evaluate((node, identity) => (node as MonacoHost).monacoEditor === identity, identity))
   assert.deepEqual(pluginWorkers(page), workers)
   const retainedTerminal = await page.evaluate(id => window.geppio!.terminal.read(id, 0), terminalId)
@@ -207,12 +207,12 @@ try {
     assert.ok(geometry.inside && Math.abs(geometry.width - geometry.bodyWidth) < 1 && Math.abs(geometry.height - geometry.bodyHeight) < 1, JSON.stringify(geometry))
     await page.screenshot({ path: join(diagnostics, theme + '.png') })
   }
-  await mode('Widgets'); await page.getByTestId('edit-layout').click(); await settle(page)
+  await mode('Bancada de Trabalho'); await page.getByTestId('edit-layout').click(); await settle(page)
   await page.locator('[data-catalog-type="host:git-changes"]').click(); await page.locator('[data-widget-place="main"]').click(); await settle(page)
   await page.getByTestId('conclude-layout').click(); await page.getByTestId('edit-layout').waitFor(); await settle(page)
   assert.equal(await page.locator('.git-changes').count(), 1)
   assert.equal(await page.locator('.git-changes').evaluate(node => node.closest('.widget-frame')?.getAttribute('data-owner-region')), 'main')
-  await mode('Editor')
+  await mode('GeppIO Code')
   const protectedFiles = (value: Record<string, string>) => Object.fromEntries(Object.entries(value).filter(([name]) => name !== '.git/index' && !name.startsWith('.git/objects/')))
   assert.deepEqual(protectedFiles(await gitFingerprint(scope)), protectedFiles(before), 'Only index and required Git objects may change; disk/config/refs remain exact')
   // Successful index action and save must update Explorer without opening Git activity.

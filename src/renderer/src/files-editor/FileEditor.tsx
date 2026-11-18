@@ -1,24 +1,10 @@
-import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { EditorSession } from './session.ts'
+import { useLayoutEffect, useRef, useSyncExternalStore } from 'react'
+import type { EditorSession } from './session.ts'
 import { monacoPresentation } from './monaco.ts'
 import { XMarkIcon } from '@heroicons/react/24/outline'
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import './files-editor.css'
 
-export function useFileEditor(locked: boolean) {
-  const [session] = useState(() => new EditorSession(window.geppio!.documents))
-  session.locked = locked
-  useEffect(() => { const presentation = monacoPresentation(session); presentation.connect(); return () => presentation.dispose() }, [session])
-  useEffect(() => session.bridge.onCloseRequested(ticket => { void session.close(ticket) }), [session])
-  useEffect(() => {
-    const save = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's' && session.snapshot().document) { event.preventDefault(); void session.save() }
-    }
-    window.addEventListener('keydown', save)
-    return () => window.removeEventListener('keydown', save)
-  }, [session])
-  return session
-}
 /** Both adapters render this same implementation; only the selected adapter mounts it. */
 export function FileEditor({ session }: { session: EditorSession }) {
   const state = useSyncExternalStore(session.subscribe, session.snapshot), input = useRef<HTMLDivElement>(null), tabs = useRef<HTMLDivElement>(null)
@@ -61,9 +47,4 @@ export function FileEditor({ session }: { session: EditorSession }) {
     </div>
     <p className="file-editor-limit">Piloto para arquivos comuns em pasta privada. Salvar substitui o arquivo: permissões específicas e metadados adicionais do Windows não são preservados.</p>
   </section>
-}
-export function EditorModeSwitch({ mode, disabled, change }: { mode: 'editor' | 'widgets'; disabled: boolean; change(mode: 'editor' | 'widgets'): void }) {
-  return <div className="file-mode-switch" role="group" aria-label="Modo de trabalho">
-    {(['editor', 'widgets'] as const).map(value => <button key={value} className="ui-button tool-button" aria-pressed={mode === value} disabled={disabled} title={disabled ? 'Conclua ou cancele a edição do layout antes de trocar de modo.' : undefined} onClick={() => change(value)}>{value === 'editor' ? 'Editor' : 'Widgets'}</button>)}
-  </div>
 }

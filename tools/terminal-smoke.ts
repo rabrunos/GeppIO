@@ -28,7 +28,7 @@ for (const key of ['ELECTRON_RUN_AS_NODE', 'ELECTRON_RENDERER_URL', 'NODE_OPTION
 env.GEPPIO_TEST_USER_DATA = profile; env.NODE_ENV = 'production'
 let app: ElectronApplication | undefined, page!: Page
 const errors: string[] = [], evidence: Record<string, unknown> = {}
-const mode = (name: 'Editor' | 'Widgets') => page.locator('.file-mode-switch').getByRole('button', { name, exact: true }).click()
+const mode = (name: 'GeppIO Code' | 'Bancada de Trabalho') => page.locator('.experience-switch').getByRole('button', { name, exact: true }).click()
 const state = async (): Promise<TerminalRead> => {
   const result = await page.evaluate(() => window.geppio!.terminal.read(null, 0))
   if (!result.ok) throw new Error(result.error)
@@ -225,20 +225,20 @@ try {
   await page.waitForFunction(() => document.querySelector('.status-cursor')?.textContent === 'Ln 2, Col 2')
   assert.equal(await page.locator('[data-status-document]').getAttribute('data-status-document'), 'dirty')
   await send("Start-Sleep -Milliseconds 350; Write-Output ('HIDDEN_' + 'kept')")
-  await mode('Widgets'); await place('bottom'); await output('HIDDEN_kept')
+  await mode('Bancada de Trabalho'); await place('bottom'); await output('HIDDEN_kept')
   await page.waitForFunction(() => document.querySelector('.xterm-rows')?.textContent?.includes('HIDDEN_kept'))
   const savedLayout = await page.evaluate(key => localStorage.getItem(key), WORKBENCH_KEY)
   const emulator = await page.locator('.terminal-emulator').elementHandle()
   for (let i = 0; i < 3; i++) {
-    await mode('Editor'); assert.equal(await editor.inputValue(), '{\n  "draft": 40\n}\n')
+    await mode('GeppIO Code'); assert.equal(await editor.inputValue(), '{\n  "draft": 40\n}\n')
     assert.deepEqual(await page.locator('[data-explorer-node]').evaluateAll(nodes => nodes.map(node => ({ id: node.getAttribute('data-explorer-node'), expanded: node.getAttribute('aria-expanded') }))), navigation)
-    await mode('Widgets'); assert.equal((await state()).state.id, first.id)
+    await mode('Bancada de Trabalho'); assert.equal((await state()).state.id, first.id)
   }
   assert.equal(await page.evaluate(key => localStorage.getItem(key), WORKBENCH_KEY), savedLayout)
   assert.equal(await emulator!.evaluate(element => element === document.querySelector('.terminal-emulator')), true, 'same emulator DOM survives presentation changes')
   assert.deepEqual(pluginWorkers(page), workers)
   await send("'CONT_' + ($alpha40 + 1)"); await output('CONT_42')
-  await mode('Editor'); await editorRegionGeometry(app, page, diagnostics, scale125 ? 1.25 : 1)
+  await mode('GeppIO Code'); await editorRegionGeometry(app, page, diagnostics, scale125 ? 1.25 : 1)
   await send("'GEOMETRY_' + $PID + '_' + $alpha40 + '_' + $env:GEPPIO_ALPHA40"); await output(`GEOMETRY_${firstPid}_41_session`)
   await send("'GEOMETRY_CWD_' + (Get-Location).Path"); await output('GEOMETRY_CWD_' + root)
   // Emit the visible failure-route sentinel after the added resize matrix; older output stays in scrollback.
@@ -267,7 +267,7 @@ try {
   await send('exit 7'); await waitPhase('exited'); await waitDead(firstPid)
   assert.equal((await state()).state.exitCode, 7); assert.equal(await status().getAttribute('data-failed'), 'true')
   const failedTranscript = await transcript()
-  await mode('Widgets'); await status().click(); assert.equal(await page.locator('.workbench').getAttribute('data-file-mode'), 'editor')
+  await mode('Bancada de Trabalho'); await status().click(); assert.equal(await page.locator('.workbench').getAttribute('data-app-id'), 'geppio-code')
   assert.ok(await page.locator('.direct-terminal').isVisible())
   await page.waitForFunction(() => document.activeElement?.classList.contains('xterm-helper-textarea'))
   assert.equal(await transcript(), failedTranscript, 'exit output history remains exact across presentation sizes')
@@ -316,12 +316,12 @@ try {
   }
   evidence.themes = 'passed: live Terminal, both themes at 1800/1024 widths; 25px Status Bar without overflow/overlap'
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setContentSize(1800, 1000)); await settle(page)
-  await mode('Widgets')
+  await mode('Bancada de Trabalho')
   await page.getByTestId('edit-layout').click()
   await page.locator(`[data-catalog-type="${TERMINAL_TYPE}"]`).click(); await page.locator('[data-widget-place="main"]').click()
   await page.getByTestId('conclude-layout').click(); await settle(page)
   assert.equal(await page.locator('.widget-frame:has(.terminal-view)').getAttribute('data-owner-region'), 'main')
-  await mode('Editor')
+  await mode('GeppIO Code')
   // Navigation revokes the old native owner; the new renderer must not inherit a stale process.
   await send("'REVOKE_' + $PID"); const revokedPid = await pid('REVOKE_')
   await page.reload(); await page.getByTestId('edit-layout').waitFor(); await waitDead(revokedPid)

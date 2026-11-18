@@ -21,7 +21,7 @@ env.GEPPIO_TEST_USER_DATA = profile; env.NODE_ENV = 'production'
 let app: ElectronApplication | undefined, page!: Page
 const errors: string[] = [], evidence: Record<string, string> = {}
 const text = () => fileEditor(page)
-const mode = (value: 'Editor' | 'Widgets') => page.locator('.file-mode-switch').getByRole('button', { name: value, exact: true }).click()
+const mode = (value: 'GeppIO Code' | 'Bancada de Trabalho') => page.locator('.experience-switch').getByRole('button', { name: value, exact: true }).click()
 const state = () => page.locator('.file-editor')
 const idle = () => page.waitForFunction(() => document.querySelector('.file-editor')?.getAttribute('data-document-status') !== 'busy')
 const raw = () => page.evaluate(key => localStorage.getItem(key), WORKBENCH_KEY)
@@ -45,13 +45,13 @@ async function place(type: string, region: string) {
 try {
   await launch()
   if (process.argv.includes('--native-ui')) {
-    await mode('Editor')
+    await mode('GeppIO Code')
     await writeFile(join(diagnostics, 'native-fixture.json'), JSON.stringify({ profile, path, other }))
     console.log('NATIVE_UI_READY: disposable fixture recorded in .local/diagnostics/documents-alpha37/native-fixture.json')
     await app!.waitForEvent('close', { timeout: 600_000 }); app = undefined
     evidence.nativeUI = 'External computer-use observation required; this wait alone proves no interaction.'
   } else {
-    await mode('Editor'); await open(); assert.equal(await text().inputValue(), 'const café = "😀";\n')
+    await mode('GeppIO Code'); await open(); assert.equal(await text().inputValue(), 'const café = "😀";\n')
     const id = await state().getAttribute('data-document-id')
     await text().fill('const café = "editado 😀";\n'); assert.equal(await state().getAttribute('data-document-dirty'), 'true')
     await open(null); assert.equal(await text().inputValue(), 'const café = "editado 😀";\n'); assert.equal(await state().getAttribute('data-document-id'), id)
@@ -98,7 +98,7 @@ try {
     assert.equal(await page.evaluate(() => 'require' in window || 'process' in window), false)
     evidence.bridge = 'passed: registered Main handlers reject malformed arguments, wrong sender/frame/URL; malformed close reply allows a fresh native close; renderer has no Node'
 
-    await mode('Widgets'); await page.getByRole('button', { name: 'Plugins', exact: true }).click()
+    await mode('Bancada de Trabalho'); await page.getByRole('button', { name: 'Plugins', exact: true }).click()
     const manager = page.getByRole('dialog', { name: 'Plugins', exact: true }); await enableDeveloperMode(manager)
     for (const name of ['workspace-essentials', 'time-tracker']) {
       await picker(resolve('.local/plugin-packages/' + name)); await manager.getByRole('button', { name: 'Carregar pasta local', exact: true }).click()
@@ -109,14 +109,14 @@ try {
     await page.getByTestId('edit-layout').click(); await settle(page)
     await place('host:file-editor', 'main'); await place('plugin:geppio.time-tracker:timer', 'main')
     await place('plugin:geppio.workspace-essentials:notes', 'sidebar'); await place('plugin:geppio.workspace-essentials:checklist', 'bottom')
-    assert.equal(await page.locator('.file-mode-switch button').first().isDisabled(), true)
+    assert.equal(await page.locator('.experience-switch button').first().isDisabled(), true)
     await page.getByTestId('conclude-layout').click(); await page.getByTestId('edit-layout').waitFor(); await settle(page)
     await page.getByRole('button', { name: 'Iniciar', exact: true }).click()
     await page.waitForFunction(() => document.querySelector('[data-plugin-widget="geppio.time-tracker:timer"] p')?.textContent?.includes('Salvo.'))
     const workers = pluginWorkers(page), layout = await raw()
     await page.locator('[data-plugin-widget]').evaluateAll(nodes => nodes.forEach(node => node.setAttribute('data-document-mount', 'retained')))
     await text().fill('widgets draft\n'); assert.equal(await state().getAttribute('data-document-id'), id)
-    for (const value of ['Editor', 'Widgets', 'Editor', 'Widgets'] as const) {
+    for (const value of ['GeppIO Code', 'Bancada de Trabalho', 'GeppIO Code', 'Bancada de Trabalho'] as const) {
       await mode(value); await settle(page); assert.equal(await text().count(), 1); assert.equal(await text().inputValue(), 'widgets draft\n')
       assert.equal(await state().getAttribute('data-document-id'), id); assert.equal(await state().getAttribute('data-document-dirty'), 'true')
       assert.equal(await raw(), layout); assert.deepEqual(pluginWorkers(page), workers)
@@ -153,14 +153,14 @@ try {
 
     for (const theme of ['light', 'dark']) {
       await page.evaluate(theme => localStorage.setItem('geppio:theme:v1', theme), theme); await page.reload(); await page.getByTestId('edit-layout').waitFor(); await settle(page)
-      await mode('Editor'); await open(other); await text().focus(); assert.equal(await text().focused(), true)
+      await mode('GeppIO Code'); await open(other); await text().focus(); assert.equal(await text().focused(), true)
       await page.screenshot({ path: join(diagnostics, `${theme}.png`) }); await page.getByRole('button', { name: 'Fechar arquivo', exact: true }).click(); await idle()
     }
     evidence.themes = 'passed: light/dark screenshots and actual Monaco keyboard focus'
     await open(other); await text().fill('saved on native close\n'); await picker(other, 0)
     const closed = app!.waitForEvent('close'); await app!.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.close()); await closed; app = undefined
     assert.equal(await readFile(other, 'utf8'), 'saved on native close\n')
-    await launch(); await mode('Editor'); await open(other); assert.equal(await text().inputValue(), 'saved on native close\n')
+    await launch(); await mode('GeppIO Code'); await open(other); assert.equal(await text().inputValue(), 'saved on native close\n')
     assert.equal(await raw(), layout); await picker(other, 1); await text().fill('discard me')
     const discarded = app!.waitForEvent('close'); await page.getByRole('button', { name: 'Fechar', exact: true }).click(); await discarded; app = undefined
     assert.equal(await readFile(other, 'utf8'), 'saved on native close\n')

@@ -38,7 +38,7 @@ try {
   page.on('request', request => { if (/^https?:/.test(request.url()) && !request.url().startsWith('http://127.0.0.1:5173/')) requests.push(request.url()) })
   await page.getByTestId('edit-layout').waitFor(); await portugueseFixture(page)
   const editor = fileEditor(page), host = page.locator('.monaco-host')
-  const mode = async (name: 'Editor' | 'Widgets') => { await page.locator('.file-mode-switch').getByRole('button', { name, exact: true }).click(); await settle(page) }
+  const mode = async (name: 'GeppIO Code' | 'Bancada de Trabalho') => { await page.locator('.experience-switch').getByRole('button', { name, exact: true }).click(); await settle(page) }
   const idle = () => page.waitForFunction(() => document.querySelector('.file-editor')?.getAttribute('data-document-status') !== 'busy')
   const picker = async (file: string, response = 2) => app!.evaluate(({ dialog }, { file, response }) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [file] }); dialog.showMessageBox = (async () => ({ response, checkboxChecked: false })) as typeof dialog.showMessageBox
@@ -48,7 +48,7 @@ try {
     const editor = (node as MonacoHost).monacoEditor!, model = editor.getModel()!
     return { value: model.getValue(), language: model.getLanguageId(), uri: model.uri.toString(), version: model.getAlternativeVersionId(), selections: editor.getSelections()?.map(s => [s.selectionStartLineNumber, s.selectionStartColumn, s.positionLineNumber, s.positionColumn]), top: editor.getScrollTop(), models: node.getAttribute('data-monaco-models') }
   })
-  await mode('Editor'); await open(fixture)
+  await mode('GeppIO Code'); await open(fixture)
   console.log('Monaco: opened JSON')
   assert.equal(await page.locator('textarea[data-file-editor]').count(), 0)
   assert.equal((await snapshot()).language, 'json'); assert.equal((await snapshot()).models, '1')
@@ -67,7 +67,7 @@ try {
   await editor.press('Control+y'); await editor.press('Control+s'); await idle(); assert.equal(await readFile(fixture, 'utf8'), modified)
   console.log('Monaco: simultaneous exact-byte edits passed')
   const layout = await page.evaluate(key => localStorage.getItem(key), WORKBENCH_KEY)
-  await mode('Widgets'); await page.getByTestId('edit-layout').click(); await settle(page)
+  await mode('Bancada de Trabalho'); await page.getByTestId('edit-layout').click(); await settle(page)
   await page.locator('[data-catalog-type="host:file-editor"]').click(); await page.locator('[data-widget-place="main"]').click(); await settle(page)
   await page.getByTestId('conclude-layout').click(); await page.getByTestId('edit-layout').waitFor(); await settle(page)
   const confirmedLayout = await page.evaluate(key => localStorage.getItem(key), WORKBENCH_KEY)
@@ -79,14 +79,14 @@ try {
   console.log('Monaco: switching presentations')
   const workerSet = page.workers()
   for (let i = 0; i < 12; i++) {
-    await mode(i % 2 ? 'Widgets' : 'Editor')
+    await mode(i % 2 ? 'Bancada de Trabalho' : 'GeppIO Code')
     assert.equal(await host.evaluate((node, e) => (node as MonacoHost).monacoEditor === e, handle), true)
     assert.deepEqual(await snapshot(), before)
     assert.equal(await readFile(fixture, 'utf8'), modified)
     assert.equal(await page.evaluate(key => localStorage.getItem(key), WORKBENCH_KEY), confirmedLayout)
   }
   await editor.press('Control+z'); assert.notEqual(await editor.inputValue(), before.value)
-  await mode('Editor'); await editor.press('Control+y'); assert.equal(await editor.inputValue(), before.value)
+  await mode('GeppIO Code'); await editor.press('Control+y'); assert.equal(await editor.inputValue(), before.value)
   assert.deepEqual(page.workers(), workerSet)
   await page.getByRole('combobox', { name: 'Linguagem do documento' }).selectOption({ label: 'TypeScript' })
   assert.equal((await snapshot()).language, 'typescript'); assert.equal((await snapshot()).uri, before.uri)

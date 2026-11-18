@@ -30,7 +30,7 @@ exit codes are distinct from user termination. A failed command inside a running
 become a process-exit failure or project diagnostic.
 
 `renderer/terminal/session.ts` owns one xterm emulator, parsed screen, bounded scrollback and DOM,
-independently of `TerminalView`. One Editor/Widgets adapter attaches that DOM at a time; temporarily
+independently of `TerminalView`. The Code panel and Workbench widget attach that DOM one at a time; temporarily
 unmounted DOM and continuous output remain session-owned. No partial raw ANSI replay is used to
 reconstruct a view. Changing modes, placement, collapse or theme never spawns or kills a process.
 Live font/screen measurements and ResizeObserver derive rows/columns without addon-fit, using

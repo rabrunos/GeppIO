@@ -15,7 +15,7 @@ export async function editorGeometry(app: ElectronApplication, page: Page, profi
   const root = page.locator('.workbench'), editor = page.locator('.direct-file-editor')
   const notes = page.locator('[data-plugin-widget="geppio.workspace-essentials:notes"]').locator('xpath=ancestor::section[contains(@class,"widget-frame")]')
   const text = fileEditor(page)
-  const mode = async (name: 'Editor' | 'Widgets') => { await page.locator('.file-mode-switch').getByRole('button', { name, exact: true }).click(); await settle(page) }
+  const mode = async (name: 'GeppIO Code' | 'Bancada de Trabalho') => { await page.locator('.experience-switch').getByRole('button', { name, exact: true }).click(); await settle(page) }
   const raw = () => page.evaluate(async key => navigator.locks.request(key, () => localStorage.getItem(key)), WORKBENCH_KEY)
   const resize = async (width: number, height: number) => {
     await app.evaluate(({ BrowserWindow }, { width, height }) => BrowserWindow.getAllWindows()[0]!.setContentSize(width, height), { width, height }); await settle(page)
@@ -38,7 +38,7 @@ export async function editorGeometry(app: ElectronApplication, page: Page, profi
   }
   const geometry = () => notes.evaluate(node => ['data-x', 'data-y', 'data-w', 'data-h'].map(key => node.getAttribute(key)))
   const initialTheme = await root.getAttribute('data-theme'), workers = pluginWorkers(page)
-  await mode('Editor'); await page.getByRole('button', { name: 'Abrir arquivo', exact: true }).click()
+  await mode('GeppIO Code'); await page.getByRole('button', { name: 'Abrir arquivo', exact: true }).click()
   await text.waitFor(); await text.fill(draft)
   const id = await page.locator('.file-editor').getAttribute('data-document-id')
   const samples: { theme: string; expanded: boolean; sidebar: boolean; bottom: boolean; width: number; height: number; scrollLeft: number; direct: Sample; maximized: Sample }[] = []
@@ -50,9 +50,9 @@ export async function editorGeometry(app: ElectronApplication, page: Page, profi
       for (const [sidebar, bottom] of [[true, true], [false, true], [false, false], [true, false]]) {
         // Alpha.39 keeps Editor Sidebar state independent. Set both presentations explicitly
         // before measuring identical chrome; every subsequent mode switch must still preserve bytes.
-        await mode('Widgets')
+        await mode('Bancada de Trabalho')
         if ((await root.getAttribute('data-sidebar-mode') === 'docked') !== sidebar) { await page.getByRole('button', { name: 'Ferramentas', exact: true }).click(); await settle(page) }
-        await mode('Editor')
+        await mode('GeppIO Code')
         if ((await root.getAttribute('data-sidebar-mode') === 'docked') !== sidebar) { await page.getByRole('button', { name: 'Explorador', exact: true }).click(); await settle(page) }
         if ((await root.getAttribute('data-bottom-mode') === 'docked') !== bottom) { await page.getByRole('separator', { name: 'Altura da Bottom', exact: true }).press('Enter'); await settle(page) }
         assert.equal(await root.getAttribute('data-sidebar-mode'), sidebar ? 'docked' : 'hidden')
@@ -78,7 +78,7 @@ export async function editorGeometry(app: ElectronApplication, page: Page, profi
           assert.deepEqual(content, { contained: true, ordered: true, reachable: true, clippedCorners: true, overflow: true })
           assert.equal(await text.inputValue(), draft); assert.equal(await page.locator('.file-editor').getAttribute('data-document-id'), id)
           assert.equal(await root.getAttribute('data-maximized-surface'), null)
-          await mode('Widgets')
+          await mode('Bancada de Trabalho')
           await page.locator('[data-surface="main"]').evaluate(node => { node.scrollLeft = 0 }); await settle(page)
           const normal = await geometry()
           await notes.getByRole('button', { name: 'Maximizar Anotações', exact: true }).click()
@@ -90,7 +90,7 @@ export async function editorGeometry(app: ElectronApplication, page: Page, profi
           if (sidebar && bottom && width === 1920) await page.screenshot({ path: join(diagnostics, `notes-${theme}-${expanded}.png`) })
           await notes.getByRole('button', { name: 'Restaurar Anotações', exact: true }).click(); await settle(page)
           assert.deepEqual(await geometry(), normal)
-          await mode('Editor'); assert.equal(await text.inputValue(), draft); assert.equal(await page.locator('.file-editor').getAttribute('data-document-dirty'), 'true')
+          await mode('GeppIO Code'); assert.equal(await text.inputValue(), draft); assert.equal(await page.locator('.file-editor').getAttribute('data-document-dirty'), 'true')
           assert.equal(await raw(), before); assert.deepEqual(pluginWorkers(page), workers)
           assert.equal(await readFile(file, 'utf8'), original)
           if (sidebar && bottom && width === 1920) await page.screenshot({ path: join(diagnostics, `editor-${theme}-${expanded}.png`) })
@@ -110,7 +110,7 @@ export async function editorGeometry(app: ElectronApplication, page: Page, profi
   await page.waitForFunction(() => document.querySelector('.file-editor')?.getAttribute('data-document-dirty') === 'false')
   assert.equal(await readFile(file, 'utf8'), saved); assert.equal(await raw(), beforeSave)
   await page.getByRole('button', { name: 'Fechar arquivo', exact: true }).click()
-  await mode('Widgets'); await expansion(page, false); await resize(1920, 1080)
+  await mode('Bancada de Trabalho'); await expansion(page, false); await resize(1920, 1080)
   if (await root.getAttribute('data-theme') !== initialTheme) await page.getByRole('button', { name: 'Alternar tema', exact: true }).click()
   await writeFile(join(diagnostics, 'editor-geometry.json'), JSON.stringify(samples, null, 2))
   console.log(`PASS Editor geometry: ${samples.length} measured Notes comparisons at DPR ${scale}; both themes, narrow/wide, Sidebar/Bottom, expansion, region resizing, clipped corners/controls, dirty session, exact disk/layout bytes and Workers`)

@@ -17,9 +17,9 @@ export async function editorRegionGeometry(app: ElectronApplication, page: Page,
   const navigation = () => page.locator('[data-explorer-node]').evaluateAll(nodes => nodes.map(n => [n.getAttribute('data-explorer-node'), n.getAttribute('aria-expanded'), n.getAttribute('aria-selected')]))
   const nav = await navigation()
   const raw = () => page.evaluate(key => localStorage.getItem(key), WORKBENCH_KEY)
-  const mode = async (name: 'Editor' | 'Widgets') => { await page.locator('.file-mode-switch').getByRole('button', { name, exact: true }).click(); await settle(page) }
+  const mode = async (name: 'GeppIO Code' | 'Bancada de Trabalho') => { await page.locator('.experience-switch').getByRole('button', { name, exact: true }).click(); await settle(page) }
   const samples = []
-  async function configure(name: 'Editor' | 'Widgets', size: 'Home' | 'End', sidebar: 'docked' | 'hidden' | 'peek', bottom: boolean) {
+  async function configure(name: 'GeppIO Code' | 'Bancada de Trabalho', size: 'Home' | 'End', sidebar: 'docked' | 'hidden' | 'peek', bottom: boolean) {
     await mode(name)
     await page.mouse.move(850, 100)
     if (await root.getAttribute('data-sidebar-mode') !== 'docked') { await page.locator('.sidebar-rail-header button').click(); await settle(page) }
@@ -27,7 +27,7 @@ export async function editorRegionGeometry(app: ElectronApplication, page: Page,
     const key = async (region: 'Sidebar' | 'Bottom', value: string) => {
       await page.getByRole('separator', { name: region === 'Sidebar' ? 'Largura da Sidebar' : 'Altura da Bottom', exact: true }).press(value)
       // Finish each real keyboard transaction before starting the next; its guarded persistence is asynchronous.
-      await page.locator('.file-mode-switch').getByRole('button', { name, exact: true }).focus(); await settle(page)
+      await page.locator('.experience-switch').getByRole('button', { name, exact: true }).focus(); await settle(page)
     }
     await key('Sidebar', size); await key('Bottom', size)
     if (!bottom) await key('Bottom', 'Enter')
@@ -93,9 +93,9 @@ export async function editorRegionGeometry(app: ElectronApplication, page: Page,
     for (const [width, height] of [[1920, 1080], [1024, 768]]) {
       await app.evaluate(({ BrowserWindow }, size) => BrowserWindow.getAllWindows()[0]!.setContentSize(size[0]!, size[1]!), [width!, height!]); await settle(page)
       for (const size of ['Home', 'End'] as const) for (const sidebar of ['docked', 'hidden', 'peek'] as const) for (const bottom of [true, false]) {
-        await configure('Widgets', size, sidebar, bottom)
+        await configure('Bancada de Trabalho', size, sidebar, bottom)
         const widgets = await measure(), before = await raw()
-        await configure('Editor', size, sidebar, bottom)
+        await configure('GeppIO Code', size, sidebar, bottom)
         const direct = await measure()
         await writeFile(join(diagnostics, 'editor-region-latest.json'), JSON.stringify({ theme, width, height, size, sidebar, bottom, widgets, direct }, null, 2))
         assert.ok(Math.abs(direct.dpr - scale) < .01)
@@ -130,7 +130,7 @@ export async function editorRegionGeometry(app: ElectronApplication, page: Page,
       }
     }
   }
-  await configure('Editor', 'End', 'docked', true)
+  await configure('GeppIO Code', 'End', 'docked', true)
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setContentSize(1800, 1000)); await settle(page)
   await writeFile(join(diagnostics, 'editor-region-geometry.json'), JSON.stringify(samples, null, 2))
   console.log(`PASS shared Editor Sidebar/Bottom: ${samples.length} actual owner/port comparisons at DPR ${scale}, both themes/sizes, dock/hidden/peek, min/max resizing, clipping/hits, one emulator/native session/draft/navigation and unchanged layout/Workers`)

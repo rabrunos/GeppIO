@@ -119,6 +119,7 @@ export function useTransaction(registry: Registry = widgetRegistry(), localState
       apply(after)
     },
     saving: saving.current, formatId: formatId.current, formatMode: formatMode.current, formatSource: formatSource.current, canUndo: history.current.canUndo, canRedo: history.current.canRedo, gestureActive: history.current.active, motionRevision: motionRevision.current, motion: motion.current,
+    blocksExperienceChange: () => editingRef.current || saving.current || history.current.active,
     undo() { const next = history.current.undo(current()); if (next) { motionRevision.current++; motion.current = { duration: 240, entering: false }; apply(next) } },
     redo() { const next = history.current.redo(current()); if (next) { motionRevision.current++; motion.current = { duration: 240, entering: false }; apply(next) } },
     beginGesture() { epoch.current++; history.current.begin(current()); refresh() },

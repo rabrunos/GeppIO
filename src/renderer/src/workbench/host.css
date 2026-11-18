@@ -7,6 +7,9 @@
 }
 .workbench button, .workbench input, .workbench select { -webkit-app-region: no-drag; }
 .workbench [hidden]:not(.catalog-slot-context) { display: none !important; }
+.workbench-presentation-layer { display: contents; }
+[data-workbench-concealed], [data-workbench-concealed] * { visibility: hidden !important; pointer-events: none !important; }
+.sidebar-region[data-workbench-concealed] { overflow-y: hidden; }
 .global-header { overflow: visible; }
 .icon { width: 20px; height: 20px; flex: none; stroke-width: 1.8; }
 .icon-sm { width: 15px; height: 15px; }

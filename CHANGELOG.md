@@ -2,6 +2,11 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.52] — 2026-11-18
+
+- Add the official App Host and GeppIO Code with Explorer, Git activity, tabbed Monaco, Terminal and contextual status alongside the independent Workbench.
+- Keep native sessions, Monaco history, plugin Workers and saved Workbench layouts across guarded, window-local experience changes.
+
 ## [0.1.0-alpha.51] — 2026-11-18
 
 - Preserve the exact fractional rectangle when a widget resize returns to its pointer origin, restoring neighboring geometry and releasing the previous alignment guide.
