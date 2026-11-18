@@ -31,9 +31,13 @@ try {
   const env = { ...process.env, GEPPIO_TEST_USER_DATA: profile, NODE_ENV: 'production' }
   for (const key of ['ELECTRON_RUN_AS_NODE', 'ELECTRON_RENDERER_URL', 'NODE_OPTIONS', 'GEPPIO_TEST_DEMO_WIDGETS']) delete (env as NodeJS.ProcessEnv)[key]
   app = await electron.launch({ args: ['.', ...(scale125 ? ['--force-device-scale-factor=1.25'] : [])], env })
-  const resize = (width: number, height: number) => app!.evaluate(({ BrowserWindow }, [w, h]) => {
-    const win = BrowserWindow.getAllWindows()[0]!
-    win.setContentSize(w!, h!); win.show(); win.focus()
+  const win = await app.firstWindow(), errors: string[] = []
+  page = win
+  page.on('pageerror', error => errors.push(error.message))
+  page.setDefaultTimeout(15000)
+  const browserWindow = await app.browserWindow(win)
+  const resize = (width: number, height: number) => browserWindow.evaluate((window, [w, h]) => {
+    window.setContentSize(w!, h!); window.show(); window.focus()
   }, [width, height])
   await resize(1440, 920)
   await app.evaluate(({ ipcMain }) => {
@@ -45,10 +49,6 @@ try {
   })
   const calls = () => app!.evaluate(() => (globalThis as typeof globalThis & { gitWindowStatusCalls: number }).gitWindowStatusCalls)
   const nativeWindows = () => app!.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)
-  page = await app.firstWindow()
-  const win = page, errors: string[] = []
-  page.on('pageerror', error => errors.push(error.message))
-  page.setDefaultTimeout(15000)
   await page.getByTestId('edit-layout').waitFor(); await portugueseFixture(page)
   assert.equal(await page.evaluate(() => devicePixelRatio), scale125 ? 1.25 : 1)
 
