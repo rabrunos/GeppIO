@@ -2,6 +2,11 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.51] — 2026-11-18
+
+- Preserve the exact fractional rectangle when a widget resize returns to its pointer origin, restoring neighboring geometry and releasing the previous alignment guide.
+- Add focused geometry and snap-lock regressions and verify neighboring geometry in the existing eight-handle Electron journey.
+
 ## [0.1.0-alpha.50] — 2026-11-16
 
 - Added an opt-in local isolated Electron smoke runner using an inactive Windows desktop and a disposable first-party Win32 bridge, with owned process jobs and fail-closed launch/cleanup.

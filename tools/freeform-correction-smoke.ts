@@ -22,12 +22,17 @@ async function trace(page: Page, id: string) {
       const e = document.querySelector<HTMLElement>(`[data-widget="${id}"]`)!, r = e.getBoundingClientRect()
       const port = document.querySelector<HTMLElement>(`[data-surface="${e.dataset.ownerRegion}"]`)!, p = port.getBoundingClientRect()
       const region = e.dataset.ownerRegion as Placement['region']
+      // Validate Main against its fractional DOM bounds, excluding native gutters.
+      // Integer client measurements below still witness scrollbar transitions.
+      const style = getComputedStyle(port)
+      const gutterX = ['auto', 'scroll'].includes(style.overflowY) && port.scrollHeight > port.clientHeight ? port.offsetWidth - port.clientWidth : 0
+      const gutterY = ['auto', 'scroll'].includes(style.overflowX) && port.scrollWidth > port.clientWidth ? port.offsetHeight - port.clientHeight : 0
       const peers = [...document.querySelectorAll<HTMLElement>(`.widget-frame[data-widget][data-owner-region="${region}"]`)].map(e => ({
         id: e.dataset.widget!, region, x: Number(e.dataset.x), y: Number(e.dataset.y), width: Number(e.dataset.w), height: Number(e.dataset.h),
         preferred: { width: Number(e.dataset.preferredW), height: Number(e.dataset.preferredH) } }))
       state.frames.push({ time, logical: [Number(e.dataset.x), Number(e.dataset.y), Number(e.dataset.w), Number(e.dataset.h)],
         dom: [r.left, r.top, r.right, r.bottom], port: [p.left, p.top, port.clientWidth, port.clientHeight, port.scrollLeft, port.scrollTop],
-        peers, surface: { region, width: port.clientWidth, height: port.clientHeight,
+        peers, surface: { region, width: region === 'main' ? p.width - gutterX : port.clientWidth, height: region === 'main' ? p.height - gutterY : port.clientHeight,
           expanded: document.querySelector('[data-testid="layout-canvas"]')!.getAttribute('data-expanded') === 'true' && region === 'main' },
         style: [e.style.left, e.style.top, e.style.width, e.style.height, e.style.clipPath],
         solve: (performance.getEntriesByName('geppio:anchor-solve').at(-1) as PerformanceMeasure | undefined)?.detail })
@@ -86,11 +91,17 @@ export async function freeformCorrectionSmoke(page: Page, dev: boolean, resizeWi
     }
     await page.mouse.up(); await shellSettle(page)
     const frames = await stopTrace(page)
-    evidence.push({ direction, before, frames })
-    await writeFile(`.local/diagnostics/freeform-anchor-${direction}-${dev ? 'dev' : 'production'}-${await page.evaluate(() => devicePixelRatio)}.json`, JSON.stringify({ before, frames }, null, 2))
+    const after = await rect(page, 'properties')
+    evidence.push({ direction, before, after, frames })
+    await writeFile(`.local/diagnostics/freeform-anchor-${direction}-${dev ? 'dev' : 'production'}-${await page.evaluate(() => devicePixelRatio)}.json`, JSON.stringify({ before, after, frames }, null, 2))
     try { anchored(frames, direction) } catch (error) { errors.push(String(error)) }
-    const after = await rect(page, 'properties'); near(after.x, before.x, 'reversal x'); near(after.y, before.y, 'reversal y')
+    near(after.x, before.x, 'reversal x'); near(after.y, before.y, 'reversal y')
     near(after.width, before.width, 'reversal width'); near(after.height, before.height, 'reversal height')
+    for (const peer of frames[0]!.peers.filter(peer => peer.id !== 'properties')) {
+      const restored = frames.at(-1)!.peers.find(last => last.id === peer.id)
+      assert.ok(restored, `Reversal retains ${peer.id}`)
+      for (const axis of ['x', 'y', 'width', 'height'] as const) near(restored[axis], peer[axis], `reversal ${direction}/${peer.id}/${axis}`)
+    }
     assert.equal(await handle.evaluate(node => node.hasPointerCapture(1)), false, 'Release must end native capture before another gesture')
     await page.mouse.move(5, 5); await settle(page)
     const released = await rect(page, 'properties')

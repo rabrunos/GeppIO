@@ -30,6 +30,9 @@ export function candidate(p: Placement, dx: number, dy: number, kind: 'move' | D
   if (kind === 'move') return { ...p,
     x: s.region === 'sidebar' ? 0 : clamp(p.x + dx, 0, limit.width - p.width),
     y: s.region === 'bottom' ? 0 : clamp(p.y + dy, 0, limit.height - p.height) }
+  // At the gesture origin, avoid a fractional far-edge round trip that would
+  // miss exact snapshot equality and keep a prior alignment lock active.
+  if (dx === 0 && dy === 0) return next
   if (!allowsResize(kind, c)) return next
   if (kind.includes('e')) next.width = clamp(p.width + dx, c.min.width, Math.min(c.max.width, limit.width - p.x))
   if (kind.includes('w')) { next.width = clamp(p.width - dx, c.min.width, Math.min(c.max.width, p.x + p.width)); next.x = p.x + p.width - next.width }

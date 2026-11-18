@@ -88,6 +88,16 @@ test('CSS pixels remain continuous; eight anchored directions, minima/maxima and
   assert.equal(candidate(low, .25, 999, 'move', bottom, constraintsFor(bottom).summary!).y, 0)
   assert.equal(candidate(low, .25, 999, 's', bottom, constraintsFor(bottom).summary!).height, 120)
 })
+test('zero-delta resize preserves the exact fractional rectangle on all eight handles', () => {
+  const original = p('properties', 310.09983970400896, 310.09983970400896, 310.1031676941426, 310.1031676941426)
+  const cs = constraints([original])
+  for (const direction of DIRECTIONS) {
+    assert.deepEqual(candidate(original, 0, 0, direction, main, cs.properties!), original, direction)
+  }
+  const moved = candidate(original, 0, -.001, 'n', main, cs.properties!)
+  assert.ok(moved.y < original.y, 'A real fractional resize still moves the active edge')
+  assert.equal(moved.y + moved.height, original.y + original.height)
+})
 test('forward push chains, clearance, no gravity, deterministic snapshot reversal and immutability', () => {
   const ps = [p('summary', 0, 40), p('chart', 210, 40), p('notes', 420, 40), p('activity', 50, 400)], cs = constraints(ps), old = structuredClone(ps)
   const rect = { ...ps[0]!, x: 13.375 }, result = reflow(ps, 'summary', rect, main, cs, 'move')

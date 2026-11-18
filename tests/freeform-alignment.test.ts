@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { alignedGesture, alignedMove, resolveAlignment } from '../src/shared/freeform/alignment.ts'
-import { validLayout } from '../src/shared/freeform/geometry.ts'
+import { candidate, validLayout } from '../src/shared/freeform/geometry.ts'
 import type { Constraints, Placement, Surface } from '../src/shared/freeform/types.ts'
 const box = (id: string, x: number, y: number, width = 100, height = 100): Placement => ({ id, x, y, width, height, region: 'main', preferred: { width, height } })
 const surface: Surface = { region: 'main', width: 800, height: 600, expanded: false }
@@ -30,6 +30,26 @@ test('resize supports corner spacing on both axes, centers and fixed opposite ed
   const bottomCs = Object.fromEntries(Object.entries(cs).map(([id,c]) => [id, { ...c, regions: ['bottom'], resizeY: false }])) as Constraints
   const bottom = alignedGesture(source.map(p => ({...p, region:'bottom',y:0,height:100})), 'moving', box('moving', 214, 0, 236, 100), {...surface,region:'bottom'}, bottomCs, 'w')
   assert.ok(bottom.guides.every(g => g.axis === 'x'))
+})
+test('fractional north resize reversal clears a held center guide and restores the entire snapshot', () => {
+  // The active rectangle and its two relevant peers from the DPR 1.25 trace.
+  const at = { ...surface, width: 960.6000366210938, height: 621.20001220703125 }
+  const active = box('moving', 239.90224061939594, 310.09983970400896, 399.829983685906, 310.1031676941426)
+  const notes = box('a', 0, 150.04680958085154, 229.90224061939594, 300.09983970400896)
+  const queue = box('b', active.x, 0, active.width, 300.09983970400896)
+  const source = [active, notes, queue], original = structuredClone(source)
+  const approach = candidate(active, 0, -9.125, 'n', at, cs.moving!)
+  const snapped = alignedGesture(source, active.id, approach, at, cs, 'n')
+  assert.equal(snapped.result.status, 'valid')
+  assert.deepEqual(snapped.locks, { y: 'a:y:0:0.5' })
+  assert.notEqual(snapped.result.placements[0]!.y, active.y)
+  const reversed = candidate(active, 0, 0, 'n', at, cs.moving!)
+  const result = alignedGesture(source, active.id, reversed, at, cs, 'n', snapped.locks)
+  assert.equal(result.result.status, 'valid')
+  assert.deepEqual(result.result.placements, original)
+  assert.deepEqual(result.locks, {})
+  assert.deepEqual(result.guides, [])
+  assert.deepEqual(source, original)
 })
 test('edge/center candidates, CSS-pixel entry/exit hysteresis and stable ties', () => {
   const moving = box('moving', 304, 0), peer = box('a', 300, 200)
