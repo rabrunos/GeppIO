@@ -2,6 +2,10 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.53] — 2026-11-18
+
+- Synchronize the native PTY with xterm when a Terminal session starts or restarts, preserving keyboard focus and the shared Terminal across GeppIO Code and the Workbench.
+
 ## [0.1.0-alpha.52] — 2026-11-18
 
 - Add the official App Host and GeppIO Code with Explorer, Git activity, tabbed Monaco, Terminal and contextual status alongside the independent Workbench.

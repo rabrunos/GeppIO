@@ -48,10 +48,13 @@ export class TerminalSession {
   }
   private accept(result: TerminalResult) {
     if (!result.ok) { this.update({ feedback: result.error }); return false }
-    const native = result.value.state
-    if (native.id !== this.state.native.id) { this.cursor = 0; this.pendingInput = ''; this.emulator?.reset(); this.update({ feedback: null }) }
+    const native = result.value.state, previous = this.state.native
+    const newGeneration = native.id !== previous.id
+    if (newGeneration) { this.cursor = 0; this.pendingInput = ''; this.emulator?.reset(); this.update({ feedback: null }) }
     this.update({ native })
     if (this.emulator) this.emulator.options.disableStdin = native.phase !== 'running'
+    // Startup can fit the emulator before the native PTY can be resized.
+    if (native.phase === 'running' && (newGeneration || previous.phase !== 'running')) void this.fit()
     return true
   }
   private async poll() {
@@ -116,6 +119,7 @@ export class TerminalSession {
     if (this.emulator) this.emulator.options.theme = theme === 'light' ? { background: '#ffffff', foreground: '#202838', cursor: '#202838', selectionBackground: '#709ad866' } : { background: '#141922', foreground: '#e2e8f0', cursor: '#e2e8f0', selectionBackground: '#709ad866' }
   }
   fit = async () => {
+    if (this.stopped) return
     if (this.fitting) { this.fitAgain = true; return }
     const terminal = this.emulator, parent = this.element?.parentElement, native = this.state.native
     if (!terminal || !parent || !parent.getClientRects().length || parent.closest('[inert]')) return
@@ -126,7 +130,16 @@ export class TerminalSession {
     terminal.resize(cols, rows)
     if (native.id && native.phase === 'running' && (cols !== native.cols || rows !== native.rows)) {
       this.fitting = true
-      try { const result = await this.bridge.resize(native.id, cols, rows); if (!result.ok) this.feedback(result.error) }
+      try {
+        const result = await this.bridge.resize(native.id, cols, rows)
+        if (!result.ok) this.feedback(result.error)
+        else {
+          const current = this.state.native, confirmed = result.value.state
+          // Apply only the size acknowledgement before processing a coalesced fit.
+          if (!this.stopped && current.phase === 'running' && current.id === native.id && confirmed.id === native.id)
+            this.update({ native: { ...current, cols: confirmed.cols, rows: confirmed.rows } })
+        }
+      }
       catch { this.feedback('Não foi possível redimensionar o Terminal.') }
       finally { this.fitting = false; if (this.fitAgain) { this.fitAgain = false; void this.fit() } }
     }
