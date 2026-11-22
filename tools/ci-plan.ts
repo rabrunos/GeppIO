@@ -18,7 +18,7 @@ export const ciGroups = {
     smoke('demo-retirement'), smoke('identity'), smoke('desktop'),
     smoke('maximize'), smoke('maximize', '--scale125'),
     smoke('app-host'), smoke('app-host', '--scale125'),
-    smoke('git-window'), smoke('git-window', '--scale125')
+    smoke('git-window'), smoke('git-window', '--scale125'), ...variants('search')
   ],
   workbench: [
     smoke('alignment'), smoke('groups'),

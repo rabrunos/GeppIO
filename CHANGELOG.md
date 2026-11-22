@@ -2,6 +2,10 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.61] — 2026-11-22
+
+- Search saved workspace text from GeppIO Code. Explicit search, cancellation, bounded results and checked navigation preserve open file drafts.
+
 ## [0.1.0-alpha.60] — 2026-11-22
 
 - Stop periodic Terminal reads after empty synchronization and final output drain. Resume reads on explicit session actions and reconnection.

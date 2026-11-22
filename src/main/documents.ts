@@ -50,17 +50,33 @@ async function inspectPath(path: string): Promise<string> {
   if ((process.platform === 'win32' ? actual.toLowerCase() !== path.toLowerCase() : actual !== path)) throw new DocumentFailure('unsupported')
   return chain.join('/')
 }
-async function inspect(path: string): Promise<Evidence> {
+/** Optional Main-only bounds for scanning. Charge actual bytes before any later validation can fail. */
+export interface DocumentReadControl {
+  authorize(stat: BigIntStats): Promise<void>
+  check(size: number): void
+  consume(bytes: number): void
+}
+async function inspect(path: string, control?: DocumentReadControl): Promise<Evidence> {
   const chain = await inspectPath(path), before = await lstat(path, { bigint: true })
   if (before.size > BigInt(DOCUMENT_LIMIT)) throw new DocumentFailure('oversized')
+  control?.check(Number(before.size))
   const file = await open(path, 'r')
   try {
     const initial = await file.stat({ bigint: true })
     if (!sameStat(before, initial)) throw new DocumentFailure('conflict')
-    const buffer = Buffer.alloc(DOCUMENT_LIMIT + 1)
+    if (control) await control.authorize(initial)
+    const buffer = Buffer.alloc(control ? Number(initial.size) : DOCUMENT_LIMIT + 1)
     let length = 0
-    while (length < buffer.length) { const read = await file.read(buffer, length, buffer.length - length, length); if (!read.bytesRead) break; length += read.bytesRead }
+    while (length < buffer.length) {
+      control?.check(buffer.length - length)
+      const requested = control ? Math.min(buffer.length - length, 64 * 1024) : buffer.length - length
+      const { bytesRead } = await file.read(buffer, length, requested, length)
+      control?.consume(bytesRead)
+      if (!bytesRead) break
+      length += bytesRead
+    }
     if (length > DOCUMENT_LIMIT) throw new DocumentFailure('oversized')
+    if (control && length !== buffer.length) throw new DocumentFailure('conflict')
     const bytes = buffer.subarray(0, length), bom = bytes.subarray(0, 3).equals(Buffer.from([0xef, 0xbb, 0xbf]))
     let text: string
     try { text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bom ? bytes.subarray(3) : bytes) } catch { throw new DocumentFailure('unsupported') }
@@ -71,6 +87,16 @@ async function inspect(path: string): Promise<Evidence> {
   } finally { await file.close() }
 }
 const sameEvidence = (a: Evidence, b: Evidence) => a.path === b.path && a.chain === b.chain && sameStat(a.stat, b.stat) && a.bytes.equals(b.bytes)
+function documentWitness(evidence: Evidence) {
+  const stat = evidence.stat
+  return { identity: [evidence.chain, identity(stat), stat.birthtimeNs, stat.ctimeNs, stat.mtimeNs, stat.mode, stat.size].join('/'),
+    fingerprint: createHash('sha256').update(evidence.bytes).digest('hex') }
+}
+/** Discard source and descriptor after the caller has searched this one file. */
+export async function inspectSearchDocument(path: string, control: DocumentReadControl) {
+  const evidence = await inspect(path, control)
+  return { text: evidence.text, witness: documentWitness(evidence) }
+}
 export type DocumentDecision = 'save' | 'discard' | 'cancel'
 /** One window's bounded native grants. Adding/activating a tab never replaces another grant. */
 export class DocumentStore {
@@ -102,14 +128,15 @@ export class DocumentStore {
     if (!this.selections.has(id)) throw new DocumentFailure('stale')
     this.active = id; return { ok: true, document: this.snapshot }
   }
-  async select(path: string, draft: DocumentDraft | null, _decide: () => Promise<DocumentDecision>, current: () => boolean, authorize?: () => Promise<void>): Promise<DocumentResult> {
+  async select(path: string, draft: DocumentDraft | null, _decide: () => Promise<DocumentDecision>, current: () => boolean,
+    authorize?: (witness: () => ReturnType<typeof documentWitness>) => Promise<void>, readControl?: DocumentReadControl): Promise<DocumentResult> {
     if (draft) this.current(draft)
-    const candidate = await inspect(path)
+    const candidate = await inspect(path, readControl)
     if (!current()) throw new DocumentFailure('stale')
     // Native picker/Explorer selection authorizes just this candidate, never an
     // implicit Save/Discard of another document. Revalidate before granting it.
-    if (!sameEvidence(candidate, await inspect(path))) throw new DocumentFailure('conflict')
-    await authorize?.()
+    if (!sameEvidence(candidate, await inspect(path, readControl))) throw new DocumentFailure('conflict')
+    await authorize?.(() => documentWitness(candidate))
     if (!current()) throw new DocumentFailure('stale')
     const key = (value: string) => process.platform === 'win32' ? value.toLowerCase() : value
     const existing = [...this.selections.values()].find(value => key(value.evidence.path) === key(path))

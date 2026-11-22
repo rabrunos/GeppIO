@@ -31,6 +31,9 @@ ocupa a Sidebar; no modo Widgets, coloque seu widget explicitamente em Main ou S
 A árvore e as abas são compartilhadas; trocar de pasta conserva os arquivos abertos. Use **Atualizar árvore** após mudanças no disco ou
 antes de reabrir um item cujo arquivo foi substituído ao salvar. A navegação aceita até 512
 entradas por pasta e 32 níveis; não cria, move nem exclui arquivos. Veja os [limites](docs/architecture/explorer.md).
+No GeppIO Code, abra **Busca no projeto**, digite um trecho e pressione **Enter**. A busca lê o
+texto salvo na pasta selecionada. Os resultados mostram arquivo, linha e coluna. Abrir uma
+ocorrência preserva o rascunho e o histórico da aba. Veja os [limites da busca](docs/architecture/search.md).
 Na alpha.44, **Alterações Git** consulta a raiz exata selecionada no Explorador, mostra branch,
 índice, alterações no disco e arquivos novos. Está no catálogo (Main/Sidebar) e nas atividades
 do modo Editor. **Atualizar Git** renova os dados; selecionar um arquivo compatível abre a

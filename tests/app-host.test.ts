@@ -8,7 +8,7 @@ test('Workbench is the default experience independently of the official App regi
   assert.equal(officialApp(DEFAULT_EXPERIENCE), undefined)
   assert.deepEqual(EXPERIENCES.map(({ id }) => id), ['workbench', 'geppio-code'])
   assert.deepEqual(officialApp('geppio-code'), {
-    id: 'geppio-code', name: 'GeppIO Code', presentation: 'code', capabilities: ['documents', 'explorer', 'git', 'terminal']
+    id: 'geppio-code', name: 'GeppIO Code', presentation: 'code', capabilities: ['documents', 'explorer', 'git', 'terminal', 'search']
   })
 })
 

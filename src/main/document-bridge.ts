@@ -9,6 +9,8 @@ import { DirectoryStore, ExplorerFailure, explorerFailure, safeExplorerName } fr
 import { validExplorerRequest } from '../shared/explorer.ts'
 import type { ExplorerResult } from '../shared/explorer.ts'
 import { GitStore, GitFailure, gitFailure } from './git.ts'
+import { SearchExpired, SearchStore } from './search.ts'
+import { validSearchRequest } from '../shared/search.ts'
 import { validGitRequest } from '../shared/git.ts'
 import { WorkspaceOwner } from './workspace.ts'
 import { WorkspaceRecovery } from './workspace-recovery.ts'
@@ -20,9 +22,11 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
   const store = new DocumentStore()
   const directories = new DirectoryStore()
   const git = new GitStore(directories)
-  const workspace = new WorkspaceOwner(directories, store, new WorkspaceRecovery(app.getPath('userData')), () => git.revoke())
+  const search = new SearchStore(directories)
+  const revokeProjectResults = () => { git.revoke(); search.revoke() }
+  const workspace = new WorkspaceOwner(directories, store, new WorkspaceRecovery(app.getPath('userData')), revokeProjectResults)
   let busy = false, closing = false, remembering = false, ticket: string | null = null
-  const revoke = () => { workspace.revoke(); git.revoke(); store.revoke(); directories.revoke(); ticket = null }
+  const revoke = () => { workspace.revoke(); revokeProjectResults(); store.revoke(); directories.revoke(); ticket = null }
   const decide = async (name = store.snapshot?.label ?? store.snapshot?.name ?? 'arquivo', id = store.snapshot?.id) => {
     const path = id ? store.filePath(id) : null
     const result = await dialog.showMessageBox(win, { type: 'question', title: 'Alterações não salvas', message: 'Salvar as alterações de ' + name + ' antes de continuar?', detail: (path ? 'Arquivo: ' + path + '\n\n' : '') + 'Cancelar mantém as abas e os rascunhos abertos. Nenhum outro arquivo será salvo automaticamente.', buttons: ['Salvar', 'Descartar', 'Cancelar'], defaultId: 2, cancelId: 2, noLink: true })
@@ -37,7 +41,7 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
     if (root && source.length) {
       try { folder = await directories.folder(root.id, current) } catch {
         if (!current()) return expiredDocumentResponse(result)
-        invalidRoot = root.id; git.revoke() /* Independent file grants remain; stale Git action IDs do not. */
+        invalidRoot = root.id; revokeProjectResults()
       }
     }
     if (!current()) return expiredDocumentResponse(result)
@@ -174,6 +178,42 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
     } catch { return current() ? { ...fail(), value: workspace.status() } : fail() }
     finally { if (exclusive) busy = false; if (operation === 'remember') remembering = false }
   })
+  const searchOperations = ['start', 'read', 'cancel', 'open'] as const
+  for (const operation of searchOperations) ipcMain.handle(`search:${operation}`, async (event, ...args: unknown[]) => {
+    const frame = event.senderFrame
+    if (win.isDestroyed() || event.sender !== win.webContents || frame !== win.webContents.mainFrame || frame?.url !== expectedURL || !validSearchRequest(operation, args)) return documentFailure(new DocumentFailure('invalid'))
+    const documentCurrent = store.guard(), directoryCurrent = directories.guard()
+    const current = () => !closing && !win.isDestroyed() && !win.webContents.isDestroyed() && win.webContents.mainFrame === frame && frame.url === expectedURL && documentCurrent() && directoryCurrent()
+    if (!current()) return { ...documentFailure(new DocumentFailure('stale')), expired: true }
+    const id = args[0] as string
+    if (operation === 'open') {
+      if (busy || ticket) return documentFailure(new DocumentFailure('busy'))
+      busy = true
+      try {
+        const opened = await search.open(id, args[1] as string, store, current)
+        const decorated = await response(opened, current)
+        if (!opened.ok || !decorated.ok) return decorated
+        return { ...decorated, matchesSnapshot: !decorated.invalidRoot && opened.matchesSnapshot === true }
+      }
+      catch (error) {
+        const failure = documentFailure(error)
+        if (error instanceof SearchExpired) return { ...failure, expired: true }
+        return !failure.ok && failure.code === 'stale'
+          ? { ...failure, error: 'Resultado de busca desatualizado. Confira o projeto e busque novamente.' } : failure
+      }
+      finally { busy = false }
+    }
+    // Search owns its work independently. Enumeration and progress requests
+    // never acquire the document transaction used for Open and Save.
+    try {
+      const value = operation === 'start' ? await search.start(id, args[1] as string, args[2] as boolean, current)
+        : operation === 'read' ? await search.read(id, args[1] as number, current) : await search.cancel(id, current)
+      return current() ? { ok: true, value } : { ...documentFailure(new DocumentFailure('stale')), expired: true }
+    } catch (error) {
+      return { ok: false, error: 'Busca indisponível ou expirada. Confira o projeto e inicie outra busca.',
+        ...(error instanceof SearchExpired ? { expired: true } : {}) }
+    }
+  })
   const gitOperations = ['status', 'compare', 'stage', 'unstage'] as const
   for (const operation of gitOperations) ipcMain.handle(`git:${operation}`, async (event, ...args: unknown[]) => {
     const frame = event.senderFrame
@@ -186,6 +226,7 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
     for (const operation of operations) ipcMain.removeHandler(`document:${operation}`)
     for (const operation of directoryOperations) ipcMain.removeHandler(`explorer:${operation}`)
     for (const operation of gitOperations) ipcMain.removeHandler(`git:${operation}`)
+    for (const operation of searchOperations) ipcMain.removeHandler(`search:${operation}`)
     for (const operation of workspaceOperations) ipcMain.removeHandler(`workspace:${operation}`)
   })
   return workspace

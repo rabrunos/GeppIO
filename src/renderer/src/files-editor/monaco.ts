@@ -76,6 +76,17 @@ class MonacoPresentation {
   }
   connect() { this.stopped = false }
   refresh() { this.sync() }
+  revealMatch(id: string, line: number, column: number, length: number) {
+    const model = this.model, state = this.session.snapshot()
+    if (this.stopped || !model || this.id !== id || this.editor.getModel() !== model ||
+        state.document?.id !== id || state.text !== state.document.text || model.getValue() !== editorText(state.text) ||
+        line < 1 || line > model.getLineCount() || column < 1 || length < 1 || column + length > model.getLineMaxColumn(line)) return false
+    const range = new monaco.Range(line, column, line, column + length)
+    this.editor.setSelection(range)
+    this.editor.revealRangeInCenterIfOutsideViewport(range)
+    if (this.host?.isConnected && this.host.getClientRects().length) this.editor.focus()
+    return true
+  }
   dispose() {
     this.stopped = true
     // React StrictMode replays effects in the same turn; only final teardown destroys ownership.

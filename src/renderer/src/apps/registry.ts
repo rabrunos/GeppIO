@@ -1,5 +1,5 @@
 const OFFICIAL_APPS = [
-  { id: 'geppio-code', name: 'GeppIO Code', presentation: 'code', capabilities: ['documents', 'explorer', 'git', 'terminal'] }
+  { id: 'geppio-code', name: 'GeppIO Code', presentation: 'code', capabilities: ['documents', 'explorer', 'git', 'terminal', 'search'] }
 ] as const
 
 export type OfficialApp = typeof OFFICIAL_APPS[number]

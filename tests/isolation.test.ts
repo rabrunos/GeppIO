@@ -8,6 +8,7 @@ import { electron } from '../tools/test-electron.ts'
 test('isolated suite selection accepts only known paths and literal supported runtime flags', () => {
   assert.deepEqual(selectSuite('monaco', '--dev'), { suite: 'monaco', step: { file: 'tools/monaco-smoke.ts', args: ['--dev'] } })
   assert.equal(selectSuite('desktop-core', '--scale125').step.file, 'tools/desktop-smoke.ts')
+  for (const variant of [undefined, '--scale125', '--dev']) assert.equal(selectSuite('search', variant).step.file, 'tools/search-smoke.ts')
   for (const args of [[], ['monaco', '--dev', '--scale125'], ['../monaco'], ['monaco && whoami'], ['C:\\run.exe'], ['__proto__'], ['constructor'], ['monaco', '--no-sandbox'], ['sidebar-stack', '--dev']]) assert.throws(() => parseSelection(args))
 })
 

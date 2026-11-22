@@ -8,6 +8,7 @@ Read only the rows needed for the active Issue. This is a route map, not task st
 | Which code owns a responsibility? | [Architecture](../architecture/overview.md) |
 | First-party Explorer, document authority and shared Editor/Widgets navigation | [Explorer](../architecture/explorer.md), [Documents](../architecture/documents.md), `src/main/explorer.ts`, `src/renderer/src/files-editor/` |
 | Single-root project, remembered clean tabs and trusted Terminal startup directory | [Workspace](../architecture/workspace.md), `src/main/workspace.ts`, `src/main/workspace-recovery.ts`, `src/shared/workspace.ts`, `tests/workspace.test.ts`, `tools/workspace-smoke.ts` |
+| Search saved project text and open a verified match | [Search](../architecture/search.md), `src/main/search.ts`, `src/renderer/src/search/`, `tests/search.test.ts`, `tools/search-smoke.ts` |
 | First-party Git status/diff, explicit per-file index actions, exact Explorer grant and independent Monaco comparison | [Git pilot](../architecture/git.md), `src/main/git.ts`, `src/renderer/src/git/`, `tests/git.test.ts`, `tools/git-smoke.ts` |
 | Active continuous geometry, region constraints, stable projection, collision and persistence | [Layout](../architecture/layout.md), `src/shared/freeform/`, `tests/freeform-*.test.ts` |
 | Freeform presentation, stable mounted content, pointer/keyboard capture and transactions | `src/renderer/src/freeform/`, `tools/freeform-smoke.ts` |

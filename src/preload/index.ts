@@ -58,6 +58,12 @@ const git = Object.freeze<import('../shared/git.ts').GitBridge>({
   stage: (root, change) => ipcRenderer.invoke('git:stage', root, change),
   unstage: (root, change) => ipcRenderer.invoke('git:unstage', root, change)
 })
+const search = Object.freeze<import('../shared/search.ts').SearchBridge>({
+  start: (root, query, matchCase) => ipcRenderer.invoke('search:start', root, query, matchCase),
+  read: (job, offset) => ipcRenderer.invoke('search:read', job, offset),
+  cancel: job => ipcRenderer.invoke('search:cancel', job),
+  open: (job, match) => ipcRenderer.invoke('search:open', job, match)
+})
 const workspace = Object.freeze<import('../shared/workspace.ts').WorkspaceBridge>({
   read: () => ipcRenderer.invoke('workspace:read'),
   restore: () => ipcRenderer.invoke('workspace:restore'),
@@ -66,5 +72,5 @@ const workspace = Object.freeze<import('../shared/workspace.ts').WorkspaceBridge
   forget: () => ipcRenderer.invoke('workspace:forget'),
   remember: editor => ipcRenderer.invoke('workspace:remember', editor)
 })
-contextBridge.exposeInMainWorld('geppio', Object.freeze({ name: IDENTITY.name, version: __APP_VERSION__, platform: process.platform, plugins, pluginData, windowControls, documents, explorer, terminal, git, workspace,
+contextBridge.exposeInMainWorld('geppio', Object.freeze({ name: IDENTITY.name, version: __APP_VERSION__, platform: process.platform, plugins, pluginData, windowControls, documents, explorer, terminal, git, workspace, search,
   demoFixtures: process.argv.includes('--geppio-demo-fixtures') }))

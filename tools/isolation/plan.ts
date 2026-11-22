@@ -10,8 +10,8 @@ export const incompatible: Readonly<Record<string, string>> = {
   terminal: 'The complete Terminal suite reads/writes the shared clipboard. Use conpty for a distinct isolated integration probe.',
   'edit-lock': 'The paste-key assertion can access the shared Windows clipboard; retain the original CI gate.'
 }
-const development = new Set(['desktop-core', 'identity', 'git', 'monaco', 'multi-document', 'workspace'])
-const scale125 = new Set(['desktop-core', 'alignment', 'groups', 'explorer', 'git', 'maximize', 'monaco', 'multi-document', 'presentation', 'real-presentation', 'workspace', 'terminal', 'conpty', 'app-host', 'git-window'])
+const development = new Set(['desktop-core', 'identity', 'git', 'monaco', 'multi-document', 'workspace', 'search'])
+const scale125 = new Set(['desktop-core', 'alignment', 'groups', 'explorer', 'git', 'maximize', 'monaco', 'multi-document', 'presentation', 'real-presentation', 'workspace', 'terminal', 'conpty', 'app-host', 'git-window', 'search'])
 
 /** Only existing known entrypoints and supported literal flags. Never a shell command or path. */
 export function selectSuite(suite: string, variant?: string): IsolationSelection {
