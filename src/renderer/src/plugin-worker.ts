@@ -33,11 +33,20 @@ scope.onmessage = event => {
         const module = await import(/* @vite-ignore */ request.entry) as { activate?: (context: PluginContext | PluginContextV2) => PluginInstance | Promise<PluginInstance> }
         if (typeof module.activate !== 'function') throw new Error('O módulo não exporta activate(context).')
         active = true
+        let draftPending = false
         instance = await module.activate(Object.freeze({
           pluginId: request.pluginId,
           publishWidget(widgetId: string, view: unknown) { if (active) scope.postMessage({ type: 'widget', widgetId, view }) },
           reportStatus(message: string) { scope.postMessage({ type: 'status', message }) },
-          ...(request.apiVersion === 2 ? { data: Object.freeze({ read: () => dataRequest('read'), write: (revision: number, document: DataDocument) => dataRequest('write', revision, document) }) } : {})
+          ...(request.apiVersion === 2 ? {
+            reportDraft(pending: boolean) {
+              if (active && typeof pending === 'boolean' && pending !== draftPending) {
+                draftPending = pending
+                scope.postMessage({ type: 'draft', pending })
+              }
+            },
+            data: Object.freeze({ read: () => dataRequest('read'), write: (revision: number, document: DataDocument) => dataRequest('write', revision, document) })
+          } : {})
         }))
         if (!instance || typeof instance.dispose !== 'function' || (instance.onAction !== undefined && typeof instance.onAction !== 'function')) throw new Error('activate deve retornar uma instância com dispose().')
       } else if (request.type === 'dispose') {

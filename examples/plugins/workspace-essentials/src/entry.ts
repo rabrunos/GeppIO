@@ -26,6 +26,7 @@ export async function activate(context: PluginContextV2): Promise<PluginInstance
   catch { writable = false; state = 'Falha ao ler dados. Originais preservados para recuperação; edição bloqueada.' }
   function publish() {
     if (!active) return
+    context.reportDraft?.(attempted !== null || itemDraft.length > 0)
     for (const kind of ['notes', 'prompts'] as const) {
       const selected = model[kind].find(entry => entry.id === (kind === 'notes' ? model.selectedNote : model.selectedPrompt))
       const view: WidgetViewV2 = { text: state }

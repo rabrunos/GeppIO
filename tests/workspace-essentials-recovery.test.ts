@@ -36,10 +36,12 @@ function storage() {
 
 async function session(data: PluginContextV2['data']) {
   const views = new Map<string, WidgetViewV2>()
+  let pending = false
   const plugin = await activate({ pluginId: 'geppio.workspace-essentials', data, reportStatus() {},
+    reportDraft(value) { pending = value },
     publishWidget(id, view) { views.set(id, view) } })
   const send = (widget: string, event: WidgetEvent) => plugin.onEvent!(widget, event)
-  return { views, plugin, send, type: (value: string) => send('scratch', { kind: 'input', controlId: 'scratch', value }),
+  return { views, plugin, send, pending: () => pending, type: (value: string) => send('scratch', { kind: 'input', controlId: 'scratch', value }),
     retry: () => send('scratch', { kind: 'action', controlId: 'save' }), scratch: () => views.get('scratch')! }
 }
 
@@ -48,11 +50,13 @@ for (const fault of ['before', 'after'] as const) test(`explicit retry settles a
   disk.fault = fault
   await ui.type('first')
   assert.match(ui.scratch().text, /Falha ao salvar/)
+  assert.equal(ui.pending(), true)
   assert.equal(disk.snapshot.revision, fault === 'after' ? 1 : 0)
   disk.fault = 'none'
   await ui.retry()
   await ui.retry()
   assert.equal(ui.scratch().text, 'Salvo.')
+  assert.equal(ui.pending(), false)
   assert.deepEqual(disk.snapshot, { revision: 1, document: document({ ...emptyModel(), scratch: 'first' }) })
   assert.deepEqual(disk.writes, fault === 'before' ? [0, 0] : [0])
 })
@@ -136,6 +140,9 @@ test('reconciliation retains generated IDs, selections, checklist and unsent ite
   disk.fault = 'none'
   await ui.retry()
   assert.equal(ui.views.get('checklist')!.fields![0]!.value, 'still typing')
+  assert.equal(ui.pending(), true)
+  await item('')
+  assert.equal(ui.pending(), false)
   assert.deepEqual(disk.snapshot, committed)
   const selected = model.checklist[0]!.id
   await ui.send('checklist', { kind: 'toggle', controlId: 'items', itemId: selected, value: true })
@@ -158,6 +165,7 @@ test('the host queues a later field event during a write and permits management 
       const emit = (value: unknown) => worker.onmessage?.({ data: value } as MessageEvent)
       if (request.type === 'activate') {
         instance = await activate({ pluginId: manifest.id, reportStatus() {},
+          reportDraft(pending) { emit({ type: 'draft', pending }) },
           publishWidget(widgetId, view) { emit({ type: 'widget', widgetId, view }) },
           data: { read: data.read, async write(revision, value) {
             const saved = await data.write(revision, value)
@@ -186,7 +194,7 @@ test('the host queues a later field event during a write and permits management 
   try {
     await runtime.sync([{ enabled: true, revision: 'fixture', manifest }])
     const first = input('first')
-    await writing
+    assert.equal(await Promise.race([writing.then(() => true), first.then(() => false)]), true, 'First event must reach the pending write')
     disk.unreadable = true
     const later = input('latest coalesced field value')
     assert.equal(received.length, 1)

@@ -128,7 +128,22 @@ try {
   await click('Tentar novamente'); await state('error')
   await writeFile(sourceEntry, code); await click('Recarregar'); await state('active')
   assert.notEqual((await installed()).generation, failed.generation)
+  // A terminated Worker can leave the only recoverable copy in its last host view.
+  await writeFile(sourceEntry, `export function activate(context) {
+    context.publishWidget('scratch', { text: 'Conteúdo local', fields: [{ id: 'scratch', label: 'Texto do rascunho', value: 'Copy before discard' }] })
+    throw new Error('Controlled failure after publishing a field')
+  }`)
+  await click('Recarregar'); await state('error')
+  const beforeRetry = workers
+  await click('Tentar novamente'); await page.getByText(/Há edições pendentes ou falha ao salvar/).waitFor()
+  assert.equal(workers, beforeRetry)
+  await closeSettings(); assert.equal(await scratch().inputValue(), 'Copy before discard')
+  await settings(); await click('Descartar rascunhos e desativar'); await state('disabled')
+  assert.equal((await installed()).revision, first.revision)
+  await writeFile(sourceEntry, code); await click('Recarregar'); await state('disabled')
+  await click('Ativar'); await state('active')
   await closeSettings(); await savedText('Confirmed after resume'); assert.equal(await layout(), beforeLayout)
+  evidence.recovery = 'passed: failed Worker retained its field through ordinary Retry; explicit discard disabled the plugin; the same installation restored confirmed data and layout'
   evidence.freshReload = 'passed: Settings, native cancel, Main off gate, fresh disabled, four placements, one Worker replacement, exact UUID/data/layout, stale channel, draft defer, delayed Main commit + dismissed popover/background edit lock, validation rejection, mode toggle, disabled reload, activation failure/retry/fix'
   await close(); await launch(profile); await savedText('Confirmed after resume'); assert.equal(await layout(), beforeLayout)
   await close(); await writeFile(sourceEntry, code + '\n// unaccepted restart bytes\n'); await launch(profile); await settings(); await state('disabled')
@@ -161,7 +176,12 @@ try {
     await launch(legacyProfile); await place(); await savedText('Legacy confirmed')
     const legacyLayout = await layout()
     await page.locator('.widget-frame').evaluateAll(nodes => nodes.forEach(node => node.setAttribute('data-link-mounted', 'retained')))
-    await settings(); if (!enabled) { await click('Desativar'); await state('disabled') }
+    if (!enabled) await widget('checklist').getByRole('textbox', { name: 'Novo item', exact: true }).fill('Legacy unsent item')
+    await settings()
+    if (!enabled) {
+      await click('Desativar'); await page.getByText(/Há edições pendentes ou falha ao salvar/).waitFor()
+      await click('Descartar rascunhos e desativar'); await state('disabled')
+    }
     await mode(true)
     await picker(legacySource, true); await click('Vincular pasta original'); assert.equal((await installed()).source, 'legacy')
     await writeFile(join(legacySource, 'extra.js'), '// mismatch'); await picker(legacySource); await click('Vincular pasta original')
@@ -177,7 +197,7 @@ try {
     assert.deepEqual(await readFile(join(legacyProfile, 'GeppIO/plugin-data', legacy.revision + '.json')), legacyData)
     await close()
   }
-  evidence.legacy = 'passed: real alpha.34-format managed copies; enabled/disabled, cancel/mismatch, byte-identical link, exact UUID/data/layout, four retained mounted frames, unchanged Worker, recovery copy and restart'
+  evidence.legacy = 'passed: real alpha.34-format managed copies; protected unsent field and explicit discard, enabled/disabled, cancel/mismatch, byte-identical link, exact UUID/data/layout, four retained mounted frames, unchanged Worker, recovery copy and restart'
   assert.deepEqual(errors, [])
   await writeFile(join(diagnostics, 'result.json'), JSON.stringify({ status: 'passed', evidence, ownerManual: 'not_run' }, null, 2))
   console.log(JSON.stringify({ status: 'passed', evidence }, null, 2))

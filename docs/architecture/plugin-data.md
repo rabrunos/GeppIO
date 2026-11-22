@@ -34,7 +34,7 @@ all completed sessions in pages of twelve; compact Sidebar/Bottom show summaries
 The 200-session pilot limit preserves history and stops offering new sessions.
 Existing installation retention/recovery and ordinary-data trust limits apply.
 
-Workspace Essentials 1.0.1 keeps the confirmed document/revision, the exact
+Since 1.0.1, Workspace Essentials keeps the confirmed document/revision, the exact
 attempted write and the editable model separate. After a rejected write, the
 next saving event or explicit retry reads and validates storage. An observed
 attempt or confirmed base supplies the current CAS revision. A later edit is
@@ -58,9 +58,18 @@ bounded to 120/second for API 2 (60 for unchanged API 1), including publications
 Input coalesces for 500 ms and flushes on blur. Failed delivery retains local text with retry;
 failed storage retains the plugin model with failure feedback. Wait for **Salvo.** before disabling
 or exiting. Pending drafts are activation-local, not crash recovery. View removal keeps the Worker.
+
+API 2 plugins may call `context.reportDraft?.(pending)` for unsaved state held in memory.
+The Worker sends one boolean when that state changes. Workspace Essentials 1.0.2 reports
+an unresolved attempt or a nonempty unsubmitted checklist item. Time Tracker 1.0.1 reports
+a pending Start/Pause operation. Older plugins can omit the signal. In that case the host can
+protect edits, events and storage operations it observes, while private plugin state remains
+unknown. Clearing the signal only clears the plugin's own draft indication.
+
 An API 2 lifecycle failure/timeout retains the last host surface and local input drafts for copying,
-with an explicit failure message and read-only controls. Retry/disable/restart is deliberate and
-can discard these pending drafts; API 1 retains its original failure-clears-publication policy.
+with an explicit failure message and read-only controls. Copy any required text before choosing
+the explicit discard action. After disabling, the plugin can be enabled again with its stored data.
+API 1 clears its publications on failure.
 
 The host calls `navigator.clipboard.writeText` directly from the user's copy click using the current
 draft of the declared text field, including edits still awaiting autosave. No clipboard method enters

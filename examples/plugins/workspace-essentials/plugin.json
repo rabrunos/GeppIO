@@ -3,7 +3,7 @@
   "apiVersion": 2,
   "id": "geppio.workspace-essentials",
   "name": "Workspace Essentials",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "entry": "entry.js",
   "widgets": [
     { "id": "notes", "title": "Anotações", "surface": "declarative" },

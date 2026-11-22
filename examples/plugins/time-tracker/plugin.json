@@ -3,7 +3,7 @@
   "apiVersion": 2,
   "id": "geppio.time-tracker",
   "name": "Time Tracker",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "entry": "entry.js",
   "widgets": [
     { "id": "timer", "title": "Cronômetro", "surface": "declarative" },

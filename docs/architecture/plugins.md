@@ -55,10 +55,12 @@ copies; signed files conflict with external registrations. Unregistering externa
 writes/deletes their files, and retained legacy recovery copies are marked to prevent rediscovery.
 
 Host text fields flush before reload/pause/removal and the runtime waits for bounded event/data
-completion. Unsaved pilot models or an unsubmitted checklist item defer the operation with feedback.
-Runtime failure preserves field text for copying; deliberate Retry or "Recarregar descartando
-rascunhos" may discard activation-local drafts. This is trusted-pilot handling, not a new author
-persistence protocol. Missing widget declarations remain separate recoverable host types, hidden
+completion. A failed write needs a successful storage acknowledgement or a matching reread.
+API 2 pilots also signal activation-local drafts. Either unresolved condition defers management.
+Widget text can be localized independently of these checks.
+Runtime failure preserves field text for copying. The explicit "Descartar rascunhos e desativar"
+action discards the activation. Failed external plugins also offer "Recarregar descartando
+rascunhos". Missing widget declarations remain separate recoverable host types, hidden
 from new placement, without entering the retired demo archive. Their IDs/placements/compositions
 remain available for the declaration to return. Historical widget identities are bounded to 64.
 

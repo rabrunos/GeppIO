@@ -1,7 +1,8 @@
 import { PLUGIN_LIMITS, isRecord, boundedText, parseWidgetView, codeGeneration } from '../../shared/plugins.ts'
 import type { InstalledPlugin, WidgetView } from '../../shared/plugins.ts'
 import { dataRevision, exactKeys, parseDataDocument } from '../../shared/plugin-data.ts'
-import type { PluginDataBridge } from '../../shared/plugin-data.ts'
+import type { DataDocument, DataSnapshot, PluginDataBridge } from '../../shared/plugin-data.ts'
+import type { Json } from '../../../sdk/plugin-v2.d.ts'
 import { parseWidgetViewV2, parseWidgetEvent, SURFACE_LIMITS } from '../../shared/plugin-surface.ts'
 import type { WidgetViewV2, WidgetEvent } from '../../shared/plugin-surface.ts'
 
@@ -11,6 +12,7 @@ export interface RuntimePlugin {
   detail: string
   events: string[]
   widgets: Record<string, WidgetView & Partial<WidgetViewV2>>
+  recoveryRequired?: boolean
 }
 export interface PluginWorker {
   onmessage: ((event: MessageEvent<unknown>) => void) | null
@@ -19,6 +21,7 @@ export interface PluginWorker {
   postMessage(value: unknown): void
   terminate(): void
 }
+interface WriteAttempt { expectedRevision: number; document?: DataDocument; failed: boolean }
 interface Running {
   worker: PluginWorker
   view: RuntimePlugin
@@ -31,7 +34,25 @@ interface Running {
   queuedEvents?: number
   inputStart?: number
   inputCount?: number
-  writeFailed?: boolean
+  write?: WriteAttempt
+  localDraft?: boolean
+}
+function equalValue(left: Json, right: Json): boolean {
+  if (left === right) return true
+  if (!left || !right || typeof left !== 'object' || typeof right !== 'object') return false
+  if (Array.isArray(left)) return Array.isArray(right) && left.length === right.length && left.every((value, i) => equalValue(value, right[i]!))
+  if (Array.isArray(right)) return false
+  const keys = Object.keys(left)
+  return keys.length === Object.keys(right).length && keys.every(key => Object.hasOwn(right, key) && equalValue(left[key]!, right[key]!))
+}
+function matchesAttempt(attempt: WriteAttempt, snapshot: DataSnapshot): boolean {
+  return !!attempt.document && !!snapshot.document && dataRevision(snapshot.revision) && snapshot.revision > attempt.expectedRevision
+    && snapshot.document.schemaVersion === attempt.document.schemaVersion && equalValue(snapshot.document.value, attempt.document.value)
+}
+function recoveryRequired(entry: Running): boolean {
+  if (entry.view.status === 'disabled') return false
+  return !!(entry.localDraft || entry.write?.failed || entry.view.status === 'error' && entry.view.plugin.manifest.apiVersion === 2
+    && (entry.write || Object.keys(entry.view.widgets).length))
 }
 /** Identity is bound to each Worker callback, never accepted from a plugin payload. */
 export class PluginRuntime {
@@ -45,7 +66,7 @@ export class PluginRuntime {
   constructor(createWorker: () => PluginWorker, changed: (views: RuntimePlugin[]) => void, timeout: number = PLUGIN_LIMITS.timeoutMs, data?: PluginDataBridge) { this.createWorker = createWorker; this.changed = changed; this.timeout = timeout; this.data = data }
   private release(entry: Running): void { const token = entry.token; delete entry.token; if (token) void this.data?.end(token).catch(() => undefined) }
   private current(entry: Running): boolean { return !this.closed && this.entries.get(entry.view.plugin.manifest.id) === entry && ['starting', 'active'].includes(entry.view.status) }
-  private emit(): void { if (!this.closed) this.changed([...this.entries.values()].map(entry => ({ ...entry.view, events: [...entry.view.events], widgets: { ...entry.view.widgets } }))) }
+  private emit(): void { if (!this.closed) this.changed([...this.entries.values()].map(entry => ({ ...entry.view, recoveryRequired: recoveryRequired(entry), events: [...entry.view.events], widgets: { ...entry.view.widgets } }))) }
   private event(entry: Running, message: string): void { entry.view.events = [...entry.view.events.slice(-7), message]; entry.view.detail = message }
   private finish(entry: Running): void { if (entry.pending) { clearTimeout(entry.pending.timer); entry.pending.resolve(); delete entry.pending } }
   private isFailed(entry: Running): boolean { return entry.view.status === 'error' }
@@ -67,10 +88,9 @@ export class PluginRuntime {
         this.finish(entry)
       } else if (value.type === 'failed' && boundedText(value.message)) this.fail(entry, 'Falha: ' + value.message)
       else if (value.type === 'status' && boundedText(value.message)) this.event(entry, value.message)
+      else if (value.type === 'draft' && this.current(entry) && entry.view.plugin.manifest.apiVersion === 2 && exactKeys(value, ['type', 'pending']) && typeof value.pending === 'boolean') entry.localDraft = value.pending
       else if (value.type === 'widget' && typeof value.widgetId === 'string' && entry.view.plugin.manifest.widgets.some(widget => widget.id === value.widgetId)) {
         const view = entry.view.plugin.manifest.apiVersion === 2 ? parseWidgetViewV2(value.view) : parseWidgetView(value.view)
-        // Trusted local pilots can reconcile a lost write acknowledgement with a read.
-        if (/(?:^|\n)Salvo\.(?:\n|$)/.test(view.text) && !/pendente|Falha ao salvar/i.test(view.text)) entry.writeFailed = false
         if (entry.view.status !== 'stopping') entry.view.widgets = { ...entry.view.widgets, [value.widgetId]: view }
       } else throw new Error('Mensagem ou contribuição não declarada no manifesto.')
       this.emit()
@@ -80,18 +100,32 @@ export class PluginRuntime {
     if (!this.current(entry) || entry.view.plugin.manifest.apiVersion !== 2 || !entry.token || !this.data || !Number.isSafeInteger(value.id) || (value.id as number) < 1 || !exactKeys(value, value.operation === 'read' ? ['type', 'id', 'operation'] : ['type', 'id', 'operation', 'expectedRevision', 'document'])) throw new Error('Solicitação de dados inválida.')
     const requests = entry.dataRequests ??= new Set<number>(), id = value.id as number
     if (requests.has(id) || requests.size >= 4) throw new Error('Solicitações de dados demais.')
-    let pending
+    let pending, write: WriteAttempt | undefined
+    // Only a read started after this failure can reconcile it. Calls may overlap.
+    const failedAtRead = entry.write?.failed ? entry.write : undefined
     if (value.operation === 'read') pending = this.data.read(entry.token)
     else if (value.operation === 'write' && dataRevision(value.expectedRevision)) {
-      try { pending = this.data.write(entry.token, value.expectedRevision, parseDataDocument(value.document)) }
-      catch (error) { entry.worker.postMessage({ type: 'data-result', id, result: { ok: false, error: error instanceof Error ? error.message : 'Documento inválido.' } }); return }
+      write = { expectedRevision: value.expectedRevision, failed: false }
+      entry.write = write
+      try { write.document = parseDataDocument(value.document); pending = this.data.write(entry.token, write.expectedRevision, write.document) }
+      catch (error) {
+        write.failed = true; this.emit()
+        entry.worker.postMessage({ type: 'data-result', id, result: { ok: false, error: error instanceof Error ? error.message : 'Documento inválido.' } }); return
+      }
     }
     else throw new Error('Operação de dados inválida.')
     requests.add(id)
     void pending.catch(() => ({ ok: false as const, error: 'Armazenamento indisponível. Rascunho preservado.' })).then(result => {
       requests.delete(id)
-      if (this.current(entry)) { if (value.operation === 'write') entry.writeFailed = !result.ok; entry.worker.postMessage({ type: 'data-result', id, result }) }
-    }).catch(() => this.fail(entry, 'Resposta de dados indisponível.'))
+      if (!this.current(entry)) return
+      const wasProtected = recoveryRequired(entry)
+      if (write && entry.write === write) {
+        if (result.ok && matchesAttempt(write, result.value)) delete entry.write
+        else write.failed = true
+      } else if (!write && failedAtRead && entry.write === failedAtRead && result.ok && matchesAttempt(failedAtRead, result.value)) delete entry.write
+      if (wasProtected !== recoveryRequired(entry)) this.emit()
+      entry.worker.postMessage({ type: 'data-result', id, result })
+    }).catch(() => { if (this.current(entry)) this.fail(entry, 'Resposta de dados indisponível.') })
   }
   private request(entry: Running, type: string, data: Record<string, unknown> = {}): Promise<void> {
     if (entry.pending) return Promise.resolve()
@@ -156,18 +190,16 @@ export class PluginRuntime {
     await this.request(entry, 'action', { widgetId, actionId })
   }
   /** Host lifecycle preparation, not an author API or an assertion of hostile-code isolation. */
-  async prepareChange(ids: readonly string[]): Promise<boolean> {
+  async prepareChange(ids: readonly string[], discardDrafts = false): Promise<boolean> {
     for (const id of ids) {
       const entry = this.entries.get(id)
-      if (!entry || entry.view.status === 'disabled') continue
+      if (!entry || entry.view.status === 'disabled' || discardDrafts && entry.view.status === 'error') continue
       const until = Date.now() + this.timeout
       while (entry.pending || entry.queuedEvents || entry.dataRequests?.size) {
         if (Date.now() >= until) return false
         await new Promise(resolve => setTimeout(resolve, 10))
       }
-      if (entry.writeFailed || entry.view.status === 'error' && Object.keys(entry.view.widgets).length > 0 && entry.view.plugin.manifest.apiVersion === 2 || Object.values(entry.view.widgets).some(view => /Falha ao salvar|Salvando|pendente/i.test(view.text))) return false
-      // The pilot's unsubmitted checklist item is intentionally not a saved document yet.
-      if (id === 'geppio.workspace-essentials' && entry.view.widgets.checklist?.fields?.some(field => field.id === 'item' && field.value.length > 0)) return false
+      if (!discardDrafts && recoveryRequired(entry)) return false
     }
     return true
   }

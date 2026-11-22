@@ -2,6 +2,10 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.57] — 2026-11-22
+
+- Protect plugin management using reported local drafts and host-owned write attempts. Reconcile a rejected write against its stored content and retain buffered edits until recovery or explicit discard.
+
 ## [0.1.0-alpha.56] — 2026-11-22
 
 - Distinguish refused document saves from unconfirmed replacements. Preserve the affected draft, undo history and earlier confirmed saves when a multi-document close stops.

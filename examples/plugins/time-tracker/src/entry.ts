@@ -9,6 +9,7 @@ export async function activate(context: PluginContextV2): Promise<PluginInstance
   catch { writable = false; state = 'Falha ao ler histórico. Originais preservados; edição bloqueada.' }
   function publish() {
     if (!active) return
+    context.reportDraft?.(pending !== null)
     const model = pending ?? confirmed, now = Date.now(), days = dailyTotals(model, now)
     const running = model.running ? elapsed(model.running.start, now) : 0
     const total = model.sessions.reduce((sum, item) => sum + elapsed(item.start, item.end), running)

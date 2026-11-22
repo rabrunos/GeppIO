@@ -47,6 +47,8 @@ export const appMessages: Readonly<Record<string, string>> = {
   'Layout inválido ou armazenamento indisponível. Dados preservados. Importe uma cópia válida ou escolha uma prévia em Configurações.': 'Invalid layout or unavailable storage. Data preserved. Import a valid copy or choose a preview in Settings.',
   'Gerenciamento disponível somente no aplicativo desktop.': 'Management is available only in the desktop application.',
   'Não foi possível iniciar o gerenciamento de plugins.': 'Could not start plugin management.',
+  'Há edições pendentes ou falha ao salvar. Conclua a edição ou copie os rascunhos antes de descartá-los.': 'Edits are pending or a save failed. Finish editing or copy your drafts before discarding them.',
+  'Descartar rascunhos e desativar': 'Discard drafts and disable',
   'Falha ao gerenciar plugins. Os dados existentes foram preservados.': 'Plugin management failed. Existing data was preserved.',
   'Edite a composição. Salvar edição confirma um checkpoint; Concluir encerra a sessão.': 'Edit the composition. Save editing confirms a checkpoint; Conclude ends the session.',
   'Gravação cancelada.': 'Write canceled.',

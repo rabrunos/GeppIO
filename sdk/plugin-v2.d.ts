@@ -20,6 +20,8 @@ export type WidgetEvent =
   | { kind: 'action'; controlId: string }
 export interface PluginContextV2 extends Omit<PluginContext, 'publishWidget'> {
   publishWidget(widgetId: string, view: WidgetViewV2): void
+  /** Report unsaved state held by this activation. The host tracks storage acknowledgement separately. */
+  reportDraft?(pending: boolean): void
   readonly data: {
     read(): Promise<DataSnapshot>
     write(expectedRevision: number, document: DataDocument): Promise<DataSnapshot>

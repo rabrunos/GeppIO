@@ -4,6 +4,7 @@ import { PluginRuntime } from '../src/renderer/src/plugin-runtime.ts'
 import type { PluginWorker, RuntimePlugin } from '../src/renderer/src/plugin-runtime.ts'
 import type { InstalledPlugin } from '../src/shared/plugins.ts'
 import type { PluginDataBridge } from '../src/shared/plugin-data.ts'
+import type { DataSnapshot } from '../src/shared/plugin-data.ts'
 
 const plugin: InstalledPlugin = { enabled: true, revision: 'test-revision', manifest: { schemaVersion: 1, apiVersion: 1, id: 'test.plugin', name: 'Test', version: '1.0.0', entry: 'entry.js', widgets: [{ id: 'counter', title: 'Counter', surface: 'declarative' }] } }
 class FakeWorker implements PluginWorker {
@@ -147,21 +148,68 @@ test('external generations replace a Worker once, preserve installation identity
     await runtime.sync([{ ...external, generation: 'code-three' }]); assert.equal(workers.length, 3)
   } finally { runtime.shutdown() }
 })
-test('preparation defers unsaved drafts, permits read-reconciled lost acknowledgement and an activation error without drafts', async () => {
+test('management uses local drafts and host acknowledgements independently of captions', async () => {
   const worker = new FakeWorker()
   const data: PluginDataBridge = { async begin() { return { ok: true, value: 'token' } }, async end() { return { ok: true, value: null } }, async read() { return { ok: true, value: { revision: 1, document: { schemaVersion: 1, value: { text: 'confirmed' } } } } }, async write() { return { ok: false, error: 'lost acknowledgement' } } }
   const runtime = new PluginRuntime(() => worker, () => {}, 100, data)
   try {
     const v2 = { ...plugin, manifest: { ...plugin.manifest, apiVersion: 2 as const } }
     await runtime.sync([v2])
-    worker.message({ type: 'widget', widgetId: 'counter', view: { text: 'Salvando…' } }); assert.equal(await runtime.prepareChange([plugin.manifest.id]), false)
+    worker.message({ type: 'widget', widgetId: 'counter', view: { text: 'Salvando…' } }); assert.equal(await runtime.prepareChange([plugin.manifest.id]), true)
+    worker.message({ type: 'draft', pending: true }); assert.equal(await runtime.prepareChange([plugin.manifest.id]), false)
     worker.message({ type: 'data', id: 1, operation: 'write', expectedRevision: 0, document: { schemaVersion: 1, value: { text: 'confirmed' } } })
     await new Promise(resolve => setTimeout(resolve, 0))
-    worker.message({ type: 'widget', widgetId: 'counter', view: { text: 'Falha ao salvar. Alteração pendente' } }); assert.equal(await runtime.prepareChange([plugin.manifest.id]), false)
+    worker.message({ type: 'draft', pending: false })
+    worker.message({ type: 'widget', widgetId: 'counter', view: { text: 'Salvo.' } }); assert.equal(await runtime.prepareChange([plugin.manifest.id]), false)
     worker.message({ type: 'data', id: 2, operation: 'read' }); await new Promise(resolve => setTimeout(resolve, 0))
-    worker.message({ type: 'widget', widgetId: 'counter', view: { text: 'Pausado\nSalvo.\n\nAguarde Salvo antes de fechar.' } }); assert.equal(await runtime.prepareChange([plugin.manifest.id]), true)
+    worker.message({ type: 'widget', widgetId: 'counter', view: { text: 'Atividade independente' } }); assert.equal(await runtime.prepareChange([plugin.manifest.id]), true)
     worker.message({ type: 'failed', message: 'failed with surface' }); assert.equal(await runtime.prepareChange([plugin.manifest.id]), false)
     await runtime.stop(plugin.manifest.id); await runtime.sync([v2])
     worker.message({ type: 'failed', message: 'activation failed before publishing' }); assert.equal(await runtime.prepareChange([plugin.manifest.id]), true)
+  } finally { runtime.shutdown() }
+})
+
+test('passive API 1 captions do not block management', async () => {
+  const worker = new FakeWorker(), runtime = new PluginRuntime(() => worker, () => {})
+  try {
+    await runtime.sync([plugin])
+    for (const text of ['Atividade independente', 'pendente', 'Pending task', 'Salvando…']) {
+      worker.message({ type: 'widget', widgetId: 'counter', view: { text } })
+      assert.equal(await runtime.prepareChange([plugin.manifest.id]), true)
+    }
+  } finally { runtime.shutdown() }
+})
+
+test('only a current acknowledgement or a later matching read clears an ambiguous write', async () => {
+  const workers: FakeWorker[] = []
+  let resolveRead!: (result: Awaited<ReturnType<PluginDataBridge['read']>>) => void
+  let acknowledged = false, requestId = 0
+  const runtime = new PluginRuntime(() => { const worker = new FakeWorker(); workers.push(worker); return worker }, () => {}, 50, {
+    async begin() { return { ok: true, value: 'channel' } }, async end() { return { ok: true, value: null } },
+    read() { return new Promise(resolve => { resolveRead = resolve }) },
+    async write(_token, revision, document) { return acknowledged ? { ok: true, value: { revision: revision + 1, document } } : { ok: false, error: 'rejected' } }
+  })
+  const active = { ...plugin, manifest: { ...plugin.manifest, apiVersion: 2 as const } }
+  const payload = { schemaVersion: 1 as const, value: { a: 1, b: 2 } }
+  const write = () => workers.at(-1)!.message({ type: 'data', id: ++requestId, operation: 'write', expectedRevision: 1, document: payload })
+  const read = () => workers.at(-1)!.message({ type: 'data', id: ++requestId, operation: 'read' })
+  const match: DataSnapshot = { revision: 2, document: { schemaVersion: 1, value: { b: 2, a: 1 } } }
+  const ready = () => runtime.prepareChange([plugin.manifest.id])
+  try {
+    await runtime.sync([active]); write(); assert.equal(await ready(), false)
+    read()
+    assert.equal(await runtime.prepareChange([plugin.manifest.id], true), false, 'discard waits for in-flight data from a live Worker')
+    resolveRead({ ok: false, error: 'unavailable' })
+    assert.equal(await runtime.prepareChange([plugin.manifest.id], true), true)
+    read(); resolveRead({ ok: false, error: 'unavailable' }); assert.equal(await ready(), false)
+    read(); resolveRead({ ok: true, value: { ...match, document: { schemaVersion: 1, value: 'different' } } }); assert.equal(await ready(), false)
+    read(); resolveRead({ ok: true, value: { ...match, revision: 1 } }); assert.equal(await ready(), false)
+    read(); write(); resolveRead({ ok: true, value: match }); assert.equal(await ready(), false)
+    read(); resolveRead({ ok: true, value: match }); assert.equal(await ready(), true)
+    write(); assert.equal(await ready(), false)
+    read(); const obsolete = resolveRead
+    await runtime.sync([{ ...active, generation: 'next' }]); write()
+    obsolete({ ok: true, value: match }); assert.equal(await ready(), false)
+    acknowledged = true; write(); assert.equal(await ready(), true)
   } finally { runtime.shutdown() }
 })

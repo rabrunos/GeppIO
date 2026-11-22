@@ -166,7 +166,7 @@ try {
     assert.equal(await page.locator('.widget-frame[data-adoption-mounted="retained"]').count(), 4)
     assert.deepEqual(page.workers(), workers, 'Byte-identical adoption does not replace active Workers')
     const preview = await app!.evaluate(() => (globalThis as { packagePreview?: { owner: number; detail: string; message: string } }).packagePreview)
-    assert.match(preview!.detail, /Adotar instalação existente/); assert.match(preview!.message, /Workspace Essentials.*1\.0\.1/)
+    assert.match(preview!.detail, /Adotar instalação existente/); assert.match(preview!.message, /Workspace Essentials.*1\.0\.2/)
     assert.equal(preview!.owner, await app!.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.id))
     await close(); await launch(root)
     assert.deepEqual((await inventory()).plugins[0], adopted)

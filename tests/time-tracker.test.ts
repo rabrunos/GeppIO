@@ -24,9 +24,9 @@ test('daily totals split intervals at local midnight, including a running interv
   }
 })
 for (const lostAcknowledgement of [false, true]) test(`failed write/retry preserves confirmed history and creates exactly one interval (lost acknowledgement: ${lostAcknowledgement})`, async () => {
-  let saved: DataSnapshot = { revision: 0, document: null }, fail = false
+  let saved: DataSnapshot = { revision: 0, document: null }, fail = false, pending = false
   const views = new Map<string, WidgetViewV2>()
-  const context: PluginContextV2 = { pluginId: 'geppio.time-tracker', reportStatus() {}, publishWidget(id, view) { views.set(id, view) }, data: {
+  const context: PluginContextV2 = { pluginId: 'geppio.time-tracker', reportStatus() {}, reportDraft(value) { pending = value }, publishWidget(id, view) { views.set(id, view) }, data: {
     async read() { return structuredClone(saved) },
     async write(revision, document) { assert.equal(revision, saved.revision); if (fail && !lostAcknowledgement) throw new Error('unavailable'); saved = { revision: revision + 1, document: structuredClone(document) }; if (fail) throw new Error('lost acknowledgement'); return structuredClone(saved) }
   } }
@@ -36,9 +36,11 @@ for (const lostAcknowledgement of [false, true]) test(`failed write/retry preser
     const running = structuredClone(saved), started = parseTracker(saved.document!.value).running!
     fail = true; await instance.onEvent!('timer', { kind: 'action', controlId: 'pause' })
     assert.match(views.get('timer')!.text, /Falha ao salvar/)
+    assert.equal(pending, true)
     if (!lostAcknowledgement) assert.deepEqual(saved, running)
     fail = false; await instance.onEvent!('timer', { kind: 'action', controlId: 'retry' })
     const paused = parseTracker(saved.document!.value)
+    assert.equal(pending, false)
     assert.equal(paused.running, null); assert.equal(paused.sessions.length, 1); assert.equal(paused.sessions[0]!.id, started.id)
     assert.equal(saved.revision, 2)
     await instance.onEvent!('timer', { kind: 'action', controlId: 'retry' }); assert.equal(saved.revision, 2)
