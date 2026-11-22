@@ -127,8 +127,19 @@ for (const enabled of [false, true]) test(`alpha.34 legacy exact linking preserv
     const { privateKey } = generateKeyPairSync('ed25519'), roots = [{ ...publicIdentity(privateKey), pluginId: id, publisher: 'test', revoked: false }] as const
     const signed = join(f.root, 'signed.gpp'); await writeFile(signed, signPluginPackage(await inspectPackage(f.source), privateKey))
     await assert.rejects(new PluginStore(f.managed, roots).installSigned(signed, async () => true, () => true), /conflitante/)
-    await restarted.remove(id); assert.deepEqual((await new PluginStore(f.managed).list()).plugins, [])
-    assert.ok(await readFile(entry)); assert.ok(await readFile(join(f.managed, 'packages', id, 'entry.js')))
+    const beforeRemoval = await readFile(join(f.managed, 'state.json'))
+    const sourceDigest = packageDigest(await inspectPackage(f.source))
+    await assert.rejects(restarted.remove(id, () => false))
+    assert.deepEqual(await readFile(join(f.managed, 'state.json')), beforeRemoval)
+    assert.equal(packageDigest(await inspectPackage(f.source)), sourceDigest)
+    assert.deepEqual(await restarted.dataOperation(1, resumed, 'read'), saved)
+    await restarted.remove(id)
+    const fresh = new PluginStore(f.managed), retained = await readFile(join(f.managed, 'state.json'))
+    assert.deepEqual((await fresh.list()).plugins, [])
+    await assert.rejects(fresh.remove(id))
+    assert.deepEqual(await readFile(join(f.managed, 'state.json')), retained)
+    assert.equal(packageDigest(await inspectPackage(f.source)), sourceDigest)
+    assert.equal(packageDigest(await inspectPackage(join(f.managed, 'packages', id))), sourceDigest)
   } finally { await f.clean() }
 })
 test('API 1 external folders retain legacy authority, with no API 2 channel', async () => {

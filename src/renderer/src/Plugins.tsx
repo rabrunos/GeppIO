@@ -31,6 +31,13 @@ export function usePlugins() {
   }, [])
   async function manage(operation: () => Promise<PluginResult<PluginInventory | null>>, prepare: string[] = [], options: { retryId?: string; discardDrafts?: boolean } = {}) {
     if (locked.current) return
+    const host = runtime.current
+    async function refreshInventory() {
+      try {
+        const actual = await window.geppio?.plugins.list()
+        if (actual?.ok && host && runtime.current === host) { setInventory(actual.value); await host.sync(actual.value.plugins) }
+      } catch { /* Keep the current presentation and the unresolved management feedback. */ }
+    }
     locked.current = true; setBusy(true); setMessage('')
     try {
       if (prepare.length) {
@@ -39,15 +46,19 @@ export function usePlugins() {
         if (!ready || !await runtime.current?.prepareChange(prepare, options.discardDrafts)) { setMessage('Há edições pendentes ou falha ao salvar. Conclua a edição ou copie os rascunhos antes de descartá-los.'); return }
       }
       const result = await operation()
+      if (runtime.current !== host) return
       if (!result.ok) {
         setMessage(result.error)
-        const refreshed = await window.geppio?.plugins.list()
-        const actual = refreshed?.ok ? refreshed.value : inventory
-        setInventory(actual); await runtime.current?.sync(actual.plugins)
+        await refreshInventory()
       }
       else if (result.value) { if (options.retryId) await runtime.current?.stop(options.retryId); setInventory(result.value); await runtime.current?.sync(result.value.plugins) }
-    } catch { setMessage('Falha ao gerenciar plugins. Os dados existentes foram preservados.') }
-    finally { pausedInputs.current = []; locked.current = false; setBusy(false) }
+    } catch {
+      if (runtime.current === host) {
+        setMessage('Resultado do gerenciamento não confirmado. Confira a lista de plugins antes de tentar novamente.')
+        await refreshInventory()
+      }
+    }
+    finally { if (runtime.current === host) { pausedInputs.current = []; locked.current = false; setBusy(false) } }
   }
   const bridge = window.geppio?.plugins
   return { inventory, views, message, busy, available: Boolean(bridge),

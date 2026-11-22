@@ -2,6 +2,10 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.58] — 2026-11-22
+
+- Revalidate the window owner before publishing plugin management changes, restore managed packages after a refused removal and reconcile an uncertain preferences write before reporting its outcome.
+
 ## [0.1.0-alpha.57] — 2026-11-22
 
 - Protect plugin management using reported local drafts and host-owned write attempts. Reconcile a rejected write against its stored content and retain buffered edits until recovery or explicit discard.

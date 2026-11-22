@@ -128,8 +128,11 @@ app.whenReady().then(async () => {
           if (!currentOwner() || selected.canceled || selected.filePaths.length !== 1) return { ok: true, value: null }
           return { ok: true, value: operation === 'link' ? await plugins.linkExternal(args[0] as string, selected.filePaths[0]!, currentOwner) : await plugins.loadExternal(selected.filePaths[0]!, currentOwner) }
         }
-        if (operation === 'set-enabled' && args.length === 2 && pluginId(args[0]) && typeof args[1] === 'boolean') return { ok: true, value: await plugins.setEnabled(args[0], args[1]) }
-        if (operation === 'remove' && args.length === 1 && pluginId(args[0])) return { ok: true, value: await plugins.remove(args[0]) }
+        if ((operation === 'set-enabled' && args.length === 2 && pluginId(args[0]) && typeof args[1] === 'boolean') ||
+          (operation === 'remove' && args.length === 1 && pluginId(args[0]))) {
+          const value = operation === 'remove' ? await plugins.remove(args[0] as string, currentOwner) : await plugins.setEnabled(args[0] as string, args[1] as boolean, currentOwner)
+          return currentOwner() ? { ok: true, value } : { ok: false, error: 'Autorização expirada. Consulte o estado atual dos plugins.' }
+        }
         return { ok: false, error: 'Operação de plugins inválida.' }
       } catch (error) {
         // OS errors may contain private source paths; only deliberate validation errors reach UI.

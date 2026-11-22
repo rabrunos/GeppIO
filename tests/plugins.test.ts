@@ -1,16 +1,16 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, writeFile, readFile, rm, symlink } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, readFile, readdir, rename, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PluginStore, inspectPackage } from '../src/main/plugins.ts'
 import { parseManifest, parseWidgetView, PLUGIN_LIMITS } from '../src/shared/plugins.ts'
 
 const manifest = { schemaVersion: 1, apiVersion: 1, id: 'test.plugin', name: 'Teste local', version: '1.0.0', entry: 'entry.js', widgets: [] }
-async function fixture() {
+async function fixture(apiVersion = 1) {
   const root = await mkdtemp(join(tmpdir(), 'geppio-plugin-test-'))
   const source = join(root, 'source'); await mkdir(source)
-  await writeFile(join(source, 'plugin.json'), JSON.stringify(manifest)); await writeFile(join(source, 'entry.js'), 'export function activate() { return { dispose() {} } }')
+  await writeFile(join(source, 'plugin.json'), JSON.stringify({ ...manifest, apiVersion })); await writeFile(join(source, 'entry.js'), 'export function activate() { return { dispose() {} } }')
   return { root, source, installed: join(root, 'managed'), clean: () => rm(root, { recursive: true, force: true }) }
 }
 test('versioned manifests reject paths, IDs, schemas, duplicate widgets and unknown capabilities', () => {
@@ -121,5 +121,161 @@ test('failed preference mutations preserve enable state and restore a removal; r
     await assert.rejects(store.install(f.source), /Diretório/)
     await assert.rejects(store.remove(manifest.id), /Diretório/)
     assert.equal(await readFile(join(outside, 'keep.txt'), 'utf8'), 'preserve')
+  } finally { await f.clean() }
+})
+
+async function managementFixture() {
+  const f = await fixture(2)
+  const faults: {
+    beforeRename?(from: string, to: string): void | Promise<void>
+    afterRename?(from: string, to: string): void | Promise<void>
+    beforeRemove?(path: string): void
+  } = {}
+  const store = new PluginStore(f.installed, undefined, {
+    async rename(from, to) { await faults.beforeRename?.(from, to); await rename(from, to); await faults.afterRename?.(from, to) },
+    async remove(path, options) { faults.beforeRemove?.(path); await rm(path, options) }
+  })
+  try {
+    const id = manifest.id
+    await store.install(f.source)
+    const [registration] = (await store.setEnabled(id, true)).plugins
+    assert.ok(registration)
+    // Management and the data consumer have independent owner identities.
+    const token = await store.beginData(7, id, registration.revision)
+    const saved = await store.dataOperation(7, token, 'write', 0, { schemaVersion: 1, value: 'retain' })
+    const statePath = join(f.installed, 'state.json'), pkg = join(f.installed, 'packages', id)
+    const dataPath = join(f.root, 'plugin-data', registration.revision + '.json')
+    return { ...f, id, store, faults, token, saved, registration, statePath, pkg, dataPath,
+      prefs: await readFile(statePath), data: await readFile(dataPath), entry: await readFile(join(pkg, 'entry.js')),
+      asset: `geppio://app/plugins/${id}/${registration.revision}/entry.js` }
+  } catch (error) { await f.clean(); throw error }
+}
+
+test('owner expiry in the preference queue prevents both enable and removal from reaching publication', async () => {
+  const f = await managementFixture()
+  let release!: () => void
+  const proceed = new Promise<void>(resolve => { release = resolve })
+  try {
+    let entered!: () => void, renames = 0
+    const atPublication = new Promise<void>(resolve => { entered = resolve })
+    f.faults.beforeRename = async () => { renames++; entered(); await proceed }
+    const earlier = f.store.setEnabled(f.id, false)
+    await atPublication
+    const owner = f.store.ownerGuard(12)
+    const pending = Promise.allSettled([f.store.setEnabled(f.id, true, owner), f.store.remove(f.id, owner)])
+    f.store.revokeOwner(12); release(); await earlier
+    assert.deepEqual((await pending).map(result => result.status), ['rejected', 'rejected'])
+    assert.equal(renames, 1)
+    assert.deepEqual(await readFile(f.dataPath), f.data)
+    assert.deepEqual((await new PluginStore(f.installed).list()).plugins, [{ ...f.registration, enabled: false }])
+  } finally { release(); await f.clean() }
+})
+
+for (const failure of ['expiry', 'preference refusal', 'lost move result'] as const) test(`removal restores the original managed package after ${failure} before publication`, async () => {
+  const f = await managementFixture()
+  try {
+    let tombstone: string | undefined, publicationAttempts = 0
+    const owner = f.store.ownerGuard(12)
+    f.faults.afterRename = (from, to) => {
+      if (from !== f.pkg) return
+      tombstone = to
+      if (failure === 'expiry') f.store.revokeOwner(12)
+      if (failure === 'lost move result') throw new Error('Move completed but reply unavailable')
+    }
+    f.faults.beforeRename = (_from, to) => { if (to === f.statePath) { publicationAttempts++; throw new Error('Preference rename refused') } }
+    await assert.rejects(f.store.remove(f.id, owner))
+    assert.ok(tombstone)
+    assert.equal(publicationAttempts, failure === 'preference refusal' ? 1 : 0)
+    await assert.rejects(readdir(tombstone), { code: 'ENOENT' })
+    assert.deepEqual(await readFile(join(f.pkg, 'entry.js')), f.entry)
+    assert.deepEqual(await readFile(f.statePath), f.prefs)
+    assert.deepEqual(await readFile(f.dataPath), f.data)
+    assert.deepEqual(await f.store.dataOperation(7, f.token, 'read'), f.saved)
+    assert.deepEqual((await new PluginStore(f.installed).list()).plugins, [f.registration])
+  } finally { await f.clean() }
+})
+
+for (const operation of ['disable', 'remove'] as const) test(`committed ${operation} survives owner expiry and a lost rename result`, async () => {
+  const f = await managementFixture()
+  try {
+    let committed = 0
+    const owner = f.store.ownerGuard(12)
+    f.faults.afterRename = (_from, to) => {
+      if (to === f.statePath) { committed++; f.store.revokeOwner(12); throw new Error('Result unavailable after real rename') }
+    }
+    // Delivery to the old caller is irrelevant to the state visible to a fresh owner.
+    await Promise.allSettled([operation === 'disable' ? f.store.setEnabled(f.id, false, owner) : f.store.remove(f.id, owner)])
+    assert.equal(committed, 1)
+    assert.equal(f.store.asset(f.asset), null)
+    await assert.rejects(f.store.dataOperation(7, f.token, 'read'))
+    const expected = operation === 'disable' ? [{ ...f.registration, enabled: false }] : []
+    assert.deepEqual((await f.store.list()).plugins, expected)
+    assert.deepEqual((await new PluginStore(f.installed).list()).plugins, expected)
+    assert.deepEqual(await readFile(f.dataPath), f.data)
+    if (operation === 'remove') assert.deepEqual(await readdir(join(f.installed, 'packages')), [])
+  } finally { await f.clean() }
+})
+
+for (const failure of ['unknown publication', 'rollback', 'cleanup'] as const) test(`uncertain removal after ${failure} retains recovery bytes and reports a path-free error`, async () => {
+  const f = await managementFixture()
+  try {
+    let tombstone = ''
+    f.faults.afterRename = (from, to) => { if (from === f.pkg) tombstone = to }
+    f.faults.beforeRename = async (from, to) => {
+      if (to === f.statePath && failure === 'unknown publication') {
+        // A third-party state cannot prove which value our native call published.
+        await writeFile(f.statePath, JSON.stringify({ ...JSON.parse(f.prefs.toString()), developerMode: true }))
+        throw new Error('Uncertain: ' + f.statePath)
+      }
+      if (failure === 'rollback' && (to === f.statePath || from === tombstone)) throw new Error('Refused: ' + to)
+    }
+    f.faults.beforeRemove = path => { if (failure === 'cleanup' && path === tombstone) throw new Error('Refused: ' + path) }
+    await assert.rejects(f.store.remove(f.id), (error: Error) => {
+      assert.ok(!error.message.includes(f.root))
+      assert.match(error.message, /recuper|incert|confirm|limpeza/i)
+      return true
+    })
+    assert.ok(tombstone)
+    assert.deepEqual(await readFile(join(tombstone, 'entry.js')), f.entry)
+    assert.deepEqual(await readFile(f.dataPath), f.data)
+    assert.equal(f.store.asset(f.asset), null)
+    await assert.rejects(f.store.dataOperation(7, f.token, 'read'))
+    const actual = JSON.parse(await readFile(f.statePath, 'utf8'))
+    if (failure === 'cleanup') {
+      assert.equal(actual.plugins[f.id], undefined)
+      assert.deepEqual((await new PluginStore(f.installed).list()).plugins, [])
+    } else {
+      assert.equal(actual.plugins[f.id].revision, f.registration.revision)
+      if (failure === 'unknown publication') assert.equal(actual.developerMode, true)
+      else assert.deepEqual(await readFile(f.statePath), f.prefs)
+    }
+  } finally { await f.clean() }
+})
+
+test('a divergent preferences file immediately revokes other installations whose authority may also have changed', async () => {
+  const f = await managementFixture()
+  try {
+    const otherId = 'test.secondary'
+    await writeFile(join(f.source, 'plugin.json'), JSON.stringify({ ...manifest, id: otherId, apiVersion: 2 }))
+    await f.store.install(f.source)
+    const other = (await f.store.setEnabled(otherId, true)).plugins.find(item => item.manifest.id === otherId)!
+    const asset = `geppio://app/plugins/${otherId}/${other.revision}/entry.js`
+    const token = await f.store.beginData(8, otherId, other.revision)
+    assert.ok(f.store.asset(asset))
+    assert.equal((await f.store.dataOperation(8, token, 'read')).revision, 0)
+    f.faults.beforeRename = async (_from, to) => {
+      if (to !== f.statePath) return
+      const third = JSON.parse(await readFile(f.statePath, 'utf8'))
+      third.plugins[otherId].enabled = false
+      await writeFile(f.statePath, JSON.stringify(third))
+      throw new Error('Unconfirmed preference replacement')
+    }
+    await assert.rejects(f.store.setEnabled(f.id, false))
+    assert.equal(f.store.asset(asset), null)
+    await assert.rejects(f.store.dataOperation(8, token, 'read'))
+    const fresh = await f.store.list()
+    assert.equal(fresh.plugins.find(item => item.manifest.id === otherId)?.enabled, false)
+    assert.deepEqual(fresh.plugins.find(item => item.manifest.id === f.id), f.registration)
+    assert.deepEqual((await new PluginStore(f.installed).list()).plugins, fresh.plugins)
   } finally { await f.clean() }
 })

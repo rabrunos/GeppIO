@@ -1,7 +1,7 @@
 import test, { before } from 'node:test'
 import assert from 'node:assert/strict'
 import { createPublicKey, createHash, generateKeyPairSync, sign } from 'node:crypto'
-import { mkdtemp, mkdir, writeFile, readFile, rm, readdir, symlink, access } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, readFile, rename, rm, readdir, symlink, access } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -139,6 +139,32 @@ for (const enabled of [false, true]) test(`alpha.33 folder adoption preserves UU
     assert.notEqual(fresh.revision, old.revision)
     await restarted.setEnabled(id, true); const freshToken = await restarted.beginData(12, id, fresh.revision)
     assert.equal((await restarted.dataOperation(12, freshToken, 'read')).document, null)
+  } finally { await f.clean() }
+})
+
+test('expired managed-folder removal after signed adoption retains both code copies, registration and data', async () => {
+  const f = await fixture()
+  try {
+    const [legacy] = (await f.store.install(source)).plugins
+    assert.ok(legacy)
+    await f.store.setEnabled(id, true)
+    const adopted = (await f.store.installSigned(f.path, yes, current))!.plugins[0]!
+    const managedPackage = join(f.managed, 'packages', id), signed = join(f.managed, 'signed')
+    const names = await readdir(signed); assert.equal(names.length, 1)
+    const store = new PluginStore(f.managed, trust, {
+      async rename(from, to) {
+        await rename(from, to)
+        if (from === managedPackage) store.revokeOwner(17)
+      }
+    })
+    assert.deepEqual((await store.list()).plugins, [adopted])
+    const token = await store.beginData(11, id, legacy.revision)
+    const saved = await store.dataOperation(11, token, 'write', 0, { schemaVersion: 1, value: 'retained signed data' })
+    await assert.rejects(store.remove(id, store.ownerGuard(17)))
+    assert.deepEqual(await readFile(join(signed, names[0]!)), f.bytes)
+    assert.deepEqual(await readFile(join(managedPackage, 'entry.js')), Buffer.from(f.pkg.files.get('entry.js')!))
+    assert.deepEqual((await new PluginStore(f.managed, trust).list()).plugins, [adopted])
+    assert.deepEqual(await store.dataOperation(11, token, 'read'), saved)
   } finally { await f.clean() }
 })
 

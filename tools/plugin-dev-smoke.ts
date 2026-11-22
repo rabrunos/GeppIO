@@ -119,7 +119,23 @@ try {
   // Same-value requests must not revoke a live runtime channel.
   assert.ok((await page.evaluate(() => window.geppio!.plugins.setDeveloperMode(true))).ok)
   await closeSettings(); await scratch().fill('Confirmed after resume'); await savedText('Confirmed after resume')
+  // In this disposable process, lose the native result after publishing Disable.
+  assert.ok(app)
+  await app.evaluate(() => {
+    const fs = process.getBuiltinModule('fs/promises') as typeof import('node:fs/promises'), original = fs.rename
+    fs.rename = async (from, to) => {
+      await original(from, to)
+      if (String(to).endsWith('state.json')) {
+        fs.rename = original
+        ;(globalThis as { lostDisableResult?: boolean }).lostDisableResult = true
+        throw new Error('Controlled lost preference result')
+      }
+    }
+  })
   await settings(); await click('Desativar'); await state('disabled')
+  assert.equal(await app.evaluate(() => (globalThis as { lostDisableResult?: boolean }).lostDisableResult), true)
+  assert.equal((await installed()).desiredEnabled, false); assert.equal(page.workers().length, 0)
+  evidence.managementPublication = 'Published Disable with lost native rename response; fresh inventory disabled, Worker stopped, confirmed document retained'
   await writeFile(sourceEntry, code + '\n// disabled rebuild\n'); await click('Recarregar'); await state('disabled')
   assert.equal((await installed()).desiredEnabled, false); await click('Ativar'); await state('active')
   // Accepted executable failure differs from rejected validation; fixing it remains possible.

@@ -16,6 +16,14 @@ interface SignedPointer { snapshot: string; sha256: string }
 interface ExternalSource { path: string; sha256: string; generation: string; manifest: PluginManifest; widgets: PluginManifest['widgets'] }
 interface Preference { enabled: boolean; revision: string; signed?: SignedPointer; external?: ExternalSource }
 interface State { schemaVersion: 1; developerMode?: boolean; retained?: string[]; plugins: Record<string, Preference> }
+interface ManagementIO {
+  rename(from: string, to: string): Promise<void>
+  remove(path: string, options: { recursive?: boolean; force: boolean }): Promise<void>
+}
+class UnconfirmedManagement extends Error {}
+function requireOwner(current: () => boolean) {
+  if (!current()) throw new Error('Autorização de gerenciamento expirada. Consulte o estado atual dos plugins.')
+}
 const STATE_BYTES = 1024 * 1024
 const uuid = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9-]{36}$/.test(value)
 const externalPath = (value: unknown): value is string => typeof value === 'string' && isAbsolute(value) && value.length <= 4096 && !Array.from(value).some(character => character.charCodeAt(0) < 32)
@@ -78,7 +86,11 @@ export class PluginStore {
   private dataPending = 0
   private generations = new Map<number, number>()
   private readonly trust: readonly Readonly<PluginTrustEntry>[]
-  constructor(root: string, trust: readonly Readonly<PluginTrustEntry>[] = PLUGIN_TRUST) { this.root = resolve(root); this.trust = trust; this.data = new PluginDataStore(join(this.root, '..', 'plugin-data')) }
+  private readonly management: ManagementIO
+  constructor(root: string, trust: readonly Readonly<PluginTrustEntry>[] = PLUGIN_TRUST, io: Partial<ManagementIO> = {}) {
+    this.root = resolve(root); this.trust = trust; this.data = new PluginDataStore(join(this.root, '..', 'plugin-data'))
+    this.management = { rename: io.rename ?? ((from, to) => rename(from, to)), remove: io.remove ?? ((path, options) => rm(path, options)) }
+  }
   revokeOwner(owner: number): void { this.generations.set(owner, (this.generations.get(owner) ?? 0) + 1); for (const [token, channel] of this.channels) if (channel.owner === owner) this.channels.delete(token) }
   ownerGuard(owner: number): () => boolean { const generation = this.generations.get(owner) ?? 0; return () => (this.generations.get(owner) ?? 0) === generation }
   endData(owner: number, token: unknown): void {
@@ -146,14 +158,15 @@ export class PluginStore {
       this.state = value as unknown as State
     } catch (error) {
       if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw new Error('Estado de plugins ilegível. Os dados foram preservados; gerenciamento bloqueado.', { cause: error })
+      this.state = { schemaVersion: 1, plugins: {} }
     }
     this.loaded = true
   }
-  private async save(state: State, beforeCommit: () => void = () => undefined): Promise<void> {
+  private async save(state: State, beforeCommit: () => void = () => undefined, replace: ManagementIO['rename'] = rename): Promise<void> {
     const temporary = join(this.root, 'state-' + randomUUID() + '.tmp')
     const text = JSON.stringify(state)
     if (Buffer.byteLength(text) > STATE_BYTES) throw new Error('Estado de plugins excede 1 MiB. Dados preservados.')
-    try { await writeFile(temporary, text, { flag: 'wx' }); beforeCommit(); await rename(temporary, join(this.root, 'state.json')); this.state = state }
+    try { await writeFile(temporary, text, { flag: 'wx' }); beforeCommit(); await replace(temporary, join(this.root, 'state.json')); this.state = state }
     finally { await rm(temporary, { force: true }).catch(() => undefined) }
   }
   private serial<T>(operation: () => Promise<T>): Promise<T> {
@@ -349,47 +362,94 @@ export class PluginStore {
       return this.inventory()
     })
   }
-  setEnabled(id: string, enabled: boolean): Promise<PluginInventory> {
+  private forgetCode(id: string): void {
+    this.revokePlugin(id); this.packages.delete(id); this.externalSnapshots.delete(id)
+  }
+  private async publishManagement(next: State, expected: string | null, current: () => boolean): Promise<void> {
+    if (await this.stateBytes() !== expected) throw new Error('Preferências alteradas. Confira o estado dos plugins.')
+    requireOwner(current)
+    const desired = JSON.stringify(next)
+    if (desired === JSON.stringify(this.state)) return
+    await this.save(next, () => requireOwner(current), async (from, to) => {
+      try { await this.management.rename(from, to) } catch {
+        const observed = await this.stateBytes().catch(() => undefined)
+        if (observed === desired) return
+        if (observed === expected) throw new Error('A alteração das preferências foi recusada.')
+        // state.json contains every registration and Developer Mode; a third state
+        // invalidates the evidence behind all cached grants until it is reloaded.
+        this.loaded = false; this.channels.clear(); this.packages.clear(); this.externalSnapshots.clear()
+        throw new UnconfirmedManagement('Resultado das preferências não confirmado. Confira a instalação e os arquivos de recuperação.')
+      }
+    })
+  }
+  setEnabled(id: string, enabled: boolean, current: () => boolean = () => true): Promise<PluginInventory> {
     return this.serial(async () => {
-      await this.load()
+      requireOwner(current); await this.load(); requireOwner(current)
       if (!pluginId(id) || typeof enabled !== 'boolean' || !this.state.plugins[id]) throw new Error('Plugin ou operação inválida.')
+      const expected = await this.expectedState()
       const external = this.state.plugins[id]!.external
       if (external && enabled) {
+        requireOwner(current)
         this.requireDeveloper()
         const source = await inspectPackage(external.path)
+        requireOwner(current)
         if (source.manifest.id !== id || packageDigest(source) !== external.sha256) throw new Error('Fonte mudou. Use Recarregar para aceitar novas versões; dados preservados.')
       }
       if (enabled) { const inventory = await this.inventory(); if (!inventory.plugins.some(item => item.manifest.id === id)) throw new Error('Pacote inválido; não pode ser ativado.') }
-      await this.save({ ...this.state, plugins: { ...this.state.plugins, [id]: { ...this.state.plugins[id], enabled } } })
-      if (!enabled) for (const [token, channel] of this.channels) if (channel.id === id) this.channels.delete(token)
+      await this.publishManagement({ ...this.state, plugins: { ...this.state.plugins, [id]: { ...this.state.plugins[id], enabled } } }, expected, current)
+      if (!enabled) this.revokePlugin(id)
       return this.inventory()
     })
   }
-  remove(id: string): Promise<PluginInventory> {
+  remove(id: string, current: () => boolean = () => true): Promise<PluginInventory> {
     return this.serial(async () => {
-      await this.load()
+      requireOwner(current); await this.load(); requireOwner(current)
       if (!pluginId(id)) throw new Error('ID de plugin inválido.')
+      if (!this.state.plugins[id] && this.state.retained?.includes(id)) throw new Error('Cópia de recuperação preservada. Não há registro ativo para remover.')
+      const expected = await this.expectedState()
+      const plugins = { ...this.state.plugins }; delete plugins[id]
       const signed = this.state.plugins[id]?.signed
       if (this.state.plugins[id]?.external) {
         // Registration removal never writes, renames or deletes an external source or its recovery copy.
-        const plugins = { ...this.state.plugins }; delete plugins[id]
         const hasRecovery = (await readdir(join(this.root, 'packages'))).includes(id)
         const retained = [...new Set([...(this.state.retained ?? []), ...(hasRecovery ? [id] : [])])]
-        await this.save({ ...this.state, plugins, ...(retained.length ? { retained } : {}) })
-        this.revokePlugin(id); this.packages.delete(id); this.externalSnapshots.delete(id)
+        await this.publishManagement({ ...this.state, plugins, ...(retained.length ? { retained } : {}) }, expected, current)
+        this.forgetCode(id)
         return this.inventory()
       }
       const destination = join(this.root, 'packages', id), tombstone = join(this.root, 'remove-' + randomUUID())
       let moved = false
-      try { await rename(destination, tombstone); moved = true }
-      catch (error) { if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw new Error('Não foi possível remover o pacote.', { cause: error }) }
-      const plugins = { ...this.state.plugins }; delete plugins[id]
-      try { await this.save({ ...this.state, plugins }) }
-      catch (error) { if (moved) await rename(tombstone, destination); throw error }
-      this.packages.delete(id)
-      for (const [token, channel] of this.channels) if (channel.id === id) this.channels.delete(token)
-      if (moved) await rm(tombstone, { recursive: true, force: true }).catch(() => undefined)
-      if (signed) await rm(join(this.root, 'signed', signed.snapshot + '.gpp'), { force: true }).catch(() => undefined)
+      requireOwner(current)
+      try {
+        try { await this.management.rename(destination, tombstone); moved = true }
+        catch (error) {
+          // A lost response may follow a completed move. Only our unique recovery name is inspected.
+          moved = await lstat(tombstone).then(() => true, e => {
+            if (e.code === 'ENOENT') return false
+            throw new UnconfirmedManagement('Movimentação do pacote não confirmada. Confira os arquivos de recuperação.')
+          })
+          if (moved || !(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw new Error('Não foi possível concluir a movimentação do pacote.', { cause: error })
+        }
+        await this.publishManagement({ ...this.state, plugins }, expected, current)
+      } catch (error) {
+        if (error instanceof UnconfirmedManagement) { this.forgetCode(id); throw error }
+        if (moved) {
+          try {
+            const absent = await lstat(destination).then(() => false, e => e.code === 'ENOENT')
+            if (!absent) throw new Error('Destino da restauração indisponível.', { cause: error })
+            await this.management.rename(tombstone, destination)
+          } catch {
+            this.forgetCode(id)
+            throw new UnconfirmedManagement('Não foi possível confirmar a restauração do pacote. Confira os arquivos de recuperação antes de continuar.')
+          }
+        }
+        throw error
+      }
+      this.forgetCode(id)
+      try {
+        if (moved) await this.management.remove(tombstone, { recursive: true, force: true })
+        if (signed) await this.management.remove(join(this.root, 'signed', signed.snapshot + '.gpp'), { force: true })
+      } catch { throw new Error('O registro foi removido. A limpeza dos arquivos do pacote não foi confirmada.') }
       return this.inventory()
     })
   }

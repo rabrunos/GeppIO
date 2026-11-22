@@ -129,10 +129,12 @@ in-memory snapshots are not live disk monitoring. Close the app and back up the 
 or owner profile before manual recovery; restore the known-good signed artifact for its exact
 referenced UUID under a currently authorized key. Do not remove `signed` to bypass verification.
 
-Removal commits preference removal before best-effort cleanup of signed/legacy code. Confirmed
-data retains its original UUID for manual recovery; a reinstall receives a new UUID and cannot
-read it. Cleanup failure or crash can leave orphan code files, which are never discovered as
-installations. Worker disposal and installation-bound API 2 data channels retain existing rules.
+When removing a signed installation with a retained legacy folder, Main temporarily moves that
+folder aside and keeps the signed snapshot through preference publication. A prepublication
+refusal restores the moved folder. Once the removal is committed, Main revokes access and cleans
+up the signed snapshot and any moved folder. A cleanup error leaves the registration removed,
+reports incomplete verification and may leave recovery files. Confirmed data retains its original installation UUID.
+A reinstall receives a new UUID. See the [management boundary](plugins.md#enable-disable-and-removal-alpha58).
 
 ## Evidence and manual Windows walkthrough
 

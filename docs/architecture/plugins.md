@@ -68,6 +68,21 @@ State schema remains 1, with optional Developer Mode/external/retained fields; a
 remain readable. State is bounded to 1 MiB to hold at most 32 bounded manifests/history records.
 A state rename is the commit boundary, not a power-loss/fsync durability guarantee.
 
+### Enable, disable and removal (alpha.58)
+
+Main binds each request to the calling window, frame and document generation. The store checks
+that owner after waiting for its serial queue, before moving a managed folder aside for removal,
+and immediately before submitting the preference rename. External enablement still verifies the
+accepted source digest. Unregistering an external folder only changes GeppIO's registration.
+
+On expiry or failure before preference publication, Main attempts to restore any managed folder
+moved aside. If the preference rename reports an error, Main rereads the file and compares it
+with the prior and intended bytes. Confirmed publication applies revocation and cache changes
+even if the caller has gone away. An unknown preference outcome invalidates cached code and
+data channels until fresh inspection. An unconfirmed restoration preserves available recovery
+material. The renderer can refresh inventory after a missing reply without repeating a mutation.
+An error cleaning up after committed removal is reported separately from the registration change.
+
 ## Signed first-party file pilot (alpha.34)
 
 Workspace Essentials can use a separately versioned, bounded Ed25519 file envelope. Main verifies
