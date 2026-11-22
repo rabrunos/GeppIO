@@ -6,6 +6,13 @@ results across panel switches. A replacement search invalidates the previous
 job. Cancel retains the matches already found. An OS read already in flight can
 finish before the scanner starts new work.
 
+Code and the Workbench project menu can open the same Search View in an
+internal window. The shell allows one Git window and one Search window. Each
+presentation subscribes to its existing Core session. Closing, raising and
+moving a window leave queries, jobs, editor history and saved layouts intact.
+The Move control accepts arrows in CSS pixels and Shift for ten-pixel steps.
+Enter confirms, Escape restores the position and Tab leaves movement mode.
+
 Main owns traversal, opaque job and match IDs, and file witnesses. Only the
 owning main frame at its expected URL may start, read, cancel or open a match.
 Changing or losing the root revokes the results. Scanning runs independently

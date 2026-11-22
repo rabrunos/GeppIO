@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { GIT_TYPE } from '../src/shared/git-widget.ts'
-import { floatingBounds, GIT_SHARED_VIEW, openFloatingPresentation, resolveSharedView } from '../src/renderer/src/shared-views/definition.ts'
+import { closeFloatingPresentation, floatingBounds, GIT_SHARED_VIEW, openFloatingPresentation, raiseFloatingPresentation, resolveSharedView, SEARCH_SHARED_VIEW, SHARED_VIEWS } from '../src/renderer/src/shared-views/definition.ts'
 import { selectSuite } from '../tools/isolation/plan.ts'
 
 test('Git is a host View with separate widget identity and two supported presentations', () => {
@@ -13,15 +13,34 @@ test('Git is a host View with separate widget identity and two supported present
   for (const kind of ['native-window', 'sidebar', 'Floating-window', {}]) assert.equal(resolveSharedView('git-changes', kind), null)
 })
 
-test('direct opening admits one floating instance and preserves the current instance on repeat or invalid requests', () => {
-  const open = (current: ReturnType<typeof openFloatingPresentation>) => openFloatingPresentation(current, GIT_SHARED_VIEW.id, 'floating-window')
-  assert.equal(openFloatingPresentation(null, GIT_SHARED_VIEW.id, 'widget'), null)
-  assert.equal(openFloatingPresentation(null, 'other-view', 'floating-window'), null)
-  const opened = open(null)
-  assert.deepEqual(opened, { viewId: GIT_SHARED_VIEW.id, kind: 'floating-window' })
-  assert.equal(open(opened), opened)
-  assert.equal(openFloatingPresentation(opened, 'other-view', 'floating-window'), opened)
-  assert.notEqual(open(null), opened, 'Reopening after clearing the slot mounts a fresh presentation')
+test('Search shares its Code activity and floating window without creating a widget definition', () => {
+  assert.deepEqual(SHARED_VIEWS.map(view => view.id), ['git-changes', 'project-search'])
+  assert.deepEqual(SEARCH_SHARED_VIEW.presentations, ['code-activity', 'floating-window'])
+  for (const kind of SEARCH_SHARED_VIEW.presentations) assert.equal(resolveSharedView('project-search', kind), SEARCH_SHARED_VIEW)
+  for (const kind of ['widget', 'native-window', 'constructor', null]) assert.equal(resolveSharedView('project-search', kind), null)
+})
+
+test('two windows coexist; repeat open raises the existing instance, and close retains the other one', () => {
+  const git = GIT_SHARED_VIEW.id, search = SEARCH_SHARED_VIEW.id
+  const empty = [] as const
+  assert.equal(openFloatingPresentation(empty, git, 'widget'), empty)
+  assert.equal(openFloatingPresentation(empty, 'other-view', 'floating-window'), empty)
+  assert.equal(raiseFloatingPresentation(empty, search), empty)
+  const first = openFloatingPresentation(empty, git, 'floating-window')
+  assert.deepEqual(first, [{ viewId: git, kind: 'floating-window' }])
+  assert.equal(openFloatingPresentation(first, git, 'floating-window'), first)
+  const both = openFloatingPresentation(first, search, 'floating-window')
+  assert.deepEqual(both.map(view => view.viewId), [git, search])
+  const raised = openFloatingPresentation(both, git, 'floating-window')
+  assert.equal(raised[0], both[1])
+  assert.equal(raised[1], first[0])
+  assert.equal(openFloatingPresentation(raised, 'other-view', 'floating-window'), raised)
+  const remaining = closeFloatingPresentation(raised, search)
+  assert.deepEqual(remaining, first)
+  assert.equal(remaining[0], first[0])
+  const reopened = openFloatingPresentation(remaining, search, 'floating-window')
+  assert.equal(reopened[0], first[0])
+  assert.notEqual(reopened[1], both[1], 'Opening after Close mounts a fresh presentation')
 })
 
 test('floating geometry clamps both axes in CSS pixels and shrinks to the usable area', () => {

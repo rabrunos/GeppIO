@@ -24,7 +24,8 @@ export const ciGroups = {
     smoke('alignment'), smoke('groups'),
     smoke('workbench'), smoke('workbench-organization'), smoke('workbench-plugins'), smoke('workbench-corrections'),
     smoke('presentation'), smoke('presentation', '--scale125'),
-    smoke('real-presentation'), smoke('real-presentation', '--scale125')
+    smoke('real-presentation'), smoke('real-presentation', '--scale125'),
+    smoke('shared-windows'), smoke('shared-windows', '--scale125')
   ]
 } satisfies Record<string, SmokeStep[]>
 

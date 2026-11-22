@@ -1,8 +1,9 @@
 import { useId, useLayoutEffect, useRef, useState } from 'react'
 import type { PointerEvent, ReactNode, Ref } from 'react'
-import { XMarkIcon } from '@heroicons/react/24/outline'
+import { ArrowsPointingOutIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import { IconButton } from '../workbench/Primitives.tsx'
 import { floatingBounds } from './definition.ts'
+import { moveWithArrow } from './movement.ts'
 import type { FloatingPresentation, Point, Size } from './definition.ts'
 import './floating-view.css'
 
@@ -14,7 +15,7 @@ interface Drag {
   handle: HTMLElement
 }
 
-export function FloatingView({ instance, title, size, children, close, closeButton, canDismissWithEscape }: {
+export function FloatingView({ instance, title, size, children, close, closeButton, canDismissWithEscape, active, raise }: {
   instance: FloatingPresentation
   title: string
   size: Size
@@ -22,9 +23,12 @@ export function FloatingView({ instance, title, size, children, close, closeButt
   close(): void
   closeButton: Ref<HTMLButtonElement>
   canDismissWithEscape(): boolean
+  active: boolean
+  raise(): void
 }) {
-  const heading = useId(), layer = useRef<HTMLDivElement>(null), frame = useRef<HTMLElement>(null)
+  const heading = useId(), instructions = useId(), layer = useRef<HTMLDivElement>(null), frame = useRef<HTMLElement>(null)
   const [area, setArea] = useState<Size | null>(null), [position, setPosition] = useState<Point | null>(null)
+  const [moveOrigin, setMoveOrigin] = useState<Point | null>(null)
   const drag = useRef<Drag | null>(null)
   useLayoutEffect(() => {
     const element = layer.current!
@@ -38,7 +42,9 @@ export function FloatingView({ instance, title, size, children, close, closeButt
     return () => observer.disconnect()
   }, [])
 
-  const bounds = area && floatingBounds(area, size, position)
+  const initial = area && floatingBounds(area, size, null)
+  const initialSearch = initial && instance.viewId === 'project-search' ? { x: initial.x - 70, y: initial.y + 54 } : null
+  const bounds = area && floatingBounds(area, size, position ?? initialSearch)
   function start(event: PointerEvent<HTMLElement>) {
     if (!bounds || drag.current || !event.isPrimary || event.button !== 0) return
     const handle = event.currentTarget
@@ -55,15 +61,25 @@ export function FloatingView({ instance, title, size, children, close, closeButt
     if (active.handle.hasPointerCapture(pointer)) active.handle.releasePointerCapture(pointer)
   }
 
-  return <div className="internal-view-layer" ref={layer}>
+  return <div className="internal-view-layer" data-floating-active={active} ref={layer}>
     <section ref={frame} tabIndex={-1} role="dialog" aria-modal={false} aria-labelledby={heading}
       data-floating-view={instance.viewId} className="internal-view"
       style={bounds ? { left: bounds.x, top: bounds.y, width: bounds.width, height: bounds.height } : undefined}
+      onFocusCapture={raise} onPointerDownCapture={event => {
+        // Clicking Close on a background presentation must leave the current
+        // editor, field or sibling window focused.
+        if (!active && (event.target as Element).closest('[data-internal-close]') && !frame.current?.contains(document.activeElement)) {
+          event.preventDefault()
+          return
+        }
+        raise()
+      }}
       onKeyDown={event => {
-        if (event.key !== 'Escape' || event.defaultPrevented) return
-        if (!drag.current && (!canDismissWithEscape() || event.repeat)) return
+        if (event.key !== 'Escape' || event.defaultPrevented || event.repeat) return
+        if (!moveOrigin && !drag.current && !canDismissWithEscape()) return
         event.preventDefault(); event.stopPropagation()
-        if (drag.current) finish(drag.current.pointer, true)
+        if (moveOrigin) { setPosition(moveOrigin); setMoveOrigin(null) }
+        else if (drag.current) finish(drag.current.pointer, true)
         else close()
       }}>
       <header className="internal-view-titlebar">
@@ -74,7 +90,16 @@ export function FloatingView({ instance, title, size, children, close, closeButt
           setPosition({ x: next.x, y: next.y })
         }} onPointerUp={event => finish(event.pointerId, false)} onPointerCancel={event => finish(event.pointerId, true)}
           onLostPointerCapture={event => finish(event.pointerId, true)}><h2 id={heading}>{title}</h2></div>
-        <IconButton ref={closeButton} label="Fechar" onClick={close}><XMarkIcon className="icon" /></IconButton>
+        <IconButton ref={closeButton} label="Fechar" data-internal-close className="internal-view-close" onClick={close}><XMarkIcon className="icon" /></IconButton>
+        <IconButton label="Mover janela" literalLabel aria-pressed={!!moveOrigin} aria-describedby={instructions}
+          onClick={() => { if (bounds && !drag.current) setMoveOrigin(moveOrigin ? null : { x: bounds.x, y: bounds.y }) }}
+          onBlur={() => setMoveOrigin(null)} onKeyDown={event => {
+            if (!moveOrigin || !bounds || !area || event.ctrlKey || event.altKey || event.metaKey) return
+            if (event.key === 'Enter') { event.preventDefault(); setMoveOrigin(null); return }
+            const next = moveWithArrow(event.key, event.shiftKey, bounds, area, size)
+            if (next) { event.preventDefault(); event.stopPropagation(); setPosition(next) }
+          }}><ArrowsPointingOutIcon className="icon" /></IconButton>
+        <span className="sr-only" id={instructions}>Use as setas para mover um pixel, ou dez com Shift. Enter confirma e Escape restaura a posição.</span>
       </header>
       <div className="internal-view-content ui-scrollbar">{children}</div>
     </section>

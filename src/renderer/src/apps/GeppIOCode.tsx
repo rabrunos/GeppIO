@@ -7,8 +7,9 @@ import type { Surfaces } from '../freeform/useSurfaces.ts'
 import { FileEditor } from '../files-editor/FileEditor.tsx'
 import type { MonacoHost } from '../files-editor/monaco.ts'
 import { Explorer } from '../files-editor/Explorer.tsx'
-import { SearchPanel } from '../search/SearchPanel.tsx'
+import { OPEN_SEARCH_WINDOW, searchSharedView } from '../shared-views/SearchView.ts'
 import { gitSharedView, OPEN_GIT_WINDOW } from '../shared-views/GitView.ts'
+import type { SharedViewId } from '../shared-views/definition.ts'
 import type { CompareGit } from '../git/GitChanges.tsx'
 import { TerminalView } from '../terminal/TerminalView.tsx'
 import { BarIcon } from '../workbench/Sidebar.tsx'
@@ -21,7 +22,7 @@ interface CodePanels {
   regions: ReturnType<typeof useRegions>
   theme: 'light' | 'dark'
   compareGit: CompareGit
-  openGitWindow(trigger: HTMLButtonElement): void
+  openWindow(id: SharedViewId, trigger: HTMLButtonElement): void
 }
 
 /** Official presentation borrowing Core sessions and the shell's measured regions. */
@@ -40,13 +41,17 @@ export function useCodePresentation(workbenchChrome: WorkbenchChrome) {
       setSidebar(previous => ({ ...previous, visible: true })); setActivity('explorer')
       requestAnimationFrame(() => document.querySelector<MonacoHost>('.direct-file-editor .monaco-host')?.monacoEditor?.focus())
     },
-    panels({ sessions, measures, regions, theme, compareGit, openGitWindow }: CodePanels) {
+    panels({ sessions, measures, regions, theme, compareGit, openWindow }: CodePanels) {
       const sidebar = regionViewport('sidebar', measures.sidebar)
       const main = regionViewport('main', measures.main)
       const bottom = regionViewport('bottom', measures.bottom)
       function selectActivity(next: typeof activity) {
         if (next === activity) regions.toggle('sidebar')
         else { setActivity(next); regions.revealSidebar() }
+      }
+      function windowAction(id: SharedViewId, label: string) {
+        return <button type="button" className="ui-button tool-button" aria-haspopup="dialog"
+          onClick={event => openWindow(id, event.currentTarget)}>{label}</button>
       }
       return {
         rail: {
@@ -55,15 +60,16 @@ export function useCodePresentation(workbenchChrome: WorkbenchChrome) {
           primary: <IconButton label="Explorador" literalLabel className="sidebar-rail-button sidebar-main-button"
             aria-pressed={activity === 'explorer' && regions.sidebarMode !== 'hidden'} onClick={() => selectActivity('explorer')}><FolderIcon className="icon" /></IconButton>,
           tools: <><IconButton label="Busca no projeto" literalLabel className="sidebar-rail-button"
-            aria-pressed={activity === 'search' && regions.sidebarMode !== 'hidden'} onClick={() => selectActivity('search')}><MagnifyingGlassIcon className="icon" /></IconButton>
+            data-search-window-trigger-fallback aria-pressed={activity === 'search' && regions.sidebarMode !== 'hidden'} onClick={() => selectActivity('search')}><MagnifyingGlassIcon className="icon" /></IconButton>
           <IconButton label="Alterações Git" literalLabel className="sidebar-rail-button"
             data-git-window-trigger-fallback aria-pressed={activity === 'git' && regions.sidebarMode !== 'hidden'} onClick={() => selectActivity('git')}><BarIcon icon="git" /></IconButton></>
         },
         sidebar: <div className="editor-explorer-panel editor-region-panel" style={sidebar} data-sidebar-interactive
           hidden={sidebar.width <= 0 || sidebar.height <= 0} inert={regions.sidebarMode === 'hidden'}
           onPointerEnter={() => regions.hover(true)} onPointerLeave={() => regions.hover(false)}>
-          {activity === 'search' ? <SearchPanel session={sessions.search} /> : activity === 'git' ? <gitSharedView.Content session={sessions.git} compare={compareGit} headerAction={<button type="button" className="ui-button tool-button"
-            aria-haspopup="dialog" onClick={event => openGitWindow(event.currentTarget)}>{OPEN_GIT_WINDOW}</button>} /> : <Explorer session={sessions.explorer} git={sessions.git} />}
+          {activity === 'search' ? <searchSharedView.Content session={sessions.search} headerAction={windowAction(searchSharedView.id, OPEN_SEARCH_WINDOW)} />
+            : activity === 'git' ? <gitSharedView.Content session={sessions.git} compare={compareGit} headerAction={windowAction(gitSharedView.id, OPEN_GIT_WINDOW)} />
+            : <Explorer session={sessions.explorer} git={sessions.git} />}
         </div>,
         main: <div className="direct-file-editor" style={main}><FileEditor session={sessions.editor} /></div>,
         bottom: <div className="direct-terminal editor-region-panel" style={bottom}

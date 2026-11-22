@@ -33,7 +33,8 @@ test('CI preserves all 38 distinct alpha.48 Electron invocations and public comm
   assert.equal(alpha48.length, 38)
   assert.deepEqual(actual, [...alpha48, 'tools/app-host-smoke.ts', 'tools/app-host-smoke.ts --scale125',
     'tools/git-window-smoke.ts', 'tools/git-window-smoke.ts --scale125',
-    'tools/search-smoke.ts', 'tools/search-smoke.ts --scale125', 'tools/search-smoke.ts --dev'].sort(),
+    'tools/search-smoke.ts', 'tools/search-smoke.ts --scale125', 'tools/search-smoke.ts --dev',
+    'tools/shared-windows-smoke.ts', 'tools/shared-windows-smoke.ts --scale125'].sort(),
     'No omission, duplicate execution or changed DPR/runtime flag. App Host and Shared View coverage are additive.')
   const publicSmokes = [
     'test:desktop', 'test:monaco', 'test:git', 'test:terminal', 'test:documents',

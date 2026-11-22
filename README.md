@@ -34,6 +34,9 @@ entradas por pasta e 32 níveis; não cria, move nem exclui arquivos. Veja os [l
 No GeppIO Code, abra **Busca no projeto**, digite um trecho e pressione **Enter**. A busca lê o
 texto salvo na pasta selecionada. Os resultados mostram arquivo, linha e coluna. Abrir uma
 ocorrência preserva o rascunho e o histórico da aba. Veja os [limites da busca](docs/architecture/search.md).
+Use **Abrir busca em janela** na atividade ou no menu do projeto para manter a busca ao lado
+de **Alterações Git**. Em **Mover janela**, pressione Enter ou Espaço e use as setas.
+Shift move dez pixels por vez. Enter confirma a posição e Escape restaura a anterior.
 Na alpha.44, **Alterações Git** consulta a raiz exata selecionada no Explorador, mostra branch,
 índice, alterações no disco e arquivos novos. Está no catálogo (Main/Sidebar) e nas atividades
 do modo Editor. **Atualizar Git** renova os dados; selecionar um arquivo compatível abre a

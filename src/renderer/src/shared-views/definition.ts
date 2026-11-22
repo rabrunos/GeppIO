@@ -8,19 +8,41 @@ export const GIT_SHARED_VIEW = {
   floatingSize: { width: 460, height: 390 }
 } as const
 
+export const SEARCH_SHARED_VIEW = {
+  id: 'project-search',
+  title: 'Busca no projeto',
+  presentations: ['code-activity', 'floating-window'],
+  floatingSize: { width: 410, height: 350 }
+} as const
+
+export const SHARED_VIEWS = [GIT_SHARED_VIEW, SEARCH_SHARED_VIEW] as const
+export type SharedViewId = typeof SHARED_VIEWS[number]['id']
+
 export function resolveSharedView(id: unknown, presentation: unknown) {
-  return id === GIT_SHARED_VIEW.id && GIT_SHARED_VIEW.presentations.some(kind => kind === presentation) ? GIT_SHARED_VIEW : null
+  return SHARED_VIEWS.find(view => view.id === id && view.presentations.some(kind => kind === presentation)) ?? null
 }
 
 export interface FloatingPresentation {
-  readonly viewId: typeof GIT_SHARED_VIEW.id
+  readonly viewId: SharedViewId
   readonly kind: 'floating-window'
 }
 
-export function openFloatingPresentation(current: FloatingPresentation | null, id: unknown, presentation: unknown): FloatingPresentation | null {
-  if (current || presentation !== 'floating-window') return current
+export function raiseFloatingPresentation(current: readonly FloatingPresentation[], id: SharedViewId) {
+  const existing = current.find(instance => instance.viewId === id)
+  if (!existing || existing === current.at(-1)) return current
+  return [...current.filter(instance => instance !== existing), existing]
+}
+
+export function closeFloatingPresentation(current: readonly FloatingPresentation[], id: SharedViewId) {
+  return current.filter(instance => instance.viewId !== id)
+}
+
+export function openFloatingPresentation(current: readonly FloatingPresentation[], id: unknown, presentation: unknown): readonly FloatingPresentation[] {
+  if (presentation !== 'floating-window') return current
   const view = resolveSharedView(id, presentation)
-  return view ? { viewId: view.id, kind: presentation } : null
+  if (!view) return current
+  if (current.some(instance => instance.viewId === view.id)) return raiseFloatingPresentation(current, view.id)
+  return [...current, { viewId: view.id, kind: presentation }]
 }
 
 export interface Point { x: number; y: number }

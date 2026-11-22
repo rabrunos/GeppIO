@@ -1,4 +1,5 @@
-import { useSyncExternalStore } from 'react'
+import { useId, useSyncExternalStore } from 'react'
+import type { ReactNode } from 'react'
 import { SEARCH_EXCLUDED_DIRECTORIES, SEARCH_LIMITS, validSearchQuery } from '../../../shared/search.ts'
 import type { SearchSession } from './session.ts'
 import './search.css'
@@ -7,22 +8,24 @@ const statusLabels = {
   idle: '', starting: 'Iniciando busca', running: 'Buscando', complete: 'Busca concluída',
   partial: 'Busca parcial', canceled: 'Busca cancelada', canceling: 'Cancelando busca', failed: 'Falha na busca'
 }
-export function SearchPanel({ session }: { session: SearchSession }) {
+export function SearchPanel({ session, headerAction }: { session: SearchSession; headerAction?: ReactNode }) {
   const state = useSyncExternalStore(session.subscribe, session.snapshot)
+  const field = useId(), error = useId()
   const { query, page, matches, status } = state
   const valid = validSearchQuery(query)
   return <section className="project-search ui-scrollbar" aria-label="Busca no projeto">
     <form onSubmit={event => { event.preventDefault(); void session.start() }}>
-      <label htmlFor="project-search-query">Texto a buscar</label>
-      <input id="project-search-query" type="text" value={query} maxLength={SEARCH_LIMITS.query} autoComplete="off"
-        aria-invalid={!!query && !valid} aria-describedby={query && !valid ? 'project-search-invalid' : undefined}
+      <label htmlFor={field}>Texto a buscar</label>
+      <input id={field} type="text" value={query} maxLength={SEARCH_LIMITS.query} autoComplete="off"
+        aria-invalid={!!query && !valid} aria-describedby={query && !valid ? error : undefined}
         onChange={event => session.setQuery(event.target.value)} />
-      {query && !valid && <p id="project-search-invalid">Use até 256 caracteres UTF-16 em uma linha, sem caracteres de controle.</p>}
+      {query && !valid && <p id={error}>Use até 256 caracteres UTF-16 em uma linha, sem caracteres de controle.</p>}
       <label className="search-option"><input type="checkbox" checked={state.matchCase}
         onChange={event => session.setMatchCase(event.target.checked)} /> Diferenciar maiúsculas e minúsculas</label>
       <div className="search-actions">
         <button type="submit" className="ui-button tool-button" disabled={!state.root || !valid || session.locked}>Buscar</button>
         <button type="button" className="ui-button tool-button" disabled={!session.canCancel} onClick={() => { void session.cancel() }}>Cancelar busca</button>
+        {headerAction}
       </div>
     </form>
     {!state.root && <p>Abra uma pasta no Explorador para buscar no projeto.</p>}
