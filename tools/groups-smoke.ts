@@ -46,6 +46,49 @@ async function selected(title: string) {
   await page.waitForFunction(id => document.getElementById(id)?.getAttribute('aria-selected') === 'true', id)
 }
 async function selectTab(title: string) { await group().getByRole('tab', { name: title, exact: true }).click(); await selected(title) }
+async function verifyOrderCheckpoint() {
+  const startOrder = await titles(), [first, second, ...remaining] = startOrder
+  assert.ok(first && second)
+  if (await group().getByRole('tab', { name: first, exact: true }).getAttribute('aria-selected') !== 'true') await selectTab(first)
+  const baseline = await raw(), before = JSON.parse(baseline!)
+  const [firstId, secondId, ...otherIds] = before.organization.groups.entries[0].members as string[]
+  const newOrder = [second, first, ...remaining], newMembers = [secondId, firstId, ...otherIds]
+  const pending = page.locator('.layout-save-pending')
+  const saveCurrent = page.getByRole('button', { name: 'Salvar atual', exact: true })
+  const confirmation = page.getByRole('dialog', { name: 'Salvar a edição primeiro?', exact: true })
+  const form = page.getByRole('dialog', { name: 'Salvar nova composição', exact: true })
+  async function showCompositions() {
+    await page.locator('.widget-catalog-toggle').click(); await settle(page)
+    await page.getByRole('tab', { name: 'Composições', exact: true }).click()
+  }
+  const moveRight = () => group().getByRole('button', { name: 'Mover aba para a direita', exact: true }).click()
+  async function cancelEdit() { await page.getByTestId('cancel-layout').click(); await page.getByTestId('edit-layout').waitFor(); await settle(page) }
+
+  // Selecting another tab changes navigation only, so the form opens directly.
+  await beginEdit(page); await selectTab(second); await showCompositions()
+  assert.equal(await pending.count(), 0)
+  await saveCurrent.click(); await form.waitFor(); assert.equal(await confirmation.count(), 0)
+  await form.getByRole('button', { name: 'Cancelar', exact: true }).click(); await cancelEdit()
+  assert.equal(await raw(), baseline)
+
+  await beginEdit(page); await moveRight(); assert.deepEqual(await titles(), newOrder)
+  await showCompositions(); await pending.waitFor(); await saveCurrent.click(); await confirmation.waitFor()
+  await confirmation.getByRole('button', { name: 'Cancelar', exact: true }).click()
+  assert.equal(await form.count(), 0); assert.equal(await raw(), baseline)
+  await cancelEdit(); assert.deepEqual(await titles(), startOrder); assert.equal(await raw(), baseline)
+
+  await beginEdit(page); await moveRight(); await showCompositions(); await pending.waitFor()
+  await undo(); assert.deepEqual(await titles(), startOrder); assert.equal(await pending.count(), 0)
+  await redo(); assert.deepEqual(await titles(), newOrder); await pending.waitFor()
+  await saveCurrent.click(); await confirmation.getByRole('button', { name: 'Salvar edição e continuar', exact: true }).click()
+  await form.waitFor(); const checkpoint = await raw()
+  assert.deepEqual(JSON.parse(checkpoint!).organization.groups.entries[0].members, newMembers)
+  await form.getByRole('button', { name: 'Cancelar', exact: true }).click()
+  assert.equal(await raw(), checkpoint)
+  assert.deepEqual(JSON.parse(checkpoint!).organization.compositions, before.organization.compositions)
+  await conclude(); assert.deepEqual(await titles(), newOrder)
+  return { order: newOrder, members: newMembers, frameId: before.organization.groups.entries[0].frameId }
+}
 async function compare() {
   await selectTab('Anotações'); assert.equal(await widget('notes').getByRole('textbox', { name: 'Texto da anotação', exact: true, includeHidden: true }).inputValue(), 'Conteúdo real preservado nas abas á')
   await selectTab('Checklist'); assert.equal(await widget('checklist').getByRole('checkbox', { name: 'Conferir grupo', exact: true, includeHidden: true }).isChecked(), true)
@@ -176,16 +219,19 @@ try {
   await page.getByRole('button', { name: 'Alternar tema', exact: true }).click(); await settle(page); await page.screenshot({ path: diagnostics + '/maximized-light.png' })
   await page.getByRole('button', { name: 'Restaurar Grupo de widgets', exact: true }).click(); await settle(page)
   assert.deepEqual(JSON.parse((await raw())!).layout, geometry); assert.deepEqual(JSON.parse((await raw())!).organization.groups.entries.map((g: { frameId: string; members: string[] }) => ({ frameId: g.frameId, members: g.members })), membership)
+  const checkpoint = await verifyOrderCheckpoint()
+  assert.deepEqual(page.workers(), workers)
+  for (const name of ['notes', 'checklist', 'prompts']) assert.equal(await widget(name).getAttribute('data-mount-proof'), name)
   await beginEdit(page)
   // Capture and restore the actual grouped composition through the existing library.
   await page.locator('.widget-catalog-toggle').click(); await settle(page)
   await page.getByRole('tab', { name: 'Composições', exact: true }).click(); await page.getByRole('button', { name: 'Salvar atual', exact: true }).click()
-  const pending = page.getByRole('dialog', { name: 'Salvar a edição primeiro?', exact: true }); if (await pending.count()) await pending.getByRole('button', { name: 'Salvar edição e continuar', exact: true }).click()
   const save = page.getByRole('dialog', { name: 'Salvar nova composição', exact: true }); await save.waitFor(); await save.getByRole('textbox', { name: 'Nome', exact: true }).fill('Grupo piloto'); await save.getByRole('button', { name: 'Salvar composição', exact: true }).click(); await save.waitFor({ state: 'detached' })
   await page.getByRole('tab', { name: 'Composições Salvas', exact: true }).click(); const card = page.locator('[data-composition-id^="composition:"]'); await card.hover(); await card.getByRole('button', { name: 'Restaurar widgets de Grupo piloto', exact: true }).click(); await settle(page)
   await conclude(); await compare(); const saved = JSON.parse((await raw())!)
-  await page.screenshot({ path: diagnostics + '/restored-light.png' }); await app!.close(); app = undefined; await launch(); await compare()
-  const reopened = JSON.parse((await raw())!); assert.deepEqual(reopened.layout, saved.layout); assert.deepEqual(reopened.organization.groups.entries.map((g: { frameId: string; members: string[] }) => ({ frameId: g.frameId, members: g.members })), membership)
+  await page.screenshot({ path: diagnostics + '/restored-light.png' }); await app!.close(); app = undefined; await launch()
+  await group().getByRole('tab', { name: checkpoint.order[0]!, exact: true }).waitFor(); assert.deepEqual(await titles(), checkpoint.order); await compare()
+  const reopened = JSON.parse((await raw())!); assert.deepEqual(reopened.layout, saved.layout); assert.deepEqual(reopened.organization.groups.entries.map((g: { frameId: string; members: string[] }) => ({ frameId: g.frameId, members: g.members })), [{ frameId: checkpoint.frameId, members: checkpoint.members }])
   assert.equal(await page.locator('[data-plugin-widget="geppio.time-tracker:timer"]').getByRole('button', { name: 'Iniciar', exact: true }).count(), 1)
   await beginEdit(page)
   await page.getByRole('button', { name: 'Nova barra', exact: true }).click()
@@ -215,6 +261,6 @@ try {
   assert.deepEqual(regionalSaved.organization.bars.find((b: { id: string }) => b.id === customId).members, [])
   await app!.close(); app = undefined; await launch(); await compare(); const regionalReopened = JSON.parse((await raw())!)
   assert.deepEqual(regionalReopened.layout, regionalSaved.layout); assert.deepEqual(regionalReopened.organization.groups, regionalSaved.organization.groups); assert.deepEqual(regionalReopened.organization.bars, regionalSaved.organization.bars); assert.deepEqual(errors, [])
-  console.log(`PASS groups: real align/group/cancel/undo/redo/reorder/detach, regional count preview/transfers/Home/custom/Bottom composition, stable member DOM/Workers/content, maximized tabs and peer regions, older layout and process restart; automated DPR ${scale}`)
+  console.log(`PASS groups: real align/group/cancel/undo/redo/reorder/detach, reorder-only save confirmation/cancel/checkpoint/restart, navigation without format warning, regional count preview/transfers/Home/custom/Bottom composition, stable member DOM/Workers/content, maximized tabs and peer regions, older layout and process restart; automated DPR ${scale}`)
 } catch (error) { if (app) { console.error('Group UI', { feedback: await page.locator('.workspace-feedback').allTextContents(), plugins: await page.locator('[data-plugin][data-status]').allTextContents(), errors }); await page.screenshot({ path: diagnostics + '/failure.png' }).catch(() => {}) }; throw error }
 finally { await app?.close(); assert.equal(dirname(resolve(profile)), resolve(tmpdir())); await rm(profile, { recursive: true, force: true }) }

@@ -8,6 +8,7 @@ import { groupWidgets, detachWidget, reorderGroup } from '../src/shared/workbenc
 import { parseWorkbench, serializeWorkbench } from '../src/shared/workbench/codec.ts'
 import { captureComposition, applyComposition } from '../src/shared/workbench/compositions.ts'
 import { maximizableSurface } from '../src/shared/workbench/maximize.ts'
+import { EditHistory, formatSignature } from '../src/shared/workbench/history.ts'
 const plugin: InstalledPlugin = { enabled: true, revision: 'fixture', manifest: { schemaVersion: 1, apiVersion: 2, id: 'geppio.workspace-essentials', name: 'Workspace Essentials', version: '1.0.0', entry: 'entry.js', widgets: ['notes', 'checklist', 'prompts', 'scratch'].map(id => ({ id, title: id, surface: 'declarative' })) } }
 const registry = widgetRegistry([plugin]), main = { region: 'main' as const, width: 1800, height: 1200, expanded: false }
 function scene() { let next = initialWorkbench(); for (const name of ['notes', 'checklist', 'prompts', 'scratch']) next = addWidget(next, registry, `plugin:geppio.workspace-essentials:${name}`, main)!; return next }
@@ -36,6 +37,28 @@ test('reorder, detach and removal are atomic and preserve the shared frame and r
   const two = groupWidgets(source, registry, checklist, notes)!, frame = two.placements.find(p => p.id === notes)!
   const full = { ...two, reference: { ...two.reference, main: { width: frame.width, height: frame.height } }, placements: [{ ...frame, x: 0, y: 0 }] }
   const before = JSON.stringify(full); assert.equal(detachWidget(full, registry, checklist), null); assert.equal(JSON.stringify(full), before)
+})
+test('only structural group changes affect the format checkpoint across undo, redo and storage', () => {
+  const source = scene(), notes = id(source, 'notes'), checklist = id(source, 'checklist')
+  const grouped = groupWidgets(source, registry, checklist, notes)!, group = groupFor(grouped, notes)!
+  const checkpoint = formatSignature(grouped), navigated = structuredClone(grouped)
+  groupFor(navigated, notes)!.active = notes
+  assert.equal(formatSignature(navigated), checkpoint)
+  const reordered = reorderGroup(navigated, group.id, checklist, -1)!
+  assert.deepEqual(reordered.placements, grouped.placements)
+  assert.deepEqual(groupFor(reordered, notes)!.members, [checklist, notes])
+  const edited = formatSignature(reordered)
+  assert.notEqual(edited, checkpoint)
+  const history = new EditHistory(), before = { snapshot: navigated, slots: [], formatId: null }, after = { ...before, snapshot: reordered }
+  history.record(before, after)
+  const undone = history.undo(after)!
+  assert.equal(formatSignature(undone.snapshot), checkpoint)
+  assert.deepEqual(groupFor(undone.snapshot, notes)!.members, [notes, checklist])
+  const redone = history.redo(undone)!
+  assert.equal(formatSignature(redone.snapshot), edited)
+  const reopened = parseWorkbench(serializeWorkbench(redone.snapshot, registry), registry)
+  assert.deepEqual(groupFor(reopened, notes), groupFor(reordered, notes))
+  assert.equal(formatSignature({ ...source, organization: { ...source.organization, groups: { version: 1, entries: [] } } }), formatSignature(source))
 })
 test('group codec is nested/versioned, old layouts remain readable, malformed or orphaned groups fail closed', () => {
   const source = scene(), older = serializeWorkbench(source, registry)

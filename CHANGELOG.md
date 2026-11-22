@@ -2,6 +2,10 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.59] — 2026-11-22
+
+- Include widget group frames and ordered tab membership in the pending layout check. Selecting a tab continues to use the existing navigation flow.
+
 ## [0.1.0-alpha.58] — 2026-11-22
 
 - Revalidate the window owner before publishing plugin management changes, restore managed packages after a refused removal and reconcile an uncertain preferences write before reporting its outcome.

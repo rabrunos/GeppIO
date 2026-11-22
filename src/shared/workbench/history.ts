@@ -5,8 +5,10 @@ import { LIMITS } from './model.ts'
 /** Bar navigation and library metadata do not edit a format; persistent widget
  * presentations do. Consume canonical intentions, never projected DOM geometry. */
 export function formatSignature(snapshot: WorkbenchSnapshot, slots: readonly SessionSlot[] = []) {
-  const { views, bars, chrome, presentations } = snapshot.organization
-  return JSON.stringify({ reference: snapshot.reference, placements: snapshot.placements, views, bars, chrome, presentations, slots })
+  const { views, bars, chrome, presentations, groups } = snapshot.organization
+  const groupStructure = (groups?.entries ?? []).map(({ id, frameId, members }) => ({ id, frameId, members }))
+  groupStructure.sort((a, b) => a.id.localeCompare(b.id))
+  return JSON.stringify({ reference: snapshot.reference, placements: snapshot.placements, views, bars, chrome, presentations, groups: groupStructure, slots })
 }
 
 /** A gesture owns one before/after pair; intermediate solver frames never enter history. */
