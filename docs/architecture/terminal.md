@@ -54,6 +54,11 @@ not automatically Start it. A nonzero-exit indicator reveals the preserved outpu
 
 ## Budgets and teardown
 
+The renderer synchronizes once when it connects. A confirmed empty session has no read timer.
+Starting or closing a PTY wakes the reader, and an active PTY continues to drain while its view
+is hidden. After exit, the reader stops when the last output page has been consumed. A failed
+initial discovery gets one retry before waiting for an explicit reconnect or start.
+
 Native output retains the most recent 262,144 UTF-16 units. Cursor reads carry at most 32,768 units
 and report a gap explicitly. The renderer polls with only one outstanding read and waits for xterm's
 write callback before the next page; this bounds the transport/parser queue instead of accumulating

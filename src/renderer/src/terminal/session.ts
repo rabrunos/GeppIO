@@ -1,5 +1,5 @@
 import { Terminal } from '@xterm/xterm'
-import { emptyTerminal, TERMINAL_INPUT_LIMIT } from '../../../shared/terminal.ts'
+import { emptyTerminal, TERMINAL_INPUT_LIMIT, TERMINAL_OUTPUT_LIMIT, TERMINAL_PAGE_LIMIT } from '../../../shared/terminal.ts'
 import type { TerminalBridge, TerminalResult, TerminalState } from '../../../shared/terminal.ts'
 
 export interface TerminalViewState { native: TerminalState; feedback: string | null }
@@ -15,7 +15,10 @@ export class TerminalSession {
   private pendingInput = ''
   private sending = false
   private actionBusy = false
-  private reading = false
+  private reading: Promise<void> | null = null
+  private discover = true
+  private retryDiscovery = true
+  private drainPending = false
   private fitting = false
   private fitAgain = false
   constructor(private bridge: TerminalBridge) {}
@@ -40,13 +43,24 @@ export class TerminalSession {
     }
     return this.emulator
   }
-  connect() { this.stopped = false; if (this.timer) clearTimeout(this.timer); void this.poll() }
-  dispose() {
-    this.stopped = true; if (this.timer) clearTimeout(this.timer)
-    // React development effect replay reconnects in the same turn. Final teardown still disposes.
-    queueMicrotask(() => { if (this.stopped) { this.emulator?.dispose(); this.element?.remove(); this.emulator = null; this.element = null } })
+  private cancelTimer() { if (this.timer !== null) clearTimeout(this.timer); this.timer = null }
+  private scheduleRead(delay: number) {
+    this.cancelTimer()
+    if (!this.stopped) this.timer = setTimeout(() => { this.timer = null; this.poll() }, delay)
   }
-  private accept(result: TerminalResult) {
+  private get live() { return ['starting', 'running', 'closing'].includes(this.state.native.phase) }
+  connect() {
+    this.stopped = false; this.retryDiscovery = true; this.cancelTimer()
+    // Effect replay can reuse an initial discovery already in flight.
+    if (!this.reading || this.state.native.id !== null) this.discover = true
+    this.poll()
+  }
+  dispose() {
+    this.stopped = true; this.cancelTimer()
+    // React development effect replay reconnects in the same turn. Final teardown still disposes.
+    queueMicrotask(() => { if (this.stopped) { this.emulator?.dispose(); this.element?.remove(); this.emulator = null; this.element = null; this.cursor = 0 } })
+  }
+  private accept(result: TerminalResult): result is Extract<TerminalResult, { ok: true }> {
     if (!result.ok) { this.update({ feedback: result.error }); return false }
     const native = result.value.state, previous = this.state.native
     const newGeneration = native.id !== previous.id
@@ -57,35 +71,57 @@ export class TerminalSession {
     if (native.phase === 'running' && (newGeneration || previous.phase !== 'running')) void this.fit()
     return true
   }
-  private async poll() {
-    if (this.stopped || this.reading) return
-    if (this.actionBusy) { this.timer = setTimeout(() => { void this.poll() }, 60); return }
-    this.reading = true
-    let more = false
+  private async readPage(): Promise<boolean> {
+    const previous = this.state.native.id, after = this.cursor
+    const id = this.discover ? null : previous
+    this.discover = false
     try {
-      const result = await this.bridge.read(this.state.native.id, this.cursor)
-      if (this.stopped) return
-      if (this.accept(result) && result.ok) {
-        if (result.value.dropped) { this.emulator?.reset(); this.feedback('O limite de saída foi atingido; o trecho mais antigo foi descartado.') }
-        const { data, next } = result.value
-        if (data) await new Promise<void>(resolve => this.terminal().write(data, resolve))
-        this.cursor = next; more = data.length > 0
+      const result = await this.bridge.read(id, after)
+      if (this.stopped) return false
+      if (!this.accept(result)) { this.discover = true; return false }
+      // A discovery may have asked for an offset belonging to the old PTY.
+      if (previous !== result.value.state.id && after > 0) { this.drainPending = true; return true }
+      if (result.value.dropped) { this.emulator?.reset(); this.feedback('O limite de saída foi atingido; o trecho mais antigo foi descartado.') }
+      const { data, next } = result.value
+      if (data) {
+        const emulator = this.terminal()
+        await new Promise<void>(resolve => emulator.write(data, resolve))
+        if (emulator !== this.emulator) return false
       }
-    } catch { this.feedback('A comunicação com o Terminal falhou.') }
-    finally {
-      this.reading = false
-      if (!this.stopped) this.timer = setTimeout(() => { void this.poll() }, more ? 0 : 60)
-    }
+      this.cursor = next; this.drainPending = data.length > 0
+      return true
+    } catch { this.feedback('A comunicação com o Terminal falhou.'); this.discover = true; return false }
+  }
+  private poll() {
+    if (this.stopped || this.reading || this.actionBusy) return
+    this.reading = this.readPage().then(ok => {
+      this.reading = null
+      if (this.stopped || this.actionBusy) return
+      if (!this.live && !this.drainPending) {
+        // One retry can discover an existing PTY after a failed handshake. A
+        // persistently unavailable bridge waits for an explicit reconnect/start.
+        if (!this.discover || (!ok && !this.retryDiscovery)) return
+        this.retryDiscovery = false
+      }
+      this.scheduleRead(ok && this.drainPending ? 0 : 60)
+    })
   }
   private async action(operation: () => Promise<TerminalResult>) {
-    if (this.actionBusy) return
-    this.actionBusy = true
+    if (this.stopped || this.actionBusy) return
+    this.actionBusy = true; this.cancelTimer()
     try {
-      // Drain the previous generation before reset/restart; never replay stale output afterward.
-      while (this.reading && !this.stopped) await new Promise(resolve => setTimeout(resolve, 10))
-      if (!this.stopped) this.accept(await operation())
+      await this.reading
+      // A restart replaces the prior ring. An exited PTY has at most one retained
+      // ring to drain, including the final empty read and a split surrogate pair.
+      const maxPages = Math.ceil(TERMINAL_OUTPUT_LIMIT / (TERMINAL_PAGE_LIMIT - 1)) + 1
+      for (let page = 0; !this.stopped && !this.live && this.drainPending; page++) {
+        if (page >= maxPages || !await this.readPage()) return
+      }
+      if (this.stopped) return
+      const result = await operation()
+      if (!this.stopped && this.accept(result)) this.drainPending = true
     } catch { this.feedback('A comunicação com o Terminal falhou.') }
-    finally { this.actionBusy = false }
+    finally { this.actionBusy = false; this.discover = true; this.retryDiscovery = true; this.scheduleRead(0) }
   }
   start = async () => { await this.action(() => this.bridge.start()); this.focus() }
   close = () => { const id = this.state.native.id; if (id) void this.action(() => this.bridge.close(id)) }

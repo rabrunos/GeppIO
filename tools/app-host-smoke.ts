@@ -10,6 +10,7 @@ import { gitFingerprint, initializeGit } from './git-fixtures.ts'
 import { fileEditor, pluginWorkers } from './monaco-support.ts'
 import { enableDeveloperMode } from './plugin-dev-support.ts'
 import { electron } from './test-electron.ts'
+import { measureAppHost } from './app-host-measurements.ts'
 
 const profile = await mkdtemp(join(tmpdir(), 'geppio-smoke-app-host-'))
 const scale125 = process.argv.includes('--scale125')
@@ -228,3 +229,4 @@ try {
 } finally {
   try { await app?.close() } finally { await rm(profile, { recursive: true, force: true }) }
 }
+if (!scale125) await measureAppHost(env)

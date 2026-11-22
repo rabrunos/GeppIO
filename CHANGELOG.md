@@ -2,6 +2,10 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.60] — 2026-11-22
+
+- Stop periodic Terminal reads after empty synchronization and final output drain. Resume reads on explicit session actions and reconnection.
+
 ## [0.1.0-alpha.59] — 2026-11-22
 
 - Include widget group frames and ordered tab membership in the pending layout check. Selecting a tab continues to use the existing navigation flow.
