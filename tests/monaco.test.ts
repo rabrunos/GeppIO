@@ -36,3 +36,28 @@ test('exact editor proposals retain the byte cap, BOM, Unicode and busy/failed-s
   assert.equal(session.editExact('a\nb\nc\n'), true); assert.equal(session.snapshot().text, document.text); assert.equal(session.dirty, false)
   await session.release(); assert.equal(session.snapshot().document, null)
 })
+
+test('an unconfirmed save or missing reply invalidates disk views without changing the draft or retrying', async () => {
+  const document = { id: randomUUID(), revision: randomUUID(), name: 'draft.txt', bom: false, text: 'base' }
+  let writes = 0
+  const original = async () => ({ ok: true as const, document })
+  const session = new EditorSession({
+    open: original, activate: original, close: original, release: original, onCloseRequested: () => () => {},
+    async save() {
+      if (++writes === 1) return { ok: false, code: 'unconfirmed', error: 'Resultado não confirmado.' }
+      throw new Error('Lost IPC response')
+    }
+  })
+  await session.open()
+  session.editExact('my draft')
+  for (const [index, code] of ['unconfirmed', 'unavailable'].entries()) {
+    const diskVersion = session.snapshot().diskVersion
+    await session.save()
+    assert.equal(writes, index + 1)
+    assert.equal(session.snapshot().code, code)
+    assert.equal(session.snapshot().document, document)
+    assert.equal(session.snapshot().text, 'my draft')
+    assert.equal(session.dirty, true)
+    assert.equal(session.snapshot().diskVersion, diskVersion + 1)
+  }
+})

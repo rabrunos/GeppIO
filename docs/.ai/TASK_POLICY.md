@@ -40,11 +40,10 @@ still needs a scoped implementation contract and relevant validation.
 
 Existing chosen foundation stack is not retroactively unapproved. Transitive dependencies
 receive normal lockfile/license/supply-chain review without individual approval for every node.
-[Issue #8](https://github.com/rabrunos/GeppIO/issues/8) specifically selects the canonical
-shadcn/ui source for needed components; it is not blanket approval of arbitrary registries,
-unrelated packages or future upgrades. Preserve the scope of prior approvals and evaluate the
-concrete code, license and dependencies in the task that incorporates them. Lack of an approval
-copy in one document is not evidence that an existing dependency was adopted without permission.
+The owner prefers project-owned components. The earlier selection of the canonical shadcn/ui
+source is historical. A proposal to incorporate a specific component follows the individual
+approval process above. Preserve the scope of prior approvals when reviewing existing
+dependencies. [Issue #8](https://github.com/rabrunos/GeppIO/issues/8)
 
 ## Effort, discovery, risk and consumption are separate
 

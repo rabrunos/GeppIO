@@ -2,6 +2,10 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.56] — 2026-11-22
+
+- Distinguish refused document saves from unconfirmed replacements. Preserve the affected draft, undo history and earlier confirmed saves when a multi-document close stops.
+
 ## [0.1.0-alpha.55] — 2026-11-22
 
 - Workspace Essentials 1.0.1 reconciles ambiguous writes against the last confirmed and attempted documents, keeping later edits and refusing to overwrite divergent storage.

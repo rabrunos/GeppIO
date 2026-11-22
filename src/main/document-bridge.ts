@@ -2,7 +2,7 @@ import { app, dialog, ipcMain } from 'electron'
 import type { BrowserWindow } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { isAbsolute, relative, sep } from 'node:path'
-import { DocumentFailure, DocumentStore, documentFailure } from './documents.ts'
+import { DocumentFailure, DocumentStore, documentFailure, expiredDocumentResponse } from './documents.ts'
 import { validDocumentRequest } from '../shared/documents.ts'
 import type { DocumentDraft, DocumentResult } from '../shared/documents.ts'
 import { DirectoryStore, ExplorerFailure, explorerFailure, safeExplorerName } from './explorer.ts'
@@ -29,14 +29,18 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
     return (['save', 'discard', 'cancel'] as const)[result.response] ?? 'cancel'
   }
   const response = async (result: DocumentResult, current: () => boolean): Promise<DocumentResult> => {
+    if (!current()) return expiredDocumentResponse(result)
     let folder: string | null = null
     let invalidRoot: string | undefined
     const root = directories.snapshot
     const source = result.documents ?? (result.ok ? result.document ? [result.document] : [] : result.confirmed ? [result.confirmed] : [])
     if (root && source.length) {
-      try { folder = await directories.folder(root.id, current) } catch { invalidRoot = root.id; git.revoke() /* Independent file grants remain; stale Git action IDs do not. */ }
+      try { folder = await directories.folder(root.id, current) } catch {
+        if (!current()) return expiredDocumentResponse(result)
+        invalidRoot = root.id; git.revoke() /* Independent file grants remain; stale Git action IDs do not. */
+      }
     }
-    if (!current()) return documentFailure(new DocumentFailure('stale'))
+    if (!current()) return expiredDocumentResponse(result)
     const documents = source.map(document => {
       const path = store.filePath(document.id), inside = folder && path ? relative(folder, path) : null
       const names = inside?.split(sep)

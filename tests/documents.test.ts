@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict'
+import { readdirSync } from 'node:fs'
 import { test } from 'node:test'
 import { mkdtemp, writeFile, readFile, rm, rename, chmod, link, mkdir, symlink, realpath } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { DocumentStore, DocumentFailure, documentFailure } from '../src/main/documents.ts'
+import { DocumentStore, DocumentFailure, documentFailure, expiredDocumentResponse } from '../src/main/documents.ts'
 import { DOCUMENT_LIMIT, DOCUMENT_SESSION_LIMITS, applyEditorText, editorText, validDocumentRequest } from '../src/shared/documents.ts'
 import type { DocumentBridge, DocumentDraft, DocumentSnapshot } from '../src/shared/documents.ts'
 import { EditorSession } from '../src/renderer/src/files-editor/session.ts'
@@ -41,6 +42,53 @@ test('same-size external edits and same-byte identity replacement refuse without
   const replacement = join(root, 'replacement.txt'); await writeFile(replacement, changed); await rename(replacement, path)
   await assert.rejects(store.save(draft(store, 'draft'), store.guard()), failure('conflict')); assert.deepEqual(await readFile(path), changed)
 }))
+test('a refused replacement leaves the selected bytes and native revision intact', () => fixture(async (_root, path) => {
+  let attempts = 0
+  const store = new DocumentStore(async () => { attempts++; throw new Error('rename refused') })
+  const original = await selected(store, path), before = await readFile(path)
+  await assert.rejects(store.save(draft(store, 'new draft'), store.guard()), failure('write'))
+  assert.equal(attempts, 1); assert.deepEqual(store.snapshot, original); assert.deepEqual(await readFile(path), before)
+}))
+test('expiry while the flushed sibling is staged prevents submitting the replacement', () => fixture(async (root, path) => {
+  let attempts = 0, expired = false
+  const store = new DocumentStore(async (from, to) => { attempts++; await rename(from, to) })
+  const original = await selected(store, path), before = await readFile(path)
+  const current = () => {
+    if (readdirSync(root).some(name => name.startsWith('.geppio-'))) expired = true
+    return !expired
+  }
+  await assert.rejects(store.save(draft(store, 'never published'), current), failure('stale'))
+  assert.equal(expired, true); assert.equal(attempts, 0); assert.deepEqual(store.snapshot, original)
+  assert.deepEqual(await readFile(path), before); assert.deepEqual(readdirSync(root), ['document.txt'])
+}))
+for (const outcome of ['unreadable', 'different', 'revoked'] as const) {
+  test(`verification after replacement is unconfirmed when ${outcome}`, () => fixture(async (root, path) => {
+    const held = join(root, 'replaced.txt')
+    let attempts = 0
+    const store = new DocumentStore(async (from, to) => {
+      attempts++
+      await rename(from, to)
+      if (outcome === 'unreadable') await rename(to, held)
+      if (outcome === 'different') await writeFile(to, 'later external edit')
+      if (outcome === 'revoked') store.revoke()
+    })
+    const original = await selected(store, path), proposal = draft(store, 'submitted')
+    await assert.rejects(store.save(proposal, store.guard()), error => {
+      assert.ok(error instanceof DocumentFailure && error.kind === 'unconfirmed')
+      const expired = expiredDocumentResponse({ ...documentFailure(error), documents: [original] })
+      assert.deepEqual(Object.keys(expired).sort(), ['code', 'error', 'ok'])
+      assert.ok(!expired.ok && expired.code === 'unconfirmed')
+      return true
+    })
+    assert.equal(attempts, 1)
+    assert.deepEqual(store.snapshot, outcome === 'revoked' ? null : original)
+    if (outcome === 'different') {
+      await assert.rejects(store.save(proposal, store.guard()), failure('conflict'))
+      assert.equal(await readFile(path, 'utf8'), 'later external edit')
+      assert.equal(attempts, 1)
+    } else assert.equal(await readFile(outcome === 'unreadable' ? held : path, 'utf8'), '\ufeffsubmitted')
+  }))
+}
 test('missing files, hardlinks, replaced directories and junction targets fail closed', () => fixture(async (root, path, store) => {
   await selected(store, path); await rm(path)
   await assert.rejects(store.save(draft(store, 'draft'), store.guard())); assert.ok(store.snapshot)

@@ -48,9 +48,44 @@ try {
   const folder = async (file: string) => { await picker(file); await page.locator('.explorer-toolbar').getByRole('button', { name: 'Abrir pasta', exact: true }).click(); await idle() }
   const tab = (id: string) => page.locator(`[data-document-tab="${id}"]`)
   const closeTab = async (id: string, choices = [2]) => { await picker(first, choices); await tab(id).locator('..').getByRole('button', { name: /^Fechar aba/ }).click(); await idle() }
+  const closeWindow = async (choices: number[]) => { await picker(first, choices); await app!.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.close()); await idle() }
   const id = async () => (await state.getAttribute('data-document-id'))!
   const view = () => host.evaluate(node => { const e = (node as MonacoHost).monacoEditor!, model = e.getModel()!; return { text: model.getValue(), version: model.getAlternativeVersionId(), uri: model.uri.toString(), language: model.getLanguageId(), selection: e.getSelections(), top: e.getScrollTop(), left: e.getScrollLeft() } })
   await mode('GeppIO Code'); await folder(scope)
+  {
+    const files = ['confirmed.txt', 'uncertain.txt', 'untouched.txt'].map(name => join(root, name))
+    const ids: string[] = []
+    for (const file of files) {
+      await writeFile(file, 'base'); await open(file); ids.push(await id())
+      await editor.press('Control+End'); await page.keyboard.insertText(' draft')
+      await host.evaluate(node => (node as MonacoHost).monacoEditor!.getModel()!.pushStackElement())
+    }
+    const [confirmed, uncertain, untouched] = ids as [string, string, string]
+    // Change this disposable file between the real rename and its verification.
+    await app.evaluate((_electron, path) => {
+      const fs = process.getBuiltinModule('fs/promises') as typeof import('node:fs/promises'), rename = fs.rename
+      fs.rename = async (from, to) => {
+        await rename(from, to)
+        if (String(to) === path) { fs.rename = rename; await fs.writeFile(path, 'external') }
+      }
+    }, files[1]!)
+    await closeWindow([0, 0, 0])
+    await page.waitForFunction(id => document.querySelector(`[data-document-tab="${id}"]`)?.getAttribute('title')?.includes(' — '), uncertain)
+    assert.equal(await id(), untouched); assert.equal(await page.getByRole('tab').count(), 3)
+    assert.equal(await tab(confirmed).locator('.file-editor-dirty').count(), 0)
+    assert.equal(await tab(uncertain).locator('.file-editor-dirty').count(), 1)
+    assert.equal(await tab(untouched).locator('.file-editor-dirty').count(), 1)
+    assert.match(await page.locator('.file-editor-feedback').innerText(), /uncertain\.txt/)
+    assert.deepEqual(await Promise.all(files.map(file => readFile(file, 'utf8'))), ['base draft', 'external', 'base'])
+    await tab(uncertain).click(); await idle()
+    assert.equal(await state.getAttribute('data-document-status'), 'unconfirmed')
+    assert.equal(await editor.inputValue(), 'base draft')
+    await editor.press('Control+z'); assert.equal(await editor.inputValue(), 'base')
+    await editor.press('Control+y'); assert.equal(await editor.inputValue(), 'base draft')
+    for (const id of ids) await closeTab(id, [1])
+    assert.equal(await readFile(files[1]!, 'utf8'), 'external')
+    evidence.unconfirmedClose = 'Three dirty documents: first save confirmed, second file changed after replacement, third untouched; native close stopped with all tabs, drafts and Monaco undo retained'
+  }
   await page.getByRole('treeitem', { name: 'first.txt', exact: true }).click(); await idle()
   const a = await id(), firstModel = await host.evaluateHandle(node => (node as MonacoHost).monacoEditor!.getModel()!)
   await editor.press('Control+Home'); await page.keyboard.insertText('prefix\n')
@@ -86,7 +121,6 @@ try {
   assert.notEqual(await tab(b).getAttribute('title'), await tab(c).getAttribute('title'))
   await editor.fill('{"third":"dirty"}\n'); await tab(b).click(); await idle(); await editor.fill('{"second":"close draft"}\n')
   await tab(c).click(); await idle(); const cView = await view()
-  const closeWindow = async (choices: number[]) => { await picker(first, choices); await app!.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.close()); await idle() }
   await closeWindow([2]); assert.equal(await page.getByRole('tab').count(), 2); assert.deepEqual(await view(), cView)
   await closeWindow([0, 2]); assert.equal(await page.getByRole('tab').count(), 2); assert.equal(await id(), c)
   assert.equal(await tab(b).locator('.file-editor-dirty').count(), 0); assert.equal(await tab(c).locator('.file-editor-dirty').count(), 1)

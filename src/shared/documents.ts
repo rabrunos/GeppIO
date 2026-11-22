@@ -3,7 +3,7 @@ export const DOCUMENT_LIMIT = 1024 * 1024
 export const DOCUMENT_SESSION_LIMITS = { count: 8, bytes: 8 * DOCUMENT_LIMIT } as const
 export interface DocumentSnapshot { id: string; revision: string; name: string; text: string; bom: boolean; label?: string; location?: { root: string; names: string[]; caseInsensitive?: boolean } }
 export interface DocumentDraft { id: string; revision: string; text: string }
-export type DocumentError = 'invalid' | 'stale' | 'busy' | 'unsupported' | 'oversized' | 'limit' | 'unavailable' | 'conflict' | 'write'
+export type DocumentError = 'invalid' | 'stale' | 'busy' | 'unsupported' | 'oversized' | 'limit' | 'unavailable' | 'conflict' | 'write' | 'unconfirmed'
 export type DocumentResult = ({ ok: true; document: DocumentSnapshot | null; canceled?: boolean } | { ok: false; code: DocumentError; error: string; confirmed?: DocumentSnapshot; failed?: string }) & { documents?: DocumentSnapshot[]; invalidRoot?: string }
 export interface DocumentBridge {
   open(draft: DocumentDraft | null): Promise<DocumentResult>

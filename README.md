@@ -2,8 +2,8 @@
 
 Workbench desktop local com widgets e plugins modulares. O nome do produto é **GeppIO**;
 o namespace técnico é `geppio`. A base usa Electron, TypeScript, React, Tailwind, Heroicons
-e Motion. A escolha de shadcn/ui para futuras incorporações está registrada na
-[issue #8](https://github.com/rabrunos/GeppIO/issues/8); isso não significa integração já concluída.
+e Motion. O projeto prioriza componentes próprios. A decisão anterior sobre shadcn/ui e a
+preferência atual do proprietário estão registradas na [issue #8](https://github.com/rabrunos/GeppIO/issues/8).
 
 O workbench tem geometria contínua, catálogo, barras, composições, histórico de edição e
 persistência de layout. Há um runtime experimental real para plugins locais confiáveis.

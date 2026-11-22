@@ -141,8 +141,13 @@ The original is never truncated. A random exclusive sibling temporary receives c
 is flushed and closed; identity/content are checked again immediately before same-directory rename.
 Validation/staging/rename failure retains the draft without deliberately deleting original bytes.
 Cleanup removes only this operation's new temporary. No backup is created or automatically deleted.
-A failure after replacement but before acknowledgment is unconfirmed: retain the draft and inspect/
-reopen before retrying. A process failure can leave a temporary; no automatic recovery cleanup exists.
+From alpha.56, a rejected replacement and a completed replacement with failed verification
+have distinct result codes. An inspection error, changed bytes or lost grant after replacement
+returns `unconfirmed`. Main retains the last acknowledged revision while its grant is live.
+The editor retains the draft and undo history, allowing the user to copy the text and check the
+file before another explicit save. An expired frame receives no document snapshots. A multi-file
+close stops at the first unresolved save and returns earlier confirmations to the current caller.
+A process failure can leave a temporary; no automatic recovery cleanup exists.
 
 **Use ordinary local text files in a user-private folder.** This is a disclosed usage restriction,
 not technical ACL detection. On Windows, replacement uses the temporary's directory-inherited ACL;

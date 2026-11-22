@@ -90,18 +90,22 @@ export class EditorSession {
         else if (kind === 'close' && !result.document) this.entries.clear()
         if (kind === 'save' && target) this.change(target, { error: null, code: null })
       }
-      const diskChanged = snapshots.some(value => before.has(value.id) && before.get(value.id) !== value.revision)
+      const diskChanged = !result.ok && result.code === 'unconfirmed' || snapshots.some(value => before.has(value.id) && before.get(value.id) !== value.revision)
       const diskVersion = this.state.diskVersion + (diskChanged || result.invalidRoot || result.ok && !result.canceled && ['save', 'release', 'close'].includes(kind) ? 1 : 0), invalidRoot = result.invalidRoot ?? null
       if (!result.ok) {
         const failed = result.failed ?? (['save', 'release', 'activate'].includes(kind) ? target : undefined)
         if (failed) this.change(failed, { error: result.error, code: result.code })
-        this.view(active, { diskVersion, invalidRoot, notice: result.error })
+        const affected = failed && failed !== active ? this.entries.get(failed)?.document : undefined
+        this.view(active, { diskVersion, invalidRoot, notice: affected ? (affected.label ?? affected.name) + ' — ' + result.error : result.error })
       } else this.view(result.canceled ? active : result.document?.id, { diskVersion, invalidRoot, notice: invalidRoot ? 'A pasta do Explorador mudou. Reabra a pasta; as abas foram mantidas.' : null })
       return result.ok && !result.canceled
     } catch {
-      const error = 'A comunicação com o Core falhou. Mantenha as abas abertas e copie os rascunhos.'
+      const mayHaveSaved = kind === 'save' || kind === 'release' || kind === 'close'
+      const error = mayHaveSaved
+        ? 'A resposta do Core não chegou. Mantenha os rascunhos abertos, copie o texto e confira o arquivo no disco antes de salvar novamente.'
+        : 'A comunicação com o Core falhou. Mantenha as abas abertas e copie os rascunhos.'
       if (target) this.change(target, { error, code: 'unavailable' })
-      this.view(active, { notice: error }); return false
+      this.view(active, { notice: error, diskVersion: this.state.diskVersion + (mayHaveSaved ? 1 : 0) }); return false
     }
     finally { this.update({ busy: false }) }
   }

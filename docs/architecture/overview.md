@@ -130,8 +130,8 @@ implement Main-scoped widget maximization (#25), and a visual project name is no
 Windows and Linux are product targets, with Windows first. The recorded desktop evidence is
 Windows; Linux application smoke, installers and published distribution are not established by
 this architecture or by pure geometry tests. A successful preview/build is not an installer release.
-The selected shadcn/ui source (#8) and individual external-adoption policy (#19) are described
-in [requirements](../product/requirements.md); they do not imply prior component adoption.
+The owner prefers project-owned UI components (#8). Proposed external components go through
+individual adoption review (#19). See [requirements](../product/requirements.md).
 
 Before adding plugin-owned native UI surfaces, perform a separately scoped WebContentsView experiment
 and define its z-order, clipping, focus, animation and lifecycle behavior. The trusted Worker runtime

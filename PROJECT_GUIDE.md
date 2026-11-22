@@ -53,10 +53,10 @@ the provisional plugin/widget catalog are future product work in Issues #32/#35,
 approved implementation sequence. Local desktop use does not require a GeppIO account;
 the optional community identity in #34 is a separate future scope.
 
-Issue #8 selects the canonical shadcn/ui source for needed components; no identifiable
-shadcn integration is asserted by the current stack. New deliberate library or copied/adapted
-external-code adoption requires individual owner approval under [TASK_POLICY](docs/.ai/TASK_POLICY.md)
-and Issue #19. This is not a blanket approval of registries, unrelated dependencies or upgrades.
+The owner prefers project-owned UI components. Issue #8 records the earlier selection of
+shadcn/ui and the later review of that decision. Any proposed use of shadcn/ui or other
+new external code needs individual owner approval under Issue #19 and
+[TASK_POLICY](docs/.ai/TASK_POLICY.md).
 
 `package.json` is the canonical version source; `CHANGELOG.md` is integrated product history.
 The initial source baseline is `0.1.0-alpha.1`; its owner acceptance remains in Issue #1.

@@ -72,14 +72,21 @@ stubs remain supported where the original smoke uses them.
 A separate noninteractive window station was investigated but unique creation was denied in the
 normal user token. Job UI clipboard restrictions interfere with Chromium's nested sandbox jobs.
 Neither administrative elevation nor disabling the Electron sandbox is an accepted workaround.
-Full physical clipboard/picker scenarios need their original hosted gate or an approved separate
-interactive session/VM. Do not install infrastructure or change security policies automatically.
+Full clipboard and native-picker scenarios use a supported visible route on an authorized
+interactive desktop or their corresponding hosted gate, where covered. Physical interaction
+requires an observed interactive session.
 
-For deliberate visible debugging only, opt in and retain the original public command:
+For a task-authorized visible test, use a disposable profile and scope the opt-in to the
+requested command. For example, run the full Essentials smoke as follows:
 
 ```powershell
-$env:GEPPIO_TEST_VISIBLE = '1'
-try { pnpm.cmd test:desktop } finally { Remove-Item Env:GEPPIO_TEST_VISIBLE }
+$previousVisible = $env:GEPPIO_TEST_VISIBLE
+try {
+  $env:GEPPIO_TEST_VISIBLE = '1'
+  pnpm.cmd test:essentials
+} finally {
+  $env:GEPPIO_TEST_VISIBLE = $previousVisible
+}
 ```
 
 That mode clearly warns and can affect focus, windows and clipboard. Ordinary local launches

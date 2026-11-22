@@ -52,9 +52,9 @@ tools. Windows/Linux is the recorded direction, while current app validation is 
 do not report the Ubuntu secrets job as Linux application support.
 
 Before any new deliberate external-library or copied/adapted source adoption, follow the
-individual owner-approval gate in TASK_POLICY and Issue #19. Issue #8 already selects the
-canonical shadcn/ui source for needed components, not every registry/dependency or unrelated
-upgrade. Research is allowed before approval; copying, installing or running external code is
+individual owner-approval gate in TASK_POLICY and Issue #19. The owner prefers project-owned
+components. Issue #8 retains the historical shadcn/ui choice and requires a specific decision
+before future adoption. Research is allowed before approval; copying, installing or running external code is
 not authorized by research alone. Existing chosen stack and transitive graph nodes are not
 retroactively subject to individual approval.
 

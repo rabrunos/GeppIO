@@ -6,12 +6,13 @@ import { DOCUMENT_LIMIT, DOCUMENT_SESSION_LIMITS, wellFormedText } from '../shar
 import type { DocumentDraft, DocumentError, DocumentResult, DocumentSnapshot } from '../shared/documents.ts'
 
 const messages: Record<DocumentError, string> = {
-  invalid: 'Solicitação de documento inválida.', stale: 'Autorização expirada. Reabra o arquivo explicitamente.', busy: 'Aguarde a operação de arquivo em andamento.',
+  invalid: 'Solicitação de documento inválida.', stale: 'Autorização expirada. Verifique o arquivo antes de retomar a edição.', busy: 'Aguarde a operação de arquivo em andamento.',
   unsupported: 'Arquivo não suportado. Selecione texto UTF-8 válido, sem dados binários, links ou caminhos especiais.',
   oversized: 'O arquivo excede o limite de 1 MiB.', unavailable: 'Arquivo indisponível. O rascunho foi mantido.',
   limit: 'Limite de 8 arquivos abertos ou 8 MiB de conteúdo. Feche uma aba antes de abrir outro arquivo.',
   conflict: 'O arquivo ou seu destino mudou no disco. Copie o rascunho, feche a aba e reabra; nenhuma alteração externa foi sobrescrita.',
-  write: 'Não foi possível confirmar a gravação. O rascunho foi mantido. Verifique o arquivo e as permissões antes de tentar novamente.'
+  write: 'A gravação foi recusada antes de substituir o arquivo. Verifique as permissões. O rascunho foi mantido.',
+  unconfirmed: 'Não foi possível confirmar o conteúdo final no disco. Copie o rascunho e confira o arquivo antes de voltar a salvar.'
 }
 export class DocumentFailure extends Error {
   readonly kind: DocumentError
@@ -21,6 +22,10 @@ export class DocumentFailure extends Error {
 export function documentFailure(error: unknown): DocumentResult {
   const code = error instanceof DocumentFailure ? error.kind : 'unavailable'
   return { ok: false, code, error: messages[code], ...(error instanceof DocumentFailure && error.document ? { failed: error.document } : {}) }
+}
+export function expiredDocumentResponse(result: DocumentResult): DocumentResult {
+  // Keep only the outcome of a submitted save. Never return IDs or snapshots after revocation.
+  return documentFailure(new DocumentFailure(!result.ok && result.code === 'unconfirmed' ? 'unconfirmed' : 'stale'))
 }
 type Evidence = { path: string; chain: string; stat: BigIntStats; bytes: Buffer; text: string; bom: boolean }
 type Selection = { evidence: Evidence; snapshot: DocumentSnapshot }
@@ -72,6 +77,8 @@ export class DocumentStore {
   private selections = new Map<string, Selection>()
   private active: string | null = null
   private generation = 0
+  private readonly replace: (from: string, to: string) => Promise<void>
+  constructor(replace: (from: string, to: string) => Promise<void> = (from, to) => rename(from, to)) { this.replace = replace }
   get snapshot(): DocumentSnapshot | null { const selected = this.active ? this.selections.get(this.active) : null; return selected ? { ...selected.snapshot } : null }
   get snapshots(): DocumentSnapshot[] { return [...this.selections.values()].map(value => ({ ...value.snapshot })) }
   result(canceled = false): DocumentResult { return { ok: true, document: this.snapshot, documents: this.snapshots, ...(canceled ? { canceled: true } : {}) } }
@@ -131,13 +138,17 @@ export class DocumentStore {
       const file = await open(temporary, 'wx', Number(original.stat.mode & 0o777n)); created = true
       try { await file.writeFile(bytes); await file.sync() } finally { await file.close() }
       await check()
-      await rename(temporary, original.path); committed = true
+      if (!current() || this.selections.get(draft.id) !== selected) throw new DocumentFailure('stale')
+      await this.replace(temporary, original.path); committed = true
       const evidence = await inspect(original.path)
       if (!evidence.bytes.equals(bytes) || !current() || this.selections.get(draft.id) !== selected) throw new DocumentFailure('conflict')
       selected.evidence = evidence
       selected.snapshot = { ...selected.snapshot, revision: randomUUID(), text: draft.text }
       return { ...selected.snapshot }
-    } catch (error) { throw error instanceof DocumentFailure ? error : new DocumentFailure('write') }
+    } catch (error) {
+      if (committed) throw new DocumentFailure('unconfirmed', draft.id)
+      throw error instanceof DocumentFailure ? error : new DocumentFailure('write')
+    }
     finally { if (created && !committed) await unlink(temporary).catch(() => { /* New temporary only; never delete a selected file or recovery backup. */ }) }
   }
   async resolveDraft(draft: DocumentDraft | null, decide: () => Promise<DocumentDecision>, current: () => boolean): Promise<boolean> {

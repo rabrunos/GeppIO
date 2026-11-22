@@ -38,7 +38,7 @@
     "No BootCrate Setup, Console, raw intake or upstream application code.",
     "Completed, validated approved GeppIO Issues inherit standing commit/push authorization under TASK_POLICY after repository ID/origin/main/staged-diff verification; explicit task overrides apply. Issue metadata/closure and publication require separate authority.",
     "Retain Electron for the owner-recorded Windows/Linux direction; platforms currently records validated Windows x64 scope, not delivered Linux support. Linux runtime smoke/packaging and distribution remain unverified/unimplemented.",
-    "Issue #8 selects the canonical shadcn/ui source for needed components, not arbitrary registries/dependencies; no identifiable integration is claimed in the current toolchain.",
+    "The owner prefers project-owned UI components. Issue #8 records the historical shadcn/ui selection. Future adoption needs a specific decision under Issue #19.",
     "New deliberate external-library or copied/adapted source adoption requires individual owner approval under Issue #19 and TASK_POLICY. Existing chosen stack is not retroactively unapproved; transitive nodes receive normal graph review rather than separate approval per node."
   ],
   "architecture_invariants": [
