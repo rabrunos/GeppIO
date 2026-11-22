@@ -2,6 +2,10 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.55] — 2026-11-22
+
+- Workspace Essentials 1.0.1 reconciles ambiguous writes against the last confirmed and attempted documents, keeping later edits and refusing to overwrite divergent storage.
+
 ## [0.1.0-alpha.54] — 2026-11-18
 
 - Register Git Changes as a shared host View and open it directly in one movable, non-blocking internal window from GeppIO Code or the Workbench project menu.

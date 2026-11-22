@@ -1,9 +1,28 @@
-import type { PluginContextV2, PluginInstanceV2, WidgetViewV2, WidgetEvent } from '../../../../sdk/plugin-v2.d.ts'
-import { emptyModel, parseModel, document } from './model.js'
+import type { DataDocument, DataSnapshot, Json, PluginContextV2, PluginInstanceV2, WidgetViewV2, WidgetEvent } from '../../../../sdk/plugin-v2.d.ts'
+import { emptyModel, parseModel, document } from './model.ts'
+
+// JSON object member order is not part of the stored document's identity.
+function sameValue(left: Json, right: Json): boolean {
+  if (left === right) return true
+  if (!left || !right || typeof left !== 'object' || typeof right !== 'object') return false
+  if (Array.isArray(left)) return Array.isArray(right) && left.length === right.length && left.every((value, i) => sameValue(value, right[i]!))
+  if (Array.isArray(right)) return false
+  const keys = Object.keys(left)
+  return keys.length === Object.keys(right).length && keys.every(key => Object.hasOwn(right, key) && sameValue(left[key]!, right[key]!))
+}
+
+function storedModel(snapshot: DataSnapshot) {
+  if (!Number.isSafeInteger(snapshot.revision) || snapshot.revision < 0) throw new Error('Revisão incompatível.')
+  if (snapshot.document === null) return emptyModel()
+  if (snapshot.document.schemaVersion !== 1) throw new Error('Formato incompatível.')
+  return parseModel(snapshot.document.value)
+}
 
 export async function activate(context: PluginContextV2): Promise<PluginInstanceV2> {
-  let model = emptyModel(), revision = 0, state = 'Salvo.', writable = true, itemDraft = '', active = true
-  try { const snapshot = await context.data.read(); revision = snapshot.revision; if (snapshot.document) model = parseModel(snapshot.document.value) }
+  let confirmed: DataSnapshot = { revision: 0, document: null }
+  let attempted: DataDocument | null = null
+  let model = emptyModel(), state = 'Salvo.', writable = true, itemDraft = '', active = true
+  try { confirmed = await context.data.read(); model = storedModel(confirmed) }
   catch { writable = false; state = 'Falha ao ler dados. Originais preservados para recuperação; edição bloqueada.' }
   function publish() {
     if (!active) return
@@ -25,13 +44,31 @@ export async function activate(context: PluginContextV2): Promise<PluginInstance
   }
   async function save() {
     state = 'Salvando…'; publish()
-    try { const snapshot = await context.data.write(revision, document(model)); revision = snapshot.revision; state = 'Salvo.' }
+    try {
+      if (attempted) {
+        const observed = await context.data.read()
+        storedModel(observed)
+        const value = observed.document?.value ?? null
+        if (!sameValue(value, attempted.value) && !sameValue(value, confirmed.document?.value ?? null)) {
+          throw new Error('Conflito com dados armazenados. Copie o rascunho antes de fechar e tente novamente após resolver a divergência.')
+        }
+        confirmed = observed
+      }
+      const desired = document(model)
+      if (!sameValue(desired.value, confirmed.document?.value ?? null)) {
+        // Keep this exact payload even if a committed write returns an error.
+        attempted = desired
+        confirmed = await context.data.write(confirmed.revision, desired)
+      }
+      attempted = null
+      state = 'Salvo.'
+    }
     catch (error) { state = 'Falha ao salvar. Texto pendente preservado nesta ativação. ' + (error instanceof Error ? error.message : '') }
     publish()
   }
   async function onEvent(widgetId: string, event: WidgetEvent) {
     if (!active || !writable) return
-    if (event.kind === 'action' && event.controlId === 'save') { await save(); return }
+    if (event.kind === 'action' && event.controlId === 'save') { if (attempted) await save(); return }
     if (widgetId === 'scratch' && event.kind === 'input' && event.controlId === 'scratch') model.scratch = event.value
     else if (widgetId === 'checklist') {
       if (event.kind === 'input' && event.controlId === 'item') { itemDraft = event.value.slice(0, 512); publish(); return }

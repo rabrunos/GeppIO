@@ -34,6 +34,15 @@ all completed sessions in pages of twelve; compact Sidebar/Bottom show summaries
 The 200-session pilot limit preserves history and stops offering new sessions.
 Existing installation retention/recovery and ordinary-data trust limits apply.
 
+Workspace Essentials 1.0.1 keeps the confirmed document/revision, the exact
+attempted write and the editable model separate. After a rejected write, the
+next saving event or explicit retry reads and validates storage. An observed
+attempt or confirmed base supplies the current CAS revision. A later edit is
+written once if needed. Divergent or unreadable storage keeps the draft and
+pending status for recovery. A retry never repeats a domain action. This
+applies to a live activation; a lost response followed by Worker termination
+does not persist unsaved drafts. Existing installation and data schemas apply.
+
 `schemaVersion:1, apiVersion:2` opts in using the existing manifest keys/widget declarations.
 `sdk/plugin.d.ts` and the exact API 1 text/action validator remain unchanged. API 2 uses
 `sdk/plugin-v2.d.ts`: literal status text, at most eight text fields, four lists (100 items each),
