@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { lstat, opendir, realpath } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, parse, relative, resolve, sep } from 'node:path'
-import { EXPLORER_LIMITS } from '../shared/explorer.ts'
+import { EXPLORER_LIMITS, safeExplorerName, validExplorerBasename } from '../shared/explorer.ts'
+export { safeExplorerName } from '../shared/explorer.ts'
 import type { ExplorerError, ExplorerNode, ExplorerResult } from '../shared/explorer.ts'
 
 const messages: Record<ExplorerError, string> = {
@@ -14,13 +15,10 @@ export class ExplorerFailure extends Error {
   readonly kind: ExplorerError
   constructor(kind: ExplorerError) { super(messages[kind]); this.kind = kind }
 }
+export class ExplorerDestinationExists extends Error {}
 export function explorerFailure(error: unknown): ExplorerResult {
   const code = error instanceof ExplorerFailure ? error.kind : 'unavailable'
   return { ok: false, code, error: messages[code] }
-}
-export function safeExplorerName(name: string): boolean {
-  return !!name && name.length <= EXPLORER_LIMITS.name && ![...name].some(c => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127) && !/[/\\:<>"|?*\ud800-\udfff]/u.test(name)
-    && !/[. ]$/.test(name) && !/^(\.|\.\.|con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])(?:\.|$)/i.test(name) && !/~\d/.test(name)
 }
 type Evidence = { path: string; chain: string; kind: 'directory' | 'file' }
 type Node = Omit<Evidence, 'kind'> & { kind: ExplorerNode['kind']; display: ExplorerNode; depth: number }
@@ -45,7 +43,7 @@ export const orderExplorerNodes = (a: ExplorerNode, b: ExplorerNode): number =>
   Number(b.kind === 'directory') - Number(a.kind === 'directory') || compare(a.name.toLowerCase(), b.name.toLowerCase()) || compare(a.name, b.name)
 const compare = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0
 
-/** Per-window, memory-only grant. No renderer path, recursive scan, watcher or write operation. */
+/** Per-window, memory-only grant. Native paths and identity chains stay in Main. */
 export class DirectoryStore {
   private root: Node | null = null
   private nodes = new Map<string, Node>()
@@ -81,6 +79,46 @@ export class DirectoryStore {
   /** Main-only reuse of the exact selected root; never a renderer path grant. */
   async folder(root: string, current: () => boolean): Promise<string> {
     return (await this.target(root, root, current)).path
+  }
+  /** Resolve one bounded write intent from existing navigation grants. The
+   * callbacks recheck the same parent/source identities across native waits. */
+  mutationTarget(root: string, id: string, operation: 'create-file' | 'create-directory' | 'rename-file', name: string, current: () => boolean) {
+    const held = this.nodes.get(id)
+    if (!current() || !this.root || this.root.display.id !== root || !held) throw new ExplorerFailure('stale')
+    const components = relative(parse(held.path).root, held.path).split(sep).filter(Boolean)
+    if (!validExplorerBasename(name) || !components.every(validExplorerBasename)) throw new ExplorerFailure('unsupported')
+    const rename = operation === 'rename-file'
+    if (held.kind !== (rename ? 'file' : 'directory')) throw new ExplorerFailure('unsupported')
+    const parent = rename ? [...this.nodes.values()].find(node => node.path === dirname(held.path) && node.kind === 'directory' && held.chain.endsWith('/' + node.chain)) : held
+    if (!parent || parent.depth >= EXPLORER_LIMITS.depth) throw new ExplorerFailure('limit')
+    const destination = join(parent.path, name), kind = operation === 'create-directory' ? 'directory' : 'file'
+    if (destination.length > 8192 || dirname(destination) !== parent.path) throw new ExplorerFailure('unsupported')
+    const parentId = parent.display.id
+    const verifyParent = async () => {
+      if (!current() || await this.target(root, parentId, current) !== parent) throw new ExplorerFailure('stale')
+    }
+    const authorize = async () => {
+      await verifyParent()
+      const listing = await this.list(root, parentId, current)
+      if (!current() || !listing.ok || !listing.children) throw new ExplorerFailure('stale')
+      const children = listing.children
+      if (children.some(entry => entry.name.toLowerCase() === name.toLowerCase())) throw new ExplorerDestinationExists()
+      if (!rename && (children.length >= EXPLORER_LIMITS.entries || this.nodes.size >= EXPLORER_LIMITS.nodes)) throw new ExplorerFailure('limit')
+      const proposed = [...children.filter(child => !rename || child.id !== id), { id: parentId, kind, name }]
+      if (Buffer.byteLength(JSON.stringify(proposed)) > EXPLORER_LIMITS.bytes) throw new ExplorerFailure('limit')
+      if (rename && await this.target(root, id, current) !== held) throw new ExplorerFailure('stale')
+      await verifyParent()
+    }
+    return { parent: parent.path, parentChain: parent.chain, destination, source: rename ? { path: held.path, chain: held.chain } : null, authorize, verifyParent,
+      registerFile: (chain: string) => {
+        if (operation !== 'create-file' || !current() || this.nodes.get(parentId) !== parent || !chain.endsWith('/' + parent.chain)) return
+        const known = [...this.nodes.values()].find(node => node.path === destination)
+        if (known) return known.chain === chain && known.kind === 'file' ? known.display.id : undefined
+        if (this.nodes.size >= EXPLORER_LIMITS.nodes) return
+        const display: ExplorerNode = { id: randomUUID(), kind: 'file', name }
+        this.nodes.set(display.id, { kind: 'file', path: destination, chain, depth: parent.depth + 1, display })
+        return display.id
+      } }
   }
   /** Main-only restoration through the same lazy nodes, budgets and file checks. */
   async resolveFile(root: string, names: readonly string[], current: () => boolean): Promise<string> {

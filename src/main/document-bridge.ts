@@ -6,8 +6,9 @@ import { DocumentFailure, DocumentStore, documentFailure, expiredDocumentRespons
 import { validDocumentRequest } from '../shared/documents.ts'
 import type { DocumentDraft, DocumentResult } from '../shared/documents.ts'
 import { DirectoryStore, ExplorerFailure, explorerFailure, safeExplorerName } from './explorer.ts'
-import { validExplorerRequest } from '../shared/explorer.ts'
-import type { ExplorerResult } from '../shared/explorer.ts'
+import { explorerMutations, validExplorerMutationRequest, validExplorerRequest } from '../shared/explorer.ts'
+import type { ExplorerMutationResult, ExplorerResult } from '../shared/explorer.ts'
+import { mutateExplorer } from './explorer-write.ts'
 import { GitStore, GitFailure, gitFailure } from './git.ts'
 import { SearchExpired, SearchStore } from './search.ts'
 import { validSearchRequest } from '../shared/search.ts'
@@ -29,6 +30,7 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
   const revokeProjectResults = () => { git.revoke(); search.revoke(); quickOpen.revoke() }
   const workspace = new WorkspaceOwner(directories, store, new WorkspaceRecovery(app.getPath('userData')), revokeProjectResults)
   let busy = false, closing = false, remembering = false, ticket: string | null = null
+  let explorerWriting = false, indexWriting = false
   const revoke = () => { workspace.revoke(); revokeProjectResults(); store.revoke(); directories.revoke(); ticket = null }
   const decide = async (name = store.snapshot?.label ?? store.snapshot?.name ?? 'arquivo', id = store.snapshot?.id) => {
     const path = id ? store.filePath(id) : null
@@ -134,7 +136,7 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
       if (operation === 'release') { const value = await workspace.close(root, contextCurrent); if (!contextCurrent()) throw new ExplorerFailure('stale'); return { ok: true, root: value.root } }
       if (operation === 'list') return await directories.list(root, node, current)
       const path = await directories.file(root, node, current)
-      return await response(await store.select(path, args[2] as DocumentDraft | null, decide, current, async () => { await directories.file(root, node, current) }), current)
+      return await response(await store.select(path, args[2] as DocumentDraft | null, decide, current, async () => { await directories.file(root, node, current) }, undefined, 'file-identity'), current)
     } catch (error) {
       const result = fail(error)
       return operation === 'open' ? await response(!result.ok ? { ...result, documents: store.snapshots, ...(store.snapshot ? { confirmed: store.snapshot } : {}) } : documentFailure(new DocumentFailure('invalid')), current) : result
@@ -187,6 +189,28 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
     const documentCurrent = store.guard(), directoryCurrent = directories.guard()
     return () => !closing && !win.isDestroyed() && !win.webContents.isDestroyed() && win.webContents.mainFrame === frame && frame.url === expectedURL && documentCurrent() && directoryCurrent()
   }
+  const profile = app.getPath('userData')
+  const bound = (path: string) => {
+    const inside = relative(profile, path)
+    return (!isAbsolute(inside) && inside !== '..' && !inside.startsWith('..' + sep)) || workspace.hasFileBinding(path)
+  }
+  for (const operation of explorerMutations) ipcMain.handle(`explorer:${operation}`, async (event, ...args: unknown[]): Promise<ExplorerMutationResult> => {
+    const current = projectCaller(event)
+    if (!current?.() || !validExplorerMutationRequest(args)) return { outcome: 'refused', message: 'Solicitação do Explorador inválida ou expirada.' }
+    if (busy || remembering || ticket || indexWriting) return { outcome: 'refused', message: 'Aguarde a operação de arquivo ou projeto em andamento.' }
+    busy = explorerWriting = true
+    const uncertain = { outcome: 'unconfirmed', message: 'Não foi possível confirmar o resultado. Confira a pasta antes de tentar outra operação.' } as const
+    try {
+      const result = await mutateExplorer(directories, operation, args[0] as string, args[1] as string, args[2] as string, current, bound)
+      if (result.outcome === 'refused') return result
+      if (!current()) return uncertain
+      revokeProjectResults()
+      return result
+    } catch {
+      if (current()) revokeProjectResults()
+      return uncertain
+    } finally { busy = explorerWriting = false }
+  })
   const searchOperations = ['start', 'read', 'cancel', 'open'] as const
   for (const operation of searchOperations) ipcMain.handle(`search:${operation}`, async (event, ...args: unknown[]) => {
     const current = projectCaller(event)
@@ -248,12 +272,17 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
     const frame = event.senderFrame
     if (win.isDestroyed() || event.sender !== win.webContents || frame !== win.webContents.mainFrame || frame?.url !== expectedURL || !validGitRequest(operation, args)) return gitFailure(new GitFailure('invalid'))
     const current = () => !closing && !win.isDestroyed() && !win.webContents.isDestroyed() && win.webContents.mainFrame === frame && frame.url === expectedURL
+    const writesIndex = operation === 'stage' || operation === 'unstage'
+    if (writesIndex && (explorerWriting || indexWriting)) return gitFailure(new GitFailure('busy'))
+    if (writesIndex) indexWriting = true
     try { return await git.inspect(operation, args[0] as string, args[1] as string | undefined, current) } catch (error) { return gitFailure(error) }
+    finally { if (writesIndex) indexWriting = false }
   })
   win.webContents.on('destroyed', () => {
     revoke()
     for (const operation of operations) ipcMain.removeHandler(`document:${operation}`)
     for (const operation of directoryOperations) ipcMain.removeHandler(`explorer:${operation}`)
+    for (const operation of explorerMutations) ipcMain.removeHandler(`explorer:${operation}`)
     for (const operation of gitOperations) ipcMain.removeHandler(`git:${operation}`)
     for (const operation of searchOperations) ipcMain.removeHandler(`search:${operation}`)
     for (const operation of searchOperations) ipcMain.removeHandler(`quick-open:${operation}`)

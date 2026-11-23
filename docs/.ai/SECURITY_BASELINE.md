@@ -44,11 +44,20 @@ is exposed; existing sandbox/context isolation/CSP/navigation controls remain. T
 pilot is not hostile-plugin/process isolation. [Status Bar](../architecture/status-bar.md) consumes
 existing document/session state and never interprets arbitrary output as project diagnostics.
 
-Issue #46 adds four fixed app-only [Explorer operations](../architecture/explorer.md) for one
+Issue #46 adds four fixed app-only [Explorer navigation operations](../architecture/explorer.md) for one
 native-selected folder. Main holds bounded revocable node/root grants, checks full ancestor
 identities and canonical containment, refuses ordinary links/junctions and special paths, and
 opens through the existing document service. There is no renderer path input or Worker grant.
 Path-based IO retains TOCTOU; arbitrary Windows reparse-tag/special-storage protection is unverified.
+
+Alpha.65 adds three exact-caller Explorer write operations. Main derives the parent and
+destination from existing grants and one validated basename, checks live document and recovery
+bindings, excludes the app profile and refuses .git and special names along the path. File
+and folder creation are exclusive. Same-parent file rename uses the system Windows PowerShell
+with a fixed noninteractive command, isolated module lookup and two-argument .NET File.Move.
+A possible native write with a lost acknowledgment or failed postcondition yields an
+uncertain outcome. Search, Quick Open and Git results expire after confirmed or uncertain
+mutations. The same-user path race still applies.
 
 The current app is local and has no account, remote content, database or
 secret vault. Issue #21 adds only explicitly trusted local development plugins. Offline does not mean trusted input. JSON layout import, saved layout bytes,

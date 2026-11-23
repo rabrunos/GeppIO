@@ -100,7 +100,8 @@ try {
     Object.entries(window.geppio!.portableLayouts).map(([name, method]) => [name, typeof method])
   )), { exportFile: 'function', importFile: 'function' }, 'Only the two native composition picker methods are exposed')
   assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.documents).sort()), ['activate', 'close', 'onCloseRequested', 'open', 'release', 'save'], 'Only the bounded document contract with ID-only activation is exposed; no filesystem/path API')
-  assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.explorer).sort()), ['list', 'open', 'release', 'select'], 'Only opaque selected-directory operations are exposed; no arbitrary path/channel API')
+  assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.explorer).sort()),
+    ['createDirectory', 'createFile', 'list', 'open', 'release', 'renameFile', 'select'], 'Only fixed selected-directory operations are exposed')
   assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.terminal).sort()), ['close', 'input', 'read', 'resize', 'start'], 'Only the five fixed app-owned terminal operations are exposed')
   assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.git).sort()), ['compare', 'stage', 'status', 'unstage'], 'Only fixed root/change opaque Git operations are exposed')
   assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.workspace).sort()), ['configure', 'forget', 'read', 'remember', 'restore', 'standalone'], 'Workspace has only fixed path-free app operations and bounded view metadata')

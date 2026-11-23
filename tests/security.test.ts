@@ -21,7 +21,7 @@ test('production script CSP is not the development inline-script policy', () => 
 test('static security regression: renderer has only fixed management, activation-bound data and authorized window chrome', () => {
   const preload = readFileSync('src/preload/index.ts', 'utf8'), main = readFileSync('src/main/index.ts', 'utf8')
   assert.ok(!/child_process|node:fs|sendSync|\.send\(/.test(preload))
-  assert.deepEqual([...preload.matchAll(/ipcRenderer.invoke\('([^']+)'/g)].map(match => match[1]), ['plugins:list', 'plugins:install', 'plugins:install-file', 'plugins:set-developer-mode', 'plugins:reload', 'plugins:link', 'plugins:set-enabled', 'plugins:remove', 'window:minimize', 'window:maximize', 'window:close', 'plugin-data:begin', 'plugin-data:read', 'plugin-data:write', 'plugin-data:end', 'document:open', 'document:save', 'document:release', 'document:activate', 'document:close', 'explorer:select', 'explorer:list', 'explorer:open', 'explorer:release', 'terminal:read', 'terminal:start', 'terminal:input', 'terminal:resize', 'terminal:close', 'git:status', 'git:compare', 'git:stage', 'git:unstage', 'search:start', 'search:read', 'search:cancel', 'search:open', 'workspace:read', 'workspace:restore', 'workspace:standalone', 'workspace:configure', 'workspace:forget', 'workspace:remember', 'portable-layout:import', 'portable-layout:export', 'quick-open:start', 'quick-open:read', 'quick-open:cancel', 'quick-open:open'])
+  assert.deepEqual([...preload.matchAll(/ipcRenderer.invoke\('([^']+)'/g)].map(match => match[1]), ['plugins:list', 'plugins:install', 'plugins:install-file', 'plugins:set-developer-mode', 'plugins:reload', 'plugins:link', 'plugins:set-enabled', 'plugins:remove', 'window:minimize', 'window:maximize', 'window:close', 'plugin-data:begin', 'plugin-data:read', 'plugin-data:write', 'plugin-data:end', 'document:open', 'document:save', 'document:release', 'document:activate', 'document:close', 'explorer:select', 'explorer:list', 'explorer:open', 'explorer:release', 'explorer:create-file', 'explorer:create-directory', 'explorer:rename-file', 'terminal:read', 'terminal:start', 'terminal:input', 'terminal:resize', 'terminal:close', 'git:status', 'git:compare', 'git:stage', 'git:unstage', 'search:start', 'search:read', 'search:cancel', 'search:open', 'workspace:read', 'workspace:restore', 'workspace:standalone', 'workspace:configure', 'workspace:forget', 'workspace:remember', 'portable-layout:import', 'portable-layout:export', 'quick-open:start', 'quick-open:read', 'quick-open:cancel', 'quick-open:open'])
   assert.doesNotMatch(readFileSync('sdk/plugin.d.ts', 'utf8'), /PortableLayoutBridge|portable-layout:/)
   const documents = readFileSync('src/main/document-bridge.ts', 'utf8')
   assert.match(documents, /event.sender !== win.webContents/)
@@ -31,6 +31,8 @@ test('static security regression: renderer has only fixed management, activation
   assert.match(documents, /validGitRequest\(operation, args\)/)
   assert.match(documents, /validSearchRequest\(operation, args\)/)
   assert.match(documents, /validQuickOpenRequest\(operation, args\)/)
+  assert.match(documents, /validExplorerMutationRequest\(args\)/)
+  assert.doesNotMatch(readFileSync('sdk/plugin.d.ts', 'utf8'), /explorer:(create-file|create-directory|rename-file)|ExplorerMutationResult/)
   assert.doesNotMatch(readFileSync('sdk/plugin.d.ts', 'utf8'), /QuickOpenBridge|quick-open:/)
   assert.doesNotMatch(readFileSync('sdk/plugin.d.ts', 'utf8'), /SearchBridge|search:(start|read|cancel|open)/)
   const terminal = readFileSync('src/main/terminal-bridge.ts', 'utf8')

@@ -1,6 +1,5 @@
 import type { QuickOpenBridge, QuickOpenPage, QuickOpenResult } from '../../../shared/quick-open.ts'
 import { QUICK_OPEN_LIMITS, validQuickOpenQuery } from '../../../shared/quick-open.ts'
-import type { DocumentResult } from '../../../shared/documents.ts'
 import type { ExplorerSession } from '../files-editor/explorer-session.ts'
 
 interface State {
@@ -34,12 +33,14 @@ export class QuickOpenSession {
   }
   connect() {
     if (this.unsubscribe) return
+    let version = this.explorer.snapshot().mutationVersion
     const sync = () => {
       const explorer = this.explorer.snapshot(), editor = this.explorer.editor.snapshot(), selected = explorer.root?.id ?? null
+      const changed = version !== explorer.mutationVersion; version = explorer.mutationVersion
       if (this.invalidRoot !== selected) this.invalidRoot = null
       if (selected && editor.invalidRoot === selected) this.invalidRoot = selected
       const root = this.invalidRoot ? null : selected, busy = explorer.busy || editor.busy
-      if (root !== this.state.root) { this.reset(); this.update({ ...closed, root, busy }) }
+      if (root !== this.state.root || changed) { this.reset(); this.update({ ...closed, root, busy }) }
       else if (busy !== this.state.busy) this.update({ busy })
     }
     const stopExplorer = this.explorer.subscribe(sync), stopEditor = this.explorer.editor.subscribe(sync)
@@ -91,25 +92,6 @@ export class QuickOpenSession {
     this.update({ page: result.value, error: null })
     if (result.value.status === 'running' && this.state.visible && !this.state.opening) this.schedule(100)
   }
-  private async reconcileObsolete(result: DocumentResult, active: string | null, wasEmpty: boolean): Promise<DocumentResult> {
-    const ignored = { ok: true, canceled: true, document: null, invalidRoot: result.invalidRoot } as const
-    if (!result.ok || result.canceled || !result.document) return ignored
-    const receipt = result.document, editor = this.explorer.editor
-    if (active === receipt.id) return ignored
-    if (active) {
-      const restored = await editor.bridge.activate(active)
-      return restored.ok ? { ...ignored, documents: result.documents ?? [receipt] } :
-        { ...restored, documents: restored.documents ?? result.documents ?? [receipt], invalidRoot: result.invalidRoot }
-    }
-    // A sole, freshly granted document cannot have acquired any local edits:
-    // openAuthorized still owns the editor and has not delivered it to a model.
-    const sole = result.documents?.length === 1 ? result.documents[0] : null
-    if (wasEmpty && !editor.documentState(receipt.id) && sole?.id === receipt.id && sole.revision === receipt.revision && sole.text === receipt.text) {
-      const released = await editor.bridge.release({ id: receipt.id, revision: receipt.revision, text: receipt.text })
-      return { ...released, invalidRoot: result.invalidRoot }
-    }
-    return { ...ignored, documents: result.documents ?? [receipt] }
-  }
   async open(id: string) {
     const { page, busy, visible, opening, root } = this.state, generation = this.generation, editor = this.explorer.editor
     if (!page || !visible || busy || opening || this.locked || !page.items.some(item => item.id === id)) return false
@@ -118,9 +100,7 @@ export class QuickOpenSession {
     const opened = await editor.openAuthorized(async () => {
       const result = await this.bridge.open(page.job, id)
       if (generation !== this.generation || root !== this.explorer.snapshot().root?.id || root === result.invalidRoot) {
-        try { return await this.reconcileObsolete(result, before.document?.id ?? null, before.tabs.length === 0) }
-        catch { return { ok: false, code: 'unavailable', error: 'A pasta mudou e a aba ativa não pôde ser confirmada. Confira as abas abertas.',
-          invalidRoot: result.invalidRoot, documents: result.documents ?? (result.ok && result.document ? [result.document] : undefined) } }
+        return editor.reconcileObsoleteOpen(result, before)
       }
       if (!result.ok && result.expired) { this.reset(); this.update({ page: null, error: result.error }) }
       return result

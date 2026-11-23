@@ -30,6 +30,18 @@ async function selected(workspace: WorkspaceOwner, path: string) {
   assert.ok(result.ok && result.document); return result.document
 }
 
+test('an Explorer rename refuses both live file grants and files the current recovery record still references', async () => fixture(async ({ project, profile, a, b }) => {
+  const workspace = owner(profile)
+  await workspace.opened(project, current)
+  const file = await selected(workspace, a)
+  assert.ok(workspace.hasFileBinding(a)); assert.equal(workspace.hasFileBinding(b), false)
+  await workspace.remember(editor(workspace), current)
+  await workspace.documents.release({ id: file.id, revision: file.revision, text: file.text }, async () => 'cancel', current)
+  assert.ok(workspace.hasFileBinding(a))
+  await workspace.persist(current)
+  assert.equal(workspace.hasFileBinding(a), false)
+}))
+
 test('Workspace protocol accepts only bounded metadata and fixed operations; never native paths or source', () => {
   const view = { id: randomUUID(), revision: randomUUID(), dirty: false, language: null, selection: { start: 0, end: 0, top: 0, left: 0 } }
   const state = { active: view.id, tabs: [view] }

@@ -143,7 +143,9 @@ test('shared Explorer follows active tabs and refreshed identity without saving 
     return value.ok ? { ...value, document: value.document ? locate(value.document) : null, documents: docs.snapshots.map(locate) } : value
   }
   const editor = new EditorSession({ activate: async id => reply(docs.activate(id)), open: async () => ({ ok: true, document: null }), save: async draft => { await docs.save(draft, current); return reply(docs.result()) }, release: async draft => reply(await docs.release(draft, async () => decision, current)), close: async () => ({ ok: true, document: null }), onCloseRequested: () => () => {} })
-  const explorer = new ExplorerSession({ select: () => dirs.select(path, current), list: (r, n) => dirs.list(r, n, current), release: async r => dirs.release(r), open: async (r, n, draft) => {
+  const unexpectedWrite = () => { throw new Error('unexpected Explorer mutation') }
+  const explorer = new ExplorerSession({ createFile: unexpectedWrite, createDirectory: unexpectedWrite, renameFile: unexpectedWrite,
+    select: () => dirs.select(path, current), list: (r, n) => dirs.list(r, n, current), release: async r => dirs.release(r), open: async (r, n, draft) => {
     try { return reply(await docs.select(await dirs.file(r, n, current), draft, async () => decision, current, async () => { await dirs.file(r, n, current) })) } catch (error) { return documentFailure(error) }
   } }, editor)
   explorer.connect()

@@ -43,17 +43,20 @@ export class SearchSession {
   private release(job: string) { void this.bridge.cancel(job).catch(() => {}) }
   connect() {
     if (this.unsubscribe) return
+    let version = this.explorer.snapshot().mutationVersion
     const sync = () => {
-      const selected = this.explorer.snapshot().root?.id ?? null
+      const explorer = this.explorer.snapshot(), selected = explorer.root?.id ?? null
+      const changed = version !== explorer.mutationVersion; version = explorer.mutationVersion
       if (this.invalidRoot !== selected) this.invalidRoot = null
       if (selected && this.explorer.editor.snapshot().invalidRoot === selected) this.invalidRoot = selected
       // A later document operation can clear its notice without reauthorizing
       // this root. Search resumes only after Explorer obtains a fresh token.
       const root = this.invalidRoot ? null : selected
-      if (root === this.state.root) return
+      if (root === this.state.root && !changed) return
       this.invalidate()
       if (this.state.page?.status === 'running') this.release(this.state.page.job)
-      this.update({ root, ...idle, feedback: this.invalidRoot ? 'A pasta do projeto mudou. Abra a pasta novamente no Explorador.' : null })
+      this.update({ root, ...idle, feedback: this.invalidRoot ? 'A pasta do projeto mudou. Abra a pasta novamente no Explorador.' :
+        changed && this.state.page ? 'A árvore do projeto mudou. Busque novamente.' : null })
     }
     const stopExplorer = this.explorer.subscribe(sync), stopEditor = this.explorer.editor.subscribe(sync)
     this.unsubscribe = () => { stopExplorer(); stopEditor() }

@@ -43,7 +43,10 @@ const explorer = Object.freeze<ExplorerBridge>({
   select: () => ipcRenderer.invoke('explorer:select'),
   list: (root, node) => ipcRenderer.invoke('explorer:list', root, node),
   open: (root, node, draft) => ipcRenderer.invoke('explorer:open', root, node, draft),
-  release: root => ipcRenderer.invoke('explorer:release', root)
+  release: root => ipcRenderer.invoke('explorer:release', root),
+  createFile: (root, node, name) => ipcRenderer.invoke('explorer:create-file', root, node, name),
+  createDirectory: (root, node, name) => ipcRenderer.invoke('explorer:create-directory', root, node, name),
+  renameFile: (root, node, name) => ipcRenderer.invoke('explorer:rename-file', root, node, name)
 })
 const terminal = Object.freeze<import('../shared/terminal.ts').TerminalBridge>({
   read: (id, after) => ipcRenderer.invoke('terminal:read', id, after),

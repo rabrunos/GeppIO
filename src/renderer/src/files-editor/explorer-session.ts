@@ -1,4 +1,5 @@
-import type { ExplorerBridge, ExplorerNode } from '../../../shared/explorer.ts'
+import { validExplorerBasename } from '../../../shared/explorer.ts'
+import type { ExplorerBridge, ExplorerMutation, ExplorerMutationResult, ExplorerNode } from '../../../shared/explorer.ts'
 import type { EditorSession } from './session.ts'
 import type { WorkspaceBridge, WorkspaceResult, WorkspaceStatus } from '../../../shared/workspace.ts'
 
@@ -13,11 +14,11 @@ export function findExplorerChild(nodes: readonly ExplorerNode[], name: string, 
 export interface ExplorerState {
   root: ExplorerNode | null; children: ReadonlyMap<string, ExplorerNode[]>; expanded: ReadonlySet<string>; diskVersion: number
   errors: ReadonlyMap<string, string>; busy: boolean; error: string | null; active: string | null; document: string | null
-  workspace: WorkspaceStatus | null
+  workspace: WorkspaceStatus | null; mutationVersion: number; mutationNotice: string | null
 }
 /** One navigation owner for the activity view and the explicitly placed official widget. */
 export class ExplorerSession {
-  private state: ExplorerState = { root: null, children: new Map(), expanded: new Set(), diskVersion: 0, errors: new Map(), busy: false, error: null, active: null, document: null, workspace: null }
+  private state: ExplorerState = { root: null, children: new Map(), expanded: new Set(), diskVersion: 0, errors: new Map(), busy: false, error: null, active: null, document: null, workspace: null, mutationVersion: 0, mutationNotice: null }
   private listeners = new Set<() => void>()
   private stop: (() => void) | null = null
   private generation = 0
@@ -36,7 +37,7 @@ export class ExplorerSession {
   constructor(bridge: ExplorerBridge, editor: EditorSession, workspace?: WorkspaceBridge) { this.bridge = bridge; this.editor = editor; this.workspace = workspace }
   snapshot = () => this.state
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener) } }
-  private update(patch: Partial<ExplorerState>) { this.state = { ...this.state, ...patch }; if (patch.busy !== undefined) this.editor.setNavigationBusy(patch.busy); if ('root' in patch) this.editor.setProjectRoot(patch.root?.id ?? null); for (const listener of this.listeners) listener() }
+  private update(patch: Partial<ExplorerState>) { this.state = { ...this.state, ...('root' in patch ? { mutationNotice: null } : {}), ...patch }; if (patch.busy !== undefined) this.editor.setNavigationBusy(patch.busy); if ('root' in patch) this.editor.setProjectRoot(patch.root?.id ?? null); for (const listener of this.listeners) listener() }
   connect() {
     if (this.stop) return
     const sync = () => {
@@ -211,6 +212,63 @@ export class ExplorerSession {
       else { this.generation++; this.followKey = null; this.scroll = 0; this.focus = null; this.update({ root: null, children: new Map(), expanded: new Set(), errors: new Map(), active: null, document: null }) }
     } catch { this.update({ error: 'Não foi possível liberar a pasta. Tente novamente.' }) }
     finally { this.update({ busy: false }); if (this.workspace) await this.initialize() }
+  }
+  openFileNodes() {
+    const root = this.state.root, nodes = new Set<string>()
+    if (!root) return nodes
+    for (const { document } of this.editor.snapshot().tabs) {
+      if (this.state.active && this.state.document === document.id) nodes.add(this.state.active)
+      const location = document.location
+      if (location?.root !== root.id) continue
+      let node: ExplorerNode | undefined = root
+      for (const name of location.names) node = node && findExplorerChild(this.state.children.get(node.id) ?? [], name, location.caseInsensitive)
+      if (node) nodes.add(node.id)
+    }
+    return nodes
+  }
+  async mutate(operation: ExplorerMutation, root: string, node: ExplorerNode, parent: string | null, name: string) {
+    const generation = this.generation
+    const current = () => generation === this.generation && this.state.root?.id === root && this.editor.snapshot().invalidRoot !== root && !this.locked
+    const target = node.id === this.state.root?.id ? this.state.root : parent && this.state.children.get(parent)?.find(child => child.id === node.id)
+    if (!current() || this.state.busy || this.editor.snapshot().busy) return
+    const rename = operation === 'rename-file'
+    if (!validExplorerBasename(name) || !target || target.kind !== (rename ? 'file' : 'directory') ||
+        rename && (!parent || this.openFileNodes().has(node.id) || target.name.toLowerCase() === name.toLowerCase())) {
+      this.update({ mutationNotice: 'Confira o nome e o item selecionado. Para renomear, escolha um arquivo fechado e outro nome.' }); return
+    }
+    const directory = rename ? parent! : node.id
+    this.update({ busy: true, error: null, mutationNotice: null })
+    let receipt: ExplorerMutationResult
+    try {
+      try {
+        const method = { 'create-file': 'createFile', 'create-directory': 'createDirectory', 'rename-file': 'renameFile' } as const
+        receipt = await this.bridge[method[operation]](root, node.id, name)
+      } catch { receipt = { outcome: 'unconfirmed', message: 'O resultado não foi confirmado. Confira a pasta antes de repetir a operação.' } }
+      if (root !== this.state.root?.id) { this.update({ mutationNotice: 'Projeto anterior: ' + receipt.message }); return }
+      this.update({ mutationNotice: receipt.message })
+      if (receipt.outcome === 'refused') return
+      this.update({ mutationVersion: this.state.mutationVersion + 1, diskVersion: this.state.diskVersion + 1 })
+      if (!current()) { this.update({ mutationNotice: receipt.message + ' A árvore não foi atualizada porque o contexto mudou.' }); return }
+      try { await this.load(directory, current) }
+      catch { if (current()) this.update({ mutationNotice: receipt.message + ' Não foi possível atualizar a árvore.' }); return }
+      if (!current()) return
+      if (this.state.errors.has(directory)) { this.update({ mutationNotice: receipt.message + ' Não foi possível atualizar a árvore.' }); return }
+      this.update({ expanded: new Set([...this.state.expanded, directory]) })
+      if (receipt.outcome !== 'confirmed') return
+      const child = findExplorerChild(this.state.children.get(directory) ?? [], name)
+      if (operation !== 'create-file') { this.focus = child?.id ?? directory; return }
+      if (!child || child.kind !== 'file' || child.id !== receipt.createdNode || this.editor.snapshot().busy || this.openFileNodes().has(child.id)) {
+        this.update({ mutationNotice: receipt.message + ' O arquivo não foi aberto. Confira a entrada na árvore.' }); return
+      }
+      const before = this.editor.snapshot()
+      const opened = await this.editor.openAuthorized(async draft => {
+        const result = await this.bridge.open(root, child.id, draft)
+        return !current() || result.invalidRoot === root ? this.editor.reconcileObsoleteOpen(result, before) : result
+      })
+      if (!current()) return
+      if (opened) { this.focus = child.id; this.update({ active: child.id, document: this.editor.snapshot().document?.id ?? null }) }
+      else this.update({ mutationNotice: receipt.message + ' O arquivo não foi aberto. ' + (this.editor.snapshot().notice ?? 'Confira a árvore.') })
+    } finally { this.update({ busy: false }) }
   }
   async open(node: ExplorerNode) {
     if (this.state.busy || this.locked || this.editor.snapshot().busy || node.kind !== 'file' || !this.state.root) return

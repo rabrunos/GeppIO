@@ -369,6 +369,14 @@ tree/rail integration at simulated DPR 1.25. Windows CI runs both. Native dialog
 controlled in Main; renderer calls use real preload/registered handlers. This is not physical owner
 Windows acceptance. The [Explorer contract](../architecture/explorer.md) records budgets and limits.
 
+On Windows, run `pnpm.cmd test:isolated explorer-write` and its `--scale125` variant for
+empty file/folder creation, editing and saving the new file, and same-parent rename.
+The journey uses the installed Windows helper, checks collision refusals against disposable
+bytes, and retains the existing Monaco model, Worker and PTY. The focused
+`tests/explorer-write.test.ts` controls the race between validation and destination creation
+and covers uncertainty after submission. The session tests exercise refresh, open and tab-limit
+failures after native confirmation.
+
 ## Selected document pilot (alpha.37)
 
 Alpha.38 adds `tools/editor-geometry-smoke.ts` to `pnpm test:maximize` (also in the desktop chain).

@@ -28,6 +28,7 @@ async function fixture(t: TestContext, bridge: Partial<SearchBridge> = {}) {
   const editor = new EditorSession(documentBridge)
   let rootId = 'first root'
   const explorer = new ExplorerSession({
+    createFile: unexpected, renameFile: unexpected, createDirectory: unexpected,
     select: async () => ({ ok: true, root: { kind: 'directory', name: 'projeto', id: rootId } }),
     list: async () => ({ ok: true, root: null, children: [] }), open: unexpected, release: unexpected
   }, editor)

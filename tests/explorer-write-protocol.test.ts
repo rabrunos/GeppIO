@@ -1,0 +1,21 @@
+import assert from 'node:assert/strict'
+import { randomUUID } from 'node:crypto'
+import test from 'node:test'
+import { validExplorerBasename, validExplorerMutationRequest } from '../src/shared/explorer.ts'
+
+test('Explorer writes accept only a literal Windows basename and two opaque IDs', () => {
+  const root = randomUUID(), item = randomUUID()
+  for (const name of ["café $ & 'semi;.txt", '.env', '😀.txt', '100% literal', 'a'.repeat(255)]) {
+    assert.equal(validExplorerBasename(name), true)
+    assert.equal(validExplorerMutationRequest([root, item, name]), true)
+  }
+  for (const name of ['', '.', '..', '.GiT', '../other', 'a\\b', 'C:x', 'x:stream', 'end.', 'end ',
+    'con.TXT', 'NUL .log', 'conin$', 'CONOUT$.txt', 'COM¹.txt', 'lpt9', 'short~1', 'control\u0001',
+    'broken\ud800', 'a'.repeat(256), {}, null]) {
+    assert.equal(validExplorerBasename(name), false)
+    assert.equal(validExplorerMutationRequest([root, item, name]), false)
+  }
+  for (const args of [[], [root, item], ['project', item, 'f'], [root, '.', 'f'], [root, item, 'f', 'text']]) {
+    assert.equal(validExplorerMutationRequest(args), false)
+  }
+})

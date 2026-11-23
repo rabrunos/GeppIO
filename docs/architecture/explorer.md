@@ -1,4 +1,4 @@
-# Essential Files & Editor Explorer — alpha.39 / Issue #46
+# Files & Editor Explorer — Issue #46
 
 The bundled first-party module in `shared/files-editor.ts` owns editor and Explorer.
 `DirectoryStore` in Main owns one memory-only navigation grant. `ExplorerSession` owns shared
@@ -41,7 +41,7 @@ only expanded directories and prunes detached cached metadata. Unopened director
 
 ## Native authorization
 
-App preload exposes four fixed `explorer` calls: zero-argument `select`, opaque-root/node `list`,
+The four navigation calls are zero-argument `select`, opaque-root/node `list`,
 opaque-root/node plus validated document draft `open`, and opaque-root `release`. The per-window
 document broker validates exact WebContents/main-frame/app URL, argument count/shape/UUIDs, and
 serializes directory operations with document operations and native close. Only Main receives the
@@ -61,7 +61,7 @@ Budgets: 512 immediate entries, 32 levels, 255 UTF-16 units per name, 256 KiB se
 8,192 units per native path and 4,096 retained metadata nodes including root and blocked entries.
 These conservative pilot limits bound UI/native work, not a performance SLA. `opendir` uses
 32-entry buffers, stops at the first excess entry and closes on error. Failed listings never partially
-commit grant metadata. IO is asynchronous. No watchers, background scans or directory writes exist.
+commit grant metadata. IO is asynchronous. Tree enumeration visits the immediate children on demand.
 
 `open` delegates to `DocumentStore.select` with byte revalidation and a final grant-identity
 callback. Alpha.46 adds or activates an independently held document grant without saving or
@@ -76,6 +76,34 @@ clear navigation/Git state without discarding tabs. BOM/EOL, 1 MiB UTF-8, confli
 [document contract](documents.md). Atomic Save changes file identity: refresh before opening an old
 tree reference again. Refresh never silently reopens or discards a document.
 
+## Creating and renaming items
+
+Since alpha.65, select a directory to create an empty file or folder, or select a closed file
+to rename it within the same parent. Each action takes one literal basename and two opaque IDs.
+Main validates the sender, frame, app URL, root, existing node and parent identities. It also
+checks listing budgets, the document and recovery bindings, and the private profile boundary.
+The three operations share the document broker and exclude concurrent Git index writes.
+
+File creation uses exclusive open and produces zero bytes. Folder creation uses nonrecursive
+mkdir. On Windows the rename helper calls the two-argument File.Move using the installed
+Windows PowerShell with a fixed command, a system working directory and a restricted module
+environment. Paths travel as bounded JSON on stdin. The move itself refuses an existing
+destination, including one created after validation. The command does not accept a case-only
+rename. [Microsoft File.Move documentation](https://learn.microsoft.com/en-us/dotnet/api/system.io.file.move?view=netframework-4.8.1)
+
+The desktop process trusts the Windows installation directory supplied by its launcher.
+Rename requires matching absolute SystemRoot and WINDIR values, then verifies the canonical
+system directory and executable. A missing helper, mismatched roots or blocked execution
+refuses the operation. Project and user PATH, module directories and PowerShell profiles do
+not select the helper or its modules. A compromised same-user launcher is outside this boundary.
+
+Main returns a refusal, confirmation or uncertain outcome. A lost reply or a possible mutation
+followed by a failed check requires inspecting the folder before another explicit action.
+Confirmed and uncertain writes expire Search, Quick Open and Git results. A confirmed file
+creation opens through the normal editor only when the refreshed listing identifies the
+file witnessed at creation. Refresh, open and tab-limit failures leave the new file on disk
+and preserve existing drafts. Explorer never rolls back a native write to repair presentation.
+
 ## Limits and remaining risks
 
 Path-based Node IO is not handle-relative Windows traversal. Hostile same-user native processes
@@ -86,12 +114,13 @@ files/private folders are supported. Cloud placeholders, custom reparse storage,
 and special storage are unsupported/unverified. Existing Windows save ACL/ADS/metadata and crash
 limitations remain. This is not an untrusted-plugin isolation platform.
 
-No create/rename/move/copy/delete, filesystem drag/drop, multiple roots,
-watchers, splits, search or public panel SDK are added by Explorer. Workspace, tabs, Git and
+Explorer supports one root. Cross-directory moves, folder renames, copying, deletion,
+filesystem drag/drop and watchers remain outside its write contract. Workspace, tabs, Git and
 Terminal are separate first-party owners coordinated through their existing grants.
 The shared Editor supplies alpha.42 Monaco highlighting independently; project-wide LSP remains deferred.
 
-`tests/explorer.test.ts` and `pnpm test:explorer` use disposable directories and the actual registered
+`tests/explorer.test.ts`, `tests/explorer-write.test.ts` and the isolated
+`explorer` and `explorer-write` journeys use disposable directories and the actual registered
 Electron bridge. Native dialog responses are controlled by tests, not mocked React actions. This
 proves handler integration, not physical picker/mouse acceptance. Platform references:
 [Node filesystem](https://nodejs.org/docs/latest-v24.x/api/fs.html),

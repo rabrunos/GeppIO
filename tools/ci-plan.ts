@@ -19,7 +19,8 @@ export const ciGroups = {
     smoke('maximize'), smoke('maximize', '--scale125'),
     smoke('app-host'), smoke('app-host', '--scale125'),
     smoke('git-window'), smoke('git-window', '--scale125'), ...variants('search'),
-    smoke('quick-open'), smoke('quick-open', '--scale125')
+    smoke('quick-open'), smoke('quick-open', '--scale125'),
+    smoke('explorer-write'), smoke('explorer-write', '--scale125')
   ],
   workbench: [
     smoke('alignment'), smoke('groups'),

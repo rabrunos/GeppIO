@@ -2,6 +2,10 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.65] — 2026-11-23
+
+- Create an empty file or folder in the project Explorer and rename a closed file in the same directory on Windows. Existing destinations keep their contents.
+
 ## [0.1.0-alpha.64] — 2026-11-22
 
 - Find and open files by name within the selected project. Quick Open reuses the editor's existing tabs and preserves drafts and undo history.

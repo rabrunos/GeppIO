@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { lstat, open, realpath, rename, unlink } from 'node:fs/promises'
 import type { BigIntStats } from 'node:fs'
-import { basename, dirname, isAbsolute, join, parse, resolve } from 'node:path'
+import { basename, dirname, isAbsolute, join, parse, relative, resolve } from 'node:path'
 import { DOCUMENT_LIMIT, DOCUMENT_SESSION_LIMITS, wellFormedText } from '../shared/documents.ts'
 import type { DocumentDraft, DocumentError, DocumentResult, DocumentSnapshot } from '../shared/documents.ts'
 
@@ -112,6 +112,7 @@ export class DocumentStore {
   result(canceled = false): DocumentResult { return { ok: true, document: this.snapshot, documents: this.snapshots, ...(canceled ? { canceled: true } : {}) } }
   /** Main-only display association. Never returned through IPC. */
   filePath(id: string): string | null { return this.selections.get(id)?.evidence.path ?? null }
+  hasFileAt(path: string) { return [...this.selections.values()].some(entry => relative(entry.evidence.path, path) === '') }
   /** Main-only recovery witness; neither source nor old grants are persisted. */
   fingerprint(id: string): string | null { const selected = this.selections.get(id); return selected ? createHash('sha256').update(selected.evidence.bytes).digest('hex') : null }
   async validate(id: string, current: () => boolean): Promise<void> {

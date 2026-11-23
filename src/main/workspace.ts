@@ -1,4 +1,4 @@
-import { basename, isAbsolute, relative, sep } from 'node:path'
+import { basename, isAbsolute, join, relative, sep } from 'node:path'
 import { homedir } from 'node:os'
 import { DirectoryStore, inspectExplorerPath, safeExplorerName } from './explorer.ts'
 import { DocumentStore } from './documents.ts'
@@ -19,6 +19,11 @@ export class WorkspaceOwner {
   constructor(directories: DirectoryStore, documents: DocumentStore, recovery: WorkspaceRecovery, changed: () => void) { this.directories = directories; this.documents = documents; this.recovery = recovery; this.changed = changed }
   revoke() { this.epoch++; this.views.clear(); this.message = null; this.transition = false }
   guard() { const epoch = this.epoch; return () => epoch === this.epoch }
+  hasFileBinding(path: string) {
+    if (this.documents.hasFileAt(path)) return true
+    const { project, files } = this.recovery.snapshot.record
+    return !!project && files.some(file => relative(join(project.path, ...file.names), path) === '')
+  }
   async read(): Promise<WorkspaceStatus> { await this.recovery.load(); return this.status() }
   status(): WorkspaceStatus {
     const { record, error } = this.recovery.snapshot

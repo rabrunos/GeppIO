@@ -111,6 +111,28 @@ export class EditorSession {
   }
   open = () => this.locked ? Promise.resolve() : this.run(() => this.bridge.open(this.draft()), 'open')
   openAuthorized = (action: (draft: DocumentDraft | null) => Promise<DocumentResult>) => this.locked ? Promise.resolve(false) : this.run(() => action(this.draft()), 'open', this.state.document?.id, true)
+  /** Called inside openAuthorized if a project grant expires while its open is in flight. */
+  async reconcileObsoleteOpen(result: DocumentResult, before: EditorState): Promise<DocumentResult> {
+    const ignored = { ok: true, canceled: true, document: null, invalidRoot: result.invalidRoot } as const
+    if (!result.ok || result.canceled || !result.document) return ignored
+    const receipt = result.document, active = before.document?.id
+    if (active === receipt.id) return ignored
+    try {
+      if (active) {
+        const restored = await this.bridge.activate(active)
+        return restored.ok ? { ...ignored, documents: result.documents ?? [receipt] } :
+          { ...restored, documents: restored.documents ?? result.documents ?? [receipt], invalidRoot: result.invalidRoot }
+      }
+      // Only a sole, freshly committed grant, still undisclosed to the renderer model, can be released here.
+      const sole = result.documents?.length === 1 ? result.documents[0] : null
+      if (!before.tabs.length && !this.documentState(receipt.id) && sole?.id === receipt.id && sole.revision === receipt.revision && sole.text === receipt.text) {
+        const released = await this.bridge.release({ id: receipt.id, revision: receipt.revision, text: receipt.text })
+        return { ...released, invalidRoot: result.invalidRoot }
+      }
+      return { ...ignored, documents: result.documents ?? [receipt] }
+    } catch { return { ok: false, code: 'unavailable', error: 'A pasta mudou e a aba ativa não pôde ser confirmada. Confira as abas abertas.',
+      invalidRoot: result.invalidRoot, documents: result.documents ?? [receipt] } }
+  }
   activate = (id: string) => this.locked || this.state.busy || !this.entries.has(id) ? Promise.resolve(false) : this.run(() => this.bridge.activate(id), 'activate', id)
   save = () => this.locked || !this.state.document ? Promise.resolve() : this.run(() => this.bridge.save(this.draft()!), 'save')
   release = (id = this.state.document?.id) => {

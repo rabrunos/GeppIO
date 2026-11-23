@@ -13,11 +13,20 @@
 .explorer-node-icon { width: 15px; height: 15px; flex: 0 0 15px; }
 .explorer-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .explorer-git-badge { flex: none; margin-left: auto; padding: 0 3px; min-width: 14px; text-align: center; font-size: 11px; font-weight: 600; color: var(--color-accent); border: 1px solid var(--color-border); border-radius: 3px; }
-.explorer-git-status { flex: none; max-height: 90px; overflow: auto; padding: 3px 8px; font-size: 11px; color: var(--color-text-muted); overflow-wrap: anywhere; border-bottom: 1px solid var(--color-border); }
+.explorer-git-status { flex: none; max-height: min(20%, 4rem); overflow: auto; padding: 3px 8px; font-size: 11px; color: var(--color-text-muted); overflow-wrap: anywhere; border-bottom: 1px solid var(--color-border); }
 .explorer-git-status button { margin-left: 6px; }
 .explorer-empty, .explorer-inline-error, .explorer-directory-empty { padding: 6px 10px; margin: 0; color: var(--color-text-muted); overflow-wrap: anywhere; }
 .explorer-empty .tool-button { margin-top: 6px; }
-.explorer-feedback { flex: none; padding: 2px 8px; overflow-wrap: anywhere; font-size: 11px; }
+.explorer-feedback { flex: none; max-height: min(20%, 4rem); overflow: auto; margin: 0; padding: 2px 8px; overflow-wrap: anywhere; font-size: 11px; }
 .explorer-feedback:empty { display: none; }
 .widget-content:has(> .file-explorer) { overflow: hidden; }
 .editor-explorer-panel { z-index: 41; }
+.explorer-write-actions { display: flex; align-items: center; gap: 2px; padding: 0 6px; border-bottom: 1px solid var(--color-border); }
+.explorer-write-actions span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-muted); }
+.explorer-write-actions .ui-icon-button { width: 25px; height: 24px; padding: 4px; flex: none; }
+.explorer-row-rename { display: none; margin-left: auto; padding: 1px 3px; flex: none; }
+.explorer-row-rename .icon { width: 14px; height: 14px; }
+.explorer-row:hover .explorer-row-rename, .explorer-row:focus-within .explorer-row-rename { display: inline-flex; }
+.explorer-name-form { display: grid; gap: .7rem; }
+.explorer-name-form label { display: grid; gap: .3rem; }
+.explorer-name-form p { margin: 0; overflow-wrap: anywhere; }
