@@ -2,6 +2,10 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.69.1] — 2026-11-23
+
+- Preserve the Windows temporary directory spelling when launching the Workspace Tools smoke with a disposable profile.
+
 ## [0.1.0-alpha.69] — 2026-11-23
 
 - Read passive text, list and table reports from the selected workspace. Open the shared Tools window from Code or Workbench and refresh explicitly after external changes.

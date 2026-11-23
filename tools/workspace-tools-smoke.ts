@@ -14,8 +14,10 @@ import { exerciseWorkspaceFiles } from './workspace-tools-documents.ts'
 import { checkConfirmedPlugin, exercisePluginRecovery, placeScratch } from './workspace-tools-plugin.ts'
 
 const scaled = process.argv.includes('--scale125')
-const temp = await realpath(await mkdtemp(join(tmpdir(), 'geppio-smoke-workspace-tools-')))
-const profile = join(temp, 'profile'), project = join(temp, 'first-project'), other = join(temp, 'second-project')
+const smokeRoot = await mkdtemp(join(tmpdir(), 'geppio-smoke-workspace-tools-'))
+// Keep the profile under the lexical temp root, including its Windows 8.3 spelling.
+const profile = join(smokeRoot, 'profile')
+const temp = await realpath(smokeRoot), project = join(temp, 'first-project'), other = join(temp, 'second-project')
 const essentials = join(temp, 'essentials'), provider = join(temp, 'provider')
 const draft = 'rascunho preservado\n', saved = 'const answer = 2;\r\n'
 const literal = '<b>Resumo</b> https://example.invalid/relatorio'
