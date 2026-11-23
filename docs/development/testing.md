@@ -403,6 +403,11 @@ undo, language, mixed line endings, invalid bytes and the other tab. The native
 
 ## Selected document pilot (alpha.37)
 
+`pnpm.cmd test:isolated editor-split` supports production at default scale and
+`--scale125`, plus development with `--dev`. Use **Dividir editor**, change a document,
+then focus the other occurrence and undo. Check independent cursor and scroll positions.
+**Mover para o outro grupo** transfers a tab and **Unir grupos** reunites all occurrences.
+
 `pnpm.cmd test:isolated document-create` supports the built, `--scale125` and `--dev`
 variants. Open Code, choose **Novo documento**, type text and save. **Salvar como** continues
 the same tab at the selected destination. **Salvar todos** lists the result for each open

@@ -4,14 +4,20 @@ import { DOCUMENT_LANGUAGES, documentLanguage } from '../../../shared/document-s
 import type { DocumentLanguage } from '../../../shared/document-status.ts'
 import { editorText } from '../../../shared/documents.ts'
 import type { WorkspaceEditor, WorkspaceSelection } from '../../../shared/workspace.ts'
+import { EditorGroups, oppositeGroup } from './editor-groups.ts'
+import type { GroupIndex } from './editor-groups.ts'
 
 export interface EditorSelection { start: number; end: number; top: number; left: number }
-export interface EditorDocument { document: DocumentSnapshot; text: string; cursor: number; language: DocumentLanguage | null; selection: EditorSelection; error: string | null; code: DocumentError | null; bytes: number; unresolved: boolean; renameUncertain?: boolean; destinationUncertain?: boolean; historyVersion: number }
+export interface EditorDocument { document: DocumentSnapshot; text: string; cursor: number; language: DocumentLanguage | null; selection: EditorSelection; error: string | null; code: DocumentError | null; bytes: number; unresolved: boolean; renameUncertain?: boolean; destinationUncertain?: boolean; releaseUncertain?: boolean; detached?: boolean; historyVersion: number }
 export interface EditorState { document: DocumentSnapshot | null; text: string; busy: boolean; reloading: string | null; error: string | null; code: DocumentError | null; cursor: number; language: DocumentLanguage | null; diskVersion: number; tabs: readonly EditorDocument[]; notice: string | null; invalidRoot: string | null; projectRoot: string | null; reloadWitness: DocumentSnapshot['location'] }
 const emptySelection = (): EditorSelection => ({ start: 0, end: 0, top: 0, left: 0 })
 type EditorOperation = 'open' | 'save' | 'saveAs' | 'saveAll' | 'release' | 'close' | 'activate'
 /** One bounded registry of drafts, each backed by its own native grant/revision. */
 export class EditorSession {
+  readonly groups = new EditorGroups()
+  private positions: [Map<string, EditorSelection>, Map<string, EditorSelection>] = [new Map(), new Map()]
+  private previousGroup: GroupIndex = 0
+  focusUnconfirmed = false
   private state: EditorState = { document: null, text: '', busy: false, reloading: null, error: null, code: null, cursor: 0, language: null, diskVersion: 0, tabs: [], notice: null, invalidRoot: null, projectRoot: null, reloadWitness: undefined }
   private entries = new Map<string, EditorDocument>()
   private initialViews = new Map<string, { language: DocumentLanguage | null; selection: WorkspaceSelection }>()
@@ -26,14 +32,23 @@ export class EditorSession {
   snapshot = () => this.state
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener) } }
   private update(patch: Partial<EditorState>) { this.state = { ...this.state, ...patch }; for (const listener of this.listeners) listener() }
-  private view(id = this.state.document?.id, patch: Partial<EditorState> = {}) {
+  private view(id: string | null | undefined = this.state.document?.id, patch: Partial<EditorState> = {}) {
+    for (const positions of this.positions) for (const key of positions.keys()) if (!this.entries.has(key)) positions.delete(key)
+    if (id && (this.previousGroup !== this.groups.active || id !== this.state.document?.id)) {
+      const position = this.positions[this.groups.active].get(id)
+      if (position) this.change(id, { selection: position, cursor: position.end })
+    }
+    this.previousGroup = this.groups.active
     const entry = id ? this.entries.get(id) : undefined
+    this.groups.sync([...this.entries.keys()], entry?.document.id ?? null)
     this.update({ document: entry?.document ?? null, text: entry?.text ?? '', cursor: entry?.cursor ?? 0, language: entry?.language ?? null, error: entry?.error ?? null, code: entry?.code ?? null, tabs: [...this.entries.values()], ...patch })
   }
   private change(id: string, patch: Partial<EditorDocument>) { const entry = this.entries.get(id); if (entry) this.entries.set(id, { ...entry, ...patch }) }
-  rememberSelection(value: typeof this.selection) {
-    if (!this.state.document) return
-    this.change(this.state.document.id, { selection: value, cursor: value.end })
+  rememberSelection(value: typeof this.selection, side = this.groups.active, id = this.state.document?.id) {
+    if (!id || !this.entries.has(id)) return
+    this.positions[side].set(id, value)
+    if (side !== this.groups.active || id !== this.state.document?.id) return
+    this.change(id, { selection: value, cursor: value.end })
     if (value.end !== this.state.cursor) this.view()
   }
   setLanguage(language: DocumentLanguage) { if (this.state.document && DOCUMENT_LANGUAGES.includes(language)) { this.change(this.state.document.id, { language }); this.view() } }
@@ -101,12 +116,17 @@ export class EditorSession {
     for (const [id, entry] of this.entries) {
       const affected = kind === 'saveAll' ? entry.document.untitled || entry.text !== entry.document.text
         : kind === 'close' ? entry.text !== entry.document.text : id === target
-      if (affected) this.change(id, { error, code, unresolved: true,
+      if (affected) this.change(id, { error, code, unresolved: true, ...(kind === 'release' ? { releaseUncertain: true } : {}),
         ...(entry.document.untitled || kind === 'saveAs' ? { destinationUncertain: true } : {}) })
     }
   }
-  private async run(action: () => Promise<DocumentResult>, kind: EditorOperation, target = this.state.document?.id, ownsNavigation = false): Promise<boolean> {
+  private async run(action: () => Promise<DocumentResult>, kind: EditorOperation, target = this.state.document?.id, ownsNavigation = false, group?: GroupIndex): Promise<boolean> {
     if (this.state.busy) return false
+    if (this.focusUnconfirmed && !['activate', 'open', 'close'].includes(kind)) { this.feedback('Selecione a aba novamente para confirmar o documento ativo.'); return false }
+    if (kind === 'open' && this.entries.size >= DOCUMENT_SESSION_LIMITS.count && [...this.entries.values()].some(entry => entry.releaseUncertain)) {
+      this.feedback('Confira a aba cujo fechamento não foi confirmado antes de abrir outro documento.'); return false
+    }
+    if (target && this.entries.get(target)?.detached && ['save', 'saveAs', 'release'].includes(kind)) { this.feedback('Copie o rascunho local antes de descartá-lo.'); return false }
     const before = new Map([...this.entries].map(([id, entry]) => [id, entry.document.revision])), active = this.state.document?.id
     this.update({ busy: true, notice: null })
     try {
@@ -114,6 +134,7 @@ export class EditorSession {
       const entry = target && this.entries.get(target)
       if (entry && (kind === 'save' && entry.destinationUncertain || (kind === 'save' || kind === 'saveAs') && entry.renameUncertain)) return false
       const result = await action()
+      if (kind === 'activate' && result.ok && result.document?.id !== target) throw new Error('Unconfirmed activation')
       const snapshots = result.documents ?? (result.ok ? result.document ? [result.document] : [] : result.confirmed ? [result.confirmed] : [])
       for (const document of snapshots) {
         const saved = (kind === 'save' || kind === 'saveAs') && target === document.id && result.ok && !result.canceled ||
@@ -121,9 +142,15 @@ export class EditorSession {
         this.merge(document, saved)
         if (saved) this.change(document.id, { error: null, code: null, unresolved: false, destinationUncertain: false })
       }
+      if (result.documents) for (const [id, entry] of this.entries) {
+        if (!entry.releaseUncertain) continue
+        if (snapshots.some(document => document.id === id)) this.change(id, { releaseUncertain: false })
+        else this.change(id, { detached: true, unresolved: true, error: 'A aba foi fechada no Core. Copie o rascunho antes de descartá-lo nesta janela.', code: 'unconfirmed' })
+      }
       // Failed/revoked responses never silently remove a recoverable local draft.
       if (result.ok && !result.canceled) {
-        if (result.documents) for (const id of this.entries.keys()) { if (!snapshots.some(value => value.id === id)) this.entries.delete(id) }
+        if (kind === 'activate' || kind === 'open') this.focusUnconfirmed = false
+        if (result.documents) for (const [id, entry] of this.entries) { if (!entry.detached && !snapshots.some(value => value.id === id)) this.entries.delete(id) }
         else if (kind === 'release' && !result.document && target) this.entries.delete(target)
         else if (kind === 'close' && !result.document) this.entries.clear()
       }
@@ -133,13 +160,19 @@ export class EditorSession {
         if (result.code === 'unconfirmed' && !result.failed && !result.saves && (kind === 'saveAll' || kind === 'close')) this.markPossibleWrites(kind, target, result.error)
         const failed = result.failed ?? (['save', 'saveAs', 'release', 'activate'].includes(kind) ? target : undefined)
         if (failed) this.change(failed, { error: result.error, code: result.code, ...(result.code === 'unconfirmed' ? { unresolved: true,
-          ...(kind === 'saveAs' || this.entries.get(failed)?.document.untitled ? { destinationUncertain: true } : {}) } : {}) })
+          ...(kind === 'release' ? { releaseUncertain: true } : {}), ...(kind === 'saveAs' || this.entries.get(failed)?.document.untitled ? { destinationUncertain: true } : {}) } : {}) })
         const affected = failed && failed !== active ? this.entries.get(failed)?.document : undefined
         this.view(active, { diskVersion, invalidRoot, notice: affected ? (affected.label ?? affected.name) + ' — ' + result.error : result.error })
-      } else this.view(result.canceled ? active : result.document?.id, { diskVersion, invalidRoot, notice: invalidRoot ? 'A pasta do Explorador mudou. Reabra a pasta; as abas foram mantidas.' : null })
+      } else {
+        const id = result.canceled || ['save', 'saveAs', 'saveAll'].includes(kind) ? active : result.document?.id
+        if (!result.canceled && group !== undefined) this.groups.active = group
+        if (kind === 'release' && id && !this.groups.sides[this.groups.active].tabs.includes(id) && this.groups.sides[oppositeGroup(this.groups.active)].tabs.includes(id)) this.groups.active = oppositeGroup(this.groups.active)
+        this.view(id ?? null, { diskVersion, invalidRoot, notice: invalidRoot ? 'A pasta do Explorador mudou. Reabra a pasta; as abas foram mantidas.' : null })
+      }
       if (result.saves) this.feedback([this.saveSummary(result.saves), !result.ok && result.error].filter(Boolean).join('. '))
       return result.ok && !result.canceled
     } catch {
+      if (kind === 'activate') this.focusUnconfirmed = true
       const mayHaveSaved = ['save', 'saveAs', 'saveAll', 'release', 'close'].includes(kind)
       const error = mayHaveSaved
         ? 'A resposta do Core não chegou. Mantenha os rascunhos abertos. Copie o texto que deseja guardar e use Recarregar do disco para conferir o arquivo.'
@@ -179,6 +212,40 @@ export class EditorSession {
       invalidRoot: result.invalidRoot, documents: result.documents ?? [receipt] } }
   }
   activate = (id: string) => this.locked || this.state.busy || !this.entries.has(id) ? Promise.resolve(false) : this.run(() => this.bridge.activate(id), 'activate', id)
+  async focusGroup(side: GroupIndex, id = this.groups.sides[side].selected) {
+    if (this.locked || this.state.busy || side === 1 && !this.groups.split) return false
+    if (id && !this.entries.get(id)?.detached && (id !== this.state.document?.id || this.focusUnconfirmed || this.entries.get(id)?.releaseUncertain)) return this.run(() => this.bridge.activate(id), 'activate', id, false, side)
+    this.groups.active = side; this.view(id); return true
+  }
+  sendToOtherGroup(move = false) {
+    if (this.locked || this.state.busy) return
+    const id = this.state.document?.id
+    if (id) this.groups.send(id, move)
+    else this.groups.split = true
+    this.view()
+  }
+  async mergeGroups() {
+    if (this.locked || this.state.busy) return
+    const selected = this.state.document?.id ?? this.groups.sides[oppositeGroup(this.groups.active)].selected
+    if (selected && selected !== this.state.document?.id && !await this.activate(selected)) return
+    this.groups.merge(); this.view(selected)
+  }
+  async closeOccurrence(side: GroupIndex, id = this.groups.sides[side].selected) {
+    if (!id || this.locked || this.state.busy) return false
+    const other = oppositeGroup(side), group = this.groups.sides[side]
+    if (!this.groups.sides[other].tabs.includes(id)) return this.release(id)
+    if (side === this.groups.active && group.selected === id) {
+      const index = group.tabs.indexOf(id), next = group.tabs[index - 1] ?? group.tabs[index + 1]
+      if (!await this.focusGroup(next ? side : other, next ?? id)) return false
+    }
+    this.groups.remove(side, id); this.view(); return true
+  }
+  async discardDetached(id: string) {
+    if (!this.entries.get(id)?.detached || this.state.busy || this.locked) return
+    this.entries.delete(id); this.groups.sync([...this.entries.keys()], null)
+    const side = this.groups.sides[this.groups.active].selected ? this.groups.active : oppositeGroup(this.groups.active)
+    this.view(null); await this.focusGroup(this.groups.split ? side : 0)
+  }
   save = () => this.locked || !this.state.document ? Promise.resolve() : this.run(() => this.bridge.save(this.draft()!), 'save')
   reload = async (): Promise<boolean> => {
     const draft = this.draft(), entry = draft && this.entries.get(draft.id)

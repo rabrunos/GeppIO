@@ -43,7 +43,7 @@ export function useCodePresentation(workbenchChrome: WorkbenchChrome) {
     },
     openExplorer() {
       setSidebar(previous => ({ ...previous, visible: true })); setActivity('explorer')
-      requestAnimationFrame(() => document.querySelector<MonacoHost>('.direct-file-editor .monaco-host')?.monacoEditor?.focus())
+      requestAnimationFrame(() => document.querySelector<MonacoHost>('.direct-file-editor .monaco-host[data-active-group="true"]')?.monacoEditor?.focus())
     },
     panels({ sessions, measures, regions, theme, compareGit, openWindow, quickOpenBlocked, interactiveBusy }: CodePanels) {
       const sidebar = regionViewport('sidebar', measures.sidebar)

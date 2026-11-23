@@ -43,8 +43,9 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
   const revokeProjectResults = () => { git.revoke(); search.revoke(); quickOpen.revoke() }
   const workspace = new WorkspaceOwner(directories, store, new WorkspaceRecovery(app.getPath('userData')), revokeProjectResults)
   let busy = false, closing = false, remembering = false, ticket: string | null = null
+  let releasedInFrame = false
   let explorerWriting = false, indexWriting = false, reloading = false, choosingDestination = false
-  const revoke = () => { workspace.revoke(); revokeProjectResults(); store.revoke(); directories.revoke(); ticket = null }
+  const revoke = () => { workspace.revoke(); revokeProjectResults(); store.revoke(); directories.revoke(); ticket = null; releasedInFrame = false }
   const decide = async (name = store.snapshot?.label ?? store.snapshot?.name ?? 'arquivo', id = store.snapshot?.id, discardOnly = false) => {
     if (discardOnly) {
       const choice = await dialog.showMessageBox(win, { type: 'warning', title: 'Renomeação não confirmada', message: 'Descartar o rascunho de ' + name + ' e fechar?',
@@ -79,7 +80,7 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
   win.webContents.on('did-start-navigation', (_event, _url, _inPlace, mainFrame) => { if (mainFrame) revoke() })
   win.webContents.on('render-process-gone', revoke)
   win.on('close', event => {
-    if (closing || !store.snapshot && !directories.snapshot && !busy) return
+    if (closing || !store.snapshot && !directories.snapshot && !busy && !releasedInFrame) return
     event.preventDefault()
     if (busy || ticket) return
     ticket = randomUUID()
@@ -150,7 +151,11 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
       if (operation === 'release') {
         const document = store.snapshots.find(value => value.id === draft!.id)
         const result = await store.release(draft!, () => decide(document?.label ?? document?.name, draft!.id, draft!.discardOnly), current)
-        if (result.ok && !result.canceled) await workspace.persist(current)
+        if (result.ok && !result.canceled) {
+          // Even an empty native registry may have a renderer draft awaiting this receipt.
+          if (current()) releasedInFrame = true
+          await workspace.persist(current)
+        }
         return await receipt(result)
       }
       const supplied = args[1] as DocumentDraft[] | DocumentDraft | null, drafts = supplied === null ? [] : Array.isArray(supplied) ? supplied : [supplied]

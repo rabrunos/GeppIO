@@ -191,12 +191,12 @@ try {
   await drag(page, frameId, 'se', 320 - frameBox.width, 240 - frameBox.height)
   await page.getByTestId('conclude-layout').click(); await page.getByTestId('edit-layout').waitFor(); await settle(page)
   const minimum = await state.evaluate(node => {
-    const rect = node.getBoundingClientRect()
-    return { height: rect.height, scrollHeight: node.scrollHeight, children: [...node.children].map(child => ({ class: child.className, rect: child.getBoundingClientRect().toJSON() })), contained: [...node.children].every(child => child.getBoundingClientRect().bottom <= rect.bottom + .1) }
+    const rect = node.getBoundingClientRect(), model = node.querySelector('.monaco-host')!.getBoundingClientRect()
+    return { height: rect.height, scrollHeight: node.scrollHeight, model: model.toJSON(), children: [...node.children].map(child => ({ class: child.className, rect: child.getBoundingClientRect().toJSON() })), contained: model.top >= rect.top - .1 && model.bottom <= rect.bottom + .1 && [...node.children].every(child => child.getBoundingClientRect().bottom <= rect.bottom + .1) }
   })
   await writeFile(join(diagnostics, 'minimum.json'), JSON.stringify(minimum, null, 2))
   assert.ok(minimum.contained, 'Tab chrome and editor remain inside the actual minimum widget content')
-  assert.ok(minimum.children.some(child => child.class === 'monaco-host' && child.rect.height > 0), 'The editor retains usable height beside the compact file actions')
+  assert.ok(minimum.model.height > 0, 'The editor retains usable height beside the compact file actions')
   await page.getByTestId('edit-layout').click(); await settle(page)
   const small = await frame.boundingBox(); assert.ok(small)
   await drag(page, frameId, 'se', frameBox.width - small.width, frameBox.height - small.height)

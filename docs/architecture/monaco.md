@@ -38,8 +38,9 @@ Production keeps script-src/worker-src 'self', font-src 'self', connect-src 'non
 request block. Development uses the existing exact loopback Vite origin. There is no remote
 grammar download, eval allowance, blob script allowance or plugin Worker/native grant.
 Monaco's included TypeScript services operate on bounded local models, not a full project IDE.
-Alpha.46 retains one model per open native grant (up to eight), with one shared editor and
-per-model undo/view/language ownership. Exact source and retained history budgets, corrective
+The editor retains one model per unique document (up to eight), with one content listener,
+undo history and language per model. Alpha.72 attaches up to two editor instances to these
+models. Each group owns selection and scrolling independently. Exact source and retained history budgets, corrective
 refusal handling and disposal are described in [document ownership](documents.md).
 
 The complete upstream MIT license and ThirdPartyNotices are retained in

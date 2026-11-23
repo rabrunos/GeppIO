@@ -10,6 +10,12 @@
   .file-editor-toolbar .icon { display: block; width: 18px; height: 18px; }
 }
 .file-editor-tabs { display: flex; flex: none; min-height: 30px; max-width: 100%; overflow: auto hidden; border-bottom: 1px solid var(--color-border); }
+.file-editor-group-tools { display: flex; flex: none; align-items: center; gap: 6px; padding: 2px 6px; overflow: auto hidden; }
+.file-editor-group-tools button { flex: none; font-size: 12px; }
+.file-editor-groups { display: grid; flex: 1; min-height: 0; min-width: 0; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+.file-editor-group { display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; }
+.file-editor-divider { background: var(--color-border); touch-action: none; cursor: col-resize; }
+.file-editor-divider:hover, .file-editor-divider:focus-visible { background: var(--color-accent); }
 .file-editor-tab { display: flex; flex: none; align-items: center; max-width: 220px; border-right: 1px solid var(--color-border); border-bottom: 2px solid transparent; }
 .file-editor-tab:has([aria-selected="true"]) { border-bottom-color: var(--color-accent); background: var(--color-border); }
 .file-editor-tab > [role="tab"] { display: flex; align-items: center; gap: 6px; min-width: 0; max-width: 190px; padding: 5px 8px; font-size: 12px; }

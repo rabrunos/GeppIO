@@ -34,6 +34,8 @@ export function useCoreSessions(layoutEditing: boolean) {
     function save(event: KeyboardEvent) {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's' && editor.snapshot().document) {
         event.preventDefault()
+        const group = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-editor-group]') : null
+        if (group && group.dataset.focused !== 'true') return
         void editor.save()
       }
     }

@@ -37,7 +37,7 @@ export function QuickOpenControl({ session, blocked, interactiveBusy }: { sessio
   async function open(id: string) {
     if (!await session.open(id)) return
     requestAnimationFrame(() => {
-      if (!session.snapshot().visible && !document.querySelector('dialog:modal')) document.querySelector<MonacoHost>('.direct-file-editor .monaco-host')?.monacoEditor?.focus()
+      if (!session.snapshot().visible && !document.querySelector('dialog:modal')) document.querySelector<MonacoHost>('.direct-file-editor .monaco-host[data-active-group="true"]')?.monacoEditor?.focus()
     })
   }
   const page = state.page

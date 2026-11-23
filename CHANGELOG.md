@@ -2,6 +2,10 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.72] — 2026-11-23
+
+- Open or move tabs between two editor groups. Both groups can edit one shared model with independent reading positions, an adjustable divider and a recoverable narrow layout.
+
 ## [0.1.0-alpha.71] — 2026-11-23
 
 - Create untitled documents, choose a native Save As destination and save all open documents in order. A canceled or failed save reports the completed prefix and preserves the remaining drafts.

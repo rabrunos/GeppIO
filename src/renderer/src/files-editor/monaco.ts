@@ -18,6 +18,7 @@ import { DOCUMENT_LIMIT, DOCUMENT_SESSION_LIMITS, editorText } from '../../../sh
 import { documentLanguage } from '../../../shared/document-status.ts'
 import type { DocumentLanguage } from '../../../shared/document-status.ts'
 import type { EditorSession } from './session.ts'
+import type { GroupIndex } from './editor-groups.ts'
 import { applyDocumentChanges, DOCUMENT_HISTORY_LIMITS, DocumentHistoryBudget } from '../../../shared/document-edits.ts'
 import { modelEndings, applyModelEndings } from './model-eols.ts'
 
@@ -36,15 +37,102 @@ const owners = new WeakMap<EditorSession, MonacoPresentation>()
 export interface MonacoHost extends HTMLDivElement { readonly monacoEditor?: monaco.editor.IStandaloneCodeEditor }
 export interface GitDiffHost extends HTMLDivElement { readonly monacoDiffEditor?: monaco.editor.IStandaloneDiffEditor }
 
-interface ModelOwner { model: monaco.editor.ITextModel; eols: Map<number, string>; view: monaco.editor.ICodeEditorViewState | null; subscription: monaco.IDisposable; limited: boolean; historyVersion: number; revision: string }
-/** One editor, one stable model/undo history per native document grant. */
-class MonacoPresentation {
+interface ModelOwner { model: monaco.editor.ITextModel; eols: Map<number, string>; subscription: monaco.IDisposable; limited: boolean; historyVersion: number; revision: string }
+
+/** Cursor, scrolling and view state belong to each occurrence of a shared model. */
+class EditorPane {
   private element = document.createElement('div')
-  private editor: monaco.editor.IStandaloneCodeEditor
-  private model: monaco.editor.ITextModel | null = null
-  private id: string | undefined
-  private host: MonacoHost | null = null
-  private changing = false
+  readonly editor: monaco.editor.IStandaloneCodeEditor
+  host: MonacoHost | null = null
+  id: string | null = null
+  private views = new Map<string, monaco.editor.ICodeEditorViewState>()
+  private reloadSelection?: { start: number; end: number }[]
+  private reloadScroll?: { scrollTop: number; scrollLeft: number }
+  private observer: ResizeObserver
+  private subscriptions: monaco.IDisposable[] = []
+  constructor(private session: EditorSession, private side: GroupIndex, private owner: MonacoPresentation) {
+    this.element.className = 'monaco-instance'
+    this.editor = monaco.editor.create(this.element, { model: null, automaticLayout: false, ariaLabel: 'Conteúdo do arquivo', theme: 'vs-dark', fontFamily: 'Consolas, monospace', fontSize: 14, minimap: { enabled: false }, scrollBeyondLastLine: false, fixedOverflowWidgets: false, readOnly: true })
+    this.subscriptions.push(this.editor.onDidChangeCursorSelection(() => this.remember()), this.editor.onDidScrollChange(() => this.remember()),
+      this.editor.onDidFocusEditorText(() => {
+        if (this.id && (this.session.groups.active !== this.side || this.session.focusUnconfirmed)) void this.session.focusGroup(this.side, this.id).then(ok => { if (ok) this.remember(); else this.owner.focusActive() })
+        else this.remember()
+      }),
+      this.editor.onKeyDown(event => {
+        const model = this.editor.getModel()
+        if (!this.id || !model || !this.owner.limited(this.id) || this.session.editingLocked(this.id) || !(event.ctrlKey || event.metaKey)) return
+        if (![monaco.KeyCode.KeyZ, monaco.KeyCode.KeyY].includes(event.keyCode)) return
+        event.preventDefault(); event.stopPropagation()
+        if (event.keyCode === monaco.KeyCode.KeyY || event.shiftKey) void model.redo()
+        else void model.undo()
+      }))
+    this.observer = new ResizeObserver(() => this.layout())
+  }
+  remember() {
+    const model = this.editor.getModel()
+    if (this.owner.changing || !model || !this.id) return
+    const selection = this.editor.getSelection()
+    if (selection) this.session.rememberSelection({ start: model.getOffsetAt(selection.getSelectionStart()), end: model.getOffsetAt(selection.getPosition()), top: this.editor.getScrollTop(), left: this.editor.getScrollLeft() }, this.side, this.id)
+  }
+  forget(id: string) {
+    if (this.id === id) { this.id = null; this.editor.setModel(null) }
+    this.views.delete(id)
+  }
+  beforeReload(id: string) {
+    this.views.delete(id)
+    const model = this.editor.getModel()
+    if (this.id === id && model) {
+      this.reloadSelection = this.editor.getSelections()?.map(s => ({ start: model.getOffsetAt(s.getSelectionStart()), end: model.getOffsetAt(s.getPosition()) }))
+      this.reloadScroll = { scrollTop: this.editor.getScrollTop(), scrollLeft: this.editor.getScrollLeft() }
+    }
+  }
+  show(id: string | null, owner?: ModelOwner) {
+    const model = owner?.model ?? null, switched = id !== this.id
+    if (switched) {
+      const oldView = this.id && this.editor.saveViewState()
+      if (this.id && oldView) this.views.set(this.id, oldView)
+      this.id = id; this.editor.setModel(model)
+    }
+    if (id && model && (switched || this.reloadSelection)) {
+      const saved = this.views.get(id), fallback = this.session.documentState(id)!.selection
+      if (saved && !this.reloadSelection) this.editor.restoreViewState(saved)
+      else {
+        this.editor.setSelections((this.reloadSelection?.length ? this.reloadSelection : [fallback]).map(s => {
+          const start = model.getPositionAt(s.start), end = model.getPositionAt(s.end)
+          return new monaco.Selection(start.lineNumber, start.column, end.lineNumber, end.column)
+        }))
+        this.editor.setScrollPosition(this.reloadScroll ?? { scrollTop: fallback.top, scrollLeft: fallback.left }, monaco.editor.ScrollType.Immediate)
+      }
+    }
+    this.reloadSelection = undefined
+    this.reloadScroll = undefined
+    this.editor.updateOptions({ readOnly: !id || this.side !== this.session.groups.active || this.session.editingLocked(id) || !!owner?.limited })
+    this.diagnostics()
+  }
+  private diagnostics() {
+    if (!this.host) return
+    const model = this.editor.getModel()
+    this.host.dataset.monacoModel = model?.uri.toString() ?? ''
+    this.host.dataset.monacoLanguage = model?.getLanguageId() ?? ''
+    this.host.dataset.monacoModels = String(monaco.editor.getModels().length)
+  }
+  private layout() { if (this.host) { this.editor.layout({ width: this.host.clientWidth, height: this.host.clientHeight }); this.diagnostics() } }
+  attach(host: MonacoHost) {
+    this.host = host; host.append(this.element)
+    Object.defineProperty(host, 'monacoEditor', { configurable: true, value: this.editor })
+    this.observer.observe(host); this.owner.refresh(); this.layout()
+    return () => {
+      if (this.host !== host) return
+      this.remember(); this.observer.unobserve(host); delete (host as { monacoEditor?: unknown }).monacoEditor
+      this.element.remove(); this.host = null
+    }
+  }
+  dispose() { this.observer.disconnect(); this.subscriptions.forEach(item => item.dispose()); this.editor.dispose(); this.views.clear(); this.element.remove() }
+}
+
+class MonacoPresentation {
+  changing = false
+  private panes = new Map<GroupIndex, EditorPane>()
   private models = new Map<string, ModelOwner>()
   // Reserve every slot in advance: up to 2 MiB initial EOL tokens and 4 MiB
   // for one full-document refusal repair plus 2 MiB corrective EOL metadata.
@@ -52,23 +140,8 @@ class MonacoPresentation {
   private history = new DocumentHistoryBudget(DOCUMENT_HISTORY_LIMITS.bytes - DOCUMENT_SESSION_LIMITS.count * DOCUMENT_LIMIT * 8)
   private stopped = false
   private stop: () => void
-  private observer: ResizeObserver
   private themeObserver: MutationObserver
-  private subscriptions: monaco.IDisposable[] = []
   constructor(private session: EditorSession) {
-    this.element.className = 'monaco-instance'
-    this.editor = monaco.editor.create(this.element, { model: null, automaticLayout: false, ariaLabel: 'Conteúdo do arquivo', theme: 'vs-dark', fontFamily: 'Consolas, monospace', fontSize: 14, minimap: { enabled: false }, scrollBeyondLastLine: false, fixedOverflowWidgets: false, readOnly: true })
-    this.subscriptions.push(this.editor.onDidChangeCursorSelection(() => this.remember()), this.editor.onDidScrollChange(() => this.remember()))
-    this.subscriptions.push(this.editor.onKeyDown(event => {
-      // At a history limit, keep ordinary typing read-only while still allowing
-      // the user to inspect/undo/redo the retained history before saving/closing.
-      if (!this.id || !this.models.get(this.id)?.limited || this.session.snapshot().busy || this.session.locked || !(event.ctrlKey || event.metaKey)) return
-      if (![monaco.KeyCode.KeyZ, monaco.KeyCode.KeyY].includes(event.keyCode)) return
-      event.preventDefault(); event.stopPropagation()
-      if (event.keyCode === monaco.KeyCode.KeyY || event.shiftKey) void this.model?.redo()
-      else void this.model?.undo()
-    }))
-    this.observer = new ResizeObserver(() => this.layout())
     this.themeObserver = new MutationObserver(() => this.theme())
     const root = document.querySelector('.workbench')
     if (root) this.themeObserver.observe(root, { attributes: true, attributeFilter: ['data-theme'] })
@@ -76,39 +149,37 @@ class MonacoPresentation {
     this.sync(); this.theme()
   }
   connect() { this.stopped = false }
-  refresh() { this.sync() }
+  refresh() { this.sync(); this.theme() }
+  limited(id: string) { return !!this.models.get(id)?.limited }
+  focusActive() { this.panes.get(this.session.groups.active)?.editor.focus() }
   revealMatch(id: string, line: number, column: number, length: number) {
-    const model = this.model, state = this.session.snapshot()
-    if (this.stopped || !model || this.id !== id || this.editor.getModel() !== model ||
-        state.document?.id !== id || state.text !== state.document.text || model.getValue() !== editorText(state.text) ||
+    const pane = this.panes.get(this.session.groups.active), model = pane?.editor.getModel(), state = this.session.snapshot()
+    if (this.stopped || !pane || !model || pane.id !== id || state.document?.id !== id || state.text !== state.document.text || model.getValue() !== editorText(state.text) ||
         line < 1 || line > model.getLineCount() || column < 1 || length < 1 || column + length > model.getLineMaxColumn(line)) return false
     const range = new monaco.Range(line, column, line, column + length)
-    this.editor.setSelection(range)
-    this.editor.revealRangeInCenterIfOutsideViewport(range)
-    if (this.host?.isConnected && this.host.getClientRects().length) this.editor.focus()
+    pane.editor.setSelection(range)
+    pane.editor.revealRangeInCenterIfOutsideViewport(range)
+    if (pane.host?.isConnected && pane.host.getClientRects().length) pane.editor.focus()
     return true
   }
   dispose() {
     this.stopped = true
-    // React StrictMode replays effects in the same turn; only final teardown destroys ownership.
     queueMicrotask(() => {
       if (!this.stopped) return
-      this.stop(); this.observer.disconnect(); this.themeObserver.disconnect()
-      this.subscriptions.forEach(item => item.dispose()); this.editor.dispose()
+      this.stop(); this.themeObserver.disconnect()
+      for (const pane of this.panes.values()) pane.dispose()
       for (const [id, owner] of this.models) { owner.subscription.dispose(); owner.model.dispose(); this.history.release(id) }
-      this.models.clear()
-      workers.forEach(worker => worker.terminate()); workers.clear()
-      this.element.remove(); owners.delete(this.session)
+      this.models.clear(); this.panes.clear()
+      workers.forEach(worker => worker.terminate()); workers.clear(); owners.delete(this.session)
     })
   }
   private sync() {
+    if (this.changing) return
     const state = this.session.snapshot()
-    let resetView = false
-    let selections: { start: number; end: number }[] | undefined
     this.changing = true
     try {
       for (const [id, owner] of this.models) if (!state.tabs.some(tab => tab.document.id === id)) {
-        if (this.model === owner.model) { this.editor.setModel(null); this.model = null }
+        for (const pane of this.panes.values()) pane.forget(id)
         owner.subscription.dispose(); owner.model.dispose(); this.models.delete(id); this.history.release(id)
       }
       for (const tab of state.tabs) if (!this.models.has(tab.document.id)) {
@@ -151,80 +222,35 @@ class MonacoPresentation {
             } finally { this.changing = false }
           } else { if (!known) this.history.retain(id, cost); eols.set(version, modelEndings(this.session.documentState(id)!.text)) }
           this.sync()
-          this.remember()
+          this.panes.get(this.session.groups.active)?.remember()
         })
-        this.models.set(id, { model, eols, subscription, view: null, limited: false, historyVersion: tab.historyVersion, revision: tab.document.revision })
+        this.models.set(id, { model, eols, subscription, limited: false, historyVersion: tab.historyVersion, revision: tab.document.revision })
       }
       for (const tab of state.tabs) {
         const id = tab.document.id, owner = this.models.get(id)!
-        if (owner.historyVersion === tab.historyVersion) {
-          // EOL/BOM-only reload: replace this version's equal-length EOL pattern,
-          // preserving undo/redo and its bounded ledger entry.
-          if (owner.revision !== tab.document.revision) owner.eols.set(owner.model.getAlternativeVersionId(), modelEndings(tab.text))
-          owner.revision = tab.document.revision
-          continue
+        if (owner.historyVersion !== tab.historyVersion) {
+          for (const pane of this.panes.values()) pane.beforeReload(id)
+          owner.model.setValue(editorText(tab.text)); this.history.release(id)
+          owner.eols.clear(); owner.limited = false; owner.historyVersion = tab.historyVersion
         }
-        // setValue preserves the model/URI while discarding its prior undo and redo stacks.
-        if (id === this.id && this.editor.getModel() === owner.model) {
-          selections = this.editor.getSelections()?.map(selection => ({
-            start: owner.model.getOffsetAt(selection.getSelectionStart()), end: owner.model.getOffsetAt(selection.getPosition())
-          }))
-        }
-        owner.model.setValue(editorText(tab.text))
-        this.history.release(id)
-        owner.eols.clear(); owner.eols.set(owner.model.getAlternativeVersionId(), modelEndings(tab.text))
-        owner.historyVersion = tab.historyVersion; owner.revision = tab.document.revision; owner.limited = false; owner.view = null
-        if (id === this.id) resetView = true
+        if (owner.revision !== tab.document.revision) owner.eols.set(owner.model.getAlternativeVersionId(), modelEndings(tab.text))
+        owner.revision = tab.document.revision
+        const language = languages[tab.language ?? documentLanguage(tab.document.name)]
+        if (owner.model.getLanguageId() !== language) monaco.editor.setModelLanguage(owner.model, language)
       }
-      if (this.id !== state.document?.id) {
-        const previous = this.id ? this.models.get(this.id) : undefined
-        if (previous && this.editor.getModel() === previous.model) previous.view = this.editor.saveViewState()
-        this.id = state.document?.id
-        const owner = this.id ? this.models.get(this.id) : undefined
-        this.model = owner?.model ?? null; this.editor.setModel(this.model)
-        if (owner?.view) this.editor.restoreViewState(owner.view)
-        else if (this.model) resetView = true
-      }
-      if (resetView && this.model) {
-        const view = this.session.selection, model = this.model
-        this.editor.setSelections((selections?.length ? selections : [view]).map(selection => {
-          const start = model.getPositionAt(selection.start), end = model.getPositionAt(selection.end)
-          return new monaco.Selection(start.lineNumber, start.column, end.lineNumber, end.column)
-        }))
-        this.editor.setScrollPosition({ scrollTop: view.top, scrollLeft: view.left }, monaco.editor.ScrollType.Immediate)
+      for (const [side, pane] of this.panes) {
+        const id = this.session.groups.sides[side].selected
+        pane.show(id, id ? this.models.get(id) : undefined)
       }
     } finally { this.changing = false }
-    if (resetView) this.remember()
-    if (this.model && state.document) {
-      const language = languages[state.language ?? documentLanguage(state.document.name)]
-      if (this.model.getLanguageId() !== language) monaco.editor.setModelLanguage(this.model, language)
-    }
-    this.editor.updateOptions({ readOnly: !this.id || this.session.editingLocked(this.id) || !!this.models.get(this.id)?.limited })
-    this.diagnostics()
-    if (this.id && this.models.get(this.id)?.limited && !state.busy && !state.notice && !state.error) this.session.feedback('Esta aba atingiu um limite de histórico ou precisou recuperar uma edição recusada. Desfaça/refaça, salve ou copie; feche e reabra a aba para continuar editando.')
-  }
-  private diagnostics() {
-    if (!this.host) return
-    this.host.dataset.monacoModel = this.model?.uri.toString() ?? ''
-    this.host.dataset.monacoLanguage = this.model?.getLanguageId() ?? ''
-    this.host.dataset.monacoModels = String(monaco.editor.getModels().length)
-  }
-  private remember() {
-    if (this.changing || !this.model || this.id !== this.session.snapshot().document?.id) return
-    const selection = this.editor.getSelection(), position = this.editor.getPosition()
-    if (selection && position) this.session.rememberSelection({ start: this.model.getOffsetAt({ lineNumber: selection.selectionStartLineNumber, column: selection.selectionStartColumn }), end: this.model.getOffsetAt(position), top: this.editor.getScrollTop(), left: this.editor.getScrollLeft() })
+    const id = state.document?.id
+    if (id && this.limited(id) && !state.busy && !state.notice && !state.error) this.session.feedback('Esta aba atingiu um limite de histórico ou precisou recuperar uma edição recusada. Desfaça/refaça, salve ou copie; feche e reabra a aba para continuar editando.')
   }
   private theme() { monaco.editor.setTheme(document.querySelector('.workbench')?.getAttribute('data-theme') === 'light' ? 'vs' : 'vs-dark') }
-  private layout() { if (this.host) { this.editor.layout({ width: this.host.clientWidth, height: this.host.clientHeight }); this.diagnostics() } }
-  attach(host: MonacoHost) {
-    this.host = host; host.append(this.element)
-    Object.defineProperty(host, 'monacoEditor', { configurable: true, value: this.editor })
-    this.observer.observe(host); this.sync(); this.theme(); this.layout()
-    return () => {
-      if (this.host !== host) return
-      this.remember(); this.observer.unobserve(host); delete (host as { monacoEditor?: unknown }).monacoEditor
-      this.element.remove(); this.host = null
-    }
+  attach(host: MonacoHost, side: GroupIndex = 0) {
+    let pane = this.panes.get(side)
+    if (!pane) { pane = new EditorPane(this.session, side, this); this.panes.set(side, pane) }
+    return pane.attach(host)
   }
 }
 export function monacoPresentation(session: EditorSession) {

@@ -157,6 +157,19 @@ tree enumeration are explicit. Reload never writes to the selected file.
 
 ## Save integrity and Windows limitations
 
+The optional two-group editor keeps tab occurrences and their view states in the renderer
+session. Focus routes commands to a single active native grant. Both Monaco instances can
+attach the same model, EOL ledger and undo stack. Removing a duplicate occurrence only
+changes presentation. Closing the last occurrence invokes native draft resolution. A group
+needs 230 measured CSS pixels and the separator needs eight. Below this width only the
+focused group is shown. Switching groups or restoring the available width retains tabs and
+the preferred divider position for the running session.
+
+An unacknowledged activation requires another confirmed selection before a write. If a
+release acknowledgment is lost, later native inventories retain the local draft. A missing
+native grant leaves a local occurrence for copying and explicit discard. The window still
+negotiates close after the last grant was released in its frame.
+
 Alpha.71 adds untitled documents to the same eight-entry registry. Each receives a UUID,
 revision and Monaco model. Its filesystem grant starts empty and it is excluded from clean
 Workspace recovery until a destination is confirmed. Saving an untitled document opens the
