@@ -2,6 +2,10 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.73.1] — 2026-11-23
+
+- Derive the editor tabs' accessible reorder shortcuts from the supported arrow keys. Record the verified historical false positive for the literal shortcut in Alpha.73.
+
 ## [0.1.0-alpha.73] — 2026-11-23
 
 - Reorder and pin document tabs, close unpinned tabs by group or across both groups, and restore their arrangement through explicit project recovery.

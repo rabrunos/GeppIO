@@ -8,6 +8,9 @@ import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { Popover } from '../workbench/Primitives.tsx'
 import './files-editor.css'
 
+const tabMoves = [{ key: 'ArrowLeft', offset: -1 }, { key: 'ArrowRight', offset: 1 }]
+const reorderShortcuts = tabMoves.map(move => 'Alt+Shift+' + move.key).join(' ')
+
 function GroupPane({ session, side }: { session: EditorSession; side: GroupIndex }) {
   const state = session.snapshot(), group = session.groups.sides[side], selected = group.selected
   const tabs = useRef<HTMLDivElement>(null), input = useRef<HTMLDivElement>(null)
@@ -28,8 +31,9 @@ function GroupPane({ session, side }: { session: EditorSession; side: GroupIndex
   async function tabKey(event: ReactKeyboardEvent, index: number) {
     if (state.busy || session.locked || !['ArrowLeft', 'ArrowRight', 'Home', 'End', 'Delete'].includes(event.key)) return
     event.preventDefault(); event.stopPropagation()
-    if (event.altKey && event.shiftKey && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
-      session.reorderTab(side, group.tabs[index]!, index + (event.key === 'ArrowLeft' ? -1 : 1)); return
+    const move = tabMoves.find(candidate => candidate.key === event.key)
+    if (event.altKey && event.shiftKey && move) {
+      session.reorderTab(side, group.tabs[index]!, index + move.offset); return
     }
     if (event.key === 'Delete') await session.closeOccurrence(side, group.tabs[index]!)
     else {
@@ -45,7 +49,7 @@ function GroupPane({ session, side }: { session: EditorSession; side: GroupIndex
         onDragOver={event => { if (dragged.current && !state.busy && !session.locked) { event.preventDefault(); event.dataTransfer.dropEffect = 'move' } }}
         onDrop={event => { if (dragged.current) { event.preventDefault(); session.reorderTab(side, dragged.current, index); dragged.current = null } }}>
         <button role="tab" draggable={!state.busy && !session.locked} onDragStart={event => { dragged.current = id; event.dataTransfer.effectAllowed = 'move' }} onDragEnd={() => { dragged.current = null }}
-          aria-keyshortcuts="Alt+Shift+ArrowLeft Alt+Shift+ArrowRight" aria-description={session.groups.pinned.has(id) ? 'Aba fixada' : undefined} id={tabId(id)} data-document-tab={id} aria-controls={panelId} aria-selected={active} tabIndex={active ? 0 : -1} disabled={state.busy || session.locked} title={(tab.document.location?.names.join('/') ?? tab.document.label ?? tab.document.name) + (tab.error ? ' — ' + tab.error : '')} className="ui-button" onFocus={() => { if (selected === id && session.groups.active !== side) void focusTab(id) }} onClick={() => { void focusTab(id) }} onKeyDown={event => { void tabKey(event, index) }}><span>{tab.document.name}</span>{session.groups.pinned.has(id) && <span aria-hidden="true" className="tab-pin">◆</span>}{dirty && <span className="file-editor-dirty" aria-label="Alterações não salvas">●</span>}</button>
+          aria-keyshortcuts={reorderShortcuts} aria-description={session.groups.pinned.has(id) ? 'Aba fixada' : undefined} id={tabId(id)} data-document-tab={id} aria-controls={panelId} aria-selected={active} tabIndex={active ? 0 : -1} disabled={state.busy || session.locked} title={(tab.document.location?.names.join('/') ?? tab.document.label ?? tab.document.name) + (tab.error ? ' — ' + tab.error : '')} className="ui-button" onFocus={() => { if (selected === id && session.groups.active !== side) void focusTab(id) }} onClick={() => { void focusTab(id) }} onKeyDown={event => { void tabKey(event, index) }}><span>{tab.document.name}</span>{session.groups.pinned.has(id) && <span aria-hidden="true" className="tab-pin">◆</span>}{dirty && <span className="file-editor-dirty" aria-label="Alterações não salvas">●</span>}</button>
         <button className="ui-button file-editor-tab-close" aria-label={'Fechar aba ' + tab.document.name} tabIndex={active ? 0 : -1} disabled={state.busy || session.locked} onClick={() => { void session.closeOccurrence(side, id) }}><XMarkIcon className="icon" /></button>
       </div> })}
     </div>}
