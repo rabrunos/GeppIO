@@ -152,6 +152,24 @@ try {
   assert.deepEqual(await diff('both.txt'), { original: 'before\n', modified: 'saved\r\n', readOnly: true, originalReadOnly: true })
   assert.equal((await diff('deleted.txt')).modified, '')
   assert.equal((await diff('rename new.txt')).original, 'before\n')
+  const gitPanel = page.locator('.git-changes')
+  await gitPanel.getByRole('button', { name: 'Histórico', exact: true }).press('Enter')
+  await gitPanel.locator('.git-history-commit', { hasText: 'Nested fixture' }).click()
+  await gitPanel.locator('.git-commit-detail .git-history-file[title="nested/tracked.ts"]').press('Enter')
+  const historical = page.getByRole('dialog', { name: 'Comparação Git · nested/tracked.ts', exact: true })
+  const historicalHost = historical.locator('.git-diff[data-git-diff-models="2"]')
+  await historicalHost.waitFor()
+  assert.deepEqual(await historicalHost.evaluate(node => {
+    const diff = (node as GitDiffHost).monacoDiffEditor!
+    return [diff.getOriginalEditor().getValue(), diff.getModifiedEditor().getValue(), diff.getModifiedEditor().getRawOptions().readOnly]
+  }), ['', 'before\n', true])
+  await page.keyboard.press('Control+s')
+  await page.keyboard.press('Escape')
+  await historical.waitFor({ state: 'detached' })
+  assert.equal(await readFile(join(scope, 'nested', 'tracked.ts'), 'utf8'), 'after\n')
+  assert.deepEqual(await snapshot(), draft)
+  await inactiveIntact()
+  await gitPanel.getByRole('button', { name: 'Alterações', exact: true }).click()
   for (const name of ['untracked.txt', 'binary.dat', 'large.txt']) {
     await page.locator('.git-file').filter({ hasText: name }).first().click(); await page.locator('.git-changes [role="alert"]').waitFor(); assert.equal(await page.locator('.git-diff').count(), 0)
   }
@@ -183,8 +201,9 @@ try {
   const negatives = await app.evaluate(async ({ ipcMain, BrowserWindow }, root) => {
     const handlers = (ipcMain as unknown as { _invokeHandlers: Map<string, (event: unknown, ...args: unknown[]) => Promise<GitResult>> })._invokeHandlers
     const sender = BrowserWindow.getAllWindows()[0]!.webContents, senderFrame = sender.mainFrame, handler = handlers.get('git:status')!
-    return Promise.all(['git:status', 'git:stage', 'git:unstage'].flatMap(channel => {
-      const call = handlers.get(channel)!, args = channel === 'git:status' ? [root] : [root, '00000000-0000-4000-8000-000000000000']
+    const arities = { status: 1, stage: 2, unstage: 2, history: 1, historyPage: 3, historyCommit: 3, historyCompare: 4 }
+    return Promise.all(Object.entries(arities).flatMap(([operation, arity]) => {
+      const call = handlers.get('git:' + operation)!, args = [root, ...Array<string>(arity - 1).fill('00000000-0000-4000-8000-000000000000')]
       return [call({ sender, senderFrame }, ...args, 'extra'), call({ sender: {}, senderFrame }, ...args), call({ sender, senderFrame: { url: senderFrame.url } }, ...args), call({ sender, senderFrame: { url: 'https://example.invalid/' } }, ...args), handler({ sender, senderFrame }, '../escape')]
     }))
   }, root)

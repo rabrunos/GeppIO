@@ -140,7 +140,8 @@ test('project reload expires only current witnesses without starting tree, Git, 
     createFile: unexpected, createDirectory: unexpected, renameFile: unexpected }, editor)
   await explorer.select(); explorer.connect(); await setImmediate()
   const status = t.mock.fn(async () => ({ ok: true as const, status: { root: root.id, name: root.name, branch: 'main', detached: false, changes: [] } }))
-  const git = new GitSession({ status, compare: unexpected, stage: async () => ({ ok: false, code: 'uncertain', error: 'Índice não confirmado.' }), unstage: unexpected }, explorer)
+  const git = new GitSession({ status, compare: unexpected, stage: async () => ({ ok: false, code: 'uncertain', error: 'Índice não confirmado.' }), unstage: unexpected,
+    history: unexpected, historyPage: unexpected, historyCommit: unexpected, historyCompare: unexpected }, explorer)
   const quick = new QuickOpenSession({ start: async () => ({ ok: true, value: { job: 'names', status: 'complete', visited: 1, skipped: 0, total: 1, items: [{ id: 'name', file: file.name }], truncated: false } }),
     read: unexpected, cancel: async () => ({ ok: true }), open: unexpected }, explorer)
   const search = new SearchSession({ start: async () => ({ ok: true, value: { job: 'text', status: 'complete', visited: 1, files: 1, skipped: 0, bytes: 4,

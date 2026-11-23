@@ -259,6 +259,13 @@ owner physical acceptance. The [Workspace contract](../architecture/workspace.md
 
 ## Git inspection and index actions (alpha.43–45 / Issues #50–52)
 
+For first-parent history, run the Node suites `tests/git-history.test.ts`
+and `tests/git-history-session.test.ts` alongside the existing Git suites.
+The three `git` journeys compare a committed nested file with a different
+saved worktree and live drafts. The two `git-window` journeys page through 51
+real commits, compare the initial addition, restore keyboard focus and use
+the same Changes actions after returning from history.
+
 Alpha.45 adds pure projections for all letters/layers, ignored/conflict policy and unique folder
 rollups; hidden case-insensitive `.git` at the visible-entry limit with other dotfiles retained;
 coalesced refresh after saves/tree actions; and delayed/failed requests. Regression tests require

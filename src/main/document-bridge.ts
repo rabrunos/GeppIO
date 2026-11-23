@@ -14,7 +14,7 @@ import { SearchExpired, SearchStore } from './search.ts'
 import { validSearchRequest } from '../shared/search.ts'
 import { QuickOpenExpired, QuickOpenStore } from './quick-open.ts'
 import { validQuickOpenRequest } from '../shared/quick-open.ts'
-import { validGitRequest } from '../shared/git.ts'
+import { gitOperations, validGitRequest } from '../shared/git.ts'
 import { WorkspaceOwner } from './workspace.ts'
 import { WorkspaceRecovery } from './workspace-recovery.ts'
 import { validWorkspaceRequest } from '../shared/workspace.ts'
@@ -287,7 +287,6 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
       return documentFailure(error)
     }
   })
-  const gitOperations = ['status', 'compare', 'stage', 'unstage'] as const
   for (const operation of gitOperations) ipcMain.handle(`git:${operation}`, async (event, ...args: unknown[]) => {
     const frame = event.senderFrame
     if (win.isDestroyed() || event.sender !== win.webContents || frame !== win.webContents.mainFrame || frame?.url !== expectedURL || !validGitRequest(operation, args)) return gitFailure(new GitFailure('invalid'))
@@ -295,7 +294,7 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
     const writesIndex = operation === 'stage' || operation === 'unstage'
     if (writesIndex && (explorerWriting || reloading || indexWriting)) return gitFailure(new GitFailure('busy'))
     if (writesIndex) indexWriting = true
-    try { return await git.inspect(operation, args[0] as string, args[1] as string | undefined, current) } catch (error) { return gitFailure(error) }
+    try { return await git.inspect(operation, args[0] as string, args[1] as string | undefined, current, args.slice(2) as string[]) } catch (error) { return gitFailure(error) }
     finally { if (writesIndex) indexWriting = false }
   })
   win.webContents.on('destroyed', () => {

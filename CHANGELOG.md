@@ -2,6 +2,10 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.67] — 2026-11-23
+
+- Browse the first-parent history of the selected Git root and compare committed file contents in the shared read-only diff editor.
+
 ## [0.1.0-alpha.66] — 2026-11-23
 
 - Reload the active text file from disk. An explicit discard decision protects dirty or unresolved drafts, and other tabs retain their models and undo histories.

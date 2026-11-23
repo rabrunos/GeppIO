@@ -185,7 +185,9 @@ test('a refused open reporting root loss preserves the draft without a compensat
 
 test('passive Git status allows Quick Open while an explicit comparison or index action owns the interaction', async t => {
   const p = await fixture(t), status = deferred<GitResult>(), compare = deferred<GitResult>(), stage = deferred<GitResult>()
-  const git = new GitSession({ status: () => status.promise, compare: () => compare.promise, stage: () => stage.promise, unstage: () => stage.promise }, p.explorer)
+  const unexpected = () => { throw new Error('unexpected history request') }
+  const git = new GitSession({ status: () => status.promise, compare: () => compare.promise, stage: () => stage.promise, unstage: () => stage.promise,
+    history: unexpected, historyPage: unexpected, historyCommit: unexpected, historyCompare: unexpected }, p.explorer)
   git.connect(); t.after(() => git.dispose())
   assert.equal(git.snapshot().busy, true); assert.equal(git.snapshot().interactive, false)
   p.session.dismiss(); assert.equal(p.session.show(), true)

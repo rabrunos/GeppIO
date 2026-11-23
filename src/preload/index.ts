@@ -60,7 +60,11 @@ const git = Object.freeze<import('../shared/git.ts').GitBridge>({
   status: root => ipcRenderer.invoke('git:status', root),
   compare: (root, change) => ipcRenderer.invoke('git:compare', root, change),
   stage: (root, change) => ipcRenderer.invoke('git:stage', root, change),
-  unstage: (root, change) => ipcRenderer.invoke('git:unstage', root, change)
+  unstage: (root, change) => ipcRenderer.invoke('git:unstage', root, change),
+  history: root => ipcRenderer.invoke('git:history', root),
+  historyPage: (root, snapshot, cursor) => ipcRenderer.invoke('git:historyPage', root, snapshot, cursor),
+  historyCommit: (root, snapshot, commit) => ipcRenderer.invoke('git:historyCommit', root, snapshot, commit),
+  historyCompare: (root, snapshot, commit, file) => ipcRenderer.invoke('git:historyCompare', root, snapshot, commit, file)
 })
 const search = Object.freeze<import('../shared/search.ts').SearchBridge>({
   start: (root, query, matchCase) => ipcRenderer.invoke('search:start', root, query, matchCase),

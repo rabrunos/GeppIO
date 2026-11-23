@@ -1,5 +1,35 @@
 # First-party Git pilot — Issues #50–52, #55, #67
 
+## First-parent history — alpha.67
+
+The Code sidebar, Workbench widget and floating Git window share the **Alterações**
+and **Histórico** controls. History follows the first parent of the selected root's
+HEAD. A merge lists its parents and compares against its first parent. For the
+initial commit, the original side is empty. Renames appear as a deletion and an
+addition. Historical comparisons read the two stored objects. The existing
+Monaco comparison dialog owns its disposable read-only models.
+
+Main binds opaque snapshot, cursor, commit and file IDs to the owning window,
+exact Explorer grant and pinned HEAD. An expired snapshot requires starting a
+new history. History has its own IDs and cannot authorize index changes.
+An unresolved index operation still requires an explicit refresh of Alterações.
+
+The fixed reads run against the private metadata copy with its isolated Git
+configuration. A first-parent log lists full object IDs. Batch object reads
+check types, declared sizes and frame boundaries. A raw NUL-delimited tree
+comparison supplies paths and modes. External diff, rename detection and text
+conversion are disabled. See the upstream documentation for
+[git log](https://git-scm.com/docs/git-log),
+[git cat-file](https://git-scm.com/docs/git-cat-file) and
+[git diff-tree](https://git-scm.com/docs/git-diff-tree).
+
+Each page contains up to 50 commits. A snapshot covers at most 500 commits,
+with 64 KiB per commit object, 512 KiB per page and 2 MiB of retained history.
+Details cover up to 512 changed paths. A comparison accepts ordinary text blobs
+up to 256 KiB per side. Unsupported modes, binary or oversized content and
+incomplete reads produce an explicit result. The existing native deadline,
+subprocess output limit and metadata-copy budgets also apply.
+
 ## Shared Views — alpha.54 and alpha.62
 
 The renderer host registers Git Changes as a first-party definition with Widget and floating-window

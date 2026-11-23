@@ -5,7 +5,9 @@ import { tmpdir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { DirectoryStore, ExplorerFailure, inspectExplorerPath, safeExplorerName } from './explorer.ts'
 import { GIT_LIMITS } from '../shared/git.ts'
-import type { GitChange, GitError, GitResult, GitStatus } from '../shared/git.ts'
+import type { GitChange, GitError, GitOperation, GitResult, GitStatus } from '../shared/git.ts'
+import { GitHistoryStore, historyOid } from './git-history.ts'
+import type { HistoryHead, HistoryOperation } from './git-history.ts'
 
 const messages: Record<GitError, string> = {
   'not-repository': 'A pasta selecionada não contém .git. Selecione a raiz exata do repositório; pastas internas não são descobertas automaticamente.',
@@ -17,8 +19,11 @@ const messages: Record<GitError, string> = {
   unavailable: 'Não foi possível consultar o Git. Atualize e tente novamente.', missing: 'Git para Windows não encontrado na instalação padrão em Arquivos de Programas.', timeout: 'A consulta Git excedeu 15 segundos. Tente um repositório menor.'
 }
 /** Main-only categories. Never contain filenames, configuration values or native paths. */
-export type GitFailureReason = 'layout' | 'metadata' | 'configuration' | 'index' | 'worktree-redirect' | 'worktree-special' | 'worktree-rules' | 'worktree-budget'
+export type GitFailureReason = 'layout' | 'metadata' | 'configuration' | 'index' | 'worktree-redirect' | 'worktree-special' | 'worktree-rules' | 'worktree-budget' | 'history-mode' | 'history-binary' | 'history-blob-size'
 const reasons: Partial<Record<GitFailureReason, string>> = {
+  'history-mode': 'Comparação histórica indisponível para links simbólicos e submódulos.',
+  'history-binary': 'Comparação histórica indisponível para conteúdo binário ou texto fora de UTF-8.',
+  'history-blob-size': 'Comparação histórica indisponível: um dos textos excede 256 KiB.',
   layout: 'Formato de repositório não suportado: selecione uma raiz local com diretório .git próprio, sem worktree vinculado, repositório aninhado ou histórico raso.',
   metadata: 'Metadados Git recusados: link, redirecionamento de objetos, arquivo especial ou estrutura incompatível. Nenhum reparo automático foi feito.',
   configuration: 'Configuração Git não suportada: filtros, extensões ou redirecionamentos nativos exigem outro escopo seguro. Nenhum programa do projeto foi executado.',
@@ -34,7 +39,7 @@ export class GitFailure extends Error {
 }
 export function gitFailure(error: unknown): GitResult {
   const code = error instanceof GitFailure || error instanceof ExplorerFailure ? error.kind : 'unavailable'
-  return { ok: false, code, error: code === 'unsupported' && error instanceof GitFailure && error.reason ? reasons[error.reason] ?? messages[code] : messages[code] }
+  return { ok: false, code, error: error instanceof GitFailure && error.reason ? reasons[error.reason] ?? messages[code] : messages[code] }
 }
 const decode = (bytes: Buffer) => { try { return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes) } catch { throw new GitFailure('unsupported') } }
 export function gitRelativeName(name: string): boolean {
@@ -114,6 +119,58 @@ async function boundedRead(path: string, cap: number): Promise<Buffer> {
   } finally { await file.close() }
 }
 const exists = async (path: string) => { try { await lstat(path); return true } catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false; throw error } }
+/** Only ordinary branch refs or a detached canonical SHA-1 are supported. Read
+ * missing refs distinctly from corrupt/missing commit objects in the snapshot. */
+async function historyHead(git: string, check: () => void): Promise<HistoryHead> {
+  check()
+  const witness = createHash('sha256').update((await inspectExplorerPath(git, 'directory')).chain)
+  async function read(path: string, cap: number) {
+    check()
+    const before = await lstat(path, { bigint: true })
+    if (before.size > BigInt(cap)) throw new GitFailure('limit')
+    const bytes = await boundedRead(path, Number(before.size)), after = await lstat(path, { bigint: true })
+    check()
+    if (before.ino !== after.ino || before.dev !== after.dev || before.ctimeNs !== after.ctimeNs || before.mtimeNs !== after.mtimeNs || before.size !== after.size) throw new GitFailure('stale')
+    witness.update([relative(git, path), before.dev, before.ino, before.birthtimeNs, before.mtimeNs, before.ctimeNs].join('/')).update(bytes)
+    return bytes
+  }
+  const head = decode(await read(join(git, 'HEAD'), 4096)).replace(/\n$/, '')
+  if (!head.startsWith('ref: refs/heads/')) {
+    if (!historyOid(head)) throw new GitFailure('unsupported')
+    return { ref: null, oid: head, witness: witness.digest('hex') }
+  }
+  const ref = head.slice(5)
+  if (!gitRelativeName(ref) || ref.includes('..') || ref.includes('@{') || /[~^?*[\x20]/.test(ref) || ref.split('/').some(p => p.startsWith('.') || p.endsWith('.lock'))) throw new GitFailure('unsupported')
+  const parts = ref.split('/'), loose = join(git, ...parts), packed = join(git, 'packed-refs')
+  let parent = git, hasParent = true
+  for (const part of parts.slice(0, -1)) {
+    check()
+    parent = join(parent, part)
+    if (!await exists(parent)) { hasParent = false; break }
+    witness.update((await inspectExplorerPath(parent, 'directory')).chain)
+  }
+  let oid: string | null = null
+  if (hasParent && await exists(loose)) {
+    oid = decode(await read(loose, 256)).replace(/\n$/, '')
+    if (!historyOid(oid)) throw new GitFailure('unsupported')
+  } else if (await exists(packed)) {
+    const bytes = await read(packed, GIT_LIMITS.metadata)
+    let offset = 0
+    while (offset < bytes.length) {
+      check()
+      const end = bytes.indexOf(10, offset)
+      if (end < 0 || end - offset > 8192) throw new GitFailure('unsupported')
+      const row = decode(bytes.subarray(offset, end)); offset = end + 1
+      if (row.startsWith('#') || /^\^[a-f0-9]{40}$/.test(row)) continue
+      if (row[40] !== ' ' || !historyOid(row.slice(0, 40)) || !row.slice(41)) throw new GitFailure('unsupported')
+      if (row.slice(41) === ref) {
+        if (oid) throw new GitFailure('unsupported')
+        oid = row.slice(0, 40)
+      }
+    }
+  }
+  return { ref, oid, witness: witness.digest('hex') }
+}
 function text(bytes: Buffer): string {
   const value = decode(bytes)
   if ([...value].some(c => c.charCodeAt(0) < 32 && ![9, 10, 13].includes(c.charCodeAt(0)) || c.charCodeAt(0) === 127)) throw new GitFailure('unsupported')
@@ -301,21 +358,34 @@ export class GitStore {
   private controller: AbortController | null = null
   private status: GitStatus | null = null
   private authority: { metadata: string; files: Map<string, string> } | null = null
+  private history = new GitHistoryStore()
   private busy = false
   private directories: DirectoryStore
   constructor(directories: DirectoryStore) { this.directories = directories }
-  revoke(): void { this.controller?.abort(); this.status = null; this.authority = null }
-  async inspect(operation: 'status' | 'compare' | 'stage' | 'unstage', root: string, id: string | undefined, current: () => boolean): Promise<GitResult> {
+  revoke(): void { this.controller?.abort(); this.status = null; this.authority = null; this.history.revoke() }
+  async inspect(operation: GitOperation, root: string, id: string | undefined, current: () => boolean, more: readonly string[] = []): Promise<GitResult> {
     if (this.busy) throw new GitFailure('busy')
+    const historyOperation = operation === 'history' || operation === 'historyPage' || operation === 'historyCommit' || operation === 'historyCompare'
+    if (historyOperation && (!current() || this.directories.snapshot?.id !== root)) throw new GitFailure('stale')
+    if (historyOperation && operation !== 'history' && !this.history.owns(root, id)) throw new GitFailure('stale')
+    if (operation === 'history') this.history.revoke()
     if (operation === 'status') { this.status = null; this.authority = null }
     this.busy = true
     const controller = new AbortController(); this.controller = controller
     const guard = this.directories.guard(), deadline = Date.now() + GIT_LIMITS.timeout
     let temporary: string | undefined, writeStarted = false, phase: GitFailureReason = 'layout'
+    let checkedHead = false
+    let publishHistory: (() => Promise<void>) | undefined
     const finish = async () => {
       try {
         if (temporary) await rm(temporary, { recursive: true, force: true, maxRetries: 3 })
-        check(); await this.directories.folder(root, () => { check(); return true })
+        check()
+        try { await this.directories.folder(root, () => { check(); return true }) }
+        catch (error) {
+          if (historyOperation) { this.history.revoke(); if (!(error instanceof GitFailure)) throw new GitFailure('stale') }
+          throw error
+        }
+        await publishHistory?.()
       } catch (error) { if (writeStarted) throw new GitFailure('uncertain'); throw error }
     }
     const check = () => { if (!guard() || !current() || controller.signal.aborted) throw new GitFailure('stale'); if (Date.now() > deadline) throw new GitFailure('timeout') }
@@ -337,7 +407,11 @@ export class GitStore {
       const selected = this.status?.root === root ? this.status.changes.find(change => change.id === id) : undefined
       const authority = this.authority
       if (mutation && (!selected || !authority)) throw new GitFailure('stale')
-      const metadata = operation === 'compare' ? '' : await metadataWitness(git, check)
+      let head: HistoryHead | undefined
+      if (historyOperation) {
+        head = await historyHead(git, check); this.history.checkHead(head.witness); checkedHead = true
+      }
+      const metadata = operation === 'compare' || historyOperation ? '' : await metadataWitness(git, check)
       if (mutation && (metadata !== authority!.metadata || await actionWitness(path, selected!.name, check) !== authority!.files.get(selected!.id))) throw new GitFailure('stale')
       if (mutation && !selected![operation]) throw new GitFailure('unsupported')
       if (mutation && await exists(join(git, 'index.lock'))) throw new GitFailure('busy')
@@ -394,7 +468,9 @@ export class GitStore {
       for (const name of ['exclude', 'attributes']) if (await exists(join(git, 'info', name))) await writeFile(join(shadow, 'info', name), await boundedRead(join(git, 'info', name), 64 * 1024))
       for (const name of ['alternates', 'http-alternates']) if (await exists(join(shadow, 'objects', 'info', name))) throw new GitFailure('unsupported')
       await writeFile(join(temporary, 'source-config'), await boundedRead(join(git, 'config'), 64 * 1024))
-      const base = ['--git-dir=' + shadow, '--work-tree=' + path]
+      const worktree = historyOperation ? join(temporary, 'empty-worktree') : path
+      if (historyOperation) await mkdir(worktree)
+      const base = ['--git-dir=' + shadow, '--work-tree=' + worktree]
       let safe = '[core]\nrepositoryformatversion = 0\nbare = false\nfsmonitor = false\nuntrackedCache = false\npreloadindex = false\n'
       await writeFile(join(shadow, 'config'), safe)
       // Bind even version/config parsing to private metadata: the host temporary
@@ -419,6 +495,25 @@ export class GitStore {
       const files = decode(indexListing).split('\0').filter(Boolean)
       if (files.length > GIT_LIMITS.nodes) throw new GitFailure('limit')
       if (files.some(row => !/^(100644|100755|120000|160000) [a-f0-9]{40} [0-3]\t/.test(row) || !gitRelativeName(row.slice(row.indexOf('\t') + 1)))) throw new GitFailure('unsupported')
+      if (historyOperation && head) {
+        phase = 'metadata'
+        const privateHead = await historyHead(shadow, check)
+        if (privateHead.oid !== head.oid || privateHead.ref !== head.ref) { this.history.revoke(); throw new GitFailure('stale') }
+        const pinned = head.witness
+        const prepared = await this.history.read(operation as HistoryOperation, root, id, more, head, invoke)
+        publishHistory = async () => {
+          try {
+            if ((await historyHead(git, check)).witness !== pinned) throw new GitFailure('stale')
+            await this.directories.folder(root, () => { check(); return true })
+            check(); prepared.publish()
+          } catch (error) {
+            this.history.revoke()
+            if (!(error instanceof GitFailure) || !['timeout', 'limit'].includes(error.kind)) throw new GitFailure('stale')
+            throw error
+          }
+        }
+        return prepared.result
+      }
       phase = 'worktree-special'
       const verifyWorktree = await inspectWorkingTree(path, files.map(row => ({ mode: row.slice(0, 6), stage: Number(row[48]), name: row.slice(row.indexOf('\t') + 1) })), async names => {
         const input = Buffer.from(names.join('\0') + '\0'), requested = new Set(names)
@@ -524,6 +619,10 @@ export class GitStore {
       check()
       return { ok: true, comparison: { name: change.name, original: text(original), modified: text(modified), basis: 'HEAD → arquivo salvo no disco; não representa o índice nem alterações não salvas do Editor.' } }
     } catch (error) {
+      if (historyOperation && !checkedHead) {
+        this.history.revoke()
+        if (operation !== 'history' && !(error instanceof GitFailure && ['timeout', 'limit'].includes(error.kind))) throw new GitFailure('stale')
+      }
       if (writeStarted) throw new GitFailure('uncertain')
       if (error instanceof GitFailure && error.kind === 'unsupported' && !error.reason) throw new GitFailure(error.kind, phase)
       if (error instanceof ExplorerFailure && error.kind === 'unsupported') throw new GitFailure(error.kind, phase)

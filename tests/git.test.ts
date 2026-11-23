@@ -17,6 +17,8 @@ import { fixtureGit, gitFingerprint, initializeGit } from '../tools/git-fixtures
 import { fileDecoration, gitDecorations } from '../src/renderer/src/git/decorations.ts'
 
 const current = () => true
+const unexpectedHistory = () => { throw new Error('Unexpected history request') }
+const noHistory = { history: unexpectedHistory, historyCommit: unexpectedHistory, historyPage: unexpectedHistory, historyCompare: unexpectedHistory }
 const turn = () => new Promise(resolve => setImmediate(resolve))
 function success(result: GitResult) { assert.ok(result.ok); return result }
 const denied = (kind: string) => (error: unknown) => error instanceof GitFailure && error.kind === kind
@@ -32,6 +34,15 @@ async function selected(root: string) {
 test('Git fixed requests, path-free failures, NUL status and bounded relative names', () => {
   const id = randomUUID()
   assert.ok(validGitRequest('status', [id])); assert.ok(validGitRequest('compare', [id, id]))
+  for (const [op, count] of Object.entries({ history: 1, historyPage: 3, historyCommit: 3, historyCompare: 4 })) {
+    const args = Array<string>(count).fill(id)
+    assert.ok(validGitRequest(op, args))
+    assert.equal(validGitRequest(op, args.slice(1)), false)
+    assert.equal(validGitRequest(op, [...args, id]), false)
+    for (const value of ['HEAD', '0123456789abcdef'.repeat(2) + '01234567', 'folder/file', { id }]) {
+      assert.equal(validGitRequest(op, [...args.slice(1), value]), false)
+    }
+  }
   for (const operation of ['status', 'compare', 'exec', 'commit']) for (const args of [[], [id, id, 'extra'], ['../root'], [id, 'C:\\private']]) assert.equal(validGitRequest(operation, args), false)
   assert.doesNotMatch(JSON.stringify(gitFailure(new Error('C:\\private'))), /private/)
   for (const name of ['../a', '/a', 'a\\b', 'a/.git/config', 'a:stream', 'a\n', 'nul', 'a/'.repeat(34)]) assert.equal(gitRelativeName(name), false)
@@ -275,7 +286,7 @@ test('OS temporary aliases canonicalize private scratch without expanding the se
 test('shared renderer state discards delayed results after root replacement/release', async () => {
   let selectedRoot = randomUUID(), finish!: (value: GitResult) => void
   const explorer = new ExplorerSession({ select: async () => ({ ok: true, root: { id: selectedRoot, name: 'scope', kind: 'directory' } }), list: async () => ({ ok: true, root: null, children: [] }), release: async () => ({ ok: true, root: null }) } as unknown as ExplorerBridge, new EditorSession({} as never))
-  const session = new GitSession({ stage: async () => ({ ok: true }), unstage: async () => ({ ok: true }), status: () => new Promise(resolve => { finish = resolve }), compare: async () => ({ ok: false, code: 'unsupported', error: 'unsupported' }) }, explorer)
+  const session = new GitSession({ ...noHistory, stage: async () => ({ ok: true }), unstage: async () => ({ ok: true }), status: () => new Promise(resolve => { finish = resolve }), compare: async () => ({ ok: false, code: 'unsupported', error: 'unsupported' }) }, explorer)
   session.connect(); await explorer.select(); const old = finish
   selectedRoot = randomUUID(); await explorer.select(); old({ ok: true, status: { root: randomUUID(), name: 'stale', branch: 'stale', detached: false, changes: [] } }); await Promise.resolve()
   assert.equal(session.snapshot().status, null)
@@ -450,7 +461,7 @@ test('renderer never retries lost mutation responses and preserves confirmed-suc
     const root = randomUUID(), change = randomUUID(); let writes = 0, reads = 0
     const explorer = new ExplorerSession({ select: async () => ({ ok: true, root: { id: root, name: 'scope', kind: 'directory' } }), list: async () => ({ ok: true, root: null, children: [] }), release: async () => ({ ok: true, root: null }) } as unknown as ExplorerBridge, new EditorSession({} as never))
     const session = new GitSession({
-      status: async () => { if (++reads > 1) throw new Error('lost refresh'); return { ok: true, status: { root, name: 'scope', branch: 'main', detached: false, changes: [] } } },
+      ...noHistory, status: async () => { if (++reads > 1) throw new Error('lost refresh'); return { ok: true, status: { root, name: 'scope', branch: 'main', detached: false, changes: [] } } },
       compare: async () => ({ ok: true }), unstage: async () => ({ ok: true }),
       stage: async () => { writes++; if (outcome === 'dropped') throw new Error('lost write acknowledgement'); return outcome === 'confirmed' ? { ok: true, mutated: true } : { ok: false, code: 'uncertain', error: 'Índice pode ter mudado' } }
     }, explorer)
