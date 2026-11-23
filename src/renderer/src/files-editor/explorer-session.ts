@@ -40,11 +40,36 @@ export class ExplorerSession {
   private update(patch: Partial<ExplorerState>) { this.state = { ...this.state, ...('root' in patch ? { mutationNotice: null } : {}), ...patch }; if (patch.busy !== undefined) this.editor.setNavigationBusy(patch.busy); if ('root' in patch) this.editor.setProjectRoot(patch.root?.id ?? null); for (const listener of this.listeners) listener() }
   connect() {
     if (this.stop) return
+    let reload = this.editor.snapshot().reloadWitness
     const sync = () => {
-      if (this.state.busy || this.editor.snapshot().busy || this.locked) return
-      const document = this.editor.snapshot().document, location = document?.location, root = this.state.root
-      const invalid = root && this.editor.snapshot().invalidRoot === root.id
+      const editor = this.editor.snapshot(), document = editor.document, location = document?.location, root = this.state.root
+      const invalid = root && editor.invalidRoot === root.id
       const key = [root?.id, document?.id, location?.root, location?.names.join('/'), location?.caseInsensitive, invalid].join('|')
+      const witness = editor.reloadWitness
+      if (witness !== reload) {
+        reload = witness
+        if (root && witness?.root === root.id) {
+          // The receipt may also supply this tab's first project association.
+          // Do not implicitly follow that path until the owner refreshes or navigates.
+          if (!invalid) this.followKey = key
+          const children = new Map(this.state.children)
+          let parent = root.id
+          let removed: string | null = null
+          for (const [index, name] of witness.names.entries()) {
+            const siblings = children.get(parent) ?? [], child = findExplorerChild(siblings, name, witness.caseInsensitive)
+            if (!child) break
+            if (index === witness.names.length - 1) {
+              removed = child.id
+              if (siblings.length === 1) children.delete(parent)
+              else children.set(parent, siblings.filter(item => item.id !== child.id))
+            } else parent = child.id
+          }
+          if (removed && this.focus === removed) this.focus = parent
+          this.update({ children, active: this.state.active === removed ? null : this.state.active,
+            mutationVersion: this.state.mutationVersion + 1, mutationNotice: 'Atualize a árvore para conferir o arquivo no disco.' })
+        }
+      }
+      if (this.state.busy || this.editor.snapshot().busy || this.locked) return
       if (key === this.followKey) return
       this.followKey = key
       if (invalid) { this.update({ active: null, document: document?.id ?? null, error: 'A pasta mudou ou ficou indisponível. Abra a pasta novamente; as abas foram mantidas.' }); return }
@@ -190,7 +215,7 @@ export class ExplorerSession {
   }
   async refresh() {
     if (this.state.busy || this.locked || this.editor.snapshot().busy || !this.state.root) return
-    this.update({ busy: true, error: null, diskVersion: this.state.diskVersion + 1 })
+    this.update({ busy: true, error: null, mutationNotice: null, diskVersion: this.state.diskVersion + 1 })
     try {
       const visit = async (id: string) => {
         await this.load(id)

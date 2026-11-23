@@ -11,7 +11,7 @@ opaque ID/revision, validated file/ancestor identity and confirmed bytes. Editor
 retains one exact draft per grant, and one active-document facade for existing Status Bar,
 Explorer and Git subscribers. Opening another file never saves or replaces a held draft;
 opening the same canonical path activates its existing grant, including a conflicted draft.
-Close and reopen explicitly to reread a changed target. No force-save or merge is implied.
+Since alpha.66 the active tab also offers **Recarregar do disco** to reread its authorized file.
 
 Compact internal tabs select by click or ArrowLeft/ArrowRight/Home/End; Delete or the close
 button requests native Save/Discard/Cancel. Active close selects the preceding tab, otherwise
@@ -115,7 +115,7 @@ session-only. The Main-only single-view widget is catalogued but never automatic
 
 ## Native boundary
 
-Five fixed calls (`open`, `activate`, `save`, `release`, `close`) and one close-request subscription exist only
+Six fixed calls (`open`, `activate`, `save`, `reload`, `release`, `close`) and one close-request subscription exist only
 in app preload. No renderer path/channel/directory argument or Worker facade exists. Main checks
 exact WebContents/main-frame/app URL, argument count, fields, types and bounds. Native selection
 authorizes one ordinary regular file. Release revokes that grant; navigation/renderer loss/destruction
@@ -134,6 +134,26 @@ Links/junction ancestors, multiple hardlinks, special files, Windows UNC/device/
 paths and read-only writes are refused. OS errors map to fixed bounded messages without paths.
 Selection must already use a canonical path: a native dialog returning an 8.3 short-path alias
 is refused too. Select the long canonical path explicitly; alias compatibility is not implemented.
+
+## Explicit reload
+
+Main serializes reload with open, save and close. It accepts only the active grant's draft and
+a boolean requesting confirmation of unresolved work. Main also checks the revision, pending
+save outcome and exact draft contents independently. Dirty and uncertain drafts require the
+native discard decision. Cancel is the default. Reload reads an ordinary file at the same
+authorized path. Its leaf identity may have changed before the request. Main checks all
+ancestors against the original grant and checks the candidate before and after confirmation
+and bounded UTF-8 reads. Both complete observations must agree before Main adopts the bytes,
+BOM, line endings and file identity.
+
+The renderer retains the draft and undo history until it receives a successful reply for
+the current tab and intention. It reuses the Monaco model and language override and resets
+the affected history when replacing the displayed text. A canceled request or a failed
+read leaves the previous model available. One predecessor revision per live grant permits
+explicit reload after losing a reply to a save or reload. That predecessor cannot save or
+close the file. Retrying revalidates the current disk state and requires a discard decision.
+A reload of a project file expires its tree entry and project result IDs. New queries and
+tree enumeration are explicit. Reload never writes to the selected file.
 
 ## Save integrity and Windows limitations
 
@@ -163,8 +183,8 @@ restoration never writes a remembered draft over a disk file.
 
 Native/app close request all drafts with a one-use ticket, then Main presents Save/Discard/Cancel
 for each dirty target. Cancel/failed Save keeps the app and drafts. Opening another file never
-prompts to save the existing tab; picker cancellation changes nothing. Conflict recovery is
-explicit: copy the draft, close its tab and reopen. No force-save or merge tool exists.
+prompts to save the existing tab; picker cancellation changes nothing. After a conflict the
+user can copy the draft and explicitly reload or close and reopen the file.
 
 References: [Electron security](https://www.electronjs.org/docs/latest/tutorial/security),
 [Node 24 filesystem](https://nodejs.org/docs/latest-v24.x/api/fs.html),

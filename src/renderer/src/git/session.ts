@@ -23,8 +23,17 @@ export class GitSession {
   connect() {
     if (this.unsubscribe) return
     let treeVersion = this.explorer.snapshot().diskVersion, documentVersion = this.explorer.editor.snapshot().diskVersion
+    let reload = this.explorer.editor.snapshot().reloadWitness
     const sync = () => {
       const root = this.explorer.snapshot().root?.id ?? null
+      const witness = this.explorer.editor.snapshot().reloadWitness
+      if (reload !== witness) {
+        reload = witness
+        if (root && witness?.root === root) {
+          this.generation++; this.pending = false
+          this.update({ status: null, comparison: null, ...(!this.requiresRefresh ? { error: 'Atualize o Git para consultar o estado no disco.', code: null } : {}) })
+        }
+      }
       const tree = this.explorer.snapshot().diskVersion, document = this.explorer.editor.snapshot().diskVersion
       if (root !== this.state.root || tree !== treeVersion || document !== documentVersion) {
         if (root !== this.state.root) this.requiresRefresh = false
@@ -57,6 +66,7 @@ export class GitSession {
     const root = this.state.root
     if (!root || this.running || this.locked || this.requiresRefresh) return
     const generation = this.generation
+    const reload = this.explorer.editor.snapshot().reloadWitness
     let confirmed = false
     this.running = true
     this.update({ busy: true, interactive: !!id, error: null, code: null, comparison: null, ...(!id ? { status: null } : {}) })
@@ -72,6 +82,7 @@ export class GitSession {
       if (result.ok && result.mutated) {
         confirmed = true
         this.update({ status: null })
+        if (reload !== this.explorer.editor.snapshot().reloadWitness) return
         const refreshed = await this.bridge.status(root)
         if (generation !== this.generation || root !== this.state.root) return
         if (refreshed.ok) this.update({ status: refreshed.status ?? null })

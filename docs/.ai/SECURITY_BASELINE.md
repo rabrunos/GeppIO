@@ -75,6 +75,11 @@ native-selected UTF-8 file (1 MiB), exact owner/main frame and revocable opaque 
 path or plugin file grant exists. Follow the [document boundary](../architecture/documents.md) for
 byte/identity checks, failure retention and explicit Windows ACL/metadata/crash limitations.
 
+Alpha.66 adds an active-grant, revision-bound document reload. Main revalidates the original
+ancestors and candidate bytes before adoption. A dirty draft, uncertain outcome or recovery
+from a lost receipt requires the native discard dialog with Cancel as default. A retained
+predecessor can only request another explicit reload. Save and close require the current revision.
+
 The proposed [optional community identity](https://github.com/rabrunos/GeppIO/issues/34) is separate
 from local desktop use and per-plugin external service authentication. It is not an implemented
 account service or a requirement to sign in before using the local workbench.

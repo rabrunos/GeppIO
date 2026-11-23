@@ -25,7 +25,7 @@ test('simultaneous model ranges preserve untouched mixed EOL tokens and surrogat
 })
 test('exact editor proposals retain the byte cap, BOM, Unicode and busy/failed-save protections', async () => {
   const document = { id: randomUUID(), revision: randomUUID(), name: 'fixture.json', bom: true, text: 'a\r\nb\nc\r' }
-  const bridge: DocumentBridge = { activate: async () => ({ ok: true, document }), open: async () => ({ ok: true, document }), save: async () => ({ ok: false, code: 'write', error: 'fixture refusal' }), release: async () => ({ ok: true, document: null }), close: async () => ({ ok: true, document: null }), onCloseRequested: () => () => {} }
+  const bridge: DocumentBridge = { reload: async () => { throw new Error('Unexpected reload') }, activate: async () => ({ ok: true, document }), open: async () => ({ ok: true, document }), save: async () => ({ ok: false, code: 'write', error: 'fixture refusal' }), release: async () => ({ ok: true, document: null }), close: async () => ({ ok: true, document: null }), onCloseRequested: () => () => {} }
   const session = new EditorSession(bridge); await session.open()
   assert.equal(session.editExact('A\r\nb\nc\r'), true); assert.equal(session.dirty, true)
   assert.equal(session.editExact('\ud800'), false); assert.equal(session.snapshot().text, 'A\r\nb\nc\r')
@@ -42,7 +42,7 @@ test('an unconfirmed save or missing reply invalidates disk views without changi
   let writes = 0
   const original = async () => ({ ok: true as const, document })
   const session = new EditorSession({
-    open: original, activate: original, close: original, release: original, onCloseRequested: () => () => {},
+    open: original, activate: original, close: original, release: original, reload: original, onCloseRequested: () => () => {},
     async save() {
       if (++writes === 1) return { ok: false, code: 'unconfirmed', error: 'Resultado não confirmado.' }
       throw new Error('Lost IPC response')

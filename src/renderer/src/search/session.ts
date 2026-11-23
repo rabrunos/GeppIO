@@ -146,7 +146,7 @@ export class SearchSession {
     if (generation !== this.generation) return
     const state = editor.snapshot()
     if (!opened) { this.update({ feedback: state.notice ?? 'Não foi possível abrir o resultado da busca.' }); return }
-    if (!verified || !state.document || state.document.id !== verified || state.text !== state.document.text || !this.reveal(verified, match)) {
+    if (!verified || !state.document || state.document.id !== verified || editor.documentState(verified)?.unresolved || state.text !== state.document.text || !this.reveal(verified, match)) {
       this.update({ feedback: 'A ocorrência se refere ao arquivo salvo no disco. O conteúdo da aba foi preservado.' })
     } else this.update({ feedback: null })
   }

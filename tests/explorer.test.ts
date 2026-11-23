@@ -27,6 +27,22 @@ async function fixture(run: (path: string) => Promise<void>) {
   const path = await mkdtemp(join(tmpdir(), 'geppio-smoke-explorer-unit-'))
   try { await run(await realpath(path)) } finally { await rm(path, { recursive: true, force: true, maxRetries: 5 }) }
 }
+test('an explicit reload expires only the matching navigation identity and leaves the root usable', () => fixture(async path => {
+  const store = new DirectoryStore(), file = join(path, 'one.txt'), other = join(path, 'two.txt')
+  await writeFile(file, 'one'); await writeFile(other, 'two')
+  const selected = root(await store.select(path, current))
+  const nodes = result(await store.list(selected.id, selected.id, current)).children!
+  const first = nodes.find(node => node.name === 'one.txt')!, second = nodes.find(node => node.name === 'two.txt')!
+  assert.equal(store.invalidateFile(join(path, '..', 'outside.txt')), false)
+  assert.equal(store.invalidateFile(join(path, '.GiT', 'description')), false)
+  assert.equal(await store.file(selected.id, first.id, current), file)
+  assert.equal(store.invalidateFile(file), true)
+  await assert.rejects(store.file(selected.id, first.id, current), denied('stale'))
+  assert.equal(await store.file(selected.id, second.id, current), other)
+  const fresh = result(await store.list(selected.id, selected.id, current)).children!
+  assert.notEqual(fresh.find(node => node.name === 'one.txt')!.id, first.id)
+  assert.equal(fresh.find(node => node.name === 'two.txt')!.id, second.id)
+}))
 test('fixed Explorer request shape refuses paths, forged IDs, extra fields and oversized drafts', () => {
   const id = randomUUID()
   assert.ok(validExplorerRequest('select', [])); assert.ok(validExplorerRequest('list', [id, id])); assert.ok(validExplorerRequest('release', [id]))
@@ -142,7 +158,7 @@ test('shared Explorer follows active tabs and refreshed identity without saving 
     const locate = (document: import('../src/shared/documents.ts').DocumentSnapshot) => ({ ...document, ...(dirs.snapshot ? { location: { root: dirs.snapshot.id, names: [document.name] } } : {}) })
     return value.ok ? { ...value, document: value.document ? locate(value.document) : null, documents: docs.snapshots.map(locate) } : value
   }
-  const editor = new EditorSession({ activate: async id => reply(docs.activate(id)), open: async () => ({ ok: true, document: null }), save: async draft => { await docs.save(draft, current); return reply(docs.result()) }, release: async draft => reply(await docs.release(draft, async () => decision, current)), close: async () => ({ ok: true, document: null }), onCloseRequested: () => () => {} })
+  const editor = new EditorSession({ reload: async () => { throw new Error('Unexpected reload') }, activate: async id => reply(docs.activate(id)), open: async () => ({ ok: true, document: null }), save: async draft => { await docs.save(draft, current); return reply(docs.result()) }, release: async draft => reply(await docs.release(draft, async () => decision, current)), close: async () => ({ ok: true, document: null }), onCloseRequested: () => () => {} })
   const unexpectedWrite = () => { throw new Error('unexpected Explorer mutation') }
   const explorer = new ExplorerSession({ createFile: unexpectedWrite, createDirectory: unexpectedWrite, renameFile: unexpectedWrite,
     select: () => dirs.select(path, current), list: (r, n) => dirs.list(r, n, current), release: async r => dirs.release(r), open: async (r, n, draft) => {

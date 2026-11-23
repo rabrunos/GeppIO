@@ -163,6 +163,8 @@ test('open-document limits are recoverable and never evict a grant or bypass dup
 test('protocol accepts only exact bounded argument shapes, never paths/channels', () => {
   const value = { id: randomUUID(), revision: randomUUID(), text: '😀' }
   assert.ok(validDocumentRequest('open', [null])); assert.ok(validDocumentRequest('save', [value]))
+  assert.ok(validDocumentRequest('reload', [value, false])); assert.ok(validDocumentRequest('reload', [value, true]))
+  for (const args of [[value], [null, true], [value, 'true'], [value, false, true], [{ ...value, path: 'other' }, false]]) assert.equal(validDocumentRequest('reload', args), false)
   assert.ok(validDocumentRequest('close', [randomUUID(), value]))
   assert.ok(validDocumentRequest('activate', [value.id])); assert.ok(validDocumentRequest('close', [randomUUID(), [value]]))
   for (const args of [[], ['C:\\private.txt'], [value], [value.id, 'extra']]) assert.equal(validDocumentRequest('activate', args), false)
@@ -181,6 +183,7 @@ test('single renderer session keeps dirty draft on canceled/failed operations an
   let disk: DocumentSnapshot = { id: randomUUID(), revision: randomUUID(), name: 'one.ts', text: 'old\r\n', bom: false }
   let canceled = false, denied = false, pending: (() => void) | undefined
   const bridge: DocumentBridge = {
+    reload: async () => { throw new Error('Unexpected reload') },
     activate: async () => ({ ok: true, document: disk }),
     open: async () => ({ ok: true, document: disk, canceled }),
     save: async value => { await new Promise<void>(resolve => { pending = resolve }); if (denied) return { ok: false, code: 'write', error: 'denied' }; disk = { ...disk, revision: randomUUID(), text: value.text }; return { ok: true, document: disk } },

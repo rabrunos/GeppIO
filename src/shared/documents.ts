@@ -8,6 +8,7 @@ export type DocumentResult = ({ ok: true; document: DocumentSnapshot | null; can
 export interface DocumentBridge {
   open(draft: DocumentDraft | null): Promise<DocumentResult>
   save(draft: DocumentDraft): Promise<DocumentResult>
+  reload(draft: DocumentDraft, confirmUnresolved: boolean): Promise<DocumentResult>
   release(draft: DocumentDraft): Promise<DocumentResult>
   activate(id: string): Promise<DocumentResult>
   close(ticket: string, drafts: DocumentDraft[] | DocumentDraft | null): Promise<DocumentResult>
@@ -22,6 +23,7 @@ export function validDraft(value: unknown): value is DocumentDraft {
     && typeof draft.text === 'string' && draft.text.length <= DOCUMENT_LIMIT && wellFormedText(draft.text)
 }
 export function validDocumentRequest(operation: string, args: readonly unknown[]): boolean {
+  if (operation === 'reload') return args.length === 2 && validDraft(args[0]) && typeof args[1] === 'boolean'
   if (operation === 'activate') return args.length === 1 && documentToken(args[0])
   if (operation === 'close') return args.length === 2 && documentToken(args[0]) && (args[1] === null || validDraft(args[1]) || Array.isArray(args[1]) && args[1].length <= DOCUMENT_SESSION_LIMITS.count && args[1].every(validDraft) && new Set(args[1].map(value => value.id)).size === args[1].length)
   return args.length === 1 && (operation === 'open' && args[0] === null || ['open', 'save', 'release'].includes(operation) && validDraft(args[0]))

@@ -18,7 +18,7 @@ function deferred<T>() { let resolve!: (value: T) => void; const promise = new P
 
 async function fixture(t: TestContext, overrides: Partial<ExplorerBridge> = {}) {
   const files = new Map<string, ExplorerNode[]>([[root.id, [folder, old]], [folder.id, []]])
-  const editor: EditorSession = new EditorSession({ open: unexpected, activate: unexpected, release: unexpected, close: unexpected, onCloseRequested: unexpected,
+  const editor: EditorSession = new EditorSession({ open: unexpected, reload: unexpected, activate: unexpected, release: unexpected, close: unexpected, onCloseRequested: unexpected,
     save: async draft => ({ ok: true, document: { ...editor.documentState(draft.id)!.document, text: draft.text, revision: 'saved' } }) })
   const createFile = t.mock.fn<ExplorerBridge['createFile']>(overrides.createFile ?? (async (_r, dir, name) => {
     const node: ExplorerNode = { id: 'fresh', name, kind: 'file' }; files.get(dir)!.push(node)

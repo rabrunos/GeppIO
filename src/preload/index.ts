@@ -30,6 +30,7 @@ const pluginData = Object.freeze<PluginDataBridge>({
 const documents = Object.freeze<DocumentBridge>({
   open: draft => ipcRenderer.invoke('document:open', draft),
   save: draft => ipcRenderer.invoke('document:save', draft),
+  reload: (draft, confirmUnresolved) => ipcRenderer.invoke('document:reload', draft, confirmUnresolved),
   release: draft => ipcRenderer.invoke('document:release', draft),
   activate: id => ipcRenderer.invoke('document:activate', id),
   close: (ticket, draft) => ipcRenderer.invoke('document:close', ticket, draft),

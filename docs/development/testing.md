@@ -377,6 +377,13 @@ bytes, and retains the existing Monaco model, Worker and PTY. The focused
 and covers uncertainty after submission. The session tests exercise refresh, open and tab-limit
 failures after native confirmation.
 
+`pnpm.cmd test:isolated document-reload` and `document-reload --scale125` drive the
+active-tab reload button in the built editor. The Electron fixture checks native dialog
+options and supplies the Cancel or discard response. It also drops one response after Main
+accepted a disk change, verifies explicit reconciliation and checks the real Monaco model,
+undo, language, mixed line endings, invalid bytes and the other tab. The native
+`tests/document-reload.test.ts` covers authorization and file changes during reads.
+
 ## Selected document pilot (alpha.37)
 
 Alpha.38 adds `tools/editor-geometry-smoke.ts` to `pnpm test:maximize` (also in the desktop chain).

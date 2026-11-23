@@ -23,7 +23,7 @@ function deferred<T>() {
 async function fixture(t: TestContext, bridge: Partial<SearchBridge> = {}) {
   t.mock.timers.enable({ apis: ['setTimeout'] })
   const unexpected = () => { throw new Error('unexpected native operation') }
-  const documentBridge: DocumentBridge = { open: unexpected, save: unexpected, release: unexpected, close: unexpected,
+  const documentBridge: DocumentBridge = { open: unexpected, reload: unexpected, save: unexpected, release: unexpected, close: unexpected,
     onCloseRequested: unexpected, activate: async () => ({ ok: true, document }) }
   const editor = new EditorSession(documentBridge)
   let rootId = 'first root'

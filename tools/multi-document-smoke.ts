@@ -196,6 +196,7 @@ try {
   })
   await writeFile(join(diagnostics, 'minimum.json'), JSON.stringify(minimum, null, 2))
   assert.ok(minimum.contained, 'Tab chrome and editor remain inside the actual minimum widget content')
+  assert.ok(minimum.children.some(child => child.class === 'monaco-host' && child.rect.height > 0), 'The editor retains usable height beside the compact file actions')
   await page.getByTestId('edit-layout').click(); await settle(page)
   const small = await frame.boundingBox(); assert.ok(small)
   await drag(page, frameId, 'se', frameBox.width - small.width, frameBox.height - small.height)

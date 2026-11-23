@@ -2,6 +2,10 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.66] — 2026-11-23
+
+- Reload the active text file from disk. An explicit discard decision protects dirty or unresolved drafts, and other tabs retain their models and undo histories.
+
 ## [0.1.0-alpha.65] — 2026-11-23
 
 - Create an empty file or folder in the project Explorer and rename a closed file in the same directory on Windows. Existing destinations keep their contents.

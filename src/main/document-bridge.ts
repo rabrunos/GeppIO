@@ -5,7 +5,7 @@ import { isAbsolute, relative, sep } from 'node:path'
 import { DocumentFailure, DocumentStore, documentFailure, expiredDocumentResponse } from './documents.ts'
 import { validDocumentRequest } from '../shared/documents.ts'
 import type { DocumentDraft, DocumentResult } from '../shared/documents.ts'
-import { DirectoryStore, ExplorerFailure, explorerFailure, safeExplorerName } from './explorer.ts'
+import { DirectoryStore, ExplorerFailure, explorerFailure, explorerFileNames } from './explorer.ts'
 import { explorerMutations, validExplorerMutationRequest, validExplorerRequest } from '../shared/explorer.ts'
 import type { ExplorerMutationResult, ExplorerResult } from '../shared/explorer.ts'
 import { mutateExplorer } from './explorer-write.ts'
@@ -30,7 +30,7 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
   const revokeProjectResults = () => { git.revoke(); search.revoke(); quickOpen.revoke() }
   const workspace = new WorkspaceOwner(directories, store, new WorkspaceRecovery(app.getPath('userData')), revokeProjectResults)
   let busy = false, closing = false, remembering = false, ticket: string | null = null
-  let explorerWriting = false, indexWriting = false
+  let explorerWriting = false, indexWriting = false, reloading = false
   const revoke = () => { workspace.revoke(); revokeProjectResults(); store.revoke(); directories.revoke(); ticket = null }
   const decide = async (name = store.snapshot?.label ?? store.snapshot?.name ?? 'arquivo', id = store.snapshot?.id) => {
     const path = id ? store.filePath(id) : null
@@ -51,9 +51,8 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
     }
     if (!current()) return expiredDocumentResponse(result)
     const documents = source.map(document => {
-      const path = store.filePath(document.id), inside = folder && path ? relative(folder, path) : null
-      const names = inside?.split(sep)
-      return { ...document, ...(root && inside && !isAbsolute(inside) && names?.every(name => safeExplorerName(name) && name.toLowerCase() !== '.git') ? { location: { root: root.id, names, caseInsensitive: process.platform === 'win32' } } : {}) }
+      const path = store.filePath(document.id), names = folder && path ? explorerFileNames(folder, path) : null
+      return { ...document, ...(root && names ? { location: { root: root.id, names, caseInsensitive: process.platform === 'win32' } } : {}) }
     })
     const registry = { ...(result.documents ? { documents } : {}), ...(invalidRoot ? { invalidRoot } : {}) }
     return result.ok ? { ...result, ...registry, document: documents.find(value => value.id === result.document?.id) ?? null }
@@ -68,13 +67,14 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
     ticket = randomUUID()
     win.webContents.send('document:close-requested', ticket)
   })
-  const operations = ['open', 'save', 'release', 'close', 'activate'] as const
+  const operations = ['open', 'save', 'release', 'close', 'activate', 'reload'] as const
   for (const operation of operations) ipcMain.handle(`document:${operation}`, async (event, ...args: unknown[]): Promise<DocumentResult> => {
     const frame = event.senderFrame
     if (win.isDestroyed() || event.sender !== win.webContents || frame !== win.webContents.mainFrame || frame?.url !== expectedURL) return documentFailure(new DocumentFailure('invalid'))
     if (!validDocumentRequest(operation, args)) { if (operation === 'close' && args[0] === ticket) ticket = null; return documentFailure(new DocumentFailure('invalid')) }
     if (busy || closing) { if (operation === 'close' && args[0] === ticket) ticket = null; return documentFailure(new DocumentFailure('busy')) }
     if (operation === 'close' && args[0] !== ticket) return documentFailure(new DocumentFailure('stale'))
+    if (operation === 'reload' && (ticket || indexWriting || remembering)) return documentFailure(new DocumentFailure('busy'))
     busy = true
     const generationCurrent = store.guard()
     const current = () => !win.isDestroyed() && !win.webContents.isDestroyed() && win.webContents.mainFrame === frame && frame.url === expectedURL && generationCurrent()
@@ -87,6 +87,25 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
         return await response(await store.select(selected.filePaths[0]!, draft, decide, current), current)
       }
       if (operation === 'activate') return await response(store.activate(args[0] as string), current)
+      if (operation === 'reload') {
+        reloading = true
+        const confirmDiscard = async () => {
+          if (!current()) return false
+          const reply = await dialog.showMessageBox(win, {
+            type: 'warning', title: 'Recarregar do disco', message: 'Descartar o rascunho desta aba e recarregar o arquivo?',
+            detail: 'Cancelar mantém o rascunho e o histórico de desfazer. Recarregar substitui o texto pelo conteúdo do disco e descarta o histórico se o texto mudar.',
+            buttons: ['Cancelar', 'Descartar rascunho e recarregar'], defaultId: 0, cancelId: 0, noLink: true
+          })
+          return current() && reply.response === 1
+        }
+        const result = await store.reload(draft!, args[1] as boolean, confirmDiscard, current)
+        if (!current()) return expiredDocumentResponse(result)
+        if (result.ok && !result.canceled && result.document) {
+          const path = store.filePath(result.document.id)
+          if (path && directories.invalidateFile(path)) revokeProjectResults()
+        }
+        return await response(result, current)
+      }
       if (operation === 'save') { await store.save(draft!, current); return await response(store.result(), current) }
       if (operation === 'release') {
         const document = store.snapshots.find(value => value.id === draft!.id)
@@ -104,8 +123,9 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
       return store.result()
     } catch (error) {
       const result = documentFailure(error)
+      if (operation === 'reload') return current() ? result : expiredDocumentResponse(result)
       return await response(!result.ok ? { ...result, documents: store.snapshots, ...(store.snapshot ? { confirmed: store.snapshot } : {}), ...(['save', 'release'].includes(operation) ? { failed: draft!.id } : {}) } : result, current)
-    } finally { busy = false; if (operation === 'close') ticket = null }
+    } finally { busy = false; if (operation === 'reload') reloading = false; if (operation === 'close') ticket = null }
   })
   const directoryOperations = ['select', 'list', 'open', 'release'] as const
   for (const operation of directoryOperations) ipcMain.handle(`explorer:${operation}`, async (event, ...args: unknown[]): Promise<ExplorerResult | DocumentResult> => {
@@ -273,7 +293,7 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
     if (win.isDestroyed() || event.sender !== win.webContents || frame !== win.webContents.mainFrame || frame?.url !== expectedURL || !validGitRequest(operation, args)) return gitFailure(new GitFailure('invalid'))
     const current = () => !closing && !win.isDestroyed() && !win.webContents.isDestroyed() && win.webContents.mainFrame === frame && frame.url === expectedURL
     const writesIndex = operation === 'stage' || operation === 'unstage'
-    if (writesIndex && (explorerWriting || indexWriting)) return gitFailure(new GitFailure('busy'))
+    if (writesIndex && (explorerWriting || reloading || indexWriting)) return gitFailure(new GitFailure('busy'))
     if (writesIndex) indexWriting = true
     try { return await git.inspect(operation, args[0] as string, args[1] as string | undefined, current) } catch (error) { return gitFailure(error) }
     finally { if (writesIndex) indexWriting = false }

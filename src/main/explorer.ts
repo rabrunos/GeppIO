@@ -16,6 +16,11 @@ export class ExplorerFailure extends Error {
   constructor(kind: ExplorerError) { super(messages[kind]); this.kind = kind }
 }
 export class ExplorerDestinationExists extends Error {}
+/** Directory-relative display and invalidation use the same visible Explorer namespace. */
+export function explorerFileNames(folder: string, path: string): string[] | null {
+  const inside = relative(folder, path), names = inside.split(sep)
+  return inside && !isAbsolute(inside) && names.every(name => safeExplorerName(name) && name.toLowerCase() !== '.git') ? names : null
+}
 export function explorerFailure(error: unknown): ExplorerResult {
   const code = error instanceof ExplorerFailure ? error.kind : 'unavailable'
   return { ok: false, code, error: messages[code] }
@@ -52,6 +57,12 @@ export class DirectoryStore {
   /** Remembering a path does not authorize it; restoration revalidates this witness. */
   get descriptor(): { path: string; chain: string } | null { return this.root ? { path: this.root.path, chain: this.root.chain } : null }
   guard(): () => boolean { const generation = this.generation; return () => generation === this.generation }
+  /** Drop only the reloaded file's navigation identity until its parent is listed again. */
+  invalidateFile(path: string): boolean {
+    if (!this.root || !explorerFileNames(this.root.path, path)) return false
+    for (const [id, node] of this.nodes) if (node.kind !== 'directory' && relative(node.path, path) === '') this.nodes.delete(id)
+    return true
+  }
   revoke(): void { this.generation++; this.root = null; this.nodes.clear() }
   async select(path: string, current: () => boolean): Promise<ExplorerResult> {
     const evidence = await inspectExplorerPath(path, 'directory')

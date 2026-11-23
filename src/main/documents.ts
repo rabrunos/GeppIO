@@ -10,9 +10,9 @@ const messages: Record<DocumentError, string> = {
   unsupported: 'Arquivo não suportado. Selecione texto UTF-8 válido, sem dados binários, links ou caminhos especiais.',
   oversized: 'O arquivo excede o limite de 1 MiB.', unavailable: 'Arquivo indisponível. O rascunho foi mantido.',
   limit: 'Limite de 8 arquivos abertos ou 8 MiB de conteúdo. Feche uma aba antes de abrir outro arquivo.',
-  conflict: 'O arquivo ou seu destino mudou no disco. Copie o rascunho, feche a aba e reabra; nenhuma alteração externa foi sobrescrita.',
+  conflict: 'O arquivo ou seu destino mudou no disco. O rascunho foi mantido. Você pode copiá-lo antes de usar Recarregar do disco.',
   write: 'A gravação foi recusada antes de substituir o arquivo. Verifique as permissões. O rascunho foi mantido.',
-  unconfirmed: 'Não foi possível confirmar o conteúdo final no disco. Copie o rascunho e confira o arquivo antes de voltar a salvar.'
+  unconfirmed: 'Não foi possível confirmar o conteúdo final no disco. O rascunho foi mantido. Copie o texto que deseja guardar antes de usar Recarregar do disco.'
 }
 export class DocumentFailure extends Error {
   readonly kind: DocumentError
@@ -28,25 +28,28 @@ export function expiredDocumentResponse(result: DocumentResult): DocumentResult 
   return documentFailure(new DocumentFailure(!result.ok && result.code === 'unconfirmed' ? 'unconfirmed' : 'stale'))
 }
 type Evidence = { path: string; chain: string; stat: BigIntStats; bytes: Buffer; text: string; bom: boolean }
-type Selection = { evidence: Evidence; snapshot: DocumentSnapshot }
+type Selection = { evidence: Evidence; snapshot: DocumentSnapshot; reloadPredecessor?: string; unconfirmedSave?: boolean }
 const identity = (stat: BigIntStats) => `${stat.dev}:${stat.ino}`
-const sameStat = (a: BigIntStats, b: BigIntStats) => identity(a) === identity(b) && a.size === b.size && a.mtimeNs === b.mtimeNs && a.ctimeNs === b.ctimeNs && a.mode === b.mode && a.nlink === b.nlink
+const sameStat = (a: BigIntStats, b: BigIntStats) => identity(a) === identity(b) && a.birthtimeNs === b.birthtimeNs && a.size === b.size && a.mtimeNs === b.mtimeNs && a.ctimeNs === b.ctimeNs && a.mode === b.mode && a.nlink === b.nlink
 function encode(text: string, bom: boolean): Buffer {
   if (!wellFormedText(text) || [...text].some(character => { const code = character.charCodeAt(0); return code < 32 && ![9, 10, 13].includes(code) || code === 127 })) throw new DocumentFailure('unsupported')
   const bytes = Buffer.from((bom ? '\ufeff' : '') + text, 'utf8')
   if (bytes.length > DOCUMENT_LIMIT) throw new DocumentFailure('oversized')
   return bytes
 }
-async function inspectPath(path: string): Promise<string> {
+async function inspectPath(path: string, guard?: () => void): Promise<string> {
+  guard?.()
   if (!isAbsolute(path) || resolve(path) !== path || (process.platform === 'win32' && (!/^[a-z]:\\/i.test(path) || path.slice(2).includes(':') || path.split(/[\\/]/).some(part => /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(part))))) throw new DocumentFailure('unsupported')
   const chain: string[] = []
   for (let current = path; ; current = dirname(current)) {
     const stat = await lstat(current, { bigint: true })
+    guard?.()
     if (stat.isSymbolicLink() || current === path && (!stat.isFile() || stat.nlink !== 1n) || current !== path && !stat.isDirectory()) throw new DocumentFailure('unsupported')
-    if (current !== path) chain.push(identity(stat))
+    if (current !== path) chain.push(`${identity(stat)}:${stat.birthtimeNs}`)
     if (current === parse(current).root) break
   }
   const actual = await realpath(path)
+  guard?.()
   if ((process.platform === 'win32' ? actual.toLowerCase() !== path.toLowerCase() : actual !== path)) throw new DocumentFailure('unsupported')
   return chain.join('/')
 }
@@ -56,12 +59,16 @@ export interface DocumentReadControl {
   check(size: number): void
   consume(bytes: number): void
 }
-async function inspect(path: string, control?: DocumentReadControl): Promise<Evidence> {
-  const chain = await inspectPath(path), before = await lstat(path, { bigint: true })
+async function inspect(path: string, control?: DocumentReadControl & { guard?(): void; ancestors?: string }): Promise<Evidence> {
+  const chain = await inspectPath(path, control?.guard)
+  control?.guard?.()
+  if (control?.ancestors !== undefined && control.ancestors !== chain) throw new DocumentFailure('conflict')
+  const before = await lstat(path, { bigint: true })
   if (before.size > BigInt(DOCUMENT_LIMIT)) throw new DocumentFailure('oversized')
   control?.check(Number(before.size))
   const file = await open(path, 'r')
   try {
+    control?.guard?.()
     const initial = await file.stat({ bigint: true })
     if (!sameStat(before, initial)) throw new DocumentFailure('conflict')
     if (control) await control.authorize(initial)
@@ -82,7 +89,8 @@ async function inspect(path: string, control?: DocumentReadControl): Promise<Evi
     try { text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bom ? bytes.subarray(3) : bytes) } catch { throw new DocumentFailure('unsupported') }
     encode(text, bom)
     const after = await file.stat({ bigint: true })
-    if (!sameStat(initial, after) || !sameStat(after, await lstat(path, { bigint: true })) || chain !== await inspectPath(path)) throw new DocumentFailure('conflict')
+    control?.guard?.()
+    if (!sameStat(initial, after) || !sameStat(after, await lstat(path, { bigint: true })) || chain !== await inspectPath(path, control?.guard)) throw new DocumentFailure('conflict')
     return { path, chain, stat: after, bytes, text, bom }
   } finally { await file.close() }
 }
@@ -168,6 +176,45 @@ export class DocumentStore {
     this.selections.set(snapshot.id, { evidence: candidate, snapshot }); this.active = snapshot.id
     return this.result()
   }
+  async reload(draft: DocumentDraft, confirmUnresolved: boolean, confirmDiscard: () => Promise<boolean>, current: () => boolean): Promise<DocumentResult> {
+    const selected = this.selections.get(draft.id)
+    if (!selected || (draft.revision !== selected.snapshot.revision && draft.revision !== selected.reloadPredecessor)) throw new DocumentFailure('stale', draft.id)
+    const guard = () => {
+      if (!current() || this.active !== draft.id || this.selections.get(draft.id) !== selected) throw new DocumentFailure('stale', draft.id)
+    }
+    guard()
+    const { evidence: original, snapshot } = selected
+    const predecessor = draft.revision !== snapshot.revision
+    const discard = draft.text !== snapshot.text || !!selected.unconfirmedSave || confirmUnresolved
+    // A replacement leaf can already exist when reload begins. Pin that
+    // particular target and all previously authorized parents across the dialog.
+    const chain = await inspectPath(original.path, guard)
+    guard()
+    if (chain !== original.chain) throw new DocumentFailure('conflict', draft.id)
+    const initial = await lstat(original.path, { bigint: true })
+    guard()
+    if (!initial.isFile() || initial.nlink !== 1n) throw new DocumentFailure('unsupported', draft.id)
+    if (predecessor || discard) {
+      const approved = await confirmDiscard()
+      guard()
+      if (!approved) return { ok: true, canceled: true, document: null }
+    }
+    const control = { guard, ancestors: chain, check: guard, consume: guard, authorize: async (stat: BigIntStats) => {
+      guard()
+      if (!sameStat(stat, initial)) throw new DocumentFailure('conflict', draft.id)
+    } }
+    const candidate = await inspect(original.path, control)
+    guard()
+    const verified = await inspect(original.path, control)
+    guard()
+    if (!sameEvidence(candidate, verified)) throw new DocumentFailure('conflict', draft.id)
+    const changed = !sameEvidence(original, verified) || discard && !predecessor
+    const next = changed ? { ...snapshot, revision: randomUUID(), bom: verified.bom, text: verified.text } : snapshot
+    // One opaque token per grant survives lost replies. Retrying from that
+    // token keeps it through further reloads. All Save/Close checks remain exact.
+    this.selections.set(draft.id, { evidence: verified, snapshot: next, ...(predecessor || changed ? { reloadPredecessor: draft.revision } : {}) })
+    return { ok: true, document: { ...next } }
+  }
   async save(draft: DocumentDraft, current: () => boolean): Promise<DocumentSnapshot> {
     const selected = this.current(draft)!, original = selected.evidence, bytes = encode(draft.text, original.bom)
     const check = async () => {
@@ -190,28 +237,38 @@ export class DocumentStore {
       await this.replace(temporary, original.path); committed = true
       const evidence = await inspect(original.path)
       if (!evidence.bytes.equals(bytes) || !current() || this.selections.get(draft.id) !== selected) throw new DocumentFailure('conflict')
-      selected.evidence = evidence
-      selected.snapshot = { ...selected.snapshot, revision: randomUUID(), text: draft.text }
-      return { ...selected.snapshot }
+      const snapshot = { ...selected.snapshot, revision: randomUUID(), text: draft.text }
+      this.selections.set(draft.id, { evidence, snapshot, reloadPredecessor: draft.revision })
+      return { ...snapshot }
     } catch (error) {
-      if (committed) throw new DocumentFailure('unconfirmed', draft.id)
+      if (committed) {
+        if (this.selections.get(draft.id) === selected) this.selections.set(draft.id, { evidence: original, snapshot: selected.snapshot, unconfirmedSave: true })
+        throw new DocumentFailure('unconfirmed', draft.id)
+      }
       throw error instanceof DocumentFailure ? error : new DocumentFailure('write')
     }
     finally { if (created && !committed) await unlink(temporary).catch(() => { /* New temporary only; never delete a selected file or recovery backup. */ }) }
   }
-  async resolveDraft(draft: DocumentDraft | null, decide: () => Promise<DocumentDecision>, current: () => boolean): Promise<boolean> {
+  private async resolveSelection(draft: DocumentDraft | null, decide: () => Promise<DocumentDecision>, current: () => boolean): Promise<Selection | null | false> {
     const selected = this.current(draft)
     if (!current()) throw new DocumentFailure('stale')
-    if (!selected || selected.snapshot.text === draft!.text) return true
+    if (!selected || selected.snapshot.text === draft!.text && !selected.unconfirmedSave) return selected
     const decision = await decide()
-    if (!current()) throw new DocumentFailure('stale')
+    if (!current() || this.selections.get(draft!.id) !== selected) throw new DocumentFailure('stale')
     if (decision === 'cancel') return false
-    if (decision === 'save') await this.save(draft!, current)
-    return true
+    if (decision === 'discard') return selected
+    const saved = await this.save(draft!, current)
+    const confirmed = this.selections.get(saved.id)
+    if (!current() || !confirmed || confirmed.snapshot.revision !== saved.revision) throw new DocumentFailure('stale')
+    return confirmed
+  }
+  async resolveDraft(draft: DocumentDraft | null, decide: () => Promise<DocumentDecision>, current: () => boolean): Promise<boolean> {
+    return await this.resolveSelection(draft, decide, current) !== false
   }
   async release(draft: DocumentDraft, decide: () => Promise<DocumentDecision>, current: () => boolean): Promise<DocumentResult> {
-    const selected = this.current(draft)!, ids = [...this.selections.keys()], index = ids.indexOf(draft.id)
-    if (!await this.resolveDraft(draft, decide, current)) return this.result(true)
+    const ids = [...this.selections.keys()], index = ids.indexOf(draft.id)
+    const selected = await this.resolveSelection(draft, decide, current)
+    if (selected === false) return this.result(true)
     if (!current() || this.selections.get(draft.id) !== selected) throw new DocumentFailure('stale')
     this.selections.delete(draft.id)
     if (this.active === draft.id) this.active = (index > 0 ? ids[index - 1] : ids[1]) ?? null
