@@ -1,3 +1,4 @@
+import { unusedDocumentAuthoring } from './document-authoring-fixture.ts'
 import assert from 'node:assert/strict'
 import { readdirSync } from 'node:fs'
 import { test } from 'node:test'
@@ -182,7 +183,7 @@ test('normalized editor text preserves unchanged mixed line endings and non-BMP 
 test('single renderer session keeps dirty draft on canceled/failed operations and locks during save', async () => {
   let disk: DocumentSnapshot = { id: randomUUID(), revision: randomUUID(), name: 'one.ts', text: 'old\r\n', bom: false }
   let canceled = false, denied = false, pending: (() => void) | undefined
-  const bridge: DocumentBridge = {
+  const bridge: DocumentBridge = { ...unusedDocumentAuthoring,
     reload: async () => { throw new Error('Unexpected reload') },
     activate: async () => ({ ok: true, document: disk }),
     open: async () => ({ ok: true, document: disk, canceled }),

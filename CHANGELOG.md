@@ -2,6 +2,10 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.71] — 2026-11-23
+
+- Create untitled documents, choose a native Save As destination and save all open documents in order. A canceled or failed save reports the completed prefix and preserves the remaining drafts.
+
 ## [0.1.0-alpha.70] — 2026-11-23
 
 - Rename an open file from the Explorer or with F2. The editor keeps its draft, undo history, language and view. Save uses the confirmed new name. An uncertain move requires reconciliation.

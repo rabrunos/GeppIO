@@ -24,7 +24,18 @@ import type { WorkspaceEditor, WorkspaceResult, WorkspaceView } from '../shared/
 
 /** Installed for the exact app window, never a recovery window or another WebContents. */
 export function bindDocuments(win: BrowserWindow, expectedURL: string): WorkspaceOwner {
-  const store = new DocumentStore()
+  const store = new DocumentStore(undefined, {
+    select: async name => {
+      const choice = await dialog.showSaveDialog(win, { title: 'Salvar documento como', defaultPath: name, buttonLabel: 'Escolher destino' })
+      return choice.canceled ? null : choice.filePath ?? null
+    },
+    confirmOverwrite: async path => (await dialog.showMessageBox(win, { type: 'warning', title: 'Substituir arquivo',
+      message: 'Substituir o conteúdo do arquivo selecionado?', detail: path, buttons: ['Cancelar', 'Substituir'], defaultId: 0, cancelId: 0, noLink: true })).response === 1,
+    reconcile: async () => (await dialog.showMessageBox(win, { type: 'warning', title: 'Conferir salvamento',
+      message: 'Você conferiu no disco o resultado da operação anterior?', detail: 'O próximo seletor permite salvar este rascunho em um destino escolhido novamente.',
+      buttons: ['Cancelar', 'Conferi, escolher destino'], defaultId: 0, cancelId: 0, noLink: true })).response === 1,
+    permitted: path => { const inside = relative(app.getPath('userData'), path); return isAbsolute(inside) || inside === '..' || inside.startsWith('..' + sep) }
+  })
   const directories = new DirectoryStore()
   const git = new GitStore(directories)
   const search = new SearchStore(directories)
@@ -32,7 +43,7 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
   const revokeProjectResults = () => { git.revoke(); search.revoke(); quickOpen.revoke() }
   const workspace = new WorkspaceOwner(directories, store, new WorkspaceRecovery(app.getPath('userData')), revokeProjectResults)
   let busy = false, closing = false, remembering = false, ticket: string | null = null
-  let explorerWriting = false, indexWriting = false, reloading = false
+  let explorerWriting = false, indexWriting = false, reloading = false, choosingDestination = false
   const revoke = () => { workspace.revoke(); revokeProjectResults(); store.revoke(); directories.revoke(); ticket = null }
   const decide = async (name = store.snapshot?.label ?? store.snapshot?.name ?? 'arquivo', id = store.snapshot?.id, discardOnly = false) => {
     if (discardOnly) {
@@ -74,19 +85,41 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
     ticket = randomUUID()
     win.webContents.send('document:close-requested', ticket)
   })
-  const operations = ['open', 'save', 'release', 'close', 'activate', 'reload'] as const
+  const operations = ['create', 'saveAs', 'saveAll', 'open', 'save', 'release', 'close', 'activate', 'reload'] as const
   for (const operation of operations) ipcMain.handle(`document:${operation}`, async (event, ...args: unknown[]): Promise<DocumentResult> => {
     const frame = event.senderFrame
     if (win.isDestroyed() || event.sender !== win.webContents || frame !== win.webContents.mainFrame || frame?.url !== expectedURL) return documentFailure(new DocumentFailure('invalid'))
     if (!validDocumentRequest(operation, args)) { if (operation === 'close' && args[0] === ticket) ticket = null; return documentFailure(new DocumentFailure('invalid')) }
     if (busy || closing) { if (operation === 'close' && args[0] === ticket) ticket = null; return documentFailure(new DocumentFailure('busy')) }
     if (operation === 'close' && args[0] !== ticket) return documentFailure(new DocumentFailure('stale'))
-    if (operation === 'reload' && (ticket || indexWriting || remembering)) return documentFailure(new DocumentFailure('busy'))
+    const authoring = operation === 'saveAs' || operation === 'saveAll' || (operation === 'save' || operation === 'release' || operation === 'close') && store.snapshots.some(doc => doc.untitled)
+    if ((authoring || operation === 'reload') && (ticket && operation !== 'close' || indexWriting || remembering)) {
+      if (operation === 'close') ticket = null
+      return documentFailure(new DocumentFailure('busy'))
+    }
+    if (authoring) choosingDestination = true
     busy = true
     const generationCurrent = store.guard()
     const current = () => !win.isDestroyed() && !win.webContents.isDestroyed() && win.webContents.mainFrame === frame && frame.url === expectedURL && generationCurrent()
     const draft = args[0] as DocumentDraft | null
+    const writesBefore = store.writeCount
+    const receipt = async (result: DocumentResult) => {
+      const value = await response(result, current)
+      return !current() && store.writeCount !== writesBefore ? documentFailure(new DocumentFailure('unconfirmed')) : value
+    }
     try {
+      if (operation === 'create') return await response(store.create(), current)
+      if (operation === 'saveAll') {
+        const result = await store.saveAll(args[0] as DocumentDraft[], current)
+        const changed = result.saves?.some(entry => entry.status === 'saved' || entry.status === 'unconfirmed')
+        if (changed) { revokeProjectResults(); await workspace.persist(current) }
+        return await receipt(result)
+      }
+      if (operation === 'saveAs' || operation === 'save' && store.snapshots.some(doc => doc.id === draft!.id && doc.untitled)) {
+        const saved = await store.saveAs(draft!, operation === 'saveAs' && args[1] === true, current)
+        if (saved) { revokeProjectResults(); await workspace.persist(current) }
+        return await receipt(store.result(!saved))
+      }
       if (operation === 'open') {
         const selected = await dialog.showOpenDialog(win, { title: 'Abrir arquivo de texto', buttonLabel: 'Abrir', properties: ['openFile'], filters: [{ name: 'Texto e código UTF-8', extensions: ['txt', 'js', 'ts', 'json', 'md', 'css', 'html'] }, { name: 'Todos os arquivos', extensions: ['*'] }] })
         if (!current()) throw new DocumentFailure('stale')
@@ -113,15 +146,15 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
         }
         return await response(result, current)
       }
-      if (operation === 'save') { await store.save(draft!, current); return await response(store.result(), current) }
+      if (operation === 'save') { await store.save(draft!, current); return await receipt(store.result()) }
       if (operation === 'release') {
         const document = store.snapshots.find(value => value.id === draft!.id)
         const result = await store.release(draft!, () => decide(document?.label ?? document?.name, draft!.id, draft!.discardOnly), current)
         if (result.ok && !result.canceled) await workspace.persist(current)
-        return await response(result, current)
+        return await receipt(result)
       }
       const supplied = args[1] as DocumentDraft[] | DocumentDraft | null, drafts = supplied === null ? [] : Array.isArray(supplied) ? supplied : [supplied]
-      if (!await store.resolveAll(drafts, document => decide(document.label ?? document.name, document.id, drafts.find(draft => draft.id === document.id)?.discardOnly), current)) return await response(store.result(true), current)
+      if (!await store.resolveAll(drafts, document => decide(document.label ?? document.name, document.id, drafts.find(draft => draft.id === document.id)?.discardOnly), current)) return await receipt(store.result(true))
       await workspace.persist(current, true)
       if (workspace.recovery.snapshot.error && current()) await dialog.showMessageBox(win, { type: 'warning', title: 'Sessão local', message: 'Os arquivos foram resolvidos, mas a lembrança da sessão não pôde ser confirmada.', detail: 'Rascunhos não são armazenados para recuperação. Os metadados existentes foram preservados.' })
       if (!current()) throw new DocumentFailure('stale')
@@ -131,8 +164,9 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
     } catch (error) {
       const result = documentFailure(error)
       if (operation === 'reload') return current() ? result : expiredDocumentResponse(result)
-      return await response(!result.ok ? { ...result, documents: store.snapshots, ...(store.snapshot ? { confirmed: store.snapshot } : {}), ...(['save', 'release'].includes(operation) ? { failed: draft!.id } : {}) } : result, current)
-    } finally { busy = false; if (operation === 'reload') reloading = false; if (operation === 'close') ticket = null }
+      if (!result.ok && result.code === 'unconfirmed') revokeProjectResults()
+      return await receipt(!result.ok ? { ...result, documents: store.snapshots, ...(store.snapshot ? { confirmed: store.snapshot } : {}), ...(['save', 'release'].includes(operation) ? { failed: draft!.id } : {}) } : result)
+    } finally { busy = false; if (authoring) choosingDestination = false; if (operation === 'reload') reloading = false; if (operation === 'close') ticket = null }
   })
   const directoryOperations = ['select', 'list', 'open', 'release'] as const
   for (const operation of directoryOperations) ipcMain.handle(`explorer:${operation}`, async (event, ...args: unknown[]): Promise<ExplorerResult | DocumentResult> => {
@@ -319,7 +353,7 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
     if (win.isDestroyed() || event.sender !== win.webContents || frame !== win.webContents.mainFrame || frame?.url !== expectedURL || !validGitRequest(operation, args)) return gitFailure(new GitFailure('invalid'))
     const current = () => !closing && !win.isDestroyed() && !win.webContents.isDestroyed() && win.webContents.mainFrame === frame && frame.url === expectedURL
     const writesIndex = operation === 'stage' || operation === 'unstage'
-    if (writesIndex && (explorerWriting || reloading || indexWriting)) return gitFailure(new GitFailure('busy'))
+    if (writesIndex && (explorerWriting || reloading || choosingDestination || indexWriting)) return gitFailure(new GitFailure('busy'))
     if (writesIndex) indexWriting = true
     try { return await git.inspect(operation, args[0] as string, args[1] as string | undefined, current, args.slice(2) as string[]) } catch (error) { return gitFailure(error) }
     finally { if (writesIndex) indexWriting = false }

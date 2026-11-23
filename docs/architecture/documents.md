@@ -157,6 +157,23 @@ tree enumeration are explicit. Reload never writes to the selected file.
 
 ## Save integrity and Windows limitations
 
+Alpha.71 adds untitled documents to the same eight-entry registry. Each receives a UUID,
+revision and Monaco model. Its filesystem grant starts empty and it is excluded from clean
+Workspace recovery until a destination is confirmed. Saving an untitled document opens the
+native destination picker. Save As retains the document identity and undo stack.
+
+Main checks the canonical parent, literal basename, protected profile and other live bindings.
+A new destination is opened exclusively and verified through its handle and the final path.
+Replacing a supported existing text file requires a native confirmation followed by a fresh
+identity and full-byte comparison. A new revision is returned only after verification. A
+possible but unconfirmed Save As keeps the draft and reserves the selected destination. The
+user can inspect the file and explicitly authorize another Save As. Destination paths stay in Main.
+
+Save All visits the native registry in creation/open order. Each grant receives one result
+for this invocation. Saved revisions survive later cancellation or failure and remaining work
+stays pending. The close transaction shares the same order and destination flow for untitled
+drafts. A confirmed close still requires resolution of all dirty documents.
+
 The original is never truncated. A random exclusive sibling temporary receives complete new bytes,
 is flushed and closed; identity/content are checked again immediately before same-directory rename.
 Validation/staging/rename failure retains the draft without deliberately deleting original bytes.

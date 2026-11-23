@@ -1,3 +1,4 @@
+import { unusedDocumentAuthoring } from './document-authoring-fixture.ts'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { setImmediate } from 'node:timers/promises'
@@ -20,7 +21,7 @@ function deferred<T>() {
   return { promise, resolve }
 }
 async function fixture(bridge: Partial<DocumentBridge>) {
-  const editor = new EditorSession({ open: unexpected, activate: unexpected, close: unexpected, release: unexpected, save: unexpected, onCloseRequested: unexpected, reload: unexpected, ...bridge })
+  const editor = new EditorSession({ ...unusedDocumentAuthoring, open: unexpected, activate: unexpected, close: unexpected, release: unexpected, save: unexpected, onCloseRequested: unexpected, reload: unexpected, ...bridge })
   await editor.openAuthorized(async () => result(other))
   await editor.openAuthorized(async () => result(file))
   return editor
@@ -42,6 +43,28 @@ test('explicit reload adopts just the named receipt; changed exact text resets o
   assert.equal(active.language, 'Markdown'); assert.equal(active.historyVersion, 1); assert.equal(editor.dirty, false)
   assert.equal(editor.documentState(other.id), sibling)
   assert.equal(await editor.reload(), true); assert.equal(editor.documentState(file.id)?.historyVersion, 1)
+})
+
+test('opaque and lost batch receipts retain affected drafts and identify possibly rebound untitled destinations', async () => {
+  for (const kind of ['saveAll', 'close'] as const) for (const lost of [false, true]) {
+    const uncertain = async (): Promise<DocumentResult> => {
+      if (lost) throw new Error('lost receipt')
+      return { ok: false, code: 'unconfirmed', error: 'Resultado não confirmado.' }
+    }
+    const editor = await fixture({ [kind]: uncertain })
+    const untitled = { ...other, id: 'untitled', untitled: true as const, text: '' }
+    await editor.openAuthorized(async () => result(untitled))
+    await editor.openAuthorized(async () => result(file))
+    editor.editExact('rascunho sem destino', untitled.id)
+    editor.editExact('rascunho nomeado', file.id)
+    if (kind === 'close') await editor.close('ticket')
+    else await editor.saveAll()
+    assert.equal(editor.documentState(untitled.id)?.destinationUncertain, true)
+    assert.equal(editor.documentState(untitled.id)?.text, 'rascunho sem destino')
+    assert.equal(editor.documentState(file.id)?.unresolved, true)
+    assert.ok(!editor.documentState(file.id)?.destinationUncertain)
+    assert.equal(editor.documentState(other.id)?.unresolved, false)
+  }
 })
 
 test('cancel and native refusals ignore attached snapshots; exact changeless draft (including mixed EOLs) preserves history', async () => {

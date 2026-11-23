@@ -99,7 +99,7 @@ try {
   assert.deepEqual(await page.evaluate(() => Object.fromEntries(
     Object.entries(window.geppio!.portableLayouts).map(([name, method]) => [name, typeof method])
   )), { exportFile: 'function', importFile: 'function' }, 'Only the two native composition picker methods are exposed')
-  assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.documents).sort()), ['activate', 'close', 'onCloseRequested', 'open', 'release', 'reload', 'save'], 'Only the bounded document contract with ID-only activation is exposed; no filesystem/path API')
+  assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.documents).sort()), ['activate', 'close', 'create', 'onCloseRequested', 'open', 'release', 'reload', 'save', 'saveAll', 'saveAs'], 'Only the bounded document contract with ID-only activation is exposed; no filesystem/path API')
   assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.explorer).sort()),
     ['createDirectory', 'createFile', 'list', 'open', 'release', 'renameFile', 'select'], 'Only fixed selected-directory operations are exposed')
   assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.terminal).sort()), ['close', 'input', 'read', 'resize', 'start'], 'Only the five fixed app-owned terminal operations are exposed')

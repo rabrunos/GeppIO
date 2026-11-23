@@ -40,6 +40,7 @@ test('CI preserves all 38 distinct alpha.48 Electron invocations and public comm
     'tools/explorer-write-smoke.ts', 'tools/explorer-write-smoke.ts --scale125',
     'tools/document-reload-smoke.ts', 'tools/document-reload-smoke.ts --scale125',
     'tools/rename-open-smoke.ts', 'tools/rename-open-smoke.ts --scale125', 'tools/rename-open-smoke.ts --dev',
+    'tools/document-create-smoke.ts', 'tools/document-create-smoke.ts --scale125', 'tools/document-create-smoke.ts --dev',
     'tools/plugin-templates-smoke.ts', 'tools/plugin-templates-smoke.ts --scale125',
     'tools/workspace-tools-smoke.ts', 'tools/workspace-tools-smoke.ts --scale125'].sort(),
     'No omission, duplicate execution or changed DPR/runtime flag. App Host and Shared View coverage are additive.')

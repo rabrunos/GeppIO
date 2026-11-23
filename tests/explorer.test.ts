@@ -1,3 +1,4 @@
+import { unusedDocumentAuthoring } from './document-authoring-fixture.ts'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
@@ -158,7 +159,7 @@ test('shared Explorer follows active tabs and refreshed identity without saving 
     const locate = (document: import('../src/shared/documents.ts').DocumentSnapshot) => ({ ...document, ...(dirs.snapshot ? { location: { root: dirs.snapshot.id, names: [document.name] } } : {}) })
     return value.ok ? { ...value, document: value.document ? locate(value.document) : null, documents: docs.snapshots.map(locate) } : value
   }
-  const editor = new EditorSession({ reload: async () => { throw new Error('Unexpected reload') }, activate: async id => reply(docs.activate(id)), open: async () => ({ ok: true, document: null }), save: async draft => { await docs.save(draft, current); return reply(docs.result()) }, release: async draft => reply(await docs.release(draft, async () => decision, current)), close: async () => ({ ok: true, document: null }), onCloseRequested: () => () => {} })
+  const editor = new EditorSession({ ...unusedDocumentAuthoring, reload: async () => { throw new Error('Unexpected reload') }, activate: async id => reply(docs.activate(id)), open: async () => ({ ok: true, document: null }), save: async draft => { await docs.save(draft, current); return reply(docs.result()) }, release: async draft => reply(await docs.release(draft, async () => decision, current)), close: async () => ({ ok: true, document: null }), onCloseRequested: () => () => {} })
   const unexpectedWrite = () => { throw new Error('unexpected Explorer mutation') }
   const explorer = new ExplorerSession({ createFile: unexpectedWrite, createDirectory: unexpectedWrite, renameFile: unexpectedWrite,
     select: () => dirs.select(path, current), list: (r, n) => dirs.list(r, n, current), release: async r => dirs.release(r), open: async (r, n, draft) => {

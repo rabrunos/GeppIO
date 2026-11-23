@@ -1,11 +1,15 @@
 /** App-owned document registry. Never part of the Worker/plugin SDK. */
 export const DOCUMENT_LIMIT = 1024 * 1024
 export const DOCUMENT_SESSION_LIMITS = { count: 8, bytes: 8 * DOCUMENT_LIMIT } as const
-export interface DocumentSnapshot { id: string; revision: string; name: string; text: string; bom: boolean; label?: string; location?: { root: string; names: string[]; caseInsensitive?: boolean } }
+export interface DocumentSnapshot { id: string; revision: string; name: string; text: string; bom: boolean; untitled?: true; label?: string; location?: { root: string; names: string[]; caseInsensitive?: boolean } }
 export interface DocumentDraft { id: string; revision: string; text: string; discardOnly?: true }
 export type DocumentError = 'invalid' | 'stale' | 'busy' | 'unsupported' | 'oversized' | 'limit' | 'unavailable' | 'conflict' | 'write' | 'unconfirmed'
-export type DocumentResult = ({ ok: true; document: DocumentSnapshot | null; canceled?: boolean } | { ok: false; code: DocumentError; error: string; confirmed?: DocumentSnapshot; failed?: string }) & { documents?: DocumentSnapshot[]; invalidRoot?: string }
+export interface SaveEntry { id: string; status: 'saved' | 'clean' | 'canceled' | 'failed' | 'unconfirmed' | 'pending' }
+export type DocumentResult = ({ ok: true; document: DocumentSnapshot | null; canceled?: boolean } | { ok: false; code: DocumentError; error: string; confirmed?: DocumentSnapshot; failed?: string }) & { documents?: DocumentSnapshot[]; invalidRoot?: string; saves?: SaveEntry[] }
 export interface DocumentBridge {
+  create(): Promise<DocumentResult>
+  saveAs(draft: DocumentDraft, reconcile: boolean): Promise<DocumentResult>
+  saveAll(drafts: DocumentDraft[]): Promise<DocumentResult>
   open(draft: DocumentDraft | null): Promise<DocumentResult>
   save(draft: DocumentDraft): Promise<DocumentResult>
   reload(draft: DocumentDraft, confirmUnresolved: boolean): Promise<DocumentResult>
@@ -24,6 +28,10 @@ export function validDraft(value: unknown, closing = false): value is DocumentDr
     && typeof draft.text === 'string' && draft.text.length <= DOCUMENT_LIMIT && wellFormedText(draft.text)
 }
 export function validDocumentRequest(operation: string, args: readonly unknown[]): boolean {
+  if (operation === 'create') return args.length === 0
+  if (operation === 'saveAs') return args.length === 2 && validDraft(args[0]) && typeof args[1] === 'boolean'
+  if (operation === 'saveAll') return args.length === 1 && Array.isArray(args[0]) && args[0].length <= DOCUMENT_SESSION_LIMITS.count &&
+    args[0].every(value => validDraft(value, true)) && new Set(args[0].map(draft => draft.id)).size === args[0].length
   if (operation === 'reload') return args.length === 2 && validDraft(args[0]) && typeof args[1] === 'boolean'
   if (operation === 'activate') return args.length === 1 && documentToken(args[0])
   if (operation === 'close') return args.length === 2 && documentToken(args[0]) && (args[1] === null || validDraft(args[1], true) || Array.isArray(args[1]) && args[1].length <= DOCUMENT_SESSION_LIMITS.count && args[1].every(value => validDraft(value, true)) && new Set(args[1].map(value => value.id)).size === args[1].length)

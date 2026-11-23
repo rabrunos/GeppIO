@@ -1,3 +1,4 @@
+import { unusedDocumentAuthoring } from './document-authoring-fixture.ts'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
@@ -14,7 +15,7 @@ test('EOL and cursor reflect actual bytes and normalized editor selection coordi
 test('session-only language and cursor do not edit buffer or disk draft; dirty/error/busy preserve one owner', async () => {
   const document: DocumentSnapshot = { id: randomUUID(), revision: randomUUID(), name: 'test.json', text: '{\r\n}\r\n', bom: true }
   let submitted = '', complete!: () => void
-  const bridge: DocumentBridge = {
+  const bridge: DocumentBridge = { ...unusedDocumentAuthoring,
     reload: async () => { throw new Error('Unexpected reload') },
     activate: async () => ({ ok: true, document }),
     open: async () => ({ ok: true, document }),

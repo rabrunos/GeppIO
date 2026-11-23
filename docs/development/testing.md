@@ -403,6 +403,12 @@ undo, language, mixed line endings, invalid bytes and the other tab. The native
 
 ## Selected document pilot (alpha.37)
 
+`pnpm.cmd test:isolated document-create` supports the built, `--scale125` and `--dev`
+variants. Open Code, choose **Novo documento**, type text and save. **Salvar como** continues
+the same tab at the selected destination. **Salvar todos** lists the result for each open
+document, including those still pending after a cancellation. The automated smoke controls
+native dialog choices, drives Monaco and checks the bytes of disposable source and destination files.
+
 Alpha.38 adds `tools/editor-geometry-smoke.ts` to `pnpm test:maximize` (also in the desktop chain).
 Run `pnpm test:maximize --scale125` for simulated DPR 1.25. Each scale compares actual DOM bounds
 of direct Editor with real maximized Workspace Essentials Notes in 32 combinations: light/dark,

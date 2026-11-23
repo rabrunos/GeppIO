@@ -1,3 +1,4 @@
+import { unusedDocumentAuthoring } from './document-authoring-fixture.ts'
 import test from 'node:test'
 import type { TestContext } from 'node:test'
 import assert from 'node:assert/strict'
@@ -21,7 +22,7 @@ function deferred<T>() {
 }
 async function fixture(t: TestContext, overrides: Partial<GitBridge> = {}) {
   const document = { id: 'tab', revision: 'revision', name: 'standalone.txt', bom: false, text: 'disco' }
-  const editor = new EditorSession({ open: async () => ({ ok: true, document }), activate: async () => ({ ok: true, document }), save: unexpected,
+  const editor = new EditorSession({ ...unusedDocumentAuthoring, open: async () => ({ ok: true, document }), activate: async () => ({ ok: true, document }), save: unexpected,
     reload: unexpected, release: unexpected, close: unexpected, onCloseRequested: unexpected })
   await editor.open(); editor.edit('rascunho mantido')
   let selected = 'project'

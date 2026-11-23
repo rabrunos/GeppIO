@@ -28,6 +28,9 @@ const pluginData = Object.freeze<PluginDataBridge>({
   end: token => ipcRenderer.invoke('plugin-data:end', token)
 })
 const documents = Object.freeze<DocumentBridge>({
+  create: () => ipcRenderer.invoke('document:create'),
+  saveAs: (draft, reconcile) => ipcRenderer.invoke('document:saveAs', draft, reconcile),
+  saveAll: drafts => ipcRenderer.invoke('document:saveAll', drafts),
   open: draft => ipcRenderer.invoke('document:open', draft),
   save: draft => ipcRenderer.invoke('document:save', draft),
   reload: (draft, confirmUnresolved) => ipcRenderer.invoke('document:reload', draft, confirmUnresolved),

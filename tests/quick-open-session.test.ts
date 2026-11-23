@@ -1,3 +1,4 @@
+import { unusedDocumentAuthoring } from './document-authoring-fixture.ts'
 import test from 'node:test'
 import type { TestContext } from 'node:test'
 import assert from 'node:assert/strict'
@@ -19,7 +20,7 @@ function page(job: string, file = 'nota.txt', status: QuickOpenPage['status'] = 
 async function fixture(t: TestContext, bridge: Partial<QuickOpenBridge> = {}, navigation: Partial<DocumentBridge> = {}) {
   t.mock.timers.enable({ apis: ['setTimeout'] })
   const unexpected = () => { throw new Error('unexpected native operation') }
-  const editor = new EditorSession({ open: unexpected, reload: unexpected, save: unexpected, close: unexpected, activate: unexpected, release: unexpected, onCloseRequested: unexpected, ...navigation })
+  const editor = new EditorSession({ ...unusedDocumentAuthoring, open: unexpected, reload: unexpected, save: unexpected, close: unexpected, activate: unexpected, release: unexpected, onCloseRequested: unexpected, ...navigation })
   let root = 'root A'
   const explorer = new ExplorerSession({
     createFile: unexpected, renameFile: unexpected, createDirectory: unexpected,

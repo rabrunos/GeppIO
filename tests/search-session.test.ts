@@ -1,3 +1,4 @@
+import { unusedDocumentAuthoring } from './document-authoring-fixture.ts'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { TestContext } from 'node:test'
@@ -23,7 +24,7 @@ function deferred<T>() {
 async function fixture(t: TestContext, bridge: Partial<SearchBridge> = {}) {
   t.mock.timers.enable({ apis: ['setTimeout'] })
   const unexpected = () => { throw new Error('unexpected native operation') }
-  const documentBridge: DocumentBridge = { open: unexpected, reload: unexpected, save: unexpected, release: unexpected, close: unexpected,
+  const documentBridge: DocumentBridge = { ...unusedDocumentAuthoring, open: unexpected, reload: unexpected, save: unexpected, release: unexpected, close: unexpected,
     onCloseRequested: unexpected, activate: async () => ({ ok: true, document }) }
   const editor = new EditorSession(documentBridge)
   let rootId = 'first root'
