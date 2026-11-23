@@ -5,6 +5,7 @@ import { EditorSession } from '../files-editor/session.ts'
 import { GitSession } from '../git/session.ts'
 import { TerminalSession } from '../terminal/session.ts'
 import { SearchSession } from '../search/session.ts'
+import { QuickOpenSession } from '../quick-open/session.ts'
 
 /** One owner per renderer window. Presentation adapters only borrow these sessions. */
 export function useCoreSessions(layoutEditing: boolean) {
@@ -14,10 +15,12 @@ export function useCoreSessions(layoutEditing: boolean) {
   const [search] = useState(() => new SearchSession(window.geppio!.search, explorer,
     (id, match) => monacoPresentation(editor).revealMatch(id, match.line, match.column, match.length)))
   const [terminal] = useState(() => new TerminalSession(window.geppio!.terminal))
+  const [quickOpen] = useState(() => new QuickOpenSession(window.geppio!.quickOpen, explorer))
   editor.locked = layoutEditing
   explorer.locked = layoutEditing
   git.locked = layoutEditing
   search.locked = layoutEditing
+  quickOpen.locked = layoutEditing
 
   useEffect(() => {
     const presentation = monacoPresentation(editor)
@@ -38,8 +41,9 @@ export function useCoreSessions(layoutEditing: boolean) {
   useEffect(() => { explorer.connect(); void explorer.initialize(); return () => explorer.dispose() }, [explorer])
   useEffect(() => { git.connect(); return () => git.dispose() }, [git])
   useEffect(() => { search.connect(); return () => search.dispose() }, [search])
+  useEffect(() => { quickOpen.connect(); return () => quickOpen.dispose() }, [quickOpen])
   useEffect(() => { terminal.connect(); return () => terminal.dispose() }, [terminal])
 
-  return { editor, explorer, git, search, terminal }
+  return { editor, explorer, git, search, terminal, quickOpen }
 }
 export type CoreSessions = ReturnType<typeof useCoreSessions>

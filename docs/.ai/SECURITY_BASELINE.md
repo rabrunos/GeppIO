@@ -93,6 +93,10 @@ protocol. Keep script-src 'self' in production and worker-src 'self'; no eval/bl
 Deny browser permissions and new windows.
 
 Validate input size, version, shape, identifiers, numbers and geometric invariants before use.
+The first-party Quick Open bridge accepts four fixed operations on opaque IDs,
+bound to the owning window, main frame, exact URL and current root. Its
+cancelable inventory stores at most 1 MiB of names and identity metadata.
+Only explicit selection may read a document through the existing grant checks.
 The two portable-composition picker operations require the primary window, current main
 frame and exact application URL. Main obtains the filename from its native dialog and
 revalidates the owner after asynchronous boundaries. Export validates the recipe before

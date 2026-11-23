@@ -12,6 +12,7 @@ import { gitSharedView, OPEN_GIT_WINDOW } from '../shared-views/GitView.ts'
 import type { SharedViewId } from '../shared-views/definition.ts'
 import type { CompareGit } from '../git/GitChanges.tsx'
 import { TerminalView } from '../terminal/TerminalView.tsx'
+import { QuickOpenControl } from '../quick-open/QuickOpenControl.tsx'
 import { BarIcon } from '../workbench/Sidebar.tsx'
 import { IconButton } from '../workbench/Primitives.tsx'
 import type { useRegions } from '../workbench/useRegions.ts'
@@ -23,6 +24,8 @@ interface CodePanels {
   theme: 'light' | 'dark'
   compareGit: CompareGit
   openWindow(id: SharedViewId, trigger: HTMLButtonElement): void
+  quickOpenBlocked(): boolean
+  interactiveBusy: boolean
 }
 
 /** Official presentation borrowing Core sessions and the shell's measured regions. */
@@ -41,7 +44,7 @@ export function useCodePresentation(workbenchChrome: WorkbenchChrome) {
       setSidebar(previous => ({ ...previous, visible: true })); setActivity('explorer')
       requestAnimationFrame(() => document.querySelector<MonacoHost>('.direct-file-editor .monaco-host')?.monacoEditor?.focus())
     },
-    panels({ sessions, measures, regions, theme, compareGit, openWindow }: CodePanels) {
+    panels({ sessions, measures, regions, theme, compareGit, openWindow, quickOpenBlocked, interactiveBusy }: CodePanels) {
       const sidebar = regionViewport('sidebar', measures.sidebar)
       const main = regionViewport('main', measures.main)
       const bottom = regionViewport('bottom', measures.bottom)
@@ -59,7 +62,7 @@ export function useCodePresentation(workbenchChrome: WorkbenchChrome) {
           heading: { git: 'Alterações Git', explorer: 'Explorador', search: 'Busca no projeto' }[activity],
           primary: <IconButton label="Explorador" literalLabel className="sidebar-rail-button sidebar-main-button"
             aria-pressed={activity === 'explorer' && regions.sidebarMode !== 'hidden'} onClick={() => selectActivity('explorer')}><FolderIcon className="icon" /></IconButton>,
-          tools: <><IconButton label="Busca no projeto" literalLabel className="sidebar-rail-button"
+          tools: <><QuickOpenControl session={sessions.quickOpen} blocked={quickOpenBlocked} interactiveBusy={interactiveBusy} /><IconButton label="Busca no projeto" literalLabel className="sidebar-rail-button"
             data-search-window-trigger-fallback aria-pressed={activity === 'search' && regions.sidebarMode !== 'hidden'} onClick={() => selectActivity('search')}><MagnifyingGlassIcon className="icon" /></IconButton>
           <IconButton label="Alterações Git" literalLabel className="sidebar-rail-button"
             data-git-window-trigger-fallback aria-pressed={activity === 'git' && regions.sidebarMode !== 'hidden'} onClick={() => selectActivity('git')}><BarIcon icon="git" /></IconButton></>

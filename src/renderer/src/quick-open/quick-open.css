@@ -1,0 +1,5 @@
+.quick-open-dialog { width: min(34rem, 90vw); }
+.quick-open-field { display: grid; gap: .4rem; }
+.quick-open-dialog [role="status"] { color: var(--color-text-muted); margin: .6rem 0; }
+.quick-open-results { max-height: min(50vh, 24rem); overflow: auto; list-style: none; margin: 0; padding: 0; }
+.quick-open-results button { width: 100%; text-align: left; overflow-wrap: anywhere; }

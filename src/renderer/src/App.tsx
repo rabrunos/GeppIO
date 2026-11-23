@@ -134,7 +134,9 @@ function GeppIOShell({ plugins }: { plugins: ReturnType<typeof usePlugins> }) {
     const next = presentation ? presentation.chromeForWorkbench(chrome, current.organization.chrome) : chrome
     return next ? tx.commitOrganization({ ...current, organization: { ...current.organization, chrome: next } }) : true
   }), surfaces = useSurfaces()
-  const panels = presentation?.panels({ sessions, measures: surfaces.measures, regions, theme, compareGit, openWindow: windows.open })
+  const panels = presentation?.panels({ sessions, measures: surfaces.measures, regions, theme, compareGit, openWindow: windows.open,
+    interactiveBusy: gitState.interactive || !!gitState.comparison || tx.saving,
+    quickOpenBlocked: () => settingsOpen || git.snapshot().interactive || !!git.snapshot().comparison || !!headerMenu || projectMenu || changingExperienceBlocked() })
   const pairGesture = useRef(false)
   function changingExperienceBlocked() {
     return tx.blocksExperienceChange() || pairGesture.current || interaction.active()

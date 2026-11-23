@@ -198,6 +198,16 @@ try {
   evidence.security = 'Actual Main handlers reject paths/source/extra fields and wrong owner/frame/URL; no renderer Node; oversized metadata is explicitly reset without reading unbounded contents'
   await writeFile(join(diagnostics, 'evidence.json'), JSON.stringify(evidence, null, 2)); console.log(JSON.stringify(evidence, null, 2))
 } catch (error) {
+  if (app && String(error).includes('while waiting for event "close"')) {
+    const launcher = app.process()
+    console.log('Workspace pending Playwright close', JSON.stringify({ code: launcher.exitCode, signal: launcher.signalCode,
+      stdoutEnded: launcher.stdout?.readableEnded, stderrEnded: launcher.stderr?.readableEnded, stdinEnded: launcher.stdin?.writableEnded,
+      pageClosed: page.isClosed(), windows: app.windows().length }))
+    if (launcher.exitCode !== null && page.isClosed()) {
+      launcher.stdout?.destroy(); launcher.stderr?.destroy(); launcher.stdin?.destroy()
+      app = undefined
+    }
+  }
   await page?.screenshot({ path: join(diagnostics, 'failure.png') }).catch(() => {})
   if (page) {
     const runtime = await page.evaluate(async () => { const workspace = await window.geppio!.workspace.read(); return { workspace, git: workspace.ok && workspace.value.root ? await window.geppio!.git.status(workspace.value.root.id) : null, rows: [...document.querySelectorAll('[role="treeitem"]')].map(node => ({ name: node.getAttribute('aria-label'), badge: node.querySelector('.explorer-git-badge')?.textContent })) } }).catch(() => null)

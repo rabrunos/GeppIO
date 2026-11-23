@@ -1126,6 +1126,10 @@ explicit visible-test authorization. Its two real Windows composition dialogs se
 the round-trip fixture in the disposable source profile. The walkthrough records the
 expected operation and fixture location under ignored local diagnostics for the picker driver.
 
+Use `pnpm test:isolated quick-open` and its `--scale125` variant for filename
+filtering, keyboard focus, revoked results, and preservation of an edited
+Monaco tab, shared Search/Git windows, Terminal and a plugin Worker.
+
 Link CI to the exact commit and distinguish global result, job,
 step and tested scope. A passed source check is not a semantic TypeScript build, effective model
 setting, physical mouse/DPI acceptance, Linux support or secure community-plugin boundary.

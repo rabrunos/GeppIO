@@ -55,3 +55,26 @@ same directory first. The test holds only the Search request's directory
 handle, sends Enter after switching back to Code, and verifies the canceled
 handle closes before iteration. Run it with `pnpm.cmd test:isolated search`, also with
 `--scale125` or `--dev`.
+
+## Quick Open
+
+In Code, **Abrir arquivo do projeto...** opens a filename dialog. Ctrl+P opens
+it from the Code shell. Terminal, Monaco, editable controls and modal surfaces
+keep their own keyboard input. Typing the first valid term starts one inventory
+after a short debounce. Further terms filter the same inventory. The ordering
+is basename prefix, basename substring, then relative-path substring, with
+lexical ties resolved by folded and original spelling. Matching preserves
+accents and treats punctuation literally.
+
+Each window can run one filename inventory alongside one content search. Each
+uses the traversal limits and exclusions above. The inventory records names
+and identity metadata, with a 1 MiB serialized budget including the private
+witnesses. Each reply contains up to 200 relative names and opaque IDs. The
+dialog labels incomplete coverage. Closing the dialog revokes the inventory,
+and replacing the root revokes both jobs. Nothing is indexed on disk.
+
+Selecting a result revalidates its identity and opens it through the regular
+document transaction. An existing document keeps its model and undo history.
+Enumeration and filtering never read source bytes. The disposable
+`quick-open` journey covers focus, keyboard activation, an edited tab,
+Terminal, a plugin Worker and existing Git/Search windows at DPR 1 and 1.25.

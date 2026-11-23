@@ -90,11 +90,12 @@ try {
   if (await page.locator('[data-widget]').count() !== 7) throw new Error('Expected seven main fixtures')
   for (const region of ['sidebar', 'main', 'bottom']) if (await page.locator(`[data-region="${region}"]`).count() !== 1) throw new Error('Missing region: ' + region)
   const privileged = await page.evaluate(() => ({ require: 'require' in window, process: 'process' in window, bridge: Object.keys(window.geppio ?? {}) }))
-  if (privileged.require || privileged.process || privileged.bridge.some(key => !['name', 'version', 'platform', 'plugins', 'pluginData', 'windowControls', 'documents', 'explorer', 'terminal', 'git', 'workspace', 'search', 'portableLayouts', 'demoFixtures'].includes(key))) throw new Error('Unexpected privileged renderer surface')
+  if (privileged.require || privileged.process || privileged.bridge.some(key => !['name', 'version', 'platform', 'plugins', 'pluginData', 'windowControls', 'documents', 'explorer', 'terminal', 'git', 'workspace', 'search', 'portableLayouts', 'quickOpen', 'demoFixtures'].includes(key))) throw new Error('Unexpected privileged renderer surface')
   assert.equal(await page.evaluate(() => window.geppio!.demoFixtures), true, 'This geometry suite explicitly opts into disposable-profile fixtures')
   assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.plugins).sort()), ['install', 'installFile', 'link', 'list', 'reload', 'remove', 'setDeveloperMode', 'setEnabled'])
   assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.pluginData).sort()), ['begin', 'end', 'read', 'write'])
   assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.search).sort()), ['cancel', 'open', 'read', 'start'])
+  assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.quickOpen).sort()), ['cancel', 'open', 'read', 'start'])
   assert.deepEqual(await page.evaluate(() => Object.fromEntries(
     Object.entries(window.geppio!.portableLayouts).map(([name, method]) => [name, typeof method])
   )), { exportFile: 'function', importFile: 'function' }, 'Only the two native composition picker methods are exposed')

@@ -22,12 +22,12 @@ export function useModalDialog(ref: RefObject<HTMLDialogElement | null>, close: 
     return () => { dialog.removeEventListener('pointerdown', down); dialog.removeEventListener('click', click); dialog.close() }
   }, [])
 }
-export function Dialog({ title, children, close, className = '' }: { title: string; children: ReactNode; close(): void; className?: string }) {
+export function Dialog({ title, children, close, closeDisabled = false, className = '' }: { title: string; children: ReactNode; close(): void; closeDisabled?: boolean; className?: string }) {
   const ref = useRef<HTMLDialogElement>(null), id = useId(), { t } = useLocale()
   useScrollState(ref)
   useModalDialog(ref, close)
   return <dialog ref={ref} className={'profile-dialog host-dialog ui-scrollbar ' + className} aria-labelledby={id} onCancel={event => { event.preventDefault(); close() }}>
-    <header className="profile-dialog-heading"><h2 id={id}>{t(title)}</h2><IconButton className="profile-dialog-close" label="Fechar" onClick={close}><XMarkIcon className="icon" /></IconButton></header>{children}
+    <header className="profile-dialog-heading"><h2 id={id}>{t(title)}</h2><IconButton className="profile-dialog-close" label="Fechar" disabled={closeDisabled} onClick={close}><XMarkIcon className="icon" /></IconButton></header>{children}
   </dialog>
 }
 export function Confirm({ title, text, confirm, close, destructive = true, label = 'Confirmar' }: { title: string; text: string; confirm(): void; close(): void; destructive?: boolean; label?: string }) {

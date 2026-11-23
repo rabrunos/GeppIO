@@ -2,6 +2,10 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.64] — 2026-11-22
+
+- Find and open files by name within the selected project. Quick Open reuses the editor's existing tabs and preserves drafts and undo history.
+
 ## [0.1.0-alpha.63.1] — 2026-11-22
 
 - Verify the portable composition bridge and its two picker methods in the desktop smoke.

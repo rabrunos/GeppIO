@@ -1,10 +1,10 @@
 import type { GitBridge, GitComparison, GitError, GitStatus } from '../../../shared/git.ts'
 import type { ExplorerSession } from '../files-editor/explorer-session.ts'
 
-interface State { root: string | null; status: GitStatus | null; comparison: GitComparison | null; busy: boolean; error: string | null; code: GitError | null }
+interface State { root: string | null; status: GitStatus | null; comparison: GitComparison | null; busy: boolean; interactive: boolean; error: string | null; code: GitError | null }
 /** One memory-only owner, independent of document, layout, terminal and plugin state. */
 export class GitSession {
-  private state: State = { root: null, status: null, comparison: null, busy: false, error: null, code: null }
+  private state: State = { root: null, status: null, comparison: null, busy: false, interactive: false, error: null, code: null }
   private listeners = new Set<() => void>()
   private generation = 0
   private unsubscribe: (() => void) | null = null
@@ -59,7 +59,7 @@ export class GitSession {
     const generation = this.generation
     let confirmed = false
     this.running = true
-    this.update({ busy: true, error: null, code: null, comparison: null, ...(!id ? { status: null } : {}) })
+    this.update({ busy: true, interactive: !!id, error: null, code: null, comparison: null, ...(!id ? { status: null } : {}) })
     try {
       const result = id ? await (operation ? this.bridge[operation](root, id) : this.bridge.compare(root, id)) : await this.bridge.status(root)
       if (root !== this.state.root || generation !== this.generation && !operation) return
@@ -83,6 +83,6 @@ export class GitSession {
         this.update({ ...(operation ? { status: null } : {}), code: operation && !confirmed ? 'uncertain' : 'unavailable', error: confirmed ? 'Índice atualizado; não foi possível consultar o novo estado. Atualize para conferir.' : operation ? 'A comunicação foi interrompida e o índice pode ter mudado. Atualize para conferir antes de outra ação.' : 'Não foi possível comunicar com o Git. Tente novamente.' })
       }
     }
-    finally { this.running = false; this.update({ busy: false }); await this.drain() }
+    finally { this.running = false; this.update({ busy: false, interactive: false }); await this.drain() }
   }
 }

@@ -76,5 +76,11 @@ const portableLayouts = Object.freeze<import('../shared/portable-layout-bridge.t
   importFile: () => ipcRenderer.invoke('portable-layout:import'),
   exportFile: text => ipcRenderer.invoke('portable-layout:export', text)
 })
-contextBridge.exposeInMainWorld('geppio', Object.freeze({ name: IDENTITY.name, version: __APP_VERSION__, platform: process.platform, plugins, pluginData, windowControls, documents, explorer, terminal, git, workspace, search, portableLayouts,
+const quickOpen = Object.freeze<import('../shared/quick-open.ts').QuickOpenBridge>({
+  start: (root, query) => ipcRenderer.invoke('quick-open:start', root, query),
+  read: (job, query) => ipcRenderer.invoke('quick-open:read', job, query),
+  cancel: job => ipcRenderer.invoke('quick-open:cancel', job),
+  open: (job, id) => ipcRenderer.invoke('quick-open:open', job, id)
+})
+contextBridge.exposeInMainWorld('geppio', Object.freeze({ name: IDENTITY.name, version: __APP_VERSION__, platform: process.platform, plugins, pluginData, windowControls, documents, explorer, terminal, git, workspace, search, portableLayouts, quickOpen,
   demoFixtures: process.argv.includes('--geppio-demo-fixtures') }))

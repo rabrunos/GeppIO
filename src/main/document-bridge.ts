@@ -1,5 +1,5 @@
 import { app, dialog, ipcMain } from 'electron'
-import type { BrowserWindow } from 'electron'
+import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { isAbsolute, relative, sep } from 'node:path'
 import { DocumentFailure, DocumentStore, documentFailure, expiredDocumentResponse } from './documents.ts'
@@ -11,6 +11,8 @@ import type { ExplorerResult } from '../shared/explorer.ts'
 import { GitStore, GitFailure, gitFailure } from './git.ts'
 import { SearchExpired, SearchStore } from './search.ts'
 import { validSearchRequest } from '../shared/search.ts'
+import { QuickOpenExpired, QuickOpenStore } from './quick-open.ts'
+import { validQuickOpenRequest } from '../shared/quick-open.ts'
 import { validGitRequest } from '../shared/git.ts'
 import { WorkspaceOwner } from './workspace.ts'
 import { WorkspaceRecovery } from './workspace-recovery.ts'
@@ -23,7 +25,8 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
   const directories = new DirectoryStore()
   const git = new GitStore(directories)
   const search = new SearchStore(directories)
-  const revokeProjectResults = () => { git.revoke(); search.revoke() }
+  const quickOpen = new QuickOpenStore(directories)
+  const revokeProjectResults = () => { git.revoke(); search.revoke(); quickOpen.revoke() }
   const workspace = new WorkspaceOwner(directories, store, new WorkspaceRecovery(app.getPath('userData')), revokeProjectResults)
   let busy = false, closing = false, remembering = false, ticket: string | null = null
   const revoke = () => { workspace.revoke(); revokeProjectResults(); store.revoke(); directories.revoke(); ticket = null }
@@ -178,12 +181,16 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
     } catch { return current() ? { ...fail(), value: workspace.status() } : fail() }
     finally { if (exclusive) busy = false; if (operation === 'remember') remembering = false }
   })
+  function projectCaller(event: IpcMainInvokeEvent) {
+    const frame = event.senderFrame
+    if (win.isDestroyed() || event.sender !== win.webContents || frame !== win.webContents.mainFrame || frame?.url !== expectedURL) return
+    const documentCurrent = store.guard(), directoryCurrent = directories.guard()
+    return () => !closing && !win.isDestroyed() && !win.webContents.isDestroyed() && win.webContents.mainFrame === frame && frame.url === expectedURL && documentCurrent() && directoryCurrent()
+  }
   const searchOperations = ['start', 'read', 'cancel', 'open'] as const
   for (const operation of searchOperations) ipcMain.handle(`search:${operation}`, async (event, ...args: unknown[]) => {
-    const frame = event.senderFrame
-    if (win.isDestroyed() || event.sender !== win.webContents || frame !== win.webContents.mainFrame || frame?.url !== expectedURL || !validSearchRequest(operation, args)) return documentFailure(new DocumentFailure('invalid'))
-    const documentCurrent = store.guard(), directoryCurrent = directories.guard()
-    const current = () => !closing && !win.isDestroyed() && !win.webContents.isDestroyed() && win.webContents.mainFrame === frame && frame.url === expectedURL && documentCurrent() && directoryCurrent()
+    const current = projectCaller(event)
+    if (!current || !validSearchRequest(operation, args)) return documentFailure(new DocumentFailure('invalid'))
     if (!current()) return { ...documentFailure(new DocumentFailure('stale')), expired: true }
     const id = args[0] as string
     if (operation === 'open') {
@@ -214,6 +221,28 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
         ...(error instanceof SearchExpired ? { expired: true } : {}) }
     }
   })
+  for (const operation of searchOperations) ipcMain.handle(`quick-open:${operation}`, async (event, ...args: unknown[]) => {
+    const current = projectCaller(event)
+    if (!current || !validQuickOpenRequest(operation, args)) return documentFailure(new DocumentFailure('invalid'))
+    const expired = () => ({ ...documentFailure(new DocumentFailure('stale')), expired: true as const })
+    if (!current()) return expired()
+    const id = args[0] as string
+    try {
+      if (operation === 'open') {
+        if (busy || ticket) return documentFailure(new DocumentFailure('busy'))
+        busy = true
+        try { return await response(await quickOpen.open(id, args[1] as string, store, current), current) }
+        finally { busy = false }
+      }
+      if (operation === 'cancel') return quickOpen.cancel(id, current)
+      const query = args[1] as string
+      const value = operation === 'start' ? quickOpen.start(id, query, current) : await quickOpen.read(id, query, current)
+      return current() ? { ok: true, value } : expired()
+    } catch (error) {
+      if (!current() || error instanceof QuickOpenExpired) return expired()
+      return documentFailure(error)
+    }
+  })
   const gitOperations = ['status', 'compare', 'stage', 'unstage'] as const
   for (const operation of gitOperations) ipcMain.handle(`git:${operation}`, async (event, ...args: unknown[]) => {
     const frame = event.senderFrame
@@ -227,6 +256,7 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
     for (const operation of directoryOperations) ipcMain.removeHandler(`explorer:${operation}`)
     for (const operation of gitOperations) ipcMain.removeHandler(`git:${operation}`)
     for (const operation of searchOperations) ipcMain.removeHandler(`search:${operation}`)
+    for (const operation of searchOperations) ipcMain.removeHandler(`quick-open:${operation}`)
     for (const operation of workspaceOperations) ipcMain.removeHandler(`workspace:${operation}`)
   })
   return workspace

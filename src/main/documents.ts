@@ -87,6 +87,8 @@ async function inspect(path: string, control?: DocumentReadControl): Promise<Evi
   } finally { await file.close() }
 }
 const sameEvidence = (a: Evidence, b: Evidence) => a.path === b.path && a.chain === b.chain && sameStat(a.stat, b.stat) && a.bytes.equals(b.bytes)
+const sameFile = (original: Evidence, chain: string, stat: BigIntStats) => original.chain === chain &&
+  identity(original.stat) === identity(stat) && original.stat.birthtimeNs === stat.birthtimeNs && stat.isFile() && stat.nlink === 1n
 function documentWitness(evidence: Evidence) {
   const stat = evidence.stat
   return { identity: [evidence.chain, identity(stat), stat.birthtimeNs, stat.ctimeNs, stat.mtimeNs, stat.mode, stat.size].join('/'),
@@ -129,8 +131,24 @@ export class DocumentStore {
     this.active = id; return { ok: true, document: this.snapshot }
   }
   async select(path: string, draft: DocumentDraft | null, _decide: () => Promise<DocumentDecision>, current: () => boolean,
-    authorize?: (witness: () => ReturnType<typeof documentWitness>) => Promise<void>, readControl?: DocumentReadControl): Promise<DocumentResult> {
+    authorize?: (witness: () => ReturnType<typeof documentWitness>) => Promise<void>, readControl?: DocumentReadControl,
+    reuse: 'path' | 'file-identity' = 'path'): Promise<DocumentResult> {
     if (draft) this.current(draft)
+    const key = (value: string) => process.platform === 'win32' ? value.toLowerCase() : value
+    const atPath = () => [...this.selections.values()].find(value => key(value.evidence.path) === key(path))
+    const retained = reuse === 'file-identity' ? atPath() : undefined
+    if (retained) {
+      // Activating an existing grant returns its confirmed snapshot and keeps its
+      // independent draft. Disk content can have changed since that confirmation.
+      const original = retained.evidence
+      if (!current()) throw new DocumentFailure('stale')
+      const chain = await inspectPath(path), stat = await lstat(path, { bigint: true })
+      if (!current() || !sameFile(original, chain, stat)) throw new DocumentFailure('stale')
+      await readControl?.authorize(stat)
+      await authorize?.(() => documentWitness(original))
+      if (!current() || retained.evidence !== original || this.selections.get(retained.snapshot.id) !== retained) throw new DocumentFailure('stale')
+      return this.activate(retained.snapshot.id)
+    }
     const candidate = await inspect(path, readControl)
     if (!current()) throw new DocumentFailure('stale')
     // Native picker/Explorer selection authorizes just this candidate, never an
@@ -138,10 +156,12 @@ export class DocumentStore {
     if (!sameEvidence(candidate, await inspect(path, readControl))) throw new DocumentFailure('conflict')
     await authorize?.(() => documentWitness(candidate))
     if (!current()) throw new DocumentFailure('stale')
-    const key = (value: string) => process.platform === 'win32' ? value.toLowerCase() : value
-    const existing = [...this.selections.values()].find(value => key(value.evidence.path) === key(path))
+    const existing = atPath()
     if (existing && existing.evidence.path !== path && identity(existing.evidence.stat) !== identity(candidate.stat)) throw new DocumentFailure('conflict', existing.snapshot.id)
-    if (existing) return this.activate(existing.snapshot.id)
+    if (existing) {
+      if (reuse === 'file-identity' && !sameFile(existing.evidence, candidate.chain, candidate.stat)) throw new DocumentFailure('stale')
+      return this.activate(existing.snapshot.id)
+    }
     if (this.selections.size >= DOCUMENT_SESSION_LIMITS.count || [...this.selections.values()].reduce((sum, value) => sum + value.evidence.bytes.length, candidate.bytes.length) > DOCUMENT_SESSION_LIMITS.bytes) throw new DocumentFailure('limit')
     const snapshot = { id: randomUUID(), revision: randomUUID(), name: basename(path).slice(0, 255), label: [basename(dirname(path)), basename(path)].filter(Boolean).join('/').slice(0, 511), text: candidate.text, bom: candidate.bom }
     this.selections.set(snapshot.id, { evidence: candidate, snapshot }); this.active = snapshot.id
