@@ -2,6 +2,10 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.62.1] — 2026-11-22
+
+- Make the keyboard cancellation check hold the Search directory handle even when background Git status visits the same folder first.
+
 ## [0.1.0-alpha.62] — 2026-11-22
 
 - Open Git and Search together in internal windows. Each reuses its Core session, supports keyboard movement and restores focus on close.

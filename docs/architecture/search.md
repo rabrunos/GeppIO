@@ -50,5 +50,8 @@ reads. The [Explorer's filesystem race limitations](explorer.md) also apply.
 The native and session tests exercise controlled reads, revocation, stale
 content and budget limits. The `search` Electron journey covers an explicit
 scan in Code, Save and Cancel during directory I/O, match selection and draft
-retention. Run it with `pnpm.cmd test:isolated search`, also with
+retention. In the disposable fixture, background Git status enumerates the
+same directory first. The test holds only the Search request's directory
+handle, sends Enter after switching back to Code, and verifies the canceled
+handle closes before iteration. Run it with `pnpm.cmd test:isolated search`, also with
 `--scale125` or `--dev`.

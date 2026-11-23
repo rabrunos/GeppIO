@@ -127,6 +127,40 @@ test('cancel during the first request reaches the eventual job and supersedes an
   assert.deepEqual(p.cancel.mock.calls.map(call => call.arguments), [['first'], ['second']])
 })
 
+test('switching presentations while cancel awaits its reply keeps stale reads and old-root results out of the new panel', async t => {
+  const progress = deferred<SearchResult>(), canceled = deferred<SearchResult>()
+  const p = await fixture(t, {
+    start: async () => page('job', 'running', [hit]),
+    read: () => progress.promise,
+    cancel: () => canceled.promise
+  })
+  const unmount = p.search.subscribe(() => {})
+  p.search.setQuery('café')
+  await p.search.start()
+  await p.tick(100)
+  assert.equal(p.read.mock.callCount(), 1)
+  unmount()
+  const cancel = p.search.cancel()
+  const updates: string[] = []
+  const unsubscribe = p.search.subscribe(() => updates.push(p.search.snapshot().status))
+  assert.equal(p.search.snapshot().status, 'canceling')
+  assert.equal(p.search.canCancel, false)
+  progress.resolve(page('job', 'complete', [{ ...hit, id: 'late' }]))
+  await p.tick(100)
+  assert.deepEqual(updates, [])
+  assert.deepEqual(p.search.snapshot().matches, [hit])
+  await p.switchRoot()
+  canceled.resolve(page('job', 'canceled', [hit]))
+  await cancel
+  await p.tick(200)
+  assert.equal(p.search.snapshot().root, 'second root')
+  assert.equal(p.search.snapshot().query, 'café')
+  assert.equal(p.search.snapshot().status, 'idle')
+  assert.deepEqual(p.search.snapshot().matches, [])
+  assert.equal(p.start.mock.callCount(), 1)
+  unsubscribe()
+})
+
 test('opening uses only opaque IDs and reveals UTF-16 coordinates only for the same confirmed editor snapshot', async t => {
   let matchesSnapshot = true
   const p = await fixture(t, { open: async () => ({ ok: true, document, matchesSnapshot }) })

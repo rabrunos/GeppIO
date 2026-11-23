@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { ElectronApplication } from 'playwright'
+import type { SearchResult } from '../src/shared/search.ts'
 import type { MonacoHost } from '../src/renderer/src/files-editor/monaco.ts'
 import { WORKBENCH_KEY } from '../src/shared/workbench/model.ts'
 import { portugueseFixture, settle } from './freeform-smoke.ts'
@@ -20,7 +21,11 @@ const env = Object.fromEntries(Object.entries(process.env).filter((entry): entry
 for (const key of ['ELECTRON_RUN_AS_NODE', 'ELECTRON_RENDERER_URL', 'NODE_OPTIONS', 'GEPPIO_TEST_DEMO_WIDGETS']) delete env[key]
 env.GEPPIO_TEST_USER_DATA = profile; env.NODE_ENV = dev ? 'development' : 'production'
 let app: ElectronApplication | undefined, server: import('vite').ViteDevServer | undefined
-interface SmokeProbe { starts: number; entered: boolean; iterated: boolean; closed: boolean; release(): void }
+interface SmokeProbe {
+  starts: number; reads: number; cancels: number; startReply: string; readReply: string; cancelReply: string
+  gitVisited: boolean; heldOwner: string
+  entered: boolean; iterated: boolean; closed: boolean; release(): void
+}
 type MainProbe = typeof globalThis & { searchSmoke: SmokeProbe }
 try {
   await initializeGit(project)
@@ -49,24 +54,38 @@ try {
   await page.getByRole('button', { name: 'Abrir arquivo', exact: true }).click()
   await page.getByRole('tab', { name: /independent\.txt/ }).waitFor()
   await editor.fill('saved while searching')
-  await select(project); await page.locator('.explorer-toolbar').getByRole('button', { name: 'Abrir pasta' }).click()
-  await page.getByRole('treeitem', { name: /search-project/ }).waitFor()
-  const rootId = await page.locator('.workspace-controls').getAttribute('data-workspace-root'); assert.ok(rootId)
 
-  // Hold one genuine scan at its fixture directory to exercise Save and Cancel
-  // without depending on disk speed. Restore the original method on entry.
+  // Both background Git status and Search enumerate this directory. Track
+  // their real async work so only the Search handle pauses before iteration.
   await app.evaluate(({ ipcMain }, gate) => {
     const fs = process.getBuiltinModule('fs/promises') as typeof import('node:fs/promises')
+    const { AsyncLocalStorage } = process.getBuiltinModule('async_hooks') as typeof import('node:async_hooks')
+    const reader = new AsyncLocalStorage<'search' | 'git'>()
     const handlers = (ipcMain as unknown as { _invokeHandlers: Map<string, (...args: unknown[]) => unknown> })._invokeHandlers
-    const start = handlers.get('search:start')!, openDirectory = fs.opendir
+    const openDirectory = fs.opendir
     let release!: () => void
     const hold = new Promise<void>(resolve => { release = resolve })
-    const probe: SmokeProbe = { starts: 0, entered: false, iterated: false, closed: false, release }
+    const probe: SmokeProbe = { starts: 0, reads: 0, cancels: 0, startReply: 'none', readReply: 'none', cancelReply: 'none',
+      entered: false, iterated: false, closed: false, gitVisited: false, heldOwner: 'none', release }
     ;(globalThis as MainProbe).searchSmoke = probe
-    handlers.set('search:start', (...args) => { probe.starts++; return start(...args) })
+    for (const operation of ['start', 'read', 'cancel'] as const) {
+      const channel = 'search:' + operation, original = handlers.get(channel)!
+      handlers.set(channel, async (...args) => {
+        probe[`${operation}s`]++
+        const result = await (operation === 'start' ? reader.run('search', () => original(...args)) : original(...args)) as SearchResult
+        probe[`${operation}Reply`] = result.ok ? result.value.status : result.expired ? 'expired' : 'refused'
+        return result
+      })
+    }
+    const gitStatus = handlers.get('git:status')!
+    handlers.set('git:status', (...args) => reader.run('git', () => gitStatus(...args)))
     fs.opendir = async (...args) => {
       const dir = await openDirectory(...args)
       if (String(args[0]) === gate) {
+        const owner = reader.getStore()
+        if (owner === 'git') probe.gitVisited = true
+        if (owner !== 'search') return dir
+        probe.heldOwner = owner
         fs.opendir = openDirectory
         const iterate = dir[Symbol.asyncIterator].bind(dir), close = dir.close.bind(dir)
         dir[Symbol.asyncIterator] = () => { probe.iterated = true; return iterate() }
@@ -76,6 +95,17 @@ try {
       return dir
     }
   }, gate)
+  await select(project); await page.locator('.explorer-toolbar').getByRole('button', { name: 'Abrir pasta' }).click()
+  await page.getByRole('treeitem', { name: /search-project/ }).waitFor()
+  const rootId = await page.locator('.workspace-controls').getAttribute('data-workspace-root'); assert.ok(rootId)
+  // Exercise the formerly failing ordering on every runner.
+  await app.evaluate(async () => {
+    const end = Date.now() + 10000
+    while (!(globalThis as MainProbe).searchSmoke.gitVisited) {
+      if (Date.now() >= end) throw new Error('Background Git did not enumerate the fixture')
+      await new Promise(resolve => setTimeout(resolve, 10))
+    }
+  })
   const starts = () => app!.evaluate(() => (globalThis as MainProbe).searchSmoke.starts)
   const activity = page.getByRole('button', { name: 'Busca no projeto', exact: true })
   await activity.click()
@@ -91,12 +121,47 @@ try {
   await page.getByRole('button', { name: 'Salvar arquivo', exact: true }).click()
   await page.locator('.file-editor[data-document-status="clean"]').waitFor()
   assert.equal(await readFile(standalone, 'utf8'), 'saved while searching')
+  // Capture only event destinations and fixed status labels in this disposable renderer.
+  const inputTrace = await page.evaluateHandle(() => {
+    const events: string[] = []
+    function record(event: Event) {
+      if (events.length >= 24 || event instanceof KeyboardEvent && event.key !== 'Enter') return
+      const node = event.target as Element
+      const target = node.closest('.search-actions button')?.textContent === 'Cancelar busca' ? 'cancel'
+        : node.closest('.experience-switch') ? 'experience' : node.closest('.monaco-host') ? 'editor' : 'other'
+      events.push(event.type + ':' + target)
+    }
+    for (const name of ['focusin', 'keydown', 'click']) document.addEventListener(name, record, true)
+    return { events, stop() { for (const name of ['focusin', 'keydown', 'click']) document.removeEventListener(name, record, true) } }
+  })
   await experience('Bancada de Trabalho'); await experience('GeppIO Code')
   assert.equal(await field.inputValue(), query); assert.equal(await starts(), 1)
-  await panel.getByRole('button', { name: 'Cancelar busca' }).press('Enter')
-  await panel.getByRole('status').filter({ hasText: 'Busca cancelada' }).waitFor()
+  const cancel = panel.getByRole('button', { name: 'Cancelar busca' })
+  try {
+    await cancel.press('Enter')
+    await panel.getByRole('status').filter({ hasText: 'Busca cancelada' }).waitFor()
+    const events = await inputTrace.evaluate(trace => trace.events)
+    assert.ok(events.includes('keydown:cancel') && events.includes('click:cancel'), 'Enter activated the Cancel button')
+  } finally {
+    const native = await app.evaluate(() => {
+      const { starts, reads, cancels, startReply, readReply, cancelReply, entered, iterated, heldOwner } = (globalThis as MainProbe).searchSmoke
+      return { starts, reads, cancels, startReply, readReply, cancelReply, entered, iterated, heldOwner }
+    })
+    const ui = await page.evaluate(trace => {
+      trace.stop()
+      const panel = document.querySelector('.project-search')
+      const status = panel?.querySelector('[role=status]')?.textContent ?? ''
+      const phase = ['Iniciando busca', 'Buscando', 'Busca concluída', 'Busca parcial', 'Busca cancelada', 'Cancelando busca', 'Falha na busca'].find(label => status.startsWith(label))
+      return { events: trace.events, phase: phase ?? 'unknown', panel: !!panel, alert: !!panel?.querySelector('[role=alert]'),
+        enabled: [...(panel?.querySelectorAll<HTMLButtonElement>('button') ?? [])].some(button => button.textContent === 'Cancelar busca' && !button.disabled) }
+    }, inputTrace)
+    console.log('Search cancellation evidence', JSON.stringify({ native, ui }))
+    await inputTrace.dispose()
+  }
   await app.evaluate(async () => {
     const probe = (globalThis as MainProbe).searchSmoke
+    if (!probe.gitVisited || probe.heldOwner !== 'search' || probe.cancels !== 1 || probe.cancelReply !== 'canceled')
+      throw new Error('Keyboard Cancel must reach the single Search job while its directory read is held')
     probe.release()
     const end = Date.now() + 3000
     while (!probe.closed && Date.now() < end) await new Promise(resolve => setTimeout(resolve, 10))
