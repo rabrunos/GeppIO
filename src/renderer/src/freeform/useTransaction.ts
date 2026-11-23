@@ -66,7 +66,18 @@ export function useTransaction(registry: Registry = widgetRegistry(), localState
     editingRef.current = false; setEditing(false); setRecovery(initial.recovery && observed.current === initial.raw)
     setMessage(initial.recovery && observed.current === initial.raw ? initial.message : 'Edição cancelada. Último checkpoint confirmado restaurado.')
   }
-  async function commit(next: WorkbenchSnapshot, conclude: boolean, retainSlots: boolean, successMessage?: string) {
+  function withComposition(base: WorkbenchSnapshot, record: Composition) {
+    return { ...base, organization: { ...base.organization, compositions: [...base.organization.compositions, record] } }
+  }
+  function pendingImportCheckpoint() {
+    const library = (value: SessionDraft) => {
+      const { compositions, compositionOrder, favorites, defaultComposition } = value.snapshot.organization
+      return JSON.stringify([compositions, compositionOrder, favorites, defaultComposition, value.localState])
+    }
+    return normalizationPending.current || formatSignature(live.current, slotsRef.current) !== formatBaseline.current || library(current()) !== library(checkpoint.current)
+  }
+  async function commit(next: WorkbenchSnapshot, conclude: boolean, retainSlots: boolean, successMessage?: string,
+      guard?: { imported?: Composition; current(): boolean }) {
     if (saving.current || history.current.active) return false
     const ticket = ++epoch.current
     let validated: WorkbenchSnapshot
@@ -74,12 +85,19 @@ export function useTransaction(registry: Registry = widgetRegistry(), localState
     catch { setMessage('Composição inválida ou sem espaço. A prévia e os dados salvos foram preservados.'); return false }
     saving.current = true; refresh()
     try {
-      const result = await navigator.locks.request(WORKBENCH_KEY, () => ticket === epoch.current
+      const result = await navigator.locks.request(WORKBENCH_KEY, () => ticket === epoch.current && (!guard || guard.current() && (!guard.imported || !pendingImportCheckpoint()))
         ? writeWorkbench(localStorage, validated, registry, observed.current, observed.current === null ? initial.previous : undefined)
         : { raw: observed.current, error: 'Gravação cancelada.' })
       if (ticket !== epoch.current) return false
       if (result.error) { setMessage(result.error); return false }
       observed.current = result.raw; committed.current = structuredClone(validated)
+      if (guard?.imported) {
+        // Only append library metadata. Preserve projections, active tabs, slots,
+        // chrome and the previous cancellation baseline for the rest of the draft.
+        checkpoint.current = { ...checkpoint.current, snapshot: withComposition(checkpoint.current.snapshot, guard.imported) }
+        put(withComposition(live.current, guard.imported))
+        setMessage('Composição importada.'); return true
+      }
       normalizationPending.current = false
       checkpoint.current = { ...current(), snapshot: structuredClone(validated), slots: structuredClone(slotsRef.current), formatId: formatId.current, formatMode: formatMode.current, formatSource: structuredClone(formatSource.current) }
       formatBaseline.current = formatSignature(validated, retainSlots ? slotsRef.current : [])
@@ -126,12 +144,22 @@ export function useTransaction(registry: Registry = widgetRegistry(), localState
     finishGesture() { history.current.finish(current()); refresh() },
     cancelGesture() { const before = history.current.abort(); if (before) apply(before); refresh() },
     save: (next: Snapshot) => commit(withOrganization(next), true, false),
-    saveEditing: (next: Snapshot = live.current) => commit(withOrganization(next), false, true),
+    saveEditing: (next: Snapshot = live.current, currentContext?: () => boolean) => commit(withOrganization(next), false, true, undefined, currentContext && { current: currentContext }),
     conclude: (next: Snapshot = live.current) => commit(withOrganization(next), true, false),
     hasPending() { return formatSignature(live.current, slotsRef.current) !== formatBaseline.current },
+    pendingImportCheckpoint,
+    savedComposition(id: string) { return committed.current.organization.compositions.find(item => item.id === id) },
+    canImportComposition() { return editingRef.current && !recovery && !history.current.active && !saving.current },
+    async saveImportedComposition(record: Composition, currentContext: () => boolean) {
+      if (!editingRef.current || recovery || history.current.active || saving.current || pendingImportCheckpoint() || !currentContext()) return false
+      const before = structuredClone(current())
+      const ok = await commit(withComposition(committed.current, record), false, true, undefined, { imported: record, current: currentContext })
+      if (ok) { history.current.record(before, current()); refresh() }
+      return ok
+    },
     async saveComposition(record: Composition) {
       if (!editingRef.current) return false
-      const before = structuredClone(current()), next = { ...live.current, organization: { ...live.current.organization, compositions: [...live.current.organization.compositions, record] } }
+      const before = structuredClone(current()), next = withComposition(live.current, record)
       const ok = await commit(next, false, true, 'Composição salva.')
       if (ok) { history.current.record(before, current()); refresh() }
       return ok

@@ -11,7 +11,7 @@ export const incompatible: Readonly<Record<string, string>> = {
   'edit-lock': 'The paste-key assertion can access the shared Windows clipboard; retain the original CI gate.'
 }
 const development = new Set(['desktop-core', 'identity', 'git', 'monaco', 'multi-document', 'workspace', 'search'])
-const scale125 = new Set(['desktop-core', 'alignment', 'groups', 'explorer', 'git', 'maximize', 'monaco', 'multi-document', 'presentation', 'real-presentation', 'workspace', 'terminal', 'conpty', 'app-host', 'git-window', 'search', 'shared-windows'])
+const scale125 = new Set(['desktop-core', 'alignment', 'groups', 'explorer', 'git', 'maximize', 'monaco', 'multi-document', 'presentation', 'real-presentation', 'workspace', 'terminal', 'conpty', 'app-host', 'git-window', 'search', 'shared-windows', 'portable-layout'])
 
 /** Only existing known entrypoints and supported literal flags. Never a shell command or path. */
 export function selectSuite(suite: string, variant?: string): IsolationSelection {

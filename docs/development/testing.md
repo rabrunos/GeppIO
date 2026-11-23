@@ -1117,7 +1117,16 @@ the actual hit target and pointer capture; bounded native pointer evidence is
 retained on failure. This synchronization does not write data or retry a gesture.
 
 Report passed/failed/blocked/not_run for each selected layer, the actual command/environment and
-its limits in the active Issue. Link CI to the exact commit and distinguish global result, job,
+its limits in the active Issue.
+
+Run `pnpm test:isolated portable-layout` and its `--scale125` variant for the two-profile
+composition journey. These use real Electron windows with controlled file selection.
+The separate `tools/portable-layout-smoke.ts --native-dialogs` walkthrough runs with
+explicit visible-test authorization. Its two real Windows composition dialogs select
+the round-trip fixture in the disposable source profile. The walkthrough records the
+expected operation and fixture location under ignored local diagnostics for the picker driver.
+
+Link CI to the exact commit and distinguish global result, job,
 step and tested scope. A passed source check is not a semantic TypeScript build, effective model
 setting, physical mouse/DPI acceptance, Linux support or secure community-plugin boundary.
 Do not use --no-sandbox, disabled webSecurity, weakened type rules or skipped assertions as fixes.

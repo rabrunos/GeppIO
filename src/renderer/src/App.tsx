@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react'
 import { MotionConfig } from 'motion/react'
 import { PlusIcon, ArrowsPointingOutIcon, ArrowsPointingInIcon } from '@heroicons/react/24/outline'
 import { usePlugins } from './Plugins.tsx'
+import { disabledWidgetOwners } from './plugin-runtime.ts'
 import { PluginSurface } from './PluginSurface.tsx'
 import { BottomPluginSurface } from './BottomPluginSurface.tsx'
 import { maximizableSurface } from '../../shared/workbench/maximize.ts'
@@ -218,7 +219,7 @@ function GeppIOShell({ plugins }: { plugins: ReturnType<typeof usePlugins> }) {
   const disabled = useMemo(disabledOwners, [plugins.views, plugins.inventory.plugins])
   const swapping = useSwap(tx, view, registry, selectedViews, () => { setSwapSelection(null) })
   const feedbackActive = interaction.active()
-  function disabledOwners() { return new Set(plugins.inventory.plugins.filter(plugin => !plugin.enabled || !plugins.views.some(view => view.plugin.manifest.id === plugin.manifest.id && view.status === 'active')).map(plugin => `plugin:${plugin.manifest.id}`)) }
+  function disabledOwners() { return disabledWidgetOwners(plugins.inventory.plugins, plugins.views) }
   useEffect(() => { document.documentElement.dataset.theme = theme }, [theme])
   useEffect(() => {
     if (tx.message === initialMessage.current || feedbackActive) { setShowFeedback(false); return }
@@ -358,7 +359,7 @@ function GeppIOShell({ plugins }: { plugins: ReturnType<typeof usePlugins> }) {
       <PairDividers suspendMain={panelActive || !!maximizedSurface} tx={tx} registry={registry} view={view} surfaces={surfaces} preview={setPairPreview} onGesture={active => { pairGesture.current = active }} snap={snap} />
       {swapping.preview && <div className="widget-swap-preview" style={{ left: swapping.preview.x, top: swapping.preview.y, zIndex: 152 }} aria-hidden="true"><WorkbenchMoveIcon />{registry.get(tx.snapshot.organization.views.find(v => v.id === swapping.preview!.id)!.typeId)?.title}</div>}
       {picture && !picture.catalog && !picture.released && (!picture.sourceBar || picture.sourceBar === tx.snapshot.organization.activeBar) && <div className="layout-drag-origin host-drag-origin" data-owner-region={picture.source?.dataset.ownerRegion} aria-hidden="true" inert style={{ left: picture.origin.left, top: picture.origin.top, width: picture.origin.width, height: picture.origin.height, clipPath: picture.originClip }} />}
-      <EditorPanel moveRequest={moveRequest} move={interaction.transferTo} request={widgetsRequest} tx={tx} registry={registry} view={view} open={editorOpen} setOpen={setEditorOpen} slot={chosenSlot} chooseSlot={setSlot} add={add} remove={setRemoving} disabled={disabled} interaction={interaction} openPlugins={() => setHeaderMenu('plugins')} />
+      <EditorPanel portableEnvironment={{ inventory: plugins.inventory.plugins, managing: plugins.managing, gesture: () => pairGesture.current || interaction.active() || regions.changing() || panelUI.active() || swapping.active() }} moveRequest={moveRequest} move={interaction.transferTo} request={widgetsRequest} tx={tx} registry={registry} view={view} open={editorOpen} setOpen={setEditorOpen} slot={chosenSlot} chooseSlot={setSlot} add={add} remove={setRemoving} disabled={disabled} interaction={interaction} openPlugins={() => setHeaderMenu('plugins')} />
       {picture && <DragLayer picture={picture} pointer={interaction.visual.pointer} controller={interaction.visual.controller} measure={interaction.visual.measure} complete={interaction.visual.complete} label={t(picture.catalog ? 'Adicionando widget' : picture.sourceBar ? 'Movendo da barra lateral' : (interaction.gestureLabel?.region ?? picture.source?.dataset.ownerRegion) === 'bottom' ? 'Movendo da barra inferior' : 'Movendo da área principal')}><section className="widget drag-picture-content"><header className="widget-heading"><strong>{registry.get(picture.typeId)?.owner === 'host' ? t(registry.get(picture.typeId)!.title) : registry.get(picture.typeId)?.title}</strong></header><div className="widget-content">{registry.get(picture.typeId)?.fixture ? <WidgetContent id={registry.get(picture.typeId)!.fixture!} /> : <PluginBody definition={registry.get(picture.typeId)!} plugins={plugins} preview />}</div></section></DragLayer>}
       {dropZones?.targets.map(region => { const m = surfaces.measures[region], width = m.width + 6, height = m.height + 6; return <div key={region} className="layout-edit-zone" data-over={dropZones.over === region ? '' : undefined} style={{ left: m.left - 3, top: m.top - 3, width, height }}><EditOutline width={width} height={height} /></div> })}
       </div>

@@ -11,6 +11,7 @@ import { recoverLayout } from './layout-migration.ts'
 import { validWindowControlRequest } from '../shared/window-controls.ts'
 import { bindDocuments } from './document-bridge.ts'
 import { bindTerminal } from './terminal-bridge.ts'
+import { bindPortableLayouts } from './portable-layout-bridge.ts'
 
 protocol.registerSchemesAsPrivileged([
   { scheme: IDENTITY.protocol, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
@@ -50,6 +51,7 @@ async function createWindow(): Promise<void> {
   win.webContents.on('will-navigate', event => event.preventDefault())
   win.webContents.on('will-attach-webview', event => event.preventDefault())
   const workspace = bindDocuments(win, devURL ?? `${IDENTITY.protocol}://${IDENTITY.host}/index.html`)
+  bindPortableLayouts(win, devURL ?? `${IDENTITY.protocol}://${IDENTITY.host}/index.html`)
   bindTerminal(win, devURL ?? `${IDENTITY.protocol}://${IDENTITY.host}/index.html`, () => workspace.startupDirectory())
   const owner = win.webContents.id
   const revokeData = () => plugins.revokeOwner(owner)

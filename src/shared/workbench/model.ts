@@ -4,6 +4,7 @@ import type { InstalledPlugin } from '../plugins.ts'
 import { CHROME_LIMITS, defaultChrome } from './chrome.ts'
 import type { ChromePatch, WorkbenchChrome } from './chrome.ts'
 import type { Presentation, Presentations } from './presentations.ts'
+import type { PortableLayout } from './portable-format.ts'
 import { FILE_EDITOR, FILE_EXPLORER } from '../files-editor.ts'
 import { TERMINAL_WIDGET } from '../terminal-widget.ts'
 import { GIT_WIDGET } from '../git-widget.ts'
@@ -26,7 +27,7 @@ export interface UserBar { id: string; name: string; userNamed: boolean; icon: s
 export interface Composition {
   id: string; name: string; system: boolean; scopes: Region[];
   reference: Snapshot['reference']; placements: Placement[]; views: View[];
-  mode: 'format' | 'format-widgets'; format: FormatSlot[]; chrome?: ChromePatch; groups?: WidgetGroups
+  mode: 'format' | 'format-widgets'; format: FormatSlot[]; chrome?: ChromePatch; groups?: WidgetGroups; portable?: PortableLayout
 }
 export interface Organization {
   views: View[]; bars: UserBar[]; activeBar: string;
@@ -85,7 +86,7 @@ export function widgetRegistry(plugins: readonly InstalledPlugin[] = [], demoFix
 }
 export function modelId(typeId: string) { return `model:${typeId}` }
 export function groupFor(source: WorkbenchSnapshot, id: string) { return source.organization.groups?.entries.find(group => group.members.includes(id)) }
-export function groupConstraint(members: readonly View[], registry: Registry): Constraint {
+export function groupConstraint(members: readonly Pick<View, 'typeId'>[], registry: Registry): Constraint {
   const originals = members.map(view => registry.get(view.typeId)!.constraint), declarations = originals.map(c => constraintInRegion(c, 'main')), base = declarations[0]!
   const regions = (['main', 'sidebar', 'bottom'] as const).filter(region => originals.every(c => c.regions.includes(region)))
   const regionMin = Object.fromEntries(regions.map(region => [region, { width: Math.max(...originals.map(c => constraintInRegion(c, region).min.width)), height: Math.max(...originals.map(c => constraintInRegion(c, region).min.height)) + TAB_STRIP_HEIGHT }]))

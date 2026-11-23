@@ -72,5 +72,9 @@ const workspace = Object.freeze<import('../shared/workspace.ts').WorkspaceBridge
   forget: () => ipcRenderer.invoke('workspace:forget'),
   remember: editor => ipcRenderer.invoke('workspace:remember', editor)
 })
-contextBridge.exposeInMainWorld('geppio', Object.freeze({ name: IDENTITY.name, version: __APP_VERSION__, platform: process.platform, plugins, pluginData, windowControls, documents, explorer, terminal, git, workspace, search,
+const portableLayouts = Object.freeze<import('../shared/portable-layout-bridge.ts').PortableLayoutBridge>({
+  importFile: () => ipcRenderer.invoke('portable-layout:import'),
+  exportFile: text => ipcRenderer.invoke('portable-layout:export', text)
+})
+contextBridge.exposeInMainWorld('geppio', Object.freeze({ name: IDENTITY.name, version: __APP_VERSION__, platform: process.platform, plugins, pluginData, windowControls, documents, explorer, terminal, git, workspace, search, portableLayouts,
   demoFixtures: process.argv.includes('--geppio-demo-fixtures') }))

@@ -61,7 +61,7 @@ export function usePlugins() {
     finally { if (runtime.current === host) { pausedInputs.current = []; locked.current = false; setBusy(false) } }
   }
   const bridge = window.geppio?.plugins
-  return { inventory, views, message, busy, available: Boolean(bridge),
+  return { inventory, views, message, busy, managing: () => busy || locked.current, available: Boolean(bridge),
     install: () => { if (bridge) void manage(() => bridge.install()) },
     installFile: () => { if (bridge) void manage(() => bridge.installFile()) },
     setDeveloperMode: (enabled: boolean) => { if (bridge) void manage(() => bridge.setDeveloperMode(enabled), enabled ? [] : inventory.plugins.filter(item => item.source === 'external' && item.enabled).map(item => item.manifest.id)) },

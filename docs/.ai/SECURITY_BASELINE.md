@@ -93,6 +93,11 @@ protocol. Keep script-src 'self' in production and worker-src 'self'; no eval/bl
 Deny browser permissions and new windows.
 
 Validate input size, version, shape, identifiers, numbers and geometric invariants before use.
+The two portable-composition picker operations require the primary window, current main
+frame and exact application URL. Main obtains the filename from its native dialog and
+revalidates the owner after asynchronous boundaries. Export validates the recipe before
+selection and uses exclusive creation. An error after creation leaves the selected output
+for inspection and reports uncertainty. The usual same-user filesystem race limitation applies.
 Do not evaluate imported text, install code from a layout file or render raw HTML. A failed read
 must not erase a draft. User-initiated saving is separate from initial loading.
 

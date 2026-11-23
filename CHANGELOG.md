@@ -2,6 +2,10 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.63] — 2026-11-22
+
+- Export one saved composition to a new file and preview portable layouts before importing a separate library item. Apply geometry or resolve existing destination widgets explicitly.
+
 ## [0.1.0-alpha.62.1] — 2026-11-22
 
 - Make the keyboard cancellation check hold the Search directory handle even when background Git status visits the same folder first.

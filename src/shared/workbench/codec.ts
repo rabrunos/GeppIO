@@ -11,6 +11,7 @@ import type { Presentations } from './presentations.ts'
 import { parseGroups, validateGroups } from './groups.ts'
 import type { WidgetGroups } from './model.ts'
 import { retireDemoViews } from './retirement.ts'
+import { storedPortableComposition } from './portable.ts'
 
 const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value)
 const identifier = (value: unknown): value is string => typeof value === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,159}$/.test(value)
@@ -94,14 +95,19 @@ function parseDocument(value: unknown, views: View[], registry: Registry, bars?:
 export function parseWorkbench(raw: string, registry: Registry): WorkbenchSnapshot {
   if (raw.length > POLICY.maxBytes || new TextEncoder().encode(raw).length > POLICY.maxBytes) throw new Error('Workbench exceeds 64 KiB')
   const data: unknown = JSON.parse(raw)
-  if (!object(data) || ![1, 2].includes(Number(data.schemaVersion)) || typeof data.schemaVersion !== 'number' || data.kind !== 'geppio-workbench' || !object(data.organization)) throw new Error('Unsupported workbench')
+  if (!object(data) || ![1, 2, 3].includes(Number(data.schemaVersion)) || typeof data.schemaVersion !== 'number' || data.kind !== 'geppio-workbench' || !object(data.organization)) throw new Error('Unsupported workbench')
   const source = data.organization, views = parseViews(source.views, registry), bars = parseBars(source.bars, registry)
   const presentations = parsePresentations(source.presentations, views, registry)
   const groups = parseGroups(source.groups, views, registry)
   const layout = parseDocument(data.layout, views, registry, bars, presentations, groups)
   if (typeof source.activeBar !== 'string' || !bars.some(bar => bar.id === source.activeBar && !bar.archived)) throw new Error('Invalid active bar')
   const compositions: Composition[] = unique(list(source.compositions, LIMITS.compositions).map(item => {
-    if (!object(item) || !identifier(item.id) || !item.id.startsWith('composition:') || item.id.length <= 12 || item.system !== false || !['format', 'format-widgets'].includes(String(item.mode))) throw new Error('Invalid saved composition')
+    if (!object(item) || !identifier(item.id) || !item.id.startsWith('composition:') || item.id.length <= 12) throw new Error('Invalid saved composition')
+    if (Object.hasOwn(item, 'portable')) {
+      if (data.schemaVersion !== 3 || Object.keys(item).some(key => !['id', 'name', 'portable'].includes(key))) throw new Error('Invalid inert composition')
+      return storedPortableComposition(item.id, name(item.name), item.portable)
+    }
+    if (item.system !== false || !['format', 'format-widgets'].includes(String(item.mode))) throw new Error('Invalid saved composition')
     const savedViews = parseViews(item.views, registry), scopes = strings(item.scopes, 3), chrome = item.chrome === undefined ? undefined : parseChrome(item.chrome, true)
     if ((!scopes.length && !chrome?.sidebar && !chrome?.bottom) || scopes.some(region => !['main', 'bottom'].includes(region))) throw new Error('Invalid composition scopes')
     const savedGroups = parseGroups(item.groups, savedViews, registry)
@@ -162,7 +168,10 @@ export function serializeWorkbench(snapshot: WorkbenchSnapshot, registry: Regist
   const sidebarHeight = Math.max(source.reference.sidebar.height, ...source.placements.filter(p => p.region === 'sidebar').map(p => p.y + p.height))
   const layout = { ...source, reference: { ...source.reference, sidebar: { width: sidebarWidth, height: sidebarHeight } },
     placements: source.placements.map(p => p.region === 'sidebar' ? { ...p, width: sidebarWidth } : p) }
-  const raw = JSON.stringify({ schemaVersion: 2, kind: 'geppio-workbench', layout, organization, ...(snapshot.retiredDemos ? { retiredDemos: snapshot.retiredDemos } : {}) })
+  const hasRecipes = organization.compositions.some(item => !!item.portable)
+  const stored = hasRecipes ? { ...organization, compositions: organization.compositions.map(item => item.portable
+    ? { id: item.id, name: item.name, portable: item.portable } : item) } : organization
+  const raw = JSON.stringify({ schemaVersion: hasRecipes ? 3 : 2, kind: 'geppio-workbench', layout, organization: stored, ...(snapshot.retiredDemos ? { retiredDemos: snapshot.retiredDemos } : {}) })
   parseWorkbench(raw, registry)
   return raw
 }

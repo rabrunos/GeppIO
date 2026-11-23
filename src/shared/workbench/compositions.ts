@@ -96,6 +96,7 @@ export function reorderComposition(source: WorkbenchSnapshot, id: string, before
   return { ...source, organization: { ...source.organization, [favorites ? 'favorites' : 'compositionOrder']: next } }
 }
 export function applyComposition(source: WorkbenchSnapshot, registry: Registry, composition: Composition, mode: 'format' | 'widgets') {
+  if (mode === 'widgets' && composition.portable) return null
   composition = availableComposition(composition, registry)
   const next = compositionChrome(structuredClone(source), composition)
   if (mode === 'widgets') {

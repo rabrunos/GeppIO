@@ -14,6 +14,11 @@ export interface RuntimePlugin {
   widgets: Record<string, WidgetView & Partial<WidgetViewV2>>
   recoveryRequired?: boolean
 }
+export function disabledWidgetOwners(inventory: readonly InstalledPlugin[], views: readonly Pick<RuntimePlugin, 'plugin' | 'status'>[]) {
+  return new Set(inventory.filter(plugin => !plugin.enabled || !views.some(view =>
+    view.status === 'active' && view.plugin.manifest.id === plugin.manifest.id && view.plugin.revision === plugin.revision
+    && codeGeneration(view.plugin) === codeGeneration(plugin))).map(plugin => 'plugin:' + plugin.manifest.id))
+}
 export interface PluginWorker {
   onmessage: ((event: MessageEvent<unknown>) => void) | null
   onerror: ((event: ErrorEvent) => void) | null

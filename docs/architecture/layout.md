@@ -883,6 +883,26 @@ v1 using the original bytes in a disposable profile/import workflow; no database
 privileged renderer bridge is added. [Identity recovery](../development/renaming.md) remains unchanged
 at the native v1 transfer boundary.
 
+## Portable saved compositions
+
+The library exports one confirmed composition as UTF-8 JSON with a 64 KiB limit and
+the extension `.geppio-layout.json`. Version 1 carries the chosen name, Main/Bottom
+reference sizes and rectangles, captured chrome sizes, public widget types and group
+membership. References inside the file use file-local keys. The name is user content.
+The parser rejects unsupported fields, versions and inconsistent geometry or groups.
+
+Import previews the recipe and creates a new library record after explicit confirmation.
+A pending Edit requires a separate checkpoint decision. Format can be applied while a
+provider is absent. Widgets resolves every reference against current eligible local
+presentations, requires a choice for ambiguous candidates and preserves the recipe
+when a dependency is unavailable. The owner can explicitly enable a provider and
+prepare local presentations before applying the same saved recipe.
+
+The first successful save containing a recipe writes Workbench envelope v3 with the
+inert recipe separate from live views. Supported historical envelopes can still be
+read without writing on startup. Use a host supporting v3 to reopen these profiles.
+Removing the last recipe allows the existing v2 representation on the next save.
+
 ## Module ownership and pending acceptance
 
 Shared grid files separate policy/types, geometry, responsive projection, occupancy, reflow, schema/migration and storage.
