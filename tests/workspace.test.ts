@@ -100,6 +100,39 @@ test('first launch, independent project/file authority, metadata-only roundtrip 
   await assert.rejects(workspace.opened(root, current), 'App profile data cannot be written inside a selected project ancestor')
 }))
 
+test('tab arrangements persist only validated file indices and retain temporarily unavailable files across a second restart', async () => fixture(async ({ project, profile, a, b }) => {
+  const original = owner(profile); await original.opened(project, current)
+  const first = await selected(original, a), second = await selected(original, b)
+  const state = editor(original)
+  state.arrangement = { split: true, active: 1, sides: [[first.id], [second.id]], selected: [first.id, second.id], pinned: [second.id] }
+  assert.equal(validWorkspaceEditor({ ...state, arrangement: { ...state.arrangement, pinned: new Array(1) } }), false)
+  assert.ok(validWorkspaceEditor(state)); await original.remember(state, current)
+  const record = original.recovery.snapshot.record
+  assert.deepEqual(record.arrangement?.sides, [[0], [1]]); assert.deepEqual(record.arrangement?.pinned, [1])
+  assert.ok(!JSON.stringify(record).includes(first.id))
+  for (const bad of [{ ...record.arrangement, pinned: [7] }, { ...record.arrangement, selected: [1, 0] }, { ...record.arrangement, sides: [[0, 0], [1]] }, { ...record.arrangement, source: 'untrusted' }]) {
+    assert.throws(() => parseWorkspaceRecord({ ...record, arrangement: bad }))
+  }
+  await rename(b, b + '.away')
+  const partial = owner(profile), opened = await partial.restore(current, async () => true, async () => 'cancel')
+  assert.ok(opened.ok && opened.arrangement); assert.equal(opened.arrangement.active, 0)
+  assert.equal(partial.documents.snapshot?.name, 'one.ts'); assert.deepEqual(opened.arrangement.sides[1], [])
+  await partial.remember({ ...editor(partial), arrangement: opened.arrangement }, current)
+  assert.equal(partial.recovery.snapshot.record.files.length, 2)
+  const noHistory = owner(profile + '-off')
+  await mkdir(profile + '-off')
+  await writeFile(join(profile + '-off', 'workspace-session.v1.json'), JSON.stringify(record))
+  await noHistory.restore(current, async () => true, async () => 'cancel')
+  await noHistory.configure(false, current); await noHistory.configure(true, current)
+  assert.equal(noHistory.recovery.snapshot.record.files.length, 1)
+  await rename(b + '.away', b)
+  const restored = owner(profile), final = await restored.restore(current, async () => true, async () => 'cancel')
+  assert.ok(final.ok && final.arrangement)
+  const recovered = restored.documents.snapshots.find(doc => doc.name === 'two.txt')!.id
+  assert.deepEqual(final.arrangement.sides[1], [recovered]); assert.deepEqual(final.arrangement.pinned, [recovered])
+  assert.notEqual(recovered, second.id)
+}))
+
 test('restoration needs explicit consent, fresh grants, active tab and clean view state', async () => fixture(async ({ project, profile, a, b }) => {
   const first = owner(profile); await first.opened(project, current)
   const original = await selected(first, a); await selected(first, b); first.documents.activate(original.id)

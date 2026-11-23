@@ -4,11 +4,15 @@ import { DirectoryStore, inspectExplorerPath, safeExplorerName } from './explore
 import { DocumentStore } from './documents.ts'
 import { WorkspaceRecovery, WorkspaceRecoveryCanceled, emptyWorkspaceRecord } from './workspace-recovery.ts'
 import type { WorkspaceRecord } from './workspace-recovery.ts'
-import type { WorkspaceEditor, WorkspaceResult, WorkspaceStatus, WorkspaceView } from '../shared/workspace.ts'
+import { mapTabArrangement } from '../shared/workspace.ts'
+import type { TabArrangement, WorkspaceEditor, WorkspaceResult, WorkspaceStatus, WorkspaceView } from '../shared/workspace.ts'
+import { DOCUMENT_SESSION_LIMITS } from '../shared/documents.ts'
 
 /** One project identity, reusing the window's existing directory and file owners. */
 export class WorkspaceOwner {
   private views = new Map<string, WorkspaceView>()
+  private arrangement?: TabArrangement<string>
+  private missingFiles?: { source: WorkspaceRecord; indices: Set<number> }
   private message: string | null = null
   private transition = false
   private epoch = 0
@@ -17,7 +21,7 @@ export class WorkspaceOwner {
   readonly recovery: WorkspaceRecovery
   private changed: () => void
   constructor(directories: DirectoryStore, documents: DocumentStore, recovery: WorkspaceRecovery, changed: () => void) { this.directories = directories; this.documents = documents; this.recovery = recovery; this.changed = changed }
-  revoke() { this.epoch++; this.views.clear(); this.message = null; this.transition = false }
+  revoke() { this.epoch++; this.views.clear(); this.arrangement = undefined; this.missingFiles = undefined; this.message = null; this.transition = false }
   guard() { const epoch = this.epoch; return () => epoch === this.epoch }
   rememberRenamedView(view: WorkspaceView, revision: string) { this.views.set(view.id, { ...structuredClone(view), revision }) }
   hasFileBinding(path: string) {
@@ -33,25 +37,60 @@ export class WorkspaceOwner {
   private record(clean = false, remember = this.recovery.snapshot.record.remember, exclude?: string): WorkspaceRecord {
     const project = this.directories.descriptor
     if (!remember || !project) return emptyWorkspaceRecord(remember)
-    const files: WorkspaceRecord['files'] = []; let active = -1
+    const files: WorkspaceRecord['files'] = [], indices = new Map<string, number>(); let active = -1
     for (const document of this.documents.snapshots) {
       if (document.id === exclude) continue
       const path = this.documents.filePath(document.id), inside = path ? relative(project.path, path) : ''
       const names = inside.split(sep), hash = this.documents.fingerprint(document.id)
       if (!inside || isAbsolute(inside) || names.length > 32 || !names.every(name => safeExplorerName(name) && name.toLowerCase() !== '.git') || !hash) continue
       const view = this.views.get(document.id)
+      indices.set(document.id, files.length)
       if (document.id === this.documents.snapshot?.id) active = files.length
       files.push({ names, hash, dirty: clean ? false : view?.dirty ?? false, language: view?.language ?? null, selection: view?.selection ?? { start: 0, end: 0, top: 0, left: 0 } })
     }
-    return { schemaVersion: 1, remember, project, files, active }
+    const arrangement = this.arrangement && mapTabArrangement(this.arrangement, indices, [...indices.values()])
+    const candidate: WorkspaceRecord = { schemaVersion: 1, remember, project, files, active, ...(arrangement ? { arrangement } : {}) }
+    this.retainMissing(candidate)
+    return candidate
+  }
+  private retainMissing(candidate: WorkspaceRecord) {
+    const pending = this.missingFiles
+    if (!pending || !candidate.project || pending.source.project?.chain !== candidate.project.chain || pending.source.project.path !== candidate.project.path) return
+    const pathKey = (names: string[]) => process.platform === 'win32' ? names.join('/').toLowerCase() : names.join('/')
+    const live = new Map(candidate.files.map((file, index) => [pathKey(file.names), index]))
+    const historical = new Map<number, number>(), missing = new Set<number>()
+    for (const [index, file] of pending.source.files.entries()) {
+      const slot = live.get(pathKey(file.names))
+      if (slot !== undefined) { historical.set(index, slot); pending.indices.delete(index) }
+      else if (pending.indices.has(index)) {
+        if (candidate.files.length >= DOCUMENT_SESSION_LIMITS.count) throw new Error('A lembrança anterior foi preservada porque inclui arquivos indisponíveis e atingiu o limite de abas.')
+        missing.add(index); historical.set(index, candidate.files.length); candidate.files.push(structuredClone(file))
+      }
+    }
+    const layout = candidate.arrangement
+    if (!layout) return
+    const saved = pending.source.arrangement
+    for (const side of [0, 1] as const) {
+      const before = saved?.sides[side] ?? (side === 0 ? [...pending.source.files.keys()] : [])
+      const group = layout.split ? side : 0, tabs = layout.sides[group]
+      for (const [position, index] of before.entries()) if (missing.has(index)) {
+        const slot = historical.get(index)!
+        if (!tabs.includes(slot)) {
+          const following = before.slice(position + 1).map(i => historical.get(i)).find(i => i !== undefined && tabs.includes(i))
+          tabs.splice(following === undefined ? tabs.length : tabs.indexOf(following), 0, slot)
+        }
+        if (saved?.pinned.includes(index) && !layout.pinned.includes(slot)) layout.pinned.push(slot)
+      }
+      layout.selected[group] ??= tabs[0] ?? null
+    }
   }
   async persist(current: () => boolean, clean = false, exclude?: string) {
     await this.recovery.load()
     // An unselected startup/standalone context must not erase offered history.
-    if (!this.recovery.snapshot.record.remember || !this.directories.snapshot) return
-    const directoryCurrent = this.directories.guard(), candidate = this.record(clean, true, exclude)
-    try { await this.recovery.save(candidate, () => current() && directoryCurrent()); this.message = null }
-    catch (error) { if (!(error instanceof WorkspaceRecoveryCanceled)) this.message = 'A sessão não foi lembrada. Os arquivos e rascunhos abertos foram mantidos.' }
+    if (!this.recovery.snapshot.record.remember || !this.directories.snapshot) return true
+    const directoryCurrent = this.directories.guard()
+    try { await this.recovery.save(this.record(clean, true, exclude), () => current() && directoryCurrent()); this.message = null; return true }
+    catch (error) { if (!(error instanceof WorkspaceRecoveryCanceled)) this.message = 'A sessão não foi lembrada. Os arquivos e rascunhos abertos foram mantidos.'; return false }
   }
   async opened(path: string, current: () => boolean) {
     await this.recovery.load()
@@ -76,13 +115,15 @@ export class WorkspaceOwner {
   }
   async configure(remember: boolean, current: () => boolean) {
     await this.recovery.load(); await this.recovery.save(this.record(false, remember), current)
+    if (!remember) this.missingFiles = undefined
     return this.status()
   }
-  async forget(current: () => boolean) { await this.recovery.forget(current); this.message = 'Recuperação local removida. As abas e o Terminal continuam abertos.'; return this.status() }
+  async forget(current: () => boolean) { await this.recovery.forget(current); this.missingFiles = undefined; this.message = 'Recuperação local removida. As abas e o Terminal continuam abertos.'; return this.status() }
   async remember(editor: WorkspaceEditor, current: () => boolean) {
     const held = this.documents.snapshots
     if (editor.tabs.length !== held.length || editor.tabs.some(view => !held.some(document => document.id === view.id && document.revision === view.revision))) throw new Error('A sessão de arquivos mudou; a lembrança será atualizada após a operação.')
     this.views = new Map(editor.tabs.map(view => [view.id, structuredClone(view)]))
+    this.arrangement = editor.arrangement && structuredClone(editor.arrangement)
     await this.persist(current)
     return this.status()
   }
@@ -98,6 +139,7 @@ export class WorkspaceOwner {
     if (!current()) throw new Error('Restauração expirada.')
     this.transition = true
     const views: NonNullable<Extract<WorkspaceResult, { ok: true }>['views']> = [], restored = new Map<number, string>()
+    const missingIndices = new Set<number>()
     let committed = false, missing = 0, changed = 0
     try {
       // The dialog never makes an old authority valid again.
@@ -127,15 +169,21 @@ export class WorkspaceOwner {
         } catch {
           if (!current()) throw new Error('Restauração expirada.')
           if (id) { const document = this.documents.snapshots.find(value => value.id === id); if (document) await this.documents.release({ id, revision: document.revision, text: document.text }, async () => 'discard', current) }
-          missing++
+          missing++; missingIndices.add(index)
         }
       }
-      const active = restored.get(record.active) ?? restored.values().next().value
-      if (active) this.documents.activate(active)
       this.views.clear()
+      this.missingFiles = missing ? { source: record, indices: missingIndices } : undefined
+      this.arrangement = record.arrangement && mapTabArrangement(record.arrangement, restored, [...restored.values()])
+      if (this.arrangement && this.arrangement.selected[this.arrangement.active] === null) {
+        const other = this.arrangement.active === 0 ? 1 : 0
+        if (this.arrangement.selected[other] !== null) this.arrangement.active = other
+      }
+      const active = (this.arrangement && this.arrangement.selected[this.arrangement.active]) ?? restored.get(record.active) ?? restored.values().next().value
+      if (active) this.documents.activate(active)
       this.message = [missing ? `${missing} aba(s) indisponível(is) não foram abertas.` : '', changed ? `${changed} arquivo(s) alterado(s) foram abertos pela decisão explícita.` : '', record.files.some(file => file.dirty) ? 'Rascunhos não salvos não foram recuperados; apenas o conteúdo atual do disco foi aberto.' : 'Projeto e arquivos salvos restaurados. Undo e processos não são restaurados.'].filter(Boolean).join(' ')
       committed = true
-      return { ok: true, value: { ...this.status(), root: this.directories.snapshot }, documents: this.documents.result(), views }
+      return { ok: true, value: { ...this.status(), root: this.directories.snapshot }, documents: this.documents.result(), views, ...(this.arrangement ? { arrangement: structuredClone(this.arrangement) } : {}) }
     } finally {
       this.transition = false
       if (!committed) { this.documents.revoke(); this.directories.revoke(); this.changed() }

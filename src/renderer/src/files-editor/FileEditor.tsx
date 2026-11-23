@@ -5,11 +5,13 @@ import type { GroupIndex } from './editor-groups.ts'
 import { monacoPresentation } from './monaco.ts'
 import { ArrowPathIcon, DocumentArrowDownIcon, DocumentDuplicateIcon, DocumentPlusIcon, FolderOpenIcon, PencilSquareIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { Popover } from '../workbench/Primitives.tsx'
 import './files-editor.css'
 
 function GroupPane({ session, side }: { session: EditorSession; side: GroupIndex }) {
   const state = session.snapshot(), group = session.groups.sides[side], selected = group.selected
   const tabs = useRef<HTMLDivElement>(null), input = useRef<HTMLDivElement>(null)
+  const dragged = useRef<string | null>(null)
   const panelId = side === 0 ? 'file-editor-document-panel' : 'file-editor-second-panel'
   const tabId = (id: string) => 'document-tab-' + (side === 0 ? '' : 'right-') + id
   const hasDocument = !!selected
@@ -26,6 +28,9 @@ function GroupPane({ session, side }: { session: EditorSession; side: GroupIndex
   async function tabKey(event: ReactKeyboardEvent, index: number) {
     if (state.busy || session.locked || !['ArrowLeft', 'ArrowRight', 'Home', 'End', 'Delete'].includes(event.key)) return
     event.preventDefault(); event.stopPropagation()
+    if (event.altKey && event.shiftKey && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+      session.reorderTab(side, group.tabs[index]!, index + (event.key === 'ArrowLeft' ? -1 : 1)); return
+    }
     if (event.key === 'Delete') await session.closeOccurrence(side, group.tabs[index]!)
     else {
       const next = event.key === 'Home' ? 0 : event.key === 'End' ? group.tabs.length - 1 : (index + (event.key === 'ArrowLeft' ? -1 : 1) + group.tabs.length) % group.tabs.length
@@ -36,8 +41,11 @@ function GroupPane({ session, side }: { session: EditorSession; side: GroupIndex
   }
   return <section className="file-editor-group" aria-label={side === 0 ? 'Grupo esquerdo' : 'Grupo direito'} data-editor-group={side} data-focused={session.groups.active === side}>
     {group.tabs.length > 0 && <div ref={tabs} className="file-editor-tabs ui-scrollbar" role="tablist" aria-label={session.groups.split ? 'Arquivos do grupo ' + (side + 1) : 'Arquivos abertos'}>
-      {group.tabs.map((id, index) => { const tab = session.documentState(id)!, active = selected === id, dirty = tab.text !== tab.document.text; return <div key={id} className="file-editor-tab">
-        <button role="tab" id={tabId(id)} data-document-tab={id} aria-controls={panelId} aria-selected={active} tabIndex={active ? 0 : -1} disabled={state.busy || session.locked} title={(tab.document.location?.names.join('/') ?? tab.document.label ?? tab.document.name) + (tab.error ? ' — ' + tab.error : '')} className="ui-button" onFocus={() => { if (selected === id && session.groups.active !== side) void focusTab(id) }} onClick={() => { void focusTab(id) }} onKeyDown={event => { void tabKey(event, index) }}><span>{tab.document.name}</span>{dirty && <span className="file-editor-dirty" aria-label="Alterações não salvas">●</span>}</button>
+      {group.tabs.map((id, index) => { const tab = session.documentState(id)!, active = selected === id, dirty = tab.text !== tab.document.text; return <div key={id} className="file-editor-tab" data-pinned={session.groups.pinned.has(id)}
+        onDragOver={event => { if (dragged.current && !state.busy && !session.locked) { event.preventDefault(); event.dataTransfer.dropEffect = 'move' } }}
+        onDrop={event => { if (dragged.current) { event.preventDefault(); session.reorderTab(side, dragged.current, index); dragged.current = null } }}>
+        <button role="tab" draggable={!state.busy && !session.locked} onDragStart={event => { dragged.current = id; event.dataTransfer.effectAllowed = 'move' }} onDragEnd={() => { dragged.current = null }}
+          aria-keyshortcuts="Alt+Shift+ArrowLeft Alt+Shift+ArrowRight" aria-description={session.groups.pinned.has(id) ? 'Aba fixada' : undefined} id={tabId(id)} data-document-tab={id} aria-controls={panelId} aria-selected={active} tabIndex={active ? 0 : -1} disabled={state.busy || session.locked} title={(tab.document.location?.names.join('/') ?? tab.document.label ?? tab.document.name) + (tab.error ? ' — ' + tab.error : '')} className="ui-button" onFocus={() => { if (selected === id && session.groups.active !== side) void focusTab(id) }} onClick={() => { void focusTab(id) }} onKeyDown={event => { void tabKey(event, index) }}><span>{tab.document.name}</span>{session.groups.pinned.has(id) && <span aria-hidden="true" className="tab-pin">◆</span>}{dirty && <span className="file-editor-dirty" aria-label="Alterações não salvas">●</span>}</button>
         <button className="ui-button file-editor-tab-close" aria-label={'Fechar aba ' + tab.document.name} tabIndex={active ? 0 : -1} disabled={state.busy || session.locked} onClick={() => { void session.closeOccurrence(side, id) }}><XMarkIcon className="icon" /></button>
       </div> })}
     </div>}
@@ -46,6 +54,26 @@ function GroupPane({ session, side }: { session: EditorSession; side: GroupIndex
       <button className="ui-button" disabled={state.busy || session.locked || state.tabs.length >= 8} onClick={async () => { if (await session.focusGroup(side, null)) await session.create() }}>Novo documento neste grupo</button></div>
       : <div className="file-editor-empty"><h2>Seu primeiro documento</h2><p>Abra um arquivo de texto ou código UTF-8 de até 1 MiB. O mesmo documento fica disponível no widget Editor de arquivo.</p><p>O rascunho fica apenas nesta sessão. Salve antes de sair.</p></div>}
   </section>
+}
+
+function TabActions({ session }: { session: EditorSession }) {
+  const [open, setOpen] = useState(false), anchor = useRef<HTMLButtonElement>(null)
+  const groups = session.groups, side = groups.active, current = groups.sides[side].selected, tabs = groups.sides[side].tabs
+  const busy = session.locked || session.snapshot().busy, index = current ? tabs.indexOf(current) : -1
+  const perform = (action: () => unknown) => { setOpen(false); void action() }
+  function item(label: string, allowed: boolean, reason: string, action: () => unknown) {
+    return <button role="menuitem" className="ui-button workspace-command" disabled={busy || !allowed} title={busy ? 'Aguarde a operação em andamento.' : allowed ? label : reason} onClick={() => perform(action)}>{label}</button>
+  }
+  const unpinned = (id: string) => !groups.pinned.has(id)
+  return <><button ref={anchor} className="ui-button" aria-haspopup="menu" aria-expanded={open} disabled={busy} onClick={() => setOpen(!open)}>Organizar abas</button>
+    {open && <Popover bare title="Organizar abas" open close={() => setOpen(false)} anchor={anchor} className="workspace-popover workspace-project-menu">
+      {item('Mover aba para a esquerda', index > 0, 'A aba já está no início do grupo.', () => current && session.reorderTab(side, current, index - 1))}
+      {item('Mover aba para a direita', index >= 0 && index < tabs.length - 1, 'A aba já está no fim do grupo.', () => current && session.reorderTab(side, current, index + 1))}
+      {item(current && groups.pinned.has(current) ? 'Desafixar aba' : 'Fixar aba', !!current, 'Selecione uma aba.', () => current && session.togglePin(current))}
+      {item('Fechar outras abas', tabs.some(id => id !== current && unpinned(id)), 'As demais abas estão fixadas ou o grupo tem apenas uma aba.', () => session.closeTabs('others'))}
+      {item('Fechar grupo', tabs.some(unpinned), 'O grupo está vazio ou só contém abas fixadas.', () => session.closeTabs('group'))}
+      {item('Fechar todas as abas', groups.sides.some(g => g.tabs.some(unpinned)), 'Há apenas abas fixadas ou nenhum documento aberto.', () => session.closeTabs('all'))}
+    </Popover>}</>
 }
 
 /** Both adapters render this same implementation; only the selected adapter mounts it. */
@@ -80,6 +108,7 @@ export function FileEditor({ session }: { session: EditorSession }) {
       {state.document && <button className="ui-button tool-button" aria-label="Fechar arquivo" title="Fechar arquivo" disabled={state.busy || session.locked} onClick={() => { void session.closeOccurrence(groups.active) }}><XMarkIcon className="icon" /><span>Fechar arquivo</span></button>}
     </div>
     <div className="file-editor-group-tools" aria-label="Grupos do editor">
+      <TabActions session={session} />
       <button className="ui-button" disabled={state.busy || session.locked} onClick={() => { if (split) void session.mergeGroups(); else session.sendToOtherGroup() }}>{split ? 'Unir grupos' : 'Dividir editor'}</button>
       {split && <><button className="ui-button" disabled={!active || state.busy || session.locked} title={active ? 'Abrir a aba atual no outro grupo' : 'Selecione um documento.'} onClick={() => session.sendToOtherGroup()}>Abrir no outro grupo</button>
       <button className="ui-button" disabled={!active || state.busy || session.locked} title={active ? 'Mover a aba atual para o outro grupo' : 'Selecione um documento.'} onClick={() => session.sendToOtherGroup(true)}>Mover para o outro grupo</button>

@@ -403,6 +403,11 @@ undo, language, mixed line endings, invalid bytes and the other tab. The native
 
 ## Selected document pilot (alpha.37)
 
+`pnpm.cmd test:isolated editor-tabs` covers dragging and keyboard reordering, pinning a
+document shared by two groups, cancellation during a bulk close, and two explicit project
+restorations across Electron restarts. The fixture temporarily moves a file out of the
+project and returns it before the second restore. Repeat with `--scale125` and `--dev`.
+
 `pnpm.cmd test:isolated editor-split` supports production at default scale and
 `--scale125`, plus development with `--dev`. Use **Dividir editor**, change a document,
 then focus the other occurrence and undo. Check independent cursor and scroll positions.

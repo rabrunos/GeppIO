@@ -160,8 +160,8 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
       }
       const supplied = args[1] as DocumentDraft[] | DocumentDraft | null, drafts = supplied === null ? [] : Array.isArray(supplied) ? supplied : [supplied]
       if (!await store.resolveAll(drafts, document => decide(document.label ?? document.name, document.id, drafts.find(draft => draft.id === document.id)?.discardOnly), current)) return await receipt(store.result(true))
-      await workspace.persist(current, true)
-      if (workspace.recovery.snapshot.error && current()) await dialog.showMessageBox(win, { type: 'warning', title: 'Sessão local', message: 'Os arquivos foram resolvidos, mas a lembrança da sessão não pôde ser confirmada.', detail: 'Rascunhos não são armazenados para recuperação. Os metadados existentes foram preservados.' })
+      const remembered = await workspace.persist(current, true)
+      if ((!remembered || workspace.recovery.snapshot.error) && current()) await dialog.showMessageBox(win, { type: 'warning', title: 'Sessão local', message: 'Os arquivos foram resolvidos, mas a lembrança da sessão não pôde ser confirmada.', detail: 'Rascunhos não são armazenados para recuperação. Os metadados existentes foram preservados.' })
       if (!current()) throw new DocumentFailure('stale')
       store.revoke()
       if (operation === 'close') { closing = true; setImmediate(() => { if (!win.isDestroyed()) win.close() }) }

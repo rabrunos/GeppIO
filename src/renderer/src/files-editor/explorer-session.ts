@@ -116,7 +116,10 @@ export class ExplorerSession {
       const result = await this.workspace.remember(state)
       if (generation === this.generation && result.ok) { this.remembered = signature; this.update({ workspace: result.value }) }
     } catch { /* A later bounded metadata update retries; no source text is sent. */ }
-    finally { this.remembering = false }
+    finally {
+      this.remembering = false
+      if (generation === this.generation && signature !== JSON.stringify(this.editor.workspaceState())) this.scheduleRemember()
+    }
   }
   async workspaceAction(action: 'restore' | 'standalone' | 'forget' | boolean): Promise<boolean> {
     if (!this.workspace || this.state.busy || this.editor.snapshot().busy || this.locked) return false
@@ -126,7 +129,7 @@ export class ExplorerSession {
       const invoke = () => typeof action === 'boolean' ? this.workspace!.configure(action) : this.workspace![action]()
       const receive = async (): Promise<WorkspaceResult> => {
         const result = await invoke()
-        if (result.ok) { await this.adoptWorkspace(result.value); if (result.views) this.editor.restoreViews(result.views) }
+        if (result.ok) { await this.adoptWorkspace(result.value); if (result.views) this.editor.restoreViews(result.views, result.arrangement) }
         else { if (result.value) await this.adoptWorkspace(result.value); this.update({ error: result.error }) }
         completed = result.ok && !result.canceled
         return result

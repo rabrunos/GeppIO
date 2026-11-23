@@ -6,18 +6,20 @@ import { DOCUMENT_SESSION_LIMITS } from '../shared/documents.ts'
 import { exactKeys } from '../shared/plugin-data.ts'
 import { isRecord } from '../shared/plugins.ts'
 import { safeExplorerName } from './explorer.ts'
-import { validWorkspaceLanguage, validWorkspaceSelection } from '../shared/workspace.ts'
+import { validTabArrangement, validWorkspaceLanguage, validWorkspaceSelection } from '../shared/workspace.ts'
 import type { DocumentLanguage } from '../shared/document-status.ts'
-import type { WorkspaceSelection } from '../shared/workspace.ts'
+import type { TabArrangement, WorkspaceSelection } from '../shared/workspace.ts'
 
 export const WORKSPACE_RECOVERY_LIMIT = 512 * 1024
 export interface RememberedFile { names: string[]; hash: string; dirty: boolean; language: DocumentLanguage | null; selection: WorkspaceSelection }
-export interface WorkspaceRecord { schemaVersion: 1; remember: boolean; project: { path: string; chain: string } | null; files: RememberedFile[]; active: number }
+export interface WorkspaceRecord { schemaVersion: 1; remember: boolean; project: { path: string; chain: string } | null; files: RememberedFile[]; active: number; arrangement?: TabArrangement<number> }
 export const emptyWorkspaceRecord = (remember = true): WorkspaceRecord => ({ schemaVersion: 1, remember, project: null, files: [], active: -1 })
 export const workspaceMetadataError = 'Não foi possível confirmar a sessão local. Metadados incompatíveis ou alterados foram preservados. Use Esquecer recuperação para removê-los; arquivos e rascunhos abertos continuam independentes.'
 export class WorkspaceRecoveryCanceled extends Error {}
 export function parseWorkspaceRecord(value: unknown): WorkspaceRecord {
-  if (!isRecord(value) || !exactKeys(value, ['schemaVersion', 'remember', 'project', 'files', 'active']) || value.schemaVersion !== 1 || typeof value.remember !== 'boolean' || !Array.isArray(value.files) || value.files.length > DOCUMENT_SESSION_LIMITS.count || !Number.isSafeInteger(value.active) || Number(value.active) < -1 || Number(value.active) >= value.files.length) throw new Error(workspaceMetadataError)
+  const fields = ['schemaVersion', 'remember', 'project', 'files', 'active']
+  if (!isRecord(value) || !exactKeys(value, 'arrangement' in value ? [...fields, 'arrangement'] : fields) || value.schemaVersion !== 1 || typeof value.remember !== 'boolean' || !Array.isArray(value.files) || value.files.length > DOCUMENT_SESSION_LIMITS.count || !Number.isSafeInteger(value.active) || Number(value.active) < -1 || Number(value.active) >= value.files.length) throw new Error(workspaceMetadataError)
+  if ('arrangement' in value && (!value.project || !validTabArrangement(value.arrangement, value.files.map((_, index) => index)))) throw new Error(workspaceMetadataError)
   if (value.project !== null && (!isRecord(value.project) || !exactKeys(value.project, ['path', 'chain']) || typeof value.project.path !== 'string' || value.project.path.length > 8192 || [...value.project.path].some(c => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127) || !isAbsolute(value.project.path) || resolve(value.project.path) !== value.project.path || typeof value.project.chain !== 'string' || !/^[\d:/-]{1,65536}$/.test(value.project.chain))) throw new Error(workspaceMetadataError)
   if ((!value.remember || value.project === null) && (value.files.length || value.active !== -1 || value.project !== null)) throw new Error(workspaceMetadataError)
   for (const file of value.files) if (!isRecord(file) || !exactKeys(file, ['names', 'hash', 'dirty', 'language', 'selection']) || !Array.isArray(file.names) || !file.names.length || file.names.length > 32 || !file.names.every(name => typeof name === 'string' && safeExplorerName(name) && name.toLowerCase() !== '.git') || typeof file.hash !== 'string' || !/^[a-f0-9]{64}$/.test(file.hash) || typeof file.dirty !== 'boolean' || !validWorkspaceLanguage(file.language) || !validWorkspaceSelection(file.selection)) throw new Error(workspaceMetadataError)

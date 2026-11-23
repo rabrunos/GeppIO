@@ -1,3 +1,5 @@
+import type { TabArrangement } from '../../../shared/workspace.ts'
+
 export type GroupIndex = 0 | 1
 export const oppositeGroup = (group: GroupIndex): GroupIndex => group === 0 ? 1 : 0
 
@@ -10,8 +12,24 @@ export class EditorGroups {
   active: GroupIndex = 0
   split = false
   ratio = 0.5
+  readonly pinned = new Set<string>()
+  snapshot(): TabArrangement<string> {
+    return { active: this.active, split: this.split, sides: [[...this.sides[0].tabs], [...this.sides[1].tabs]],
+      selected: [this.sides[0].selected, this.sides[1].selected], pinned: [...this.pinned] }
+  }
+  restore(value: TabArrangement<string>) {
+    this.active = value.active; this.split = value.split; this.pinned.clear()
+    value.pinned.forEach(id => this.pinned.add(id))
+    for (const side of [0, 1] as const) this.sides[side] = { tabs: [...value.sides[side]], selected: value.selected[side] }
+  }
+  reorder(side: GroupIndex, id: string, index: number) {
+    const tabs = this.sides[side].tabs, from = tabs.indexOf(id)
+    if (!Number.isInteger(index) || index < 0 || index >= tabs.length || from < 0 || from === index) return false
+    tabs.splice(from, 1); tabs.splice(index, 0, id); return true
+  }
 
   sync(ids: readonly string[], selected: string | null) {
+    for (const id of this.pinned) if (!ids.includes(id)) this.pinned.delete(id)
     for (const group of this.sides) {
       group.tabs = group.tabs.filter(id => ids.includes(id))
       if (group.selected && !group.tabs.includes(group.selected)) group.selected = group.tabs[0] ?? null

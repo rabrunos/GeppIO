@@ -71,3 +71,38 @@ test('after a lost last release an unrelated native inventory retains the recove
   await session.discardDetached(b.id)
   assert.ok(!session.documentState(b.id)); assert.equal(session.snapshot().document?.id, a.id)
 })
+
+test('a pending bulk close excludes pinned duplicates and refuses concurrent editing and organization', async () => {
+  const released: string[] = []
+  let decide!: () => void
+  const answer = new Promise<void>(resolve => { decide = resolve })
+  const { session, a, b } = await fixture({ release: async draft => {
+    released.push(draft.id); await answer
+    return { ok: true, canceled: true, document: b }
+  } })
+  session.togglePin(b.id); session.sendToOtherGroup()
+  assert.equal(session.reorderTab(0, b.id, 0), true)
+  const closing = session.closeTabs('all')
+  assert.equal(session.snapshot().busy, true)
+  assert.equal(session.reorderTab(0, a.id, 0), false)
+  session.togglePin(a.id); assert.ok(!session.groups.pinned.has(a.id))
+  assert.equal(await session.closeTabs('all'), false)
+  assert.ok(!session.editExact('blocked', a.id)); decide()
+  assert.equal(await closing, false)
+  assert.deepEqual(released, [a.id]); assert.deepEqual(session.groups.sides.map(g => g.tabs), [[b.id, a.id], [b.id]])
+})
+
+test('a confirmed release counts once and stops the batch if activating the visual neighbor fails', async () => {
+  const released: string[] = []
+  const c = { id: 'c', revision: 'c1', text: 'third', name: 'c.txt', bom: false }
+  const { session, a, b } = await fixture({
+    release: async draft => { released.push(draft.id); return { ok: true, document: a, documents: [a, c] } },
+    activate: async () => ({ ok: false, code: 'stale', error: 'Vizinho indisponível.' })
+  })
+  await session.openAuthorized(async () => ({ ok: true, document: c }))
+  await session.openAuthorized(async () => ({ ok: true, document: b }))
+  session.reorderTab(0, a.id, 2)
+  assert.equal(await session.closeTabs('all'), false)
+  assert.deepEqual(released, [b.id]); assert.deepEqual(session.groups.sides[0].tabs, [c.id, a.id])
+  assert.match(session.snapshot().notice!, /1 de 3.*Vizinho indisponível/)
+})

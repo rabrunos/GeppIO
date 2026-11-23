@@ -21,7 +21,7 @@ export const ciGroups = {
     smoke('git-window'), smoke('git-window', '--scale125'), ...variants('search'),
     smoke('quick-open'), smoke('quick-open', '--scale125'),
     smoke('explorer-write'), smoke('explorer-write', '--scale125'),
-    smoke('document-reload'), smoke('document-reload', '--scale125'), ...variants('rename-open'), ...variants('document-create'), ...variants('editor-split')
+    smoke('document-reload'), smoke('document-reload', '--scale125'), ...variants('rename-open'), ...variants('document-create'), ...variants('editor-split'), ...variants('editor-tabs')
   ],
   workbench: [
     smoke('alignment'), smoke('groups'),

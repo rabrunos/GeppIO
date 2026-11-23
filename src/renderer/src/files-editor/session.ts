@@ -3,7 +3,7 @@ import type { DocumentBridge, DocumentDraft, DocumentError, DocumentResult, Docu
 import { DOCUMENT_LANGUAGES, documentLanguage } from '../../../shared/document-status.ts'
 import type { DocumentLanguage } from '../../../shared/document-status.ts'
 import { editorText } from '../../../shared/documents.ts'
-import type { WorkspaceEditor, WorkspaceSelection } from '../../../shared/workspace.ts'
+import type { TabArrangement, WorkspaceEditor, WorkspaceSelection } from '../../../shared/workspace.ts'
 import { EditorGroups, oppositeGroup } from './editor-groups.ts'
 import type { GroupIndex } from './editor-groups.ts'
 
@@ -17,6 +17,8 @@ export class EditorSession {
   readonly groups = new EditorGroups()
   private positions: [Map<string, EditorSelection>, Map<string, EditorSelection>] = [new Map(), new Map()]
   private previousGroup: GroupIndex = 0
+  private restoredArrangement: TabArrangement<string> | undefined
+  private bulkClosing = false
   focusUnconfirmed = false
   private state: EditorState = { document: null, text: '', busy: false, reloading: null, error: null, code: null, cursor: 0, language: null, diskVersion: 0, tabs: [], notice: null, invalidRoot: null, projectRoot: null, reloadWitness: undefined }
   private entries = new Map<string, EditorDocument>()
@@ -56,8 +58,10 @@ export class EditorSession {
   get dirty() { return !!this.state.document && this.state.text !== this.state.document.text }
   documentState(id: string): Readonly<EditorDocument> | undefined { return this.entries.get(id) }
   editingLocked(id: string) { return this.locked || this.state.busy && (!this.state.reloading || this.state.reloading === id) }
-  workspaceState(): WorkspaceEditor { return { active: this.state.document?.id ?? null, tabs: [...this.entries.values()].map(entry => ({ id: entry.document.id, revision: entry.document.revision, dirty: entry.text !== entry.document.text, language: entry.language, selection: { ...entry.selection } })) } }
-  restoreViews(views: { id: string; language: DocumentLanguage | null; selection: WorkspaceSelection }[]) { this.initialViews = new Map(views.map(view => [view.id, view])) }
+  workspaceState(): WorkspaceEditor { return { active: this.state.document?.id ?? null, tabs: [...this.entries.values()].map(entry => ({ id: entry.document.id, revision: entry.document.revision, dirty: entry.text !== entry.document.text, language: entry.language, selection: { ...entry.selection } })), arrangement: this.groups.snapshot() } }
+  restoreViews(views: { id: string; language: DocumentLanguage | null; selection: WorkspaceSelection }[], arrangement?: TabArrangement<string>) {
+    this.initialViews = new Map(views.map(view => [view.id, view])); this.restoredArrangement = arrangement
+  }
   setNavigationBusy(value: boolean) {
     this.navigationBusy = value
     if (!value) { for (const resolve of this.navigationWaiters) resolve(); this.navigationWaiters.clear() }
@@ -120,8 +124,8 @@ export class EditorSession {
         ...(entry.document.untitled || kind === 'saveAs' ? { destinationUncertain: true } : {}) })
     }
   }
-  private async run(action: () => Promise<DocumentResult>, kind: EditorOperation, target = this.state.document?.id, ownsNavigation = false, group?: GroupIndex): Promise<boolean> {
-    if (this.state.busy) return false
+  private async run(action: () => Promise<DocumentResult>, kind: EditorOperation, target = this.state.document?.id, ownsNavigation = false, group?: GroupIndex, withinBatch = false): Promise<boolean> {
+    if (this.state.busy && !withinBatch) return false
     if (this.focusUnconfirmed && !['activate', 'open', 'close'].includes(kind)) { this.feedback('Selecione a aba novamente para confirmar o documento ativo.'); return false }
     if (kind === 'open' && this.entries.size >= DOCUMENT_SESSION_LIMITS.count && [...this.entries.values()].some(entry => entry.releaseUncertain)) {
       this.feedback('Confira a aba cujo fechamento não foi confirmado antes de abrir outro documento.'); return false
@@ -164,7 +168,11 @@ export class EditorSession {
         const affected = failed && failed !== active ? this.entries.get(failed)?.document : undefined
         this.view(active, { diskVersion, invalidRoot, notice: affected ? (affected.label ?? affected.name) + ' — ' + result.error : result.error })
       } else {
-        const id = result.canceled || ['save', 'saveAs', 'saveAll'].includes(kind) ? active : result.document?.id
+        let id: string | null | undefined = result.canceled || ['save', 'saveAs', 'saveAll'].includes(kind) ? active : result.document?.id
+        if (this.restoredArrangement && kind === 'open' && !result.canceled) {
+          this.groups.restore(this.restoredArrangement)
+          id = this.groups.sides[this.groups.active].selected
+        }
         if (!result.canceled && group !== undefined) this.groups.active = group
         if (kind === 'release' && id && !this.groups.sides[this.groups.active].tabs.includes(id) && this.groups.sides[oppositeGroup(this.groups.active)].tabs.includes(id)) this.groups.active = oppositeGroup(this.groups.active)
         this.view(id ?? null, { diskVersion, invalidRoot, notice: invalidRoot ? 'A pasta do Explorador mudou. Reabra a pasta; as abas foram mantidas.' : null })
@@ -181,7 +189,7 @@ export class EditorSession {
       else if (target) this.change(target, { error, code: 'unavailable' })
       this.view(active, { notice: error, diskVersion: this.state.diskVersion + (mayHaveSaved ? 1 : 0) }); return false
     }
-    finally { this.update({ busy: false }) }
+    finally { if (kind === 'open') this.restoredArrangement = undefined; this.update({ busy: this.bulkClosing }) }
   }
   open = () => this.locked ? Promise.resolve() : this.run(() => this.bridge.open(this.draft()), 'open')
   create = () => this.locked ? Promise.resolve(false) : this.run(() => this.bridge.create(), 'open')
@@ -212,9 +220,9 @@ export class EditorSession {
       invalidRoot: result.invalidRoot, documents: result.documents ?? [receipt] } }
   }
   activate = (id: string) => this.locked || this.state.busy || !this.entries.has(id) ? Promise.resolve(false) : this.run(() => this.bridge.activate(id), 'activate', id)
-  async focusGroup(side: GroupIndex, id = this.groups.sides[side].selected) {
-    if (this.locked || this.state.busy || side === 1 && !this.groups.split) return false
-    if (id && !this.entries.get(id)?.detached && (id !== this.state.document?.id || this.focusUnconfirmed || this.entries.get(id)?.releaseUncertain)) return this.run(() => this.bridge.activate(id), 'activate', id, false, side)
+  async focusGroup(side: GroupIndex, id = this.groups.sides[side].selected, withinBatch = false) {
+    if (this.locked || this.state.busy && !withinBatch || side === 1 && !this.groups.split) return false
+    if (id && !this.entries.get(id)?.detached && (id !== this.state.document?.id || this.focusUnconfirmed || this.entries.get(id)?.releaseUncertain)) return this.run(() => this.bridge.activate(id), 'activate', id, false, side, withinBatch)
     this.groups.active = side; this.view(id); return true
   }
   sendToOtherGroup(move = false) {
@@ -230,15 +238,48 @@ export class EditorSession {
     if (selected && selected !== this.state.document?.id && !await this.activate(selected)) return
     this.groups.merge(); this.view(selected)
   }
-  async closeOccurrence(side: GroupIndex, id = this.groups.sides[side].selected) {
-    if (!id || this.locked || this.state.busy) return false
+  async closeOccurrence(side: GroupIndex, id = this.groups.sides[side].selected, withinBatch = false) {
+    if (!id || this.locked || this.state.busy && !withinBatch || !this.groups.sides[side].tabs.includes(id)) return false
     const other = oppositeGroup(side), group = this.groups.sides[side]
-    if (!this.groups.sides[other].tabs.includes(id)) return this.release(id)
+    if (!this.groups.sides[other].tabs.includes(id)) {
+      const index = group.tabs.indexOf(id), nearby = group.tabs[index - 1] ?? group.tabs[index + 1]
+      const wasFocused = side === this.groups.active && group.selected === id
+      const closed = await this.release(id, withinBatch)
+      if (closed && wasFocused && nearby && this.entries.has(nearby)) return this.focusGroup(side, nearby, withinBatch)
+      return closed
+    }
     if (side === this.groups.active && group.selected === id) {
       const index = group.tabs.indexOf(id), next = group.tabs[index - 1] ?? group.tabs[index + 1]
-      if (!await this.focusGroup(next ? side : other, next ?? id)) return false
+      if (!await this.focusGroup(next ? side : other, next ?? id, withinBatch)) return false
     }
     this.groups.remove(side, id); this.view(); return true
+  }
+  reorderTab(side: GroupIndex, id: string, index: number) {
+    if (this.locked || this.state.busy || !this.groups.reorder(side, id, index)) return false
+    this.view(); return true
+  }
+  togglePin(id: string) {
+    if (!this.entries.has(id) || this.locked || this.state.busy) return
+    if (this.groups.pinned.has(id)) this.groups.pinned.delete(id)
+    else this.groups.pinned.add(id)
+    this.view()
+  }
+  async closeTabs(scope: 'others' | 'group' | 'all') {
+    if (this.locked || this.state.busy || this.focusUnconfirmed) return false
+    const focused = this.groups.active, keep = this.groups.sides[focused].selected
+    const plan = ([0, 1] as const).flatMap(side => (scope === 'all' || side === focused ? this.groups.sides[side].tabs : [])
+      .filter(id => !this.groups.pinned.has(id) && (scope !== 'others' || id !== keep)).map(id => ({ side, id })))
+    this.bulkClosing = true; this.update({ busy: true })
+    let count = 0, stopped = false
+    try {
+      for (const item of plan) {
+        const completed = await this.closeOccurrence(item.side, item.id, true)
+        if (!this.groups.sides[item.side].tabs.includes(item.id)) count++
+        if (!completed || this.focusUnconfirmed) { stopped = true; break }
+      }
+      this.feedback((stopped ? 'Fechamento interrompido. ' : '') + count + ' de ' + plan.length + ' abas fechadas.' + (stopped && this.state.notice ? ' ' + this.state.notice : ''))
+      return !stopped
+    } finally { this.bulkClosing = false; this.update({ busy: false }) }
   }
   async discardDetached(id: string) {
     if (!this.entries.get(id)?.detached || this.state.busy || this.locked) return
@@ -282,9 +323,9 @@ export class EditorSession {
     } catch { return lost() }
     finally { this.update({ busy: false, reloading: null }) }
   }
-  release = (id = this.state.document?.id) => {
+  release = (id = this.state.document?.id, withinBatch = false) => {
     const entry = id ? this.entries.get(id) : undefined
-    return this.locked || !entry ? Promise.resolve() : this.run(() => this.bridge.release(this.closingDraft(this.entries.get(entry.document.id)!)), 'release', id)
+    return this.locked || !entry ? Promise.resolve() : this.run(() => this.bridge.release(this.closingDraft(this.entries.get(entry.document.id)!)), 'release', id, false, undefined, withinBatch)
   }
   close = async (ticket: string): Promise<void> => {
     if (this.state.busy) await new Promise<void>(resolve => { const stop = this.subscribe(() => { if (!this.state.busy) { stop(); resolve() } }) })

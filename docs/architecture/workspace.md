@@ -28,6 +28,12 @@ remembered identity/view data without closing files, killing the terminal or tou
 App-owned `workspace-session.v1.json` is limited to 512 KiB: version, preference, Main-only
 absolute root/ancestor identity, at most eight validated relative file names, confirmed SHA-256
 fingerprints, active index, dirty flags, language and bounded primary selection/scroll coordinates.
+The optional tab arrangement records two bounded lists of file indices, their selected indices,
+the focused group and pinned indices. Older records without this field restore one group.
+Explicit restoration maps file indices to freshly authorized documents. If a file is unavailable,
+its prior metadata remains eligible for a later restoration. If keeping both available and missing
+files exceeds eight entries, the previous record stays on disk and the close dialog reports the
+incomplete metadata save. Disabling or forgetting recovery removes the retained missing entries.
 Source, drafts, undo stacks, opaque grants, terminal output/processes and credentials are absent.
 Absolute paths are private local plaintext metadata, not a credential vault or encrypted storage.
 Only root basename/tab counts and ordinary bounded document DTOs reach the renderer.

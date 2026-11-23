@@ -165,6 +165,12 @@ needs 230 measured CSS pixels and the separator needs eight. Below this width on
 focused group is shown. Switching groups or restoring the available width retains tabs and
 the preferred divider position for the running session.
 
+Each group has a visual tab order. Dragging within its tab strip, the Organizar abas menu
+or Alt+Shift+Left/Right reorders an occurrence. A pin belongs to the document and applies
+to both groups. Bulk close visits visible occurrences in group order, skips pinned
+documents and requests native resolution only for the last occurrence. Confirmed closures
+survive a later refusal or cancellation. An individual close also works on a pinned tab.
+
 An unacknowledged activation requires another confirmed selection before a write. If a
 release acknowledgment is lost, later native inventories retain the local draft. A missing
 native grant leaves a local occurrence for copying and explicit discard. The window still
