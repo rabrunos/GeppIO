@@ -2,6 +2,10 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.72.1] — 2026-11-23
+
+- Synchronize the Workspace Tools desktop journey with the completed project close and the visible project menu before reopening it.
+
 ## [0.1.0-alpha.72] — 2026-11-23
 
 - Open or move tabs between two editor groups. Both groups can edit one shared model with independent reading positions, an adjustable divider and a recoverable narrow layout.

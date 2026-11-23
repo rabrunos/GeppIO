@@ -84,10 +84,18 @@ const experience = async (label: string) => {
 }
 async function projectAction(label: string, folder?: string) {
   if (folder) await app!.evaluate(({ dialog }, path) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }) }, folder)
-  const button = projectButton()
-  if (await button.getAttribute('aria-expanded') !== 'true') await button.click()
-  await page.getByRole('button', { name: label, exact: true }).click()
-  if (await button.getAttribute('aria-expanded') === 'true') await button.press('Escape')
+  const controls = page.locator('.workspace-controls')
+  const menu = page.getByRole('dialog', { name: 'Projeto local e recuperação', exact: true })
+  const collapsed = controls.locator('button[aria-haspopup="dialog"][aria-expanded="false"]')
+  await collapsed.waitFor()
+  await projectButton().click()
+  await menu.getByRole('button', { name: label, exact: true }).click()
+  if (label === 'Fechar projeto') {
+    await page.locator('.workspace-controls[data-workspace-root=""][aria-busy="false"]').waitFor()
+    await menu.getByRole('button', { name: 'Fechar', exact: true }).click()
+  }
+  await menu.waitFor({ state: 'hidden' })
+  await collapsed.waitFor()
 }
 async function openFromWorkbench(label: string) {
   await page.getByRole('button', { name: 'Mais opções do projeto', exact: true }).press('Enter')
