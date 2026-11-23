@@ -30,7 +30,8 @@ export const ciGroups = {
     smoke('real-presentation'), smoke('real-presentation', '--scale125'),
     smoke('shared-windows'), smoke('shared-windows', '--scale125'),
     smoke('portable-layout'), smoke('portable-layout', '--scale125'),
-    smoke('plugin-templates'), smoke('plugin-templates', '--scale125')
+    smoke('plugin-templates'), smoke('plugin-templates', '--scale125'),
+    smoke('workspace-tools'), smoke('workspace-tools', '--scale125')
   ]
 } satisfies Record<string, SmokeStep[]>
 

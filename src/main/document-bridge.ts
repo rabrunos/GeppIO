@@ -16,6 +16,8 @@ import { QuickOpenExpired, QuickOpenStore } from './quick-open.ts'
 import { validQuickOpenRequest } from '../shared/quick-open.ts'
 import { gitOperations, validGitRequest } from '../shared/git.ts'
 import { WorkspaceOwner } from './workspace.ts'
+import { readWorkspaceTools } from './workspace-tools.ts'
+import type { WorkspaceToolsResult } from '../shared/workspace-tools.ts'
 import { WorkspaceRecovery } from './workspace-recovery.ts'
 import { validWorkspaceRequest } from '../shared/workspace.ts'
 import type { WorkspaceEditor, WorkspaceResult } from '../shared/workspace.ts'
@@ -210,6 +212,15 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
     return () => !closing && !win.isDestroyed() && !win.webContents.isDestroyed() && win.webContents.mainFrame === frame && frame.url === expectedURL && documentCurrent() && directoryCurrent()
   }
   const profile = app.getPath('userData')
+  ipcMain.handle('workspace:readTools', async (event, ...args: unknown[]): Promise<WorkspaceToolsResult> => {
+    const caller = projectCaller(event), owner = workspace.guard()
+    const expired = { ok: false, expired: true, error: 'Autorização do projeto expirada.' } as const
+    if (!caller || !validWorkspaceRequest('readTools', args)) return expired
+    const current = () => caller() && owner() && workspace.status().root?.id === args[0]
+    if (!current()) return expired
+    const result = await readWorkspaceTools(workspace, current)
+    return current() ? result : expired
+  })
   const bound = (path: string) => {
     const inside = relative(profile, path)
     return (!isAbsolute(inside) && inside !== '..' && !inside.startsWith('..' + sep)) || workspace.hasFileBinding(path)
@@ -306,6 +317,7 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
     for (const operation of searchOperations) ipcMain.removeHandler(`search:${operation}`)
     for (const operation of searchOperations) ipcMain.removeHandler(`quick-open:${operation}`)
     for (const operation of workspaceOperations) ipcMain.removeHandler(`workspace:${operation}`)
+    ipcMain.removeHandler('workspace:readTools')
   })
   return workspace
 }

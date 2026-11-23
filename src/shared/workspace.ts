@@ -3,6 +3,7 @@ import type { DocumentResult } from './documents.ts'
 import { DOCUMENT_LANGUAGES } from './document-status.ts'
 import type { DocumentLanguage } from './document-status.ts'
 import type { ExplorerNode } from './explorer.ts'
+import type { WorkspaceToolsResult } from './workspace-tools.ts'
 import { exactKeys } from './plugin-data.ts'
 import { isRecord } from './plugins.ts'
 
@@ -14,6 +15,7 @@ export type WorkspaceResult = { ok: true; value: WorkspaceStatus; canceled?: boo
 /** App-only operations. No native path, source text, command or Worker facade. */
 export interface WorkspaceBridge {
   read(): Promise<WorkspaceResult>
+  readTools(root: string): Promise<WorkspaceToolsResult>
   restore(): Promise<WorkspaceResult>
   standalone(): Promise<WorkspaceResult>
   configure(remember: boolean): Promise<WorkspaceResult>
@@ -32,6 +34,7 @@ export function validWorkspaceEditor(value: unknown): value is WorkspaceEditor {
   return new Set(value.tabs.map(tab => tab.id)).size === value.tabs.length && (value.active === null || documentToken(value.active) && value.tabs.some(tab => tab.id === value.active))
 }
 export function validWorkspaceRequest(operation: string, args: readonly unknown[]): boolean {
+  if (operation === 'readTools') return args.length === 1 && documentToken(args[0])
   if (['read', 'restore', 'standalone', 'forget'].includes(operation)) return args.length === 0
   if (operation === 'configure') return args.length === 1 && typeof args[0] === 'boolean'
   return operation === 'remember' && args.length === 1 && validWorkspaceEditor(args[0])

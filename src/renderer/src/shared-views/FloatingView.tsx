@@ -15,7 +15,7 @@ interface Drag {
   handle: HTMLElement
 }
 
-export function FloatingView({ instance, title, size, children, close, closeButton, canDismissWithEscape, active, raise }: {
+export function FloatingView({ instance, title, size, children, close, closeButton, canDismissWithEscape, active, stackIndex, raise }: {
   instance: FloatingPresentation
   title: string
   size: Size
@@ -24,6 +24,7 @@ export function FloatingView({ instance, title, size, children, close, closeButt
   closeButton: Ref<HTMLButtonElement>
   canDismissWithEscape(): boolean
   active: boolean
+  stackIndex: number
   raise(): void
 }) {
   const heading = useId(), instructions = useId(), layer = useRef<HTMLDivElement>(null), frame = useRef<HTMLElement>(null)
@@ -43,8 +44,9 @@ export function FloatingView({ instance, title, size, children, close, closeButt
   }, [])
 
   const initial = area && floatingBounds(area, size, null)
-  const initialSearch = initial && instance.viewId === 'project-search' ? { x: initial.x - 70, y: initial.y + 54 } : null
-  const bounds = area && floatingBounds(area, size, position ?? initialSearch)
+  const stagger = instance.viewId === 'workspace-tools' ? 2 : instance.viewId === 'project-search' ? 1 : 0
+  const startPosition = initial && { x: initial.x - 70 * stagger, y: initial.y + 54 * stagger }
+  const bounds = area && floatingBounds(area, size, position ?? startPosition)
   function start(event: PointerEvent<HTMLElement>) {
     if (!bounds || drag.current || !event.isPrimary || event.button !== 0) return
     const handle = event.currentTarget
@@ -61,7 +63,7 @@ export function FloatingView({ instance, title, size, children, close, closeButt
     if (active.handle.hasPointerCapture(pointer)) active.handle.releasePointerCapture(pointer)
   }
 
-  return <div className="internal-view-layer" data-floating-active={active} ref={layer}>
+  return <div className="internal-view-layer" data-floating-active={active} style={{ zIndex: 100 + stackIndex }} ref={layer}>
     <section ref={frame} tabIndex={-1} role="dialog" aria-modal={false} aria-labelledby={heading}
       data-floating-view={instance.viewId} className="internal-view"
       style={bounds ? { left: bounds.x, top: bounds.y, width: bounds.width, height: bounds.height } : undefined}

@@ -54,6 +54,7 @@ import { GitComparisonDialog } from './git/GitChanges.tsx'
 import { FloatingView } from './shared-views/FloatingView.tsx'
 import { gitSharedView } from './shared-views/GitView.ts'
 import { searchSharedView } from './shared-views/SearchView.ts'
+import { WorkspaceTools } from './workspace-tools/WorkspaceTools.tsx'
 import { SHARED_VIEWS } from './shared-views/definition.ts'
 import type { SharedViewId } from './shared-views/definition.ts'
 import { focusAvailable, useFloatingWindows } from './shared-views/useFloatingWindows.ts'
@@ -108,7 +109,7 @@ function GeppIOShell({ plugins }: { plugins: ReturnType<typeof usePlugins> }) {
   const workbenchVisible = !presentation, concealed = presentation ? '' : undefined
   function windowFallback(id: SharedViewId) {
     return workbenchVisible ? projectAnchor.current : document.querySelector<HTMLButtonElement>(
-      id === gitSharedView.id ? '[data-git-window-trigger-fallback]' : '[data-search-window-trigger-fallback]')
+      id === gitSharedView.id ? '[data-git-window-trigger-fallback]' : id === searchSharedView.id ? '[data-search-window-trigger-fallback]' : '[data-tools-window-trigger-fallback]')
   }
   const windows = useFloatingWindows(windowFallback)
   const comparisonTrigger = useRef<{ button: HTMLButtonElement; fromWindow: boolean } | null>(null)
@@ -368,9 +369,10 @@ function GeppIOShell({ plugins }: { plugins: ReturnType<typeof usePlugins> }) {
       {SHARED_VIEWS.map(view => {
         const instance = windows.stack.find(item => item.viewId === view.id)
         return instance && <FloatingView key={view.id} instance={instance} title={view.title} size={view.floatingSize}
-          active={windows.active === view.id} raise={() => windows.raise(view.id)} close={() => windows.close(view.id)}
+          active={windows.active === view.id} stackIndex={windows.stack.indexOf(instance)} raise={() => windows.raise(view.id)} close={() => windows.close(view.id)}
           closeButton={windows.closeButtons[view.id]} canDismissWithEscape={() => !changingExperienceBlocked()}>
-          {view.id === gitSharedView.id ? <gitSharedView.Content session={git} compare={compareGit} /> : <searchSharedView.Content session={sessions.search} />}
+          {view.id === gitSharedView.id ? <gitSharedView.Content session={git} compare={compareGit} /> :
+            view.id === searchSharedView.id ? <searchSharedView.Content session={sessions.search} /> : <WorkspaceTools session={sessions.tools} />}
         </FloatingView>
       })}
     </div><StatusBar editor={fileSession} terminal={terminal} reveal={revealTerminal} locked={tx.editing || tx.saving} />

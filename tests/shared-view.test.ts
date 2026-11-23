@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { GIT_TYPE } from '../src/shared/git-widget.ts'
-import { closeFloatingPresentation, floatingBounds, GIT_SHARED_VIEW, openFloatingPresentation, raiseFloatingPresentation, resolveSharedView, SEARCH_SHARED_VIEW, SHARED_VIEWS } from '../src/renderer/src/shared-views/definition.ts'
+import { closeFloatingPresentation, floatingBounds, GIT_SHARED_VIEW, openFloatingPresentation, raiseFloatingPresentation, resolveSharedView, SEARCH_SHARED_VIEW, SHARED_VIEWS, TOOLS_SHARED_VIEW } from '../src/renderer/src/shared-views/definition.ts'
 import { selectSuite } from '../tools/isolation/plan.ts'
 
 test('Git is a host View with separate widget identity and two supported presentations', () => {
@@ -14,10 +14,22 @@ test('Git is a host View with separate widget identity and two supported present
 })
 
 test('Search shares its Code activity and floating window without creating a widget definition', () => {
-  assert.deepEqual(SHARED_VIEWS.map(view => view.id), ['git-changes', 'project-search'])
+  assert.deepEqual(SHARED_VIEWS.map(view => view.id), ['git-changes', 'project-search', 'workspace-tools'])
   assert.deepEqual(SEARCH_SHARED_VIEW.presentations, ['code-activity', 'floating-window'])
   for (const kind of SEARCH_SHARED_VIEW.presentations) assert.equal(resolveSharedView('project-search', kind), SEARCH_SHARED_VIEW)
   for (const kind of ['widget', 'native-window', 'constructor', null]) assert.equal(resolveSharedView('project-search', kind), null)
+})
+
+test('the report View is a single third internal window and retains both preceding instances', () => {
+  const id = TOOLS_SHARED_VIEW.id
+  assert.deepEqual(TOOLS_SHARED_VIEW.presentations, ['floating-window'])
+  for (const kind of ['widget', 'native-window', 'code-activity']) assert.equal(resolveSharedView(id, kind), null)
+  const three = SHARED_VIEWS.reduce<ReturnType<typeof openFloatingPresentation>>((stack, view) => openFloatingPresentation(stack, view.id, 'floating-window'), [])
+  assert.deepEqual(three.map(view => view.viewId), ['git-changes', 'project-search', 'workspace-tools'])
+  const raised = raiseFloatingPresentation(three, 'git-changes')
+  const again = openFloatingPresentation(raised, id, 'floating-window')
+  assert.equal(again.length, 3); assert.equal(again[0], three[1]); assert.equal(again[1], three[0]); assert.equal(again[2], three[2])
+  assert.deepEqual(closeFloatingPresentation(again, id), [three[1], three[0]])
 })
 
 test('two windows coexist; repeat open raises the existing instance, and close retains the other one', () => {

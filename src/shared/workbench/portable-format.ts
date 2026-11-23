@@ -5,6 +5,7 @@ import { FILE_EDITOR_TYPE, EXPLORER_TYPE } from '../files-editor.ts'
 import { TERMINAL_TYPE } from '../terminal-widget.ts'
 import { GIT_TYPE } from '../git-widget.ts'
 import { pluginId } from '../plugin-id.ts'
+import { assertUniqueJsonKeys } from '../json-keys.ts'
 import { CHROME_LIMITS } from './chrome.ts'
 
 const official = [FILE_EDITOR_TYPE, EXPLORER_TYPE, TERMINAL_TYPE, GIT_TYPE] as const
@@ -127,20 +128,5 @@ export function parsePortableText(text: string): PortableLayout {
   try { value = JSON.parse(text) } catch { return invalid() }
   assertUniqueJsonKeys(text)
   return parsePortableLayout(value)
-}
-/** Call only after JSON.parse accepts the bounded input. Embedded recipes use the same text rule. */
-export function assertUniqueJsonKeys(text: string): void {
-  // JSON.parse keeps only the last occurrence. A portable file must describe
-  // one unambiguous record, including when a key uses Unicode escapes.
-  const fields: Set<string>[] = []
-  for (const token of text.matchAll(/"(?:[^"\\]|\\[\s\S])*"|[{}]/g)) {
-    if (token[0] === '{') fields.push(new Set())
-    else if (token[0] === '}') fields.pop()
-    else if (/^\s*:/.test(text.slice(token.index! + token[0].length))) {
-      const key = JSON.parse(token[0]) as string, object = fields.at(-1)!
-      if (object.has(key)) return invalid()
-      object.add(key)
-    }
-  }
 }
 export const serializePortableLayout = (value: unknown): string => JSON.stringify(parsePortableLayout(value))

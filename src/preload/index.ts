@@ -74,6 +74,7 @@ const search = Object.freeze<import('../shared/search.ts').SearchBridge>({
 })
 const workspace = Object.freeze<import('../shared/workspace.ts').WorkspaceBridge>({
   read: () => ipcRenderer.invoke('workspace:read'),
+  readTools: root => ipcRenderer.invoke('workspace:readTools', root),
   restore: () => ipcRenderer.invoke('workspace:restore'),
   standalone: () => ipcRenderer.invoke('workspace:standalone'),
   configure: remember => ipcRenderer.invoke('workspace:configure', remember),

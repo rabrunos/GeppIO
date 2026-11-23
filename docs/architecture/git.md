@@ -39,7 +39,7 @@ position only while open. The Code sidebar, Workbench widget and floating window
 `GitChanges` with the Core-owned `GitSession`. Explorer and Workspace still own the root grant.
 
 Open via **Abrir Git em janela** in the Code Git activity or the Workbench project menu.
-Opening again focuses the existing instance. Git can coexist with the [Search View](search.md).
+Opening again focuses the existing instance. Git can coexist with the [Search View](search.md) and [Workspace Tools](workspace-tools.md).
 The pointer grip and keyboard Move control share the same bounds in CSS pixels and adapt
 to viewport changes. Tab leaves the window naturally. Close or Escape from within it returns focus to the opener
 or an available host control. Escape cancels an active title-bar drag first and leaves blocking

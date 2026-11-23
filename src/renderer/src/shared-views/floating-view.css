@@ -17,7 +17,6 @@
   overflow: hidden;
   -webkit-app-region: no-drag;
 }
-.internal-view-layer[data-floating-active="true"] { z-index: 101; }
 .internal-view-close { order: 1; }
 .internal-view-titlebar button[aria-pressed="true"] { outline: 2px solid var(--color-accent); }
 .internal-view-titlebar {

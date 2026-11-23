@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { FolderIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
+import { DocumentChartBarIcon, FolderIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import type { WorkbenchChrome } from '../../../shared/workbench/chrome.ts'
 import type { CoreSessions } from '../core/useCoreSessions.ts'
 import { regionViewport } from '../freeform/frame-layout.ts'
@@ -10,6 +10,7 @@ import { Explorer } from '../files-editor/Explorer.tsx'
 import { OPEN_SEARCH_WINDOW, searchSharedView } from '../shared-views/SearchView.ts'
 import { gitSharedView, OPEN_GIT_WINDOW } from '../shared-views/GitView.ts'
 import type { SharedViewId } from '../shared-views/definition.ts'
+import { OPEN_TOOLS_WINDOW, TOOLS_SHARED_VIEW } from '../shared-views/definition.ts'
 import type { CompareGit } from '../git/GitChanges.tsx'
 import { TerminalView } from '../terminal/TerminalView.tsx'
 import { QuickOpenControl } from '../quick-open/QuickOpenControl.tsx'
@@ -65,7 +66,9 @@ export function useCodePresentation(workbenchChrome: WorkbenchChrome) {
           tools: <><QuickOpenControl session={sessions.quickOpen} blocked={quickOpenBlocked} interactiveBusy={interactiveBusy} /><IconButton label="Busca no projeto" literalLabel className="sidebar-rail-button"
             data-search-window-trigger-fallback aria-pressed={activity === 'search' && regions.sidebarMode !== 'hidden'} onClick={() => selectActivity('search')}><MagnifyingGlassIcon className="icon" /></IconButton>
           <IconButton label="Alterações Git" literalLabel className="sidebar-rail-button"
-            data-git-window-trigger-fallback aria-pressed={activity === 'git' && regions.sidebarMode !== 'hidden'} onClick={() => selectActivity('git')}><BarIcon icon="git" /></IconButton></>
+            data-git-window-trigger-fallback aria-pressed={activity === 'git' && regions.sidebarMode !== 'hidden'} onClick={() => selectActivity('git')}><BarIcon icon="git" /></IconButton>
+          <IconButton label={OPEN_TOOLS_WINDOW} literalLabel className="sidebar-rail-button" aria-haspopup="dialog" data-tools-window-trigger-fallback
+            onClick={event => openWindow(TOOLS_SHARED_VIEW.id, event.currentTarget)}><DocumentChartBarIcon className="icon" /></IconButton></>
         },
         sidebar: <div className="editor-explorer-panel editor-region-panel" style={sidebar} data-sidebar-interactive
           hidden={sidebar.width <= 0 || sidebar.height <= 0} inert={regions.sidebarMode === 'hidden'}

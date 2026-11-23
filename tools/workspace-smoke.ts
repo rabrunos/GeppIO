@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { electron } from './test-electron.ts'
+import { closeWorkspaceWindow } from './workspace-close.ts'
 import type { ElectronApplication, Page } from 'playwright'
 import { mkdir, mkdtemp, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir, homedir } from 'node:os'
@@ -10,6 +11,7 @@ import { portugueseFixture, settle } from './freeform-smoke.ts'
 import { enableDeveloperMode } from './plugin-dev-support.ts'
 import { IDENTITY } from '../src/shared/identity.ts'
 import { WORKBENCH_KEY } from '../src/shared/workbench/model.ts'
+import { CHROME_LIMITS } from '../src/shared/workbench/chrome.ts'
 import type { DocumentDraft } from '../src/shared/documents.ts'
 import type { MonacoHost } from '../src/renderer/src/files-editor/monaco.ts'
 
@@ -63,7 +65,7 @@ async function openProject(path: string | null) {
   await dialogs(path); await menu(); await panel().getByRole('button', { name: /^(Abrir|Trocar) projeto$/ }).click(); await idle(); await settle(page)
 }
 async function openFile(path: string) { await dialogs(path); await page.getByRole('button', { name: 'Abrir arquivo', exact: true }).click(); await idle() }
-async function closeWindow() { const closed = app!.waitForEvent('close'); await app!.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.close()); await closed; app = undefined }
+async function closeWindow() { await closeWorkspaceWindow(app!, page); app = undefined }
 async function startTerminal(path: string, label: string) {
   await page.getByRole('button', { name: /^(Iniciar|Reiniciar) terminal$/ }).click()
   await page.waitForFunction(async () => { const result = await window.geppio!.terminal.read(null, 0); return result.ok && result.value.state.phase === 'running' })
@@ -101,7 +103,15 @@ try {
   const oldGit = await page.evaluate(root => window.geppio!.git.status(root), rootId); assert.ok(oldGit.ok && oldGit.status)
   await page.getByRole('button', { name: 'Mostrar Terminal', exact: true }).click()
   await app!.evaluate((_, path) => { process.env.PSMODULEPATH = path }, poisoned)
-  const terminalA = await startTerminal(project, 'WS_A_'), terminalLayout = await raw()
+  const terminalA = await startTerminal(project, 'WS_A_')
+  // Revealing the Terminal queues an independent Workbench save. Compare the
+  // two projects only after the requested Bottom size is durably published.
+  await page.waitForFunction(({ key, size }) => {
+    const bytes = localStorage.getItem(key)
+    const bottom = bytes && JSON.parse(bytes).organization.chrome.bottom
+    return bottom?.visible === true && bottom.size === size
+  }, { key: WORKBENCH_KEY, size: CHROME_LIMITS.bottom.max })
+  const terminalLayout = await raw()
   await assert.rejects(readFile(marker)); await openProject(other)
   assert.equal(await raw(), terminalLayout); assert.equal(await page.locator('.project-context h1').innerText(), 'project two')
   assert.equal(await page.getByRole('tab').count(), 2); assert.equal(await active(), b)

@@ -15,7 +15,15 @@ export const SEARCH_SHARED_VIEW = {
   floatingSize: { width: 410, height: 350 }
 } as const
 
-export const SHARED_VIEWS = [GIT_SHARED_VIEW, SEARCH_SHARED_VIEW] as const
+export const TOOLS_SHARED_VIEW = {
+  id: 'workspace-tools',
+  title: 'Relatórios do projeto',
+  presentations: ['floating-window'],
+  floatingSize: { width: 480, height: 400 }
+} as const
+
+export const OPEN_TOOLS_WINDOW = 'Abrir relatórios do projeto'
+export const SHARED_VIEWS = [GIT_SHARED_VIEW, SEARCH_SHARED_VIEW, TOOLS_SHARED_VIEW] as const
 export type SharedViewId = typeof SHARED_VIEWS[number]['id']
 
 export function resolveSharedView(id: unknown, presentation: unknown) {

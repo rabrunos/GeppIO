@@ -12,7 +12,7 @@ export function focusAvailable(button: HTMLButtonElement | null) {
 export function useFloatingWindows(fallback: (id: SharedViewId) => HTMLButtonElement | null) {
   const [stack, setStack] = useState<readonly FloatingPresentation[]>([])
   const [closeButtons] = useState(() => ({
-    'git-changes': createRef<HTMLButtonElement>(), 'project-search': createRef<HTMLButtonElement>()
+    'git-changes': createRef<HTMLButtonElement>(), 'project-search': createRef<HTMLButtonElement>(), 'workspace-tools': createRef<HTMLButtonElement>()
   }))
   const openers = useRef(new Map<SharedViewId, HTMLButtonElement>())
   const pendingFocus = useRef<SharedViewId | null>(null)

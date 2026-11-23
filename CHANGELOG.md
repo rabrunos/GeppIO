@@ -2,6 +2,10 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.69] — 2026-11-23
+
+- Read passive text, list and table reports from the selected workspace. Open the shared Tools window from Code or Workbench and refresh explicitly after external changes.
+
 ## [0.1.0-alpha.68] — 2026-11-23
 
 - Preview composition templates from installed plugins and save a personal copy, including while the provider is disabled.

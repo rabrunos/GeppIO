@@ -1,7 +1,8 @@
 export type { WidgetView, PluginContext, PluginInstance } from '../../sdk/plugin.d.ts'
 import type { WidgetView } from '../../sdk/plugin.d.ts'
 import { pluginId } from './plugin-id.ts'
-import { assertUniqueJsonKeys, parsePortableLayout } from './workbench/portable-format.ts'
+import { assertUniqueJsonKeys } from './json-keys.ts'
+import { parsePortableLayout } from './workbench/portable-format.ts'
 import type { PortableCompositionV1 } from './workbench/portable-format.ts'
 export { pluginId }
 

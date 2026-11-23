@@ -104,7 +104,7 @@ try {
     ['createDirectory', 'createFile', 'list', 'open', 'release', 'renameFile', 'select'], 'Only fixed selected-directory operations are exposed')
   assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.terminal).sort()), ['close', 'input', 'read', 'resize', 'start'], 'Only the five fixed app-owned terminal operations are exposed')
   assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.git).sort()), ['compare', 'history', 'historyCommit', 'historyCompare', 'historyPage', 'stage', 'status', 'unstage'], 'Only fixed operations with opaque Git identities are exposed')
-  assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.workspace).sort()), ['configure', 'forget', 'read', 'remember', 'restore', 'standalone'], 'Workspace has only fixed path-free app operations and bounded view metadata')
+  assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.workspace).sort()), ['configure', 'forget', 'read', 'readTools', 'remember', 'restore', 'standalone'], 'Workspace has only fixed path-free app operations and bounded view metadata')
   assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.windowControls).sort()), ['close', 'maximize', 'minimize'], 'Only the three owner-authorized host chrome actions are exposed')
   const nativeBoundary = await application!.evaluate(({ BrowserWindow }) => {
     const contents = BrowserWindow.getAllWindows()[0]!.webContents
