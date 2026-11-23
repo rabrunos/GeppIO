@@ -1,5 +1,36 @@
 # Plugin boundary — trusted local v1/v2 and future design
 
+## Inert composition templates (alpha.68)
+
+Manifest schema 1 accepts an optional `compositionTemplates` array on API 1 and
+API 2 packages. Each entry has a unique package-local `id` and a `composition`
+validated as the exact [portable composition format](../../src/shared/workbench/portable-format.ts).
+The array allows four entries, with the entire manifest still limited to 16 KiB.
+Earlier hosts reject the extra manifest key. Existing manifests that omit the
+field keep their prior behavior.
+
+The catalog reads accepted installation metadata. A disabled provider can
+offer templates without evaluating its entry module. External edits become
+visible only through a successful explicit reload. A package whose accepted
+snapshot is unavailable cannot supply a template for copying. This includes an
+external development folder while Developer Mode is switched off, or a folder
+whose contents no longer match the accepted version after restart. The production
+signature policy still accepts only the existing Workspace Essentials pilot.
+
+In layout edit mode, open **Composições → Modelos de plugins**. The preview shows
+the provider, version, included regions, geometry and widget availability.
+**Adicionar cópia** creates a user-owned saved composition with a new identity.
+Pending changes require the existing checkpoint and the save checks the observed
+storage revision. Provider updates, disablement and removal leave personal copies
+intact. Applying **Formato** works independently of widget availability. Applying
+**Widgets** requires compatible local models and an explicit choice where
+multiple presentations qualify.
+
+Build the Developer Mode example with `pnpm.cmd plugins:build`; its independently
+built folder is `.local/plugin-packages/composition-templates`. The
+[example manifest](../../examples/plugins/composition-templates/plugin.json)
+combines the official editor and Terminal with Workspace Essentials notes.
+
 Alpha.40 adds an essential [Terminal](terminal.md) with a Core-owned native session and shared
 xterm presentation. Its fixed native calls are app-only and absent from the Worker facade. Neither
 trusted installed plugins nor declarative widget data receive a process-spawning capability.

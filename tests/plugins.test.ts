@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PluginStore, inspectPackage } from '../src/main/plugins.ts'
 import { parseManifest, parseWidgetView, PLUGIN_LIMITS } from '../src/shared/plugins.ts'
+import { template } from './fixtures/plugin-template.ts'
 
 const manifest = { schemaVersion: 1, apiVersion: 1, id: 'test.plugin', name: 'Teste local', version: '1.0.0', entry: 'entry.js', widgets: [] }
 async function fixture(apiVersion = 1) {
@@ -20,6 +21,47 @@ test('versioned manifests reject paths, IDs, schemas, duplicate widgets and unkn
   assert.throws(() => parseWidgetView({ text: 'x', html: '<script>' }))
   assert.throws(() => parseWidgetView({ text: 'x', action: { id: '../x', label: 'X' } }))
   assert.deepEqual(parseWidgetView({ text: '<b>literal text</b>' }), { text: '<b>literal text</b>' })
+})
+test('API 1 and 2 accept up to four uniquely named inert recipes and preserve legacy manifests', () => {
+  const item = template()
+  for (const apiVersion of [1, 2]) {
+    const legacy = { ...manifest, apiVersion }
+    assert.deepEqual(parseManifest(JSON.stringify(legacy)), legacy)
+    for (const templates of [[], [item], Array.from({ length: 4 }, (_, i) => ({ ...item, id: 'template-' + i }))]) {
+      const withTemplates = { ...legacy, compositionTemplates: templates }
+      assert.deepEqual(parseManifest(JSON.stringify(withTemplates)), withTemplates)
+    }
+  }
+  const text = (items: unknown) => JSON.stringify({ ...manifest, compositionTemplates: items })
+  for (const invalid of [null, {}, [null], Array.from({ length: 5 }, (_, i) => ({ ...item, id: 'template-' + i })),
+    [item, item], [{ ...item, id: '../simple' }], [{ ...item, id: 'constructor' }], [{ ...item, id: 't'.repeat(65) }],
+    [{ composition: item.composition }], [{ id: item.id }], [{ ...item, entry: 'extra.js' }],
+    [{ ...item, composition: { ...item.composition, version: 2 } }],
+    [{ ...item, composition: { ...item.composition, path: 'source.json' } }],
+    [{ ...item, composition: { ...item.composition, views: [{ key: 'v1', ref: { model: 'local-instance' } }] } }]]) {
+    assert.throws(() => parseManifest(text(invalid)))
+  }
+  assert.throws(() => parseManifest(text([item]).replace('"name":"Formato local"', '"na\\u006de":"ambiguous","name":"Formato local"')))
+  const json = text([template('Área')]), bounded = json + ' '.repeat(PLUGIN_LIMITS.manifestBytes - Buffer.byteLength(json))
+  assert.deepEqual(parseManifest(bounded).compositionTemplates, [template('Área')])
+  assert.throws(() => parseManifest(bounded + ' '), /16 KiB/)
+})
+test('disabled legacy discovery validates recipes before entry execution and counts all raw manifest bytes', async () => {
+  const f = await fixture()
+  try {
+    const store = new PluginStore(f.installed), path = join(f.source, 'plugin.json')
+    const json = JSON.stringify({ ...manifest, compositionTemplates: [template()] })
+    await writeFile(join(f.source, 'entry.js'), 'throw new Error("disabled entry executed")')
+    await writeFile(path, '\uFEFF' + json + ' '.repeat(PLUGIN_LIMITS.manifestBytes - Buffer.byteLength(json)))
+    await assert.rejects(store.install(f.source), /16 KiB/)
+    assert.deepEqual((await store.list()).plugins, [])
+    await writeFile(path, json)
+    const installed = (await store.install(f.source)).plugins[0]!
+    assert.deepEqual(installed.manifest.compositionTemplates, [template()])
+    assert.equal(installed.enabled, false); assert.equal(installed.source, 'legacy')
+    assert.deepEqual((await new PluginStore(f.installed).list()).plugins, [installed])
+    assert.equal(store.asset('geppio://app/plugins/' + manifest.id + '/' + installed.revision + '/entry.js'), null)
+  } finally { await f.clean() }
 })
 test('install stays disabled; enable, discovery, immutable assets and restart persist; duplicate IDs fail', async () => {
   const f = await fixture()

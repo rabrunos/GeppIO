@@ -15,6 +15,8 @@ pnpm.cmd test:isolated monaco --dev
 pnpm.cmd test:isolated git
 pnpm.cmd test:isolated git-window
 pnpm.cmd test:isolated git-window --scale125
+pnpm.cmd test:isolated plugin-templates
+pnpm.cmd test:isolated plugin-templates --scale125
 pnpm.cmd test:isolated workspace
 pnpm.cmd test:isolated conpty
 pnpm.cmd test:isolation:negative

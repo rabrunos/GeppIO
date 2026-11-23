@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { PluginInventory, PluginResult } from '../../shared/plugins.ts'
-import { PluginRuntime } from './plugin-runtime.ts'
+import { disabledWidgetOwners, PluginRuntime } from './plugin-runtime.ts'
 import type { RuntimePlugin } from './plugin-runtime.ts'
 import { useLocale } from './workbench/Locale.tsx'
 import { flushPluginDrafts } from './plugin-drafts.ts'
@@ -11,11 +11,14 @@ export function usePlugins() {
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(true)
   const runtime = useRef<PluginRuntime | null>(null)
+  const accepted = useRef(inventory), published = useRef(views)
+  const unknownInventory = useRef(false)
   const locked = useRef(true)
   const pausedInputs = useRef<readonly string[]>([])
+  function acceptInventory(value: PluginInventory) { accepted.current = value; unknownInventory.current = false; setInventory(value) }
   useEffect(() => {
     let mounted = true
-    const host = new PluginRuntime(() => new Worker(new URL('./plugin-worker.ts', import.meta.url), { type: 'module' }), values => { if (mounted) setViews(values) }, undefined, window.geppio?.pluginData)
+    const host = new PluginRuntime(() => new Worker(new URL('./plugin-worker.ts', import.meta.url), { type: 'module' }), values => { if (mounted) { published.current = values; setViews(values) } }, undefined, window.geppio?.pluginData)
     runtime.current = host
     void (async () => {
       try {
@@ -23,7 +26,7 @@ export function usePlugins() {
         if (!mounted) return
         if (!result) setMessage('Gerenciamento disponível somente no aplicativo desktop.')
         else if (!result.ok) setMessage(result.error)
-        else { setInventory(result.value); await host.sync(result.value.plugins) }
+        else { acceptInventory(result.value); await host.sync(result.value.plugins) }
       } catch { if (mounted) setMessage('Não foi possível iniciar o gerenciamento de plugins.') }
       finally { if (mounted) { locked.current = false; setBusy(false) } }
     })()
@@ -35,9 +38,10 @@ export function usePlugins() {
     async function refreshInventory() {
       try {
         const actual = await window.geppio?.plugins.list()
-        if (actual?.ok && host && runtime.current === host) { setInventory(actual.value); await host.sync(actual.value.plugins) }
+        if (actual?.ok && host && runtime.current === host) { acceptInventory(actual.value); await host.sync(actual.value.plugins) }
       } catch { /* Keep the current presentation and the unresolved management feedback. */ }
     }
+    let awaitingResult = false
     locked.current = true; setBusy(true); setMessage('')
     try {
       if (prepare.length) {
@@ -45,15 +49,19 @@ export function usePlugins() {
         pausedInputs.current = prepare
         if (!ready || !await runtime.current?.prepareChange(prepare, options.discardDrafts)) { setMessage('Há edições pendentes ou falha ao salvar. Conclua a edição ou copie os rascunhos antes de descartá-los.'); return }
       }
+      awaitingResult = true
       const result = await operation()
+      awaitingResult = false
       if (runtime.current !== host) return
       if (!result.ok) {
+        unknownInventory.current = true
         setMessage(result.error)
         await refreshInventory()
       }
-      else if (result.value) { if (options.retryId) await runtime.current?.stop(options.retryId); setInventory(result.value); await runtime.current?.sync(result.value.plugins) }
+      else if (result.value) { if (options.retryId) await runtime.current?.stop(options.retryId); acceptInventory(result.value); await runtime.current?.sync(result.value.plugins) }
     } catch {
       if (runtime.current === host) {
+        if (awaitingResult) unknownInventory.current = true
         setMessage('Resultado do gerenciamento não confirmado. Confira a lista de plugins antes de tentar novamente.')
         await refreshInventory()
       }
@@ -61,7 +69,16 @@ export function usePlugins() {
     finally { if (runtime.current === host) { pausedInputs.current = []; locked.current = false; setBusy(false) } }
   }
   const bridge = window.geppio?.plugins
-  return { inventory, views, message, busy, managing: () => busy || locked.current, available: Boolean(bridge),
+  // A deferred layout write can awaken after publication but before React has
+  // rendered the new registry and availability. Its old context must decline.
+  function managing() {
+    if (busy || locked.current || accepted.current !== inventory) return true
+    if (published.current === views) return false
+    const rendered = disabledWidgetOwners(inventory.plugins, views), current = disabledWidgetOwners(inventory.plugins, published.current)
+    return rendered.size !== current.size || [...current].some(id => !rendered.has(id))
+  }
+  return { inventory, views, message, busy, managing, inventoryUnconfirmed: () => unknownInventory.current, available: Boolean(bridge),
+    refresh: () => { if (bridge) void manage(() => bridge.list()) },
     install: () => { if (bridge) void manage(() => bridge.install()) },
     installFile: () => { if (bridge) void manage(() => bridge.installFile()) },
     setDeveloperMode: (enabled: boolean) => { if (bridge) void manage(() => bridge.setDeveloperMode(enabled), enabled ? [] : inventory.plugins.filter(item => item.source === 'external' && item.enabled).map(item => item.manifest.id)) },
@@ -88,6 +105,7 @@ export function PluginSettings({ plugins }: { plugins: Plugins }) {
     <p>{t('Pastas externas executam código local confiável. Desligar o modo pausa essas fontes e mantém dados, posições e ativação desejada.')}</p>
     {plugins.inventory.developerMode && <button className="ui-button tool-button" disabled={plugins.busy || !plugins.available} onClick={plugins.install}>{t('Carregar pasta local')}</button>}
     <p role="status">{plugins.busy ? t('Processando plugins…') : t(plugins.message)}</p>
+    {plugins.inventoryUnconfirmed() && <button className="ui-button tool-button" disabled={plugins.busy} onClick={plugins.refresh}>Atualizar lista de plugins</button>}
     {plugins.inventory.errors.map(error => <div className="plugin-error" key={error}><p>{error}</p>{/^[a-z][a-z0-9.-]*:/.test(error) && <button className="ui-button tool-button" disabled={plugins.busy} onClick={() => plugins.removeInvalid(error.split(':')[0]!)}>{t('Remover instalação inválida')}</button>}</div>)}
     {!plugins.views.length && <p>{t('Nenhum plugin instalado.')}</p>}
     <ul className="plugin-list">{plugins.views.map(view => <li key={view.plugin.manifest.id} data-plugin={view.plugin.manifest.id} data-status={view.status}>

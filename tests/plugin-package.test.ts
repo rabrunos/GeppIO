@@ -9,6 +9,7 @@ import { PluginStore, inspectPackage } from '../src/main/plugins.ts'
 import { PACKAGE_DOMAIN, PACKAGE_LIMITS, PACKAGE_MAGIC, readPackageSnapshot, verifyPluginPackage } from '../src/main/plugin-package.ts'
 import { PLUGIN_TRUST } from '../src/main/plugin-trust.ts'
 import { signPluginPackage, publicIdentity } from '../tools/plugin-package.ts'
+import { template } from './fixtures/plugin-template.ts'
 
 const id = 'geppio.workspace-essentials', { privateKey } = generateKeyPairSync('ed25519')
 const trust = [{ ...publicIdentity(privateKey), pluginId: id, publisher: 'Disposable test publisher', revoked: false }] as const
@@ -86,6 +87,27 @@ test('authenticated entry set rejects unsafe paths, non-files, Windows aliases, 
   } finally { await f.clean() }
 })
 
+test('only authenticated closed templates are discovered in a disabled signed installation', async () => {
+  const f = await fixture()
+  try {
+    const entries = (items: unknown) => [...f.pkg.files].map(([path, bytes]) => ({ path, type: 'file', content:
+      (path === 'plugin.json' ? Buffer.from(JSON.stringify({ ...f.pkg.manifest, compositionTemplates: items })) : Buffer.from(bytes)).toString('base64') }))
+    const signed = raw(entries([template('Inicial')]))
+    const changed = raw(entries([template('Alterado')]))
+    signed.copy(changed, changed.length - 64, signed.length - 64)
+    assert.throws(() => verifyPluginPackage(changed, trust), /Assinatura/)
+    assert.throws(() => verifyPluginPackage(raw(entries([{ ...template(), execute: true }])), trust), /inválido/)
+    assert.throws(() => verifyPluginPackage(raw(entries([template()]), { keyId: trust[0].keyId, pluginId: 'geppio.composition-templates' }), trust), /Identidade/)
+    await writeFile(f.path, changed)
+    await assert.rejects(f.store.installSigned(f.path, yes, current), /Assinatura/)
+    assert.deepEqual((await f.store.list()).plugins, [])
+    await writeFile(f.path, signed)
+    const installed = (await f.store.installSigned(f.path, yes, current))!.plugins[0]!
+    assert.equal(installed.source, 'signed'); assert.equal(installed.enabled, false)
+    assert.deepEqual(installed.manifest.compositionTemplates, [template('Inicial')])
+    assert.deepEqual((await new PluginStore(f.managed, trust).list()).plugins, [installed])
+  } finally { await f.clean() }
+})
 test('fresh install is disabled; cancellation, denial and expired owner do not install; source changes cannot replace preview', async () => {
   const f = await fixture()
   try {

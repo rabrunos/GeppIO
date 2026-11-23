@@ -2,6 +2,10 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.68] — 2026-11-23
+
+- Preview composition templates from installed plugins and save a personal copy, including while the provider is disabled.
+
 ## [0.1.0-alpha.67] — 2026-11-23
 
 - Browse the first-parent history of the selected Git root and compare committed file contents in the shared read-only diff editor.

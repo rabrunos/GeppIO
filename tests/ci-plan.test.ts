@@ -38,7 +38,8 @@ test('CI preserves all 38 distinct alpha.48 Electron invocations and public comm
     'tools/portable-layout-smoke.ts', 'tools/portable-layout-smoke.ts --scale125',
     'tools/quick-open-smoke.ts', 'tools/quick-open-smoke.ts --scale125',
     'tools/explorer-write-smoke.ts', 'tools/explorer-write-smoke.ts --scale125',
-    'tools/document-reload-smoke.ts', 'tools/document-reload-smoke.ts --scale125'].sort(),
+    'tools/document-reload-smoke.ts', 'tools/document-reload-smoke.ts --scale125',
+    'tools/plugin-templates-smoke.ts', 'tools/plugin-templates-smoke.ts --scale125'].sort(),
     'No omission, duplicate execution or changed DPR/runtime flag. App Host and Shared View coverage are additive.')
   const publicSmokes = [
     'test:desktop', 'test:monaco', 'test:git', 'test:terminal', 'test:documents',

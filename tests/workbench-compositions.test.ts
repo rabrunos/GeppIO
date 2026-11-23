@@ -6,8 +6,50 @@ import { applyComposition, captureComposition, captureCurrentComposition, compos
 import { parseWorkbench, serializeWorkbench } from '../src/shared/workbench/codec.ts'
 import { EditHistory } from '../src/shared/workbench/history.ts'
 import { fillReservation } from '../src/shared/workbench/slots.ts'
+import { importPortableComposition, parsePortableLayout, portableDependencies, resolvePortableWidgets } from '../src/shared/workbench/portable.ts'
+import type { InstalledPlugin } from '../src/shared/plugins.ts'
+import { compositionTemplates, currentCompositionTemplate } from '../src/renderer/src/workbench/plugin-templates.ts'
 
 const registry = widgetRegistry()
+test('only accepted templates are discoverable and saved copies keep their own identity after the provider changes or disappears', () => {
+  const rect = { x: 0, y: 0, width: 350, height: 220, region: 'main' }
+  const recipe = parsePortableLayout({ kind: 'geppio-layout', version: 1, name: 'Mesa', mode: 'format-widgets',
+    scopes: ['main'], reference: { main: { width: 1000, height: 700 } }, chrome: { sidebar: { size: 280 } },
+    format: [{ ...rect, key: 's1' }], views: [{ key: 'v1', ref: { pluginId: 'missing.plugin', widgetId: 'notes' } }],
+    placements: [{ ...rect, view: 'v1', preferred: { width: rect.width, height: rect.height } }], groups: [] })
+  const provider: InstalledPlugin = { enabled: false, revision: 'installation', generation: 'accepted', source: 'external',
+    manifest: { schemaVersion: 1, apiVersion: 2, id: 'test.models', name: 'Modelos', version: '1.0.0', entry: 'entry.js',
+      widgets: [], compositionTemplates: [{ id: 'desk', composition: recipe }] } }
+  const choices = compositionTemplates([provider])
+  assert.equal(choices.length, 1); assert.equal(choices[0]!.enabled, false)
+  assert.deepEqual(compositionTemplates([{ ...provider, unavailable: 'Fonte não validada.' }]), [])
+  const preview = structuredClone(choices[0]!)
+  assert.ok(currentCompositionTemplate([provider], preview))
+  for (const next of [[], [{ ...provider, revision: 'new-installation' }], [{ ...provider, generation: 'new-generation' }],
+    [{ ...provider, enabled: true }], [{ ...provider, unavailable: 'Fonte não validada.' }]]) {
+    assert.equal(currentCompositionTemplate(next, preview), false)
+  }
+  const source = initialWorkbench(), original = structuredClone(source)
+  const first = importPortableComposition(source, preview.recipe, 'Minha mesa')
+  assert.deepEqual(source, original)
+  source.organization.compositions.push(first)
+  const second = importPortableComposition(source, preview.recipe, 'Minha mesa')
+  assert.notEqual(second.id, first.id); assert.equal(second.name, 'Minha mesa (2)')
+  assert.equal(first.system, false); assert.deepEqual(first.views, []); assert.deepEqual(first.placements, [])
+  assert.match(portableDependencies(source, registry, first, new Set())[0]!.reason!, /ausente/)
+  assert.equal(resolvePortableWidgets(source, registry, first, new Set(), {}), null)
+  assert.ok(applyComposition(source, registry, first, 'format'))
+  first.name = 'Personalizada'
+  const bytes = serializeWorkbench(source, registry)
+  recipe.name = 'Mesa revisada'
+  assert.equal(currentCompositionTemplate([provider], preview), false)
+  assert.equal(compositionTemplates([]).length, 0)
+  assert.equal(serializeWorkbench(source, registry), bytes)
+  assert.deepEqual(parseWorkbench(bytes, registry).organization.compositions[0], first)
+  assert.deepEqual(source.placements, original.placements)
+  assert.deepEqual(source.organization.favorites, original.organization.favorites)
+  assert.equal(source.organization.defaultComposition, original.organization.defaultComposition)
+})
 test('new captures always contain scoped widget associations and exact geometry, with remembered dimensions independent of visibility', () => {
   for (const sidebar of [false, true]) for (const bottom of [false, true]) {
     const source = initialWorkbench()

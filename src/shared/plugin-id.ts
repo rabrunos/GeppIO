@@ -1,0 +1,1 @@
+export function pluginId(value: unknown): value is string { return typeof value === 'string' && /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/.test(value) && value.length <= 64 && !Object.hasOwn(Object.prototype, value) && !/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/.test(value) }

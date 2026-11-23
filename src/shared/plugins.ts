@@ -1,7 +1,12 @@
 export type { WidgetView, PluginContext, PluginInstance } from '../../sdk/plugin.d.ts'
 import type { WidgetView } from '../../sdk/plugin.d.ts'
+import { pluginId } from './plugin-id.ts'
+import { assertUniqueJsonKeys, parsePortableLayout } from './workbench/portable-format.ts'
+import type { PortableCompositionV1 } from './workbench/portable-format.ts'
+export { pluginId }
 
-export const PLUGIN_LIMITS = Object.freeze({ manifestBytes: 16 * 1024, fileBytes: 512 * 1024, packageBytes: 2 * 1024 * 1024, files: 64, plugins: 32, widgets: 8, timeoutMs: 3000 })
+export const PLUGIN_LIMITS = Object.freeze({ manifestBytes: 16 * 1024, fileBytes: 512 * 1024, packageBytes: 2 * 1024 * 1024, files: 64, plugins: 32, widgets: 8, compositionTemplates: 4, timeoutMs: 3000 })
+export interface PluginCompositionTemplate { id: string; composition: PortableCompositionV1 }
 export interface PluginManifest {
   schemaVersion: 1
   apiVersion: 1 | 2
@@ -10,6 +15,7 @@ export interface PluginManifest {
   version: string
   entry: string
   widgets: { id: string; title: string; surface: 'declarative' }[]
+  compositionTemplates?: PluginCompositionTemplate[]
 }
 export interface InstalledPlugin {
   manifest: PluginManifest; enabled: boolean; revision: string
@@ -36,7 +42,6 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 function exact(value: Record<string, unknown>, keys: string[]): boolean { return Object.keys(value).every(key => keys.includes(key)) }
-export function pluginId(value: unknown): value is string { return typeof value === 'string' && /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/.test(value) && value.length <= 64 && !Object.hasOwn(Object.prototype, value) && !/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/.test(value) }
 export function packagePath(value: unknown): value is string {
   return typeof value === 'string' && value.length <= 160 && value.split('/').every(part => /^[a-zA-Z0-9_-][a-zA-Z0-9_.-]*$/.test(part) && !part.endsWith('.') && !/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(part))
 }
@@ -45,13 +50,24 @@ export function parseManifest(text: string): PluginManifest {
   if (new TextEncoder().encode(text).byteLength > PLUGIN_LIMITS.manifestBytes) throw new Error('Manifesto maior que 16 KiB.')
   let value: unknown
   try { value = JSON.parse(text) } catch (error) { throw new Error('Manifesto JSON inválido.', { cause: error }) }
-  if (!isRecord(value) || !exact(value, ['schemaVersion', 'apiVersion', 'id', 'name', 'version', 'entry', 'widgets']) || value.schemaVersion !== 1 || ![1, 2].includes(value.apiVersion as number) || !pluginId(value.id) || !boundedText(value.name, 80)
+  if (!isRecord(value) || !exact(value, ['schemaVersion', 'apiVersion', 'id', 'name', 'version', 'entry', 'widgets', 'compositionTemplates']) || value.schemaVersion !== 1 || ![1, 2].includes(value.apiVersion as number) || !pluginId(value.id) || !boundedText(value.name, 80)
     || !boundedText(value.version, 64) || !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[a-zA-Z-][a-zA-Z0-9-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][a-zA-Z0-9-]*))*)?(?:\+[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*)?$/.test(value.version)
     || !packagePath(value.entry) || !value.entry.endsWith('.js') || !Array.isArray(value.widgets) || value.widgets.length > PLUGIN_LIMITS.widgets) throw new Error('Manifesto inválido ou API incompatível.')
   const ids = new Set<string>()
   for (const widget of value.widgets) {
     if (!isRecord(widget) || !exact(widget, ['id', 'title', 'surface']) || !pluginId(widget.id) || !boundedText(widget.title, 80) || widget.surface !== 'declarative' || ids.has(widget.id)) throw new Error('Contribuição de widget inválida ou duplicada.')
     ids.add(widget.id)
+  }
+  if (Object.hasOwn(value, 'compositionTemplates')) {
+    assertUniqueJsonKeys(text)
+    const templates = value.compositionTemplates
+    if (!Array.isArray(templates) || templates.length > PLUGIN_LIMITS.compositionTemplates) throw new Error('Lista de modelos de composição inválida ou acima do limite.')
+    const templateIds = new Set<string>()
+    value.compositionTemplates = templates.map((item: unknown): PluginCompositionTemplate => {
+      if (!isRecord(item) || !exact(item, ['id', 'composition']) || !pluginId(item.id) || templateIds.has(item.id)) throw new Error('Modelo de composição inválido ou duplicado.')
+      templateIds.add(item.id)
+      return { id: item.id, composition: parsePortableLayout(item.composition) }
+    })
   }
   return value as unknown as PluginManifest
 }

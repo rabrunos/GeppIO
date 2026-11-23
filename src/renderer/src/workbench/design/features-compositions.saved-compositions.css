@@ -511,3 +511,18 @@
   }
 }
 /* @endsection */
+.plugin-template-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.plugin-template-list .workspace-command {
+  display: grid;
+  width: 100%;
+  gap: 2px;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.plugin-template-list small {
+  color: var(--color-text-muted);
+}

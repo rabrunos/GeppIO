@@ -41,6 +41,7 @@ export function validatePackageFiles(files: Map<string, Uint8Array>): Package {
   }
   const bytes = files.get('plugin.json')
   if (!bytes) throw new Error('plugin.json não encontrado.')
+  if (bytes.length > PLUGIN_LIMITS.manifestBytes) throw new Error('Manifesto maior que 16 KiB.')
   const manifest = parseManifest(decoder.decode(bytes))
   if (!files.has(manifest.entry)) throw new Error('Módulo de entrada não encontrado.')
   return { manifest, files }

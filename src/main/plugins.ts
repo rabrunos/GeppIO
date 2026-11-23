@@ -28,6 +28,12 @@ const STATE_BYTES = 1024 * 1024
 const uuid = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9-]{36}$/.test(value)
 const externalPath = (value: unknown): value is string => typeof value === 'string' && isAbsolute(value) && value.length <= 4096 && !Array.from(value).some(character => character.charCodeAt(0) < 32)
 const digest = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value)
+/** Offline metadata preserves existing widget placements. Recipes come only from accepted package bytes. */
+function recoveryManifest(manifest: PluginManifest): PluginManifest {
+  const recovery = { ...manifest }
+  delete recovery.compositionTemplates
+  return recovery
+}
 /** Bind names, lengths and all bytes, independently of directory ordering or mtime. */
 export function packageDigest(pkg: Package): string {
   const hash = createHash('sha256').update('GeppIO external snapshot\0v1\0')
@@ -151,7 +157,7 @@ export class PluginStore {
           const manifest = parseManifest(JSON.stringify(ext.manifest))
           if (manifest.id !== id) throw new Error('Identidade externa inválida.')
           const ids = new Set<string>()
-          for (const widget of ext.widgets) { parseManifest(JSON.stringify({ ...manifest, widgets: [widget] })); if (ids.has(widget.id)) throw new Error('Histórico de widgets inválido.'); ids.add(widget.id) }
+          for (const widget of ext.widgets) { parseManifest(JSON.stringify({ ...recoveryManifest(manifest), widgets: [widget] })); if (ids.has(widget.id)) throw new Error('Histórico de widgets inválido.'); ids.add(widget.id) }
           if (manifest.widgets.some(widget => !ids.has(widget.id))) throw new Error('Histórico de widgets incompleto.')
         }
       }
@@ -196,7 +202,8 @@ export class PluginStore {
           }
           const paused = !this.state.developerMode
           if (cached && !unavailable) snapshots.set(id, cached.pkg)
-          plugins.push({ manifest: ext.manifest, revision: item.revision, enabled: item.enabled && !paused && !unavailable, desiredEnabled: item.enabled, generation: ext.generation, source: 'external', ...(unavailable ? { unavailable } : paused ? { unavailable: 'Pausado: ative Modo desenvolvedor para verificar e retomar a fonte aceita.' } : {}), recoveryWidgets: ext.widgets.filter(widget => !ext.manifest.widgets.some(current => current.id === widget.id)) })
+          const manifest = cached && !paused && !unavailable ? cached.pkg.manifest : recoveryManifest(ext.manifest)
+          plugins.push({ manifest, revision: item.revision, enabled: item.enabled && !paused && !unavailable, desiredEnabled: item.enabled, generation: ext.generation, source: 'external', ...(unavailable ? { unavailable } : paused ? { unavailable: 'Pausado: ative Modo desenvolvedor para verificar e retomar a fonte aceita.' } : {}), recoveryWidgets: ext.widgets.filter(widget => !manifest.widgets.some(current => current.id === widget.id)) })
           continue
         }
         // Signed preferences never fall back to a legacy directory, including after corruption.
@@ -256,7 +263,7 @@ export class PluginStore {
       if (this.state.plugins[id] || (names.includes(id) && !this.state.retained?.includes(id))) throw new Error('Já existe uma instalação conflitante com esse ID.')
       if (new Set([...names, ...Object.keys(this.state.plugins), id]).size > PLUGIN_LIMITS.plugins) throw new Error('Limite de 32 plugins atingido.')
       const revision = randomUUID(), generation = randomUUID()
-      const external = { path, manifest: pkg.manifest, widgets: pkg.manifest.widgets, sha256: packageDigest(pkg), generation }
+      const external = { path, manifest: recoveryManifest(pkg.manifest), widgets: pkg.manifest.widgets, sha256: packageDigest(pkg), generation }
       await this.commitExternal({ ...this.state, plugins: { ...this.state.plugins, [id]: { enabled: false, revision, external } } }, expected, currentOwner)
       this.externalSnapshots.set(id, { generation, pkg })
       return this.inventory()
@@ -274,7 +281,7 @@ export class PluginStore {
         if (legacy.manifest.id !== id || pkg.manifest.id !== id || packageDigest(legacy) !== sha256 || packageDigest(await inspectPackage(path)) !== sha256) throw new Error('A pasta original deve ter o mesmo ID e todos os arquivos/bytes da cópia gerenciada. Dados preservados.')
       }
       await equivalent()
-      const external = { path, manifest: pkg.manifest, widgets: pkg.manifest.widgets, sha256, generation: previous.revision }
+      const external = { path, manifest: recoveryManifest(pkg.manifest), widgets: pkg.manifest.widgets, sha256, generation: previous.revision }
       await this.commitExternal({ ...this.state, plugins: { ...this.state.plugins, [id]: { ...previous, external } } }, expected, currentOwner)
       this.externalSnapshots.set(id, { generation: external.generation, pkg })
       return this.inventory()
@@ -289,7 +296,7 @@ export class PluginStore {
       if (pkg.manifest.id !== id) throw new Error('A pasta recompilada deve manter o ID do plugin. Código anterior preservado.')
       const widgets = [...new Map([...previous.external.widgets, ...pkg.manifest.widgets].map(widget => [widget.id, widget])).values()]
       if (widgets.length > 64) throw new Error('Limite de 64 identidades históricas de widgets atingido. Referências preservadas.')
-      const external = { ...previous.external, sha256: packageDigest(pkg), generation: randomUUID(), manifest: pkg.manifest, widgets }
+      const external = { ...previous.external, sha256: packageDigest(pkg), generation: randomUUID(), manifest: recoveryManifest(pkg.manifest), widgets }
       await this.commitExternal({ ...this.state, plugins: { ...this.state.plugins, [id]: { ...previous, external } } }, expected, currentOwner)
       // This boundary is deliberately after the state rename. Rejections leave the old Worker/token live.
       this.revokePlugin(id)

@@ -11,6 +11,7 @@ import { initialWorkbench, widgetRegistry } from '../src/shared/workbench/model.
 import { addWidget } from '../src/shared/workbench/commands.ts'
 import { parseWorkbench, serializeWorkbench } from '../src/shared/workbench/codec.ts'
 import { initialWorkbench as demoWorkbench, widgetRegistry as demoRegistry } from './fixtures/workbench.ts'
+import { template } from './fixtures/plugin-template.ts'
 
 const id = 'geppio.workspace-essentials', doc = { schemaVersion: 1 as const, value: { confirmed: 'retain exactly' } }
 async function fixture(apiVersion = 2) {
@@ -38,6 +39,41 @@ test('mode defaults off and Main gates source operations; fresh source is disabl
     assert.equal(f.store.asset(asset(installed.generation!)), null)
     await assert.rejects(f.store.loadExternal(f.source), /conflitante/)
     await f.store.setEnabled(id, true); assert.ok(f.store.asset(asset(installed.generation!)))
+  } finally { await f.clean() }
+})
+test('disabled external templates follow accepted bytes across rejection, explicit reload, pause and restart', async () => {
+  const f = await fixture()
+  try {
+    const path = join(f.source, 'plugin.json'), state = join(f.managed, 'state.json')
+    const writeTemplates = (compositionTemplates: unknown) => writeFile(path, JSON.stringify({ ...f.manifest, widgets: [], compositionTemplates }))
+    await writeFile(join(f.source, 'entry.js'), 'throw new Error("disabled template provider executed")')
+    await writeTemplates([template('Inicial')])
+    await f.store.setDeveloperMode(true)
+    const first = (await f.store.loadExternal(f.source)).plugins[0]!, saved = await readFile(state)
+    assert.deepEqual(first.manifest.compositionTemplates, [template('Inicial')])
+    assert.equal(first.enabled, false); assert.equal(first.unavailable, undefined)
+    assert.equal(f.store.asset(asset(first.generation!)), null)
+    await assert.rejects(f.store.beginData(1, id, first.revision, first.generation))
+    assert.deepEqual((await new PluginStore(f.managed).list()).plugins, [first])
+
+    await writeTemplates([template('Rascunho'), template('Repetido')])
+    await assert.rejects(f.store.reload(id), /duplicado/)
+    assert.deepEqual(await readFile(state), saved)
+    assert.deepEqual((await f.store.list()).plugins, [first])
+    await writeTemplates([template('Revisado')])
+    assert.deepEqual((await f.store.list()).plugins, [first])
+    const changed = (await new PluginStore(f.managed).list()).plugins[0]!
+    assert.ok(changed.unavailable); assert.equal(changed.manifest.compositionTemplates, undefined)
+    assert.equal(changed.generation, first.generation)
+
+    const second = (await f.store.reload(id)).plugins[0]!
+    assert.equal(second.revision, first.revision); assert.notEqual(second.generation, first.generation)
+    assert.equal(second.enabled, false); assert.deepEqual(second.manifest.compositionTemplates, [template('Revisado')])
+    assert.equal(f.store.asset(asset(second.generation!)), null)
+    await f.store.setDeveloperMode(false)
+    const restarted = new PluginStore(f.managed), paused = (await restarted.list()).plugins[0]!
+    assert.ok(paused.unavailable); assert.equal(paused.manifest.compositionTemplates, undefined)
+    assert.deepEqual((await restarted.setDeveloperMode(true)).plugins, [second])
   } finally { await f.clean() }
 })
 test('explicit reload alone accepts changed bytes, rotates code not data, revokes stale/queued channels and preserves rejected snapshot', async () => {

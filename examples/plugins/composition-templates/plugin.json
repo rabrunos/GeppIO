@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "apiVersion": 1,
+  "id": "local.composition-templates",
+  "name": "Modelos de composição",
+  "version": "1.0.0",
+  "entry": "entry.js",
+  "widgets": [],
+  "compositionTemplates": [
+    {
+      "id": "study",
+      "composition": {
+        "kind": "geppio-layout",
+        "version": 1,
+        "name": "Edição com anotações",
+        "mode": "format-widgets",
+        "scopes": ["main", "bottom"],
+        "reference": { "main": { "width": 1000, "height": 540 }, "bottom": { "width": 1000, "height": 240 } },
+        "chrome": { "sidebar": { "size": 280 }, "bottom": { "size": 240 } },
+        "format": [
+          { "key": "s1", "region": "main", "x": 0, "y": 0, "width": 610, "height": 500 },
+          { "key": "s2", "region": "main", "x": 626, "y": 0, "width": 360, "height": 500 },
+          { "key": "s3", "region": "bottom", "x": 0, "y": 0, "width": 986, "height": 240 }
+        ],
+        "views": [
+          { "key": "v1", "ref": { "host": "host:file-editor" } },
+          { "key": "v2", "ref": { "pluginId": "geppio.workspace-essentials", "widgetId": "notes" } },
+          { "key": "v3", "ref": { "host": "host:terminal" } }
+        ],
+        "placements": [
+          { "view": "v1", "region": "main", "x": 0, "y": 0, "width": 610, "height": 500, "preferred": { "width": 610, "height": 500 } },
+          { "view": "v2", "region": "main", "x": 626, "y": 0, "width": 360, "height": 500, "preferred": { "width": 360, "height": 500 } },
+          { "view": "v3", "region": "bottom", "x": 0, "y": 0, "width": 986, "height": 240, "preferred": { "width": 986, "height": 240 } }
+        ],
+        "groups": []
+      }
+    }
+  ]
+}
