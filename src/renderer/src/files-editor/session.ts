@@ -1,12 +1,12 @@
 import { applyEditorText, DOCUMENT_LIMIT, DOCUMENT_SESSION_LIMITS, wellFormedText } from '../../../shared/documents.ts'
 import type { DocumentBridge, DocumentDraft, DocumentError, DocumentResult, DocumentSnapshot } from '../../../shared/documents.ts'
-import { DOCUMENT_LANGUAGES } from '../../../shared/document-status.ts'
+import { DOCUMENT_LANGUAGES, documentLanguage } from '../../../shared/document-status.ts'
 import type { DocumentLanguage } from '../../../shared/document-status.ts'
 import { editorText } from '../../../shared/documents.ts'
 import type { WorkspaceEditor, WorkspaceSelection } from '../../../shared/workspace.ts'
 
 export interface EditorSelection { start: number; end: number; top: number; left: number }
-export interface EditorDocument { document: DocumentSnapshot; text: string; cursor: number; language: DocumentLanguage | null; selection: EditorSelection; error: string | null; code: DocumentError | null; bytes: number; unresolved: boolean; historyVersion: number }
+export interface EditorDocument { document: DocumentSnapshot; text: string; cursor: number; language: DocumentLanguage | null; selection: EditorSelection; error: string | null; code: DocumentError | null; bytes: number; unresolved: boolean; renameUncertain?: boolean; historyVersion: number }
 export interface EditorState { document: DocumentSnapshot | null; text: string; busy: boolean; reloading: string | null; error: string | null; code: DocumentError | null; cursor: number; language: DocumentLanguage | null; diskVersion: number; tabs: readonly EditorDocument[]; notice: string | null; invalidRoot: string | null; projectRoot: string | null; reloadWitness: DocumentSnapshot['location'] }
 const emptySelection = (): EditorSelection => ({ start: 0, end: 0, top: 0, left: 0 })
 /** One bounded registry of drafts, each backed by its own native grant/revision. */
@@ -47,7 +47,10 @@ export class EditorSession {
     if (!value) { for (const resolve of this.navigationWaiters) resolve(); this.navigationWaiters.clear() }
   }
   private draft(): DocumentDraft | null { return this.state.document ? { id: this.state.document.id, revision: this.state.document.revision, text: this.state.text } : null }
-  drafts(): DocumentDraft[] { return [...this.entries.values()].map(value => ({ id: value.document.id, revision: value.document.revision, text: value.text })) }
+  private closingDraft(entry: EditorDocument): DocumentDraft {
+    return { id: entry.document.id, revision: entry.document.revision, text: entry.text, ...(entry.renameUncertain ? { discardOnly: true } : {}) }
+  }
+  drafts(): DocumentDraft[] { return [...this.entries.values()].map(entry => this.closingDraft(entry)) }
   edit(value: string) {
     return this.accept(applyEditorText(this.state.text, value))
   }
@@ -68,6 +71,17 @@ export class EditorSession {
     return true
   }
   feedback(notice: string) { this.update({ notice }) }
+  renamed(id: string, revision: string, document?: DocumentSnapshot) {
+    const entry = this.entries.get(id)
+    if (!entry || entry.document.revision !== revision) return
+    if (document?.id === id && document.revision !== revision) {
+      this.change(id, { document, language: entry.language ?? documentLanguage(entry.document.name), error: null, code: null })
+    } else {
+      this.change(id, { unresolved: true, renameUncertain: true, code: 'unconfirmed',
+        error: 'Renomeação não confirmada. Copie o rascunho desejado e use Recarregar do disco para conferir o vínculo antes de salvar.' })
+    }
+    this.view()
+  }
   private merge(document: DocumentSnapshot, saved = false) {
     const previous = this.entries.get(document.id)
     // Ordinary inventory/activation can describe a reload whose reply was lost.
@@ -84,6 +98,7 @@ export class EditorSession {
     this.update({ busy: true, notice: null })
     try {
       if (this.navigationBusy && !ownsNavigation) await new Promise<void>(resolve => this.navigationWaiters.add(resolve))
+      if (kind === 'save' && target && this.entries.get(target)?.renameUncertain) return false
       const result = await action()
       const snapshots = result.documents ?? (result.ok ? result.document ? [result.document] : [] : result.confirmed ? [result.confirmed] : [])
       for (const document of snapshots) this.merge(document, kind === 'save' && target === document.id && result.ok && !result.canceled)
@@ -168,7 +183,7 @@ export class EditorSession {
       if (!current() || !document || document.id !== draft.id || this.locked) return lost()
       const previous = this.entries.get(draft.id)!, length = editorText(document.text).length
       const selection = { ...previous.selection, start: Math.min(previous.selection.start, length), end: Math.min(previous.selection.end, length) }
-      this.change(draft.id, { document, text: document.text, bytes: new TextEncoder().encode(document.text).length + (document.bom ? 3 : 0),
+      this.change(draft.id, { document, renameUncertain: false, text: document.text, bytes: new TextEncoder().encode(document.text).length + (document.bom ? 3 : 0),
         selection, cursor: selection.end, historyVersion: previous.historyVersion + (editorText(previous.text) === editorText(document.text) ? 0 : 1), error: null, code: null, unresolved: false })
       this.view(draft.id, { notice: 'Arquivo recarregado do disco.', invalidRoot: result.invalidRoot ?? this.state.invalidRoot, ...witness(document) })
       return true
@@ -177,7 +192,7 @@ export class EditorSession {
   }
   release = (id = this.state.document?.id) => {
     const entry = id ? this.entries.get(id) : undefined
-    return this.locked || !entry ? Promise.resolve() : this.run(() => this.bridge.release({ id: entry.document.id, revision: entry.document.revision, text: entry.text }), 'release', id)
+    return this.locked || !entry ? Promise.resolve() : this.run(() => this.bridge.release(this.closingDraft(this.entries.get(entry.document.id)!)), 'release', id)
   }
   close = async (ticket: string): Promise<void> => {
     if (this.state.busy) await new Promise<void>(resolve => { const stop = this.subscribe(() => { if (!this.state.busy) { stop(); resolve() } }) })

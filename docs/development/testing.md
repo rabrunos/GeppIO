@@ -386,6 +386,14 @@ bytes, and retains the existing Monaco model, Worker and PTY. The focused
 and covers uncertainty after submission. The session tests exercise refresh, open and tab-limit
 failures after native confirmation.
 
+`pnpm.cmd test:isolated rename-open` and its `--scale125` and `--dev` variants click
+`teste.js` in a disposable project, rename a clean and a dirty tab, exercise F2, cancel,
+collision, undo, save, and a dropped acknowledgment. The smoke asserts the Monaco model,
+selection, language and saved BOM/mixed-EOL bytes. For a manual check use a disposable
+project in a test profile whose path begins with `geppio-smoke-` directly below the lexical
+Node temporary directory. Click a file, edit it, choose **Renomear** and verify its disk
+contents change only when you explicitly save the draft.
+
 `pnpm.cmd test:isolated document-reload` and `document-reload --scale125` drive the
 active-tab reload button in the built editor. The Electron fixture checks native dialog
 options and supplies the Cancel or discard response. It also drops one response after Main

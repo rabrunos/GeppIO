@@ -186,6 +186,13 @@ for each dirty target. Cancel/failed Save keeps the app and drafts. Opening anot
 prompts to save the existing tab; picker cancellation changes nothing. After a conflict the
 user can copy the draft and explicitly reload or close and reopen the file.
 
+The [open-file rename transaction](explorer.md#creating-and-renaming-items) keeps the same
+document ID, advances the native revision and leaves saved bytes and draft text distinct.
+The previous revision can reconcile through explicit reload after a lost acknowledgment.
+When the move itself is uncertain, Main reserves both paths, withholds the recovery path and
+requires the original file identity under the original ancestor chain. A renderer that lost
+a reply restricts its closing draft to explicit discard or cancellation.
+
 References: [Electron security](https://www.electronjs.org/docs/latest/tutorial/security),
 [Node 24 filesystem](https://nodejs.org/docs/latest-v24.x/api/fs.html),
 [Windows MoveFileEx](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-movefileexw),

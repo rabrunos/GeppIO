@@ -6,6 +6,7 @@ import { tmpdir, homedir } from 'node:os'
 import { join } from 'node:path'
 import { DocumentStore } from '../src/main/documents.ts'
 import { DirectoryStore } from '../src/main/explorer.ts'
+import { mutateExplorer } from '../src/main/explorer-write.ts'
 import { WorkspaceOwner } from '../src/main/workspace.ts'
 import { WorkspaceRecovery, WORKSPACE_RECOVERY_LIMIT, emptyWorkspaceRecord, parseWorkspaceRecord } from '../src/main/workspace-recovery.ts'
 import { validWorkspaceEditor, validWorkspaceRequest } from '../src/shared/workspace.ts'
@@ -40,6 +41,26 @@ test('an Explorer rename refuses both live file grants and files the current rec
   assert.ok(workspace.hasFileBinding(a))
   await workspace.persist(current)
   assert.equal(workspace.hasFileBinding(a), false)
+}))
+
+test('an immediate open rename persists the new name and current unsaved view before the debounce', async () => fixture(async ({ project, profile, a }) => {
+  const workspace = owner(profile)
+  await workspace.opened(project, current); const document = await selected(workspace, a)
+  await workspace.remember(editor(workspace, false), current)
+  const root = workspace.directories.snapshot!.id, listing = await workspace.directories.list(root, root, current)
+  assert.ok(listing.ok)
+  const node = listing.children!.find(node => node.name === 'one.ts')!, view = editor(workspace, true).tabs[0]!
+  const result = await mutateExplorer(workspace.directories, 'rename-file', root, node.id, 'next.js', current, path => workspace.hasFileBinding(path), {
+    openFile: { store: workspace.documents, binding: document },
+    move: async (from, to, authorize, _current, sent) => { await authorize(); sent?.(); await rename(from, to); return 'moved' }
+  })
+  assert.ok(result.outcome === 'confirmed' && result.renamed)
+  workspace.rememberRenamedView(view, result.renamed.revision); await workspace.persist(current)
+  assert.equal(workspace.hasFileBinding(a), false)
+  const again = owner(profile); await again.read()
+  const [saved] = again.recovery.snapshot.record.files
+  assert.deepEqual(saved?.names, ['next.js']); assert.equal(saved?.dirty, true)
+  assert.deepEqual(saved?.selection, view.selection); assert.equal(saved?.language, view.language)
 }))
 
 test('Workspace protocol accepts only bounded metadata and fixed operations; never native paths or source', () => {

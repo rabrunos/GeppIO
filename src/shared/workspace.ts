@@ -28,9 +28,12 @@ export function validWorkspaceSelection(value: unknown): value is WorkspaceSelec
     && ['top', 'left'].every(key => typeof value[key] === 'number' && Number.isFinite(value[key]) && value[key] >= 0 && value[key] <= 10_000_000)
 }
 export const validWorkspaceLanguage = (value: unknown): value is DocumentLanguage | null => value === null || DOCUMENT_LANGUAGES.includes(value as DocumentLanguage)
+export function validWorkspaceView(tab: unknown): tab is WorkspaceView {
+  return isRecord(tab) && exactKeys(tab, ['id', 'revision', 'dirty', 'language', 'selection']) && documentToken(tab.id) && documentToken(tab.revision) && typeof tab.dirty === 'boolean' && validWorkspaceLanguage(tab.language) && validWorkspaceSelection(tab.selection)
+}
 export function validWorkspaceEditor(value: unknown): value is WorkspaceEditor {
   if (!isRecord(value) || !exactKeys(value, ['active', 'tabs']) || !Array.isArray(value.tabs) || value.tabs.length > DOCUMENT_SESSION_LIMITS.count) return false
-  if (!value.tabs.every(tab => isRecord(tab) && exactKeys(tab, ['id', 'revision', 'dirty', 'language', 'selection']) && documentToken(tab.id) && documentToken(tab.revision) && typeof tab.dirty === 'boolean' && validWorkspaceLanguage(tab.language) && validWorkspaceSelection(tab.selection))) return false
+  if (!value.tabs.every(validWorkspaceView)) return false
   return new Set(value.tabs.map(tab => tab.id)).size === value.tabs.length && (value.active === null || documentToken(value.active) && value.tabs.some(tab => tab.id === value.active))
 }
 export function validWorkspaceRequest(operation: string, args: readonly unknown[]): boolean {

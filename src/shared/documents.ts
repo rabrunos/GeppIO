@@ -2,7 +2,7 @@
 export const DOCUMENT_LIMIT = 1024 * 1024
 export const DOCUMENT_SESSION_LIMITS = { count: 8, bytes: 8 * DOCUMENT_LIMIT } as const
 export interface DocumentSnapshot { id: string; revision: string; name: string; text: string; bom: boolean; label?: string; location?: { root: string; names: string[]; caseInsensitive?: boolean } }
-export interface DocumentDraft { id: string; revision: string; text: string }
+export interface DocumentDraft { id: string; revision: string; text: string; discardOnly?: true }
 export type DocumentError = 'invalid' | 'stale' | 'busy' | 'unsupported' | 'oversized' | 'limit' | 'unavailable' | 'conflict' | 'write' | 'unconfirmed'
 export type DocumentResult = ({ ok: true; document: DocumentSnapshot | null; canceled?: boolean } | { ok: false; code: DocumentError; error: string; confirmed?: DocumentSnapshot; failed?: string }) & { documents?: DocumentSnapshot[]; invalidRoot?: string }
 export interface DocumentBridge {
@@ -16,17 +16,18 @@ export interface DocumentBridge {
 }
 export const documentToken = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(value)
 export const wellFormedText = (value: string) => !/[\ud800-\udfff]/u.test(value)
-export function validDraft(value: unknown): value is DocumentDraft {
+export function validDraft(value: unknown, closing = false): value is DocumentDraft {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
   const draft = value as DocumentDraft
-  return Object.keys(draft).sort().join(',') === 'id,revision,text' && documentToken(draft.id) && documentToken(draft.revision)
+  const keys = Object.keys(draft).sort().join(',')
+  return (keys === 'id,revision,text' || closing && keys === 'discardOnly,id,revision,text' && draft.discardOnly === true) && documentToken(draft.id) && documentToken(draft.revision)
     && typeof draft.text === 'string' && draft.text.length <= DOCUMENT_LIMIT && wellFormedText(draft.text)
 }
 export function validDocumentRequest(operation: string, args: readonly unknown[]): boolean {
   if (operation === 'reload') return args.length === 2 && validDraft(args[0]) && typeof args[1] === 'boolean'
   if (operation === 'activate') return args.length === 1 && documentToken(args[0])
-  if (operation === 'close') return args.length === 2 && documentToken(args[0]) && (args[1] === null || validDraft(args[1]) || Array.isArray(args[1]) && args[1].length <= DOCUMENT_SESSION_LIMITS.count && args[1].every(validDraft) && new Set(args[1].map(value => value.id)).size === args[1].length)
-  return args.length === 1 && (operation === 'open' && args[0] === null || ['open', 'save', 'release'].includes(operation) && validDraft(args[0]))
+  if (operation === 'close') return args.length === 2 && documentToken(args[0]) && (args[1] === null || validDraft(args[1], true) || Array.isArray(args[1]) && args[1].length <= DOCUMENT_SESSION_LIMITS.count && args[1].every(value => validDraft(value, true)) && new Set(args[1].map(value => value.id)).size === args[1].length)
+  return args.length === 1 && (operation === 'open' && args[0] === null || ['open', 'save', 'release'].includes(operation) && validDraft(args[0], operation === 'release'))
 }
 export const editorText = (text: string) => text.replace(/\r\n?/g, '\n')
 /** LF-normalized display text. Preserve exact bytes in unchanged spans, including mixed EOLs. */

@@ -2,6 +2,10 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.70] — 2026-11-23
+
+- Rename an open file from the Explorer or with F2. The editor keeps its draft, undo history, language and view. Save uses the confirmed new name. An uncertain move requires reconciliation.
+
 ## [0.1.0-alpha.69.1] — 2026-11-23
 
 - Preserve the Windows temporary directory spelling when launching the Workspace Tools smoke with a disposable profile.

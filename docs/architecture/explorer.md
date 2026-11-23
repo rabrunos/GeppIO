@@ -78,8 +78,15 @@ tree reference again. Refresh never silently reopens or discards a document.
 
 ## Creating and renaming items
 
-Since alpha.65, select a directory to create an empty file or folder, or select a closed file
+Select a directory to create an empty file or folder, or select a file and choose Rename or F2
 to rename it within the same parent. Each action takes one literal basename and two opaque IDs.
+Since alpha.70, an open file additionally requires its current document grant, revision and bounded
+view metadata. The broker verifies the saved bytes and ancestry before submission, then binds the
+same document to the verified destination and advances its revision. The editor retains its
+model, draft, undo, view and language. Recovery uses the new project-relative name.
+An uncertain helper outcome reserves both names and blocks saves. Explicit reload can recover
+the same witnessed file at either name after the user confirms discarding the draft. A missing
+renderer acknowledgment also blocks saving from editor and close actions until reconciliation.
 Main validates the sender, frame, app URL, root, existing node and parent identities. It also
 checks listing budgets, the document and recovery bindings, and the private profile boundary.
 The three operations share the document broker and exclude concurrent Git index writes.

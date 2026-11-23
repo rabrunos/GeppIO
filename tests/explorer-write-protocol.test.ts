@@ -5,6 +5,12 @@ import { validExplorerBasename, validExplorerMutationRequest } from '../src/shar
 
 test('Explorer writes accept only a literal Windows basename and two opaque IDs', () => {
   const root = randomUUID(), item = randomUUID()
+  const view = { id: randomUUID(), revision: randomUUID(), dirty: true, language: 'JavaScript', selection: { start: 2, end: 5, top: 0, left: 0 } }
+  assert.ok(validExplorerMutationRequest([root, item, 'outro', view], 'rename-file'))
+  for (const wrong of [{ ...view, revision: item + 'x' }, { ...view, path: 'other' }, { ...view, dirty: 'false' }, { ...view, selection: null }]) {
+    assert.equal(validExplorerMutationRequest([root, item, 'outro', wrong], 'rename-file'), false)
+  }
+  assert.equal(validExplorerMutationRequest([root, item, 'outro', view], 'create-file'), false)
   for (const name of ["café $ & 'semi;.txt", '.env', '😀.txt', '100% literal', 'a'.repeat(255)]) {
     assert.equal(validExplorerBasename(name), true)
     assert.equal(validExplorerMutationRequest([root, item, name]), true)

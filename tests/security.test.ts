@@ -31,7 +31,7 @@ test('static security regression: renderer has only fixed management, activation
   assert.match(documents, /validGitRequest\(operation, args\)/)
   assert.match(documents, /validSearchRequest\(operation, args\)/)
   assert.match(documents, /validQuickOpenRequest\(operation, args\)/)
-  assert.match(documents, /validExplorerMutationRequest\(args\)/)
+  assert.match(documents, /validExplorerMutationRequest\(args, operation\)/)
   assert.doesNotMatch(readFileSync('sdk/plugin.d.ts', 'utf8'), /explorer:(create-file|create-directory|rename-file)|ExplorerMutationResult/)
   assert.doesNotMatch(readFileSync('sdk/plugin.d.ts', 'utf8'), /QuickOpenBridge|quick-open:/)
   assert.doesNotMatch(readFileSync('sdk/plugin.d.ts', 'utf8'), /SearchBridge|search:(start|read|cancel|open)/)

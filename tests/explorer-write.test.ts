@@ -8,6 +8,7 @@ import { join } from 'node:path'
 import test from 'node:test'
 import type { TestContext } from 'node:test'
 import { DirectoryStore } from '../src/main/explorer.ts'
+import { DocumentStore } from '../src/main/documents.ts'
 import { moveExplorerFile, mutateExplorer } from '../src/main/explorer-write.ts'
 import type { ExplorerMutation } from '../src/shared/explorer.ts'
 import { EXPLORER_LIMITS } from '../src/shared/explorer.ts'
@@ -209,6 +210,64 @@ test('honest uncertain outcomes retain created/replaced evidence; communication 
     }
   })
   assert.equal(lost.outcome, 'unconfirmed'); assert.equal(calls, 2); assert.equal(await readFile(join(path, 'rename'), 'utf8'), 'external')
+})
+
+test('an open move needs the exact grant and revision, refreshes the saved path, and expires old saves', { skip: process.platform !== 'win32' }, async t => {
+  const { path, dirs, root, children } = await fixture(t), store = new DocumentStore()
+  const source = join(path, 'Test.js'), destination = join(path, 'next.txt'), bytes = Buffer.from('\ufefflet x = 1\r\n')
+  await writeFile(source, bytes)
+  await store.select(join(path, 'TEST.js'), null, async () => 'cancel', current)
+  const original = store.snapshot!, node = (await children())[0]!.id
+  const move = (id: string, revision: string) => mutateExplorer(dirs, 'rename-file', root, node, 'next.txt', current, file => store.hasFileAt(file), { openFile: { store, binding: { id, revision } } })
+  assert.equal((await move(randomUUID(), original.revision)).outcome, 'refused')
+  assert.equal((await move(original.id, randomUUID())).outcome, 'refused')
+  const result = await move(original.id, original.revision)
+  assert.equal(result.outcome, 'confirmed'); assert.equal(result.renamed?.id, original.id)
+  assert.notEqual(result.renamed?.revision, original.revision); assert.equal(store.filePath(original.id), destination)
+  assert.deepEqual(await readFile(destination), bytes); await assert.rejects(lstat(source), { code: 'ENOENT' })
+  const draft = { id: original.id, revision: original.revision, text: 'different\r\n' }
+  await assert.rejects(store.save(draft, current), { kind: 'stale' })
+  await store.save({ ...draft, revision: store.snapshot!.revision }, current)
+  assert.deepEqual(await readFile(destination), Buffer.from('\ufeffdifferent\r\n')); await assert.rejects(lstat(source), { code: 'ENOENT' })
+})
+
+test('a lost helper reply blocks both names and every save until explicit same-file reconciliation', async t => {
+  const { path, dirs, root, children } = await fixture(t), store = new DocumentStore()
+  const source = join(path, 'before'), destination = join(path, 'after')
+  await writeFile(source, 'base'); await store.select(source, null, async () => 'cancel', current)
+  const snapshot = store.snapshot!, node = (await children())[0]!.id
+  const draft = { id: snapshot.id, revision: snapshot.revision, text: 'unsaved' }
+  let submissions = 0
+  const lost = await mutateExplorer(dirs, 'rename-file', root, node, 'after', current, file => store.hasFileAt(file), {
+    openFile: { store, binding: snapshot },
+    move: async (from, to, authorize, _guard, sent) => {
+      await authorize(); submissions++; sent?.(); await rename(from, to); return 'unknown'
+    }
+  })
+  assert.equal(lost.outcome, 'unconfirmed'); assert.equal(submissions, 1)
+  assert.ok(store.hasFileAt(source)); assert.ok(store.hasFileAt(destination)); assert.equal(store.filePath(snapshot.id), null)
+  await writeFile(source, 'replacement', { flag: 'wx' })
+  await assert.rejects(store.save(draft, current), { kind: 'unconfirmed' })
+  await assert.rejects(store.resolveAll([draft], async () => 'save', current), { kind: 'unconfirmed' })
+  await assert.rejects(store.select(destination, null, async () => 'cancel', current), { kind: 'unconfirmed' })
+  let reconciled = await store.reload(draft, true, async () => false, current); assert.ok(reconciled.ok && reconciled.canceled)
+  await assert.rejects(store.save(draft, current), { kind: 'unconfirmed' })
+  reconciled = await store.reload(draft, true, async () => true, current)
+  assert.ok(reconciled.ok && reconciled.document?.name === 'after')
+  assert.equal(store.filePath(snapshot.id), destination); assert.equal(await readFile(source, 'utf8'), 'replacement')
+  assert.equal(await readFile(destination, 'utf8'), 'base'); assert.equal(store.snapshots.length, 1)
+})
+
+test('renderer uncertainty after a refused move excludes saving on tab and window close', async t => {
+  const { path } = await fixture(t), store = new DocumentStore(), file = join(path, 'original')
+  await writeFile(file, 'on disk'); await store.select(file, null, async () => 'cancel', current)
+  const { id, revision } = store.snapshot!, draft = { id, revision, text: 'draft', discardOnly: true as const }
+  await assert.rejects(store.release(draft, async () => 'save', current), { kind: 'unconfirmed' })
+  await assert.rejects(store.resolveAll([draft], async () => 'save', current), { kind: 'unconfirmed' })
+  assert.equal(await store.resolveAll([draft], async () => 'cancel', current), false)
+  assert.equal(store.snapshot?.id, id); assert.equal(await readFile(file, 'utf8'), 'on disk')
+  const closed = await store.release(draft, async () => 'discard', current); assert.ok(closed.ok && !closed.document)
+  assert.equal(await readFile(file, 'utf8'), 'on disk')
 })
 
 test('creation stays within visible Explorer quota and depth even when a fresh child could otherwise be created', async t => {

@@ -1,7 +1,8 @@
 import { spawn } from 'node:child_process'
 import { lstat, mkdir, open, realpath } from 'node:fs/promises'
 import { isAbsolute, join, resolve } from 'node:path'
-import type { ExplorerMutation, ExplorerMutationResult } from '../shared/explorer.ts'
+import type { ExplorerMutation, ExplorerMutationResult, RenameBinding } from '../shared/explorer.ts'
+import type { DocumentStore } from './documents.ts'
 import { validExplorerBasename } from '../shared/explorer.ts'
 import { DirectoryStore, ExplorerDestinationExists, ExplorerFailure, inspectExplorerPath } from './explorer.ts'
 
@@ -85,21 +86,32 @@ export const moveExplorerFile: Move = async (source, destination, authorize, cur
 }
 
 const refused = (message: string): ExplorerMutationResult => ({ outcome: 'refused', message })
-const unconfirmed = (): ExplorerMutationResult => ({ outcome: 'unconfirmed', message: 'Não foi possível confirmar a alteração. Confira a pasta antes de tentar novamente.' })
 const collision = () => refused('Já existe um item com esse nome. Escolha outro nome.')
 const knownRefusal = (err: unknown) => ['EEXIST', 'EACCES', 'EPERM', 'ENOENT', 'ENOTDIR', 'EISDIR', 'EROFS', 'ENAMETOOLONG', 'EINVAL'].includes((err as NodeJS.ErrnoException)?.code ?? '')
 
 export async function mutateExplorer(directories: DirectoryStore, operation: ExplorerMutation, root: string, node: string, name: string,
-  current: () => boolean, bound: (path: string) => boolean, options: { move?: Move; afterMutation?(): Promise<void> } = {}): Promise<ExplorerMutationResult> {
+  current: () => boolean, bound: (path: string) => boolean, options: { move?: Move; afterMutation?(): Promise<void>; openFile?: { store: DocumentStore; binding: RenameBinding } } = {}): Promise<ExplorerMutationResult> {
   if (!['create-file', 'create-directory', 'rename-file'].includes(operation) || !validExplorerBasename(name)) return refused('Nome ou operação inválida.')
   const generation = directories.guard(), active = () => generation() && current()
   let possible = false
+  let binding: ReturnType<DocumentStore['prepareRename']> | undefined
+  const unconfirmed = (): ExplorerMutationResult => {
+    binding?.uncertain()
+    return { outcome: 'unconfirmed', message: binding ? 'Renomeação não confirmada. O rascunho foi mantido. Use Recarregar do disco para conferir o vínculo antes de salvar.' : 'Não foi possível confirmar a alteração. Confira a pasta antes de tentar novamente.' }
+  }
   try {
     const target = directories.mutationTarget(root, node, operation, name, active)
-    const allowed = () => active() && !bound(target.parent) && !bound(target.destination) && (!target.source || !bound(target.source.path))
+    if (options.openFile) {
+      if (!target.source) throw new ExplorerFailure('invalid')
+      const { store, binding: { id, revision } } = options.openFile
+      binding = store.prepareRename(id, revision, target.source.path, target.destination, active)
+    }
+    const allowed = () => active() && !bound(target.parent) && !bound(target.destination) && (!target.source || (binding ? binding.valid() : !bound(target.source.path)))
     const authorize = async () => {
       if (!allowed()) throw new ExplorerFailure('stale')
       await target.authorize()
+      if (!allowed()) throw new ExplorerFailure('stale')
+      await binding?.validate()
       if (!allowed()) throw new ExplorerFailure('stale')
     }
     const unavailable = () => refused('A pasta mudou ou o item tem um vínculo ativo. Confira os arquivos abertos e o projeto.')
@@ -155,7 +167,8 @@ export async function mutateExplorer(directories: DirectoryStore, operation: Exp
       const createdNode = target.registerFile(final.chain)
       return { outcome: 'confirmed', message: 'Arquivo criado.', ...(createdNode ? { createdNode } : {}) }
     }
-    return { outcome: 'confirmed', message: operation === 'create-directory' ? 'Pasta criada.' : 'Arquivo renomeado.' }
+    const renamed = await binding?.confirm()
+    return { outcome: 'confirmed', message: operation === 'create-directory' ? 'Pasta criada.' : 'Arquivo renomeado.', ...(renamed ? { renamed } : {}) }
   } catch (err) {
     if (possible) return unconfirmed()
     if (err instanceof ExplorerDestinationExists || (err as NodeJS.ErrnoException)?.code === 'EEXIST') return collision()

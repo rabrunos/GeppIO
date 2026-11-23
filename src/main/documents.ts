@@ -28,7 +28,7 @@ export function expiredDocumentResponse(result: DocumentResult): DocumentResult 
   return documentFailure(new DocumentFailure(!result.ok && result.code === 'unconfirmed' ? 'unconfirmed' : 'stale'))
 }
 type Evidence = { path: string; chain: string; stat: BigIntStats; bytes: Buffer; text: string; bom: boolean }
-type Selection = { evidence: Evidence; snapshot: DocumentSnapshot; reloadPredecessor?: string; unconfirmedSave?: boolean }
+type Selection = { evidence: Evidence; snapshot: DocumentSnapshot; reloadPredecessor?: string; unconfirmedSave?: boolean; pendingRename?: string }
 const identity = (stat: BigIntStats) => `${stat.dev}:${stat.ino}`
 const sameStat = (a: BigIntStats, b: BigIntStats) => identity(a) === identity(b) && a.birthtimeNs === b.birthtimeNs && a.size === b.size && a.mtimeNs === b.mtimeNs && a.ctimeNs === b.ctimeNs && a.mode === b.mode && a.nlink === b.nlink
 function encode(text: string, bom: boolean): Buffer {
@@ -119,8 +119,30 @@ export class DocumentStore {
   get snapshots(): DocumentSnapshot[] { return [...this.selections.values()].map(value => ({ ...value.snapshot })) }
   result(canceled = false): DocumentResult { return { ok: true, document: this.snapshot, documents: this.snapshots, ...(canceled ? { canceled: true } : {}) } }
   /** Main-only display association. Never returned through IPC. */
-  filePath(id: string): string | null { return this.selections.get(id)?.evidence.path ?? null }
-  hasFileAt(path: string) { return [...this.selections.values()].some(entry => relative(entry.evidence.path, path) === '') }
+  filePath(id: string): string | null { const selection = this.selections.get(id); return selection && !selection.pendingRename ? selection.evidence.path : null }
+  hasFileAt(path: string) { return [...this.selections.values()].some(entry => relative(entry.evidence.path, path) === '' || entry.pendingRename && relative(entry.pendingRename, path) === '') }
+  prepareRename(id: string, revision: string, source: string, destination: string, current: () => boolean) {
+    const selected = this.selections.get(id)
+    if (!selected || selected.snapshot.revision !== revision || selected.unconfirmedSave || selected.pendingRename ||
+        relative(selected.evidence.path, source) !== '' || dirname(source) !== dirname(destination) || this.hasFileAt(destination)) throw new DocumentFailure('stale')
+    const original = selected.evidence
+    const valid = () => current() && this.selections.get(id) === selected
+    return {
+      valid,
+      validate: async () => {
+        if (!valid() || !sameEvidence({ ...original, path: source }, await inspect(source)) || !valid()) throw new DocumentFailure('conflict')
+      },
+      uncertain: () => { if (this.selections.get(id) === selected) selected.pendingRename = destination },
+      confirm: async () => {
+        const evidence = await inspect(destination)
+        if (!valid() || !sameFile(original, evidence.chain, evidence.stat) || !original.bytes.equals(evidence.bytes)) throw new DocumentFailure('unconfirmed')
+        const snapshot = { ...selected.snapshot, revision: randomUUID(), name: basename(destination),
+          label: [basename(dirname(destination)), basename(destination)].filter(Boolean).join('/').slice(0, 511) }
+        this.selections.set(id, { evidence, snapshot, reloadPredecessor: revision })
+        return { ...snapshot }
+      }
+    }
+  }
   /** Main-only recovery witness; neither source nor old grants are persisted. */
   fingerprint(id: string): string | null { const selected = this.selections.get(id); return selected ? createHash('sha256').update(selected.evidence.bytes).digest('hex') : null }
   async validate(id: string, current: () => boolean): Promise<void> {
@@ -143,6 +165,8 @@ export class DocumentStore {
     authorize?: (witness: () => ReturnType<typeof documentWitness>) => Promise<void>, readControl?: DocumentReadControl,
     reuse: 'path' | 'file-identity' = 'path'): Promise<DocumentResult> {
     if (draft) this.current(draft)
+    if ([...this.selections.values()].some(entry => entry.pendingRename &&
+        (relative(entry.pendingRename, path) === '' || relative(entry.evidence.path, path) === ''))) throw new DocumentFailure('unconfirmed')
     const key = (value: string) => process.platform === 'win32' ? value.toLowerCase() : value
     const atPath = () => [...this.selections.values()].find(value => key(value.evidence.path) === key(path))
     const retained = reuse === 'file-identity' ? atPath() : undefined
@@ -185,15 +209,31 @@ export class DocumentStore {
     guard()
     const { evidence: original, snapshot } = selected
     const predecessor = draft.revision !== snapshot.revision
-    const discard = draft.text !== snapshot.text || !!selected.unconfirmedSave || confirmUnresolved
+    const discard = draft.text !== snapshot.text || !!selected.unconfirmedSave || !!selected.pendingRename || confirmUnresolved
     // A replacement leaf can already exist when reload begins. Pin that
     // particular target and all previously authorized parents across the dialog.
-    const chain = await inspectPath(original.path, guard)
+    let path = original.path
+    if (selected.pendingRename) {
+      // Reconciliation may only follow the original ordinary file to one of the two witnessed names.
+      const matches: string[] = []
+      for (const candidate of [original.path, selected.pendingRename]) {
+        try {
+          const ancestors = await inspectPath(candidate, guard)
+          const stat = await lstat(candidate, { bigint: true })
+          if (sameFile(original, ancestors, stat)) matches.push(candidate)
+        } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
+        guard()
+      }
+      if (matches.length !== 1) throw new DocumentFailure('conflict', draft.id)
+      path = matches[0]!
+    }
+    const chain = await inspectPath(path, guard)
     guard()
     if (chain !== original.chain) throw new DocumentFailure('conflict', draft.id)
-    const initial = await lstat(original.path, { bigint: true })
+    const initial = await lstat(path, { bigint: true })
     guard()
     if (!initial.isFile() || initial.nlink !== 1n) throw new DocumentFailure('unsupported', draft.id)
+    if (selected.pendingRename && !sameFile(original, chain, initial)) throw new DocumentFailure('conflict', draft.id)
     if (predecessor || discard) {
       const approved = await confirmDiscard()
       guard()
@@ -203,13 +243,14 @@ export class DocumentStore {
       guard()
       if (!sameStat(stat, initial)) throw new DocumentFailure('conflict', draft.id)
     } }
-    const candidate = await inspect(original.path, control)
+    const candidate = await inspect(path, control)
     guard()
-    const verified = await inspect(original.path, control)
+    const verified = await inspect(path, control)
     guard()
     if (!sameEvidence(candidate, verified)) throw new DocumentFailure('conflict', draft.id)
     const changed = !sameEvidence(original, verified) || discard && !predecessor
-    const next = changed ? { ...snapshot, revision: randomUUID(), bom: verified.bom, text: verified.text } : snapshot
+    const next = changed ? { ...snapshot, revision: randomUUID(), bom: verified.bom, text: verified.text,
+      ...(path !== original.path ? { name: basename(path), label: [basename(dirname(path)), basename(path)].filter(Boolean).join('/').slice(0, 511) } : {}) } : snapshot
     // One opaque token per grant survives lost replies. Retrying from that
     // token keeps it through further reloads. All Save/Close checks remain exact.
     this.selections.set(draft.id, { evidence: verified, snapshot: next, ...(predecessor || changed ? { reloadPredecessor: draft.revision } : {}) })
@@ -217,6 +258,7 @@ export class DocumentStore {
   }
   async save(draft: DocumentDraft, current: () => boolean): Promise<DocumentSnapshot> {
     const selected = this.current(draft)!, original = selected.evidence, bytes = encode(draft.text, original.bom)
+    if (selected.pendingRename) throw new DocumentFailure('unconfirmed', draft.id)
     const check = async () => {
       const disk = await inspect(original.path)
       if (!sameEvidence(original, disk)) throw new DocumentFailure('conflict')
@@ -252,11 +294,12 @@ export class DocumentStore {
   private async resolveSelection(draft: DocumentDraft | null, decide: () => Promise<DocumentDecision>, current: () => boolean): Promise<Selection | null | false> {
     const selected = this.current(draft)
     if (!current()) throw new DocumentFailure('stale')
-    if (!selected || selected.snapshot.text === draft!.text && !selected.unconfirmedSave) return selected
+    if (!selected || selected.snapshot.text === draft!.text && !selected.unconfirmedSave && !selected.pendingRename && !draft!.discardOnly) return selected
     const decision = await decide()
     if (!current() || this.selections.get(draft!.id) !== selected) throw new DocumentFailure('stale')
     if (decision === 'cancel') return false
     if (decision === 'discard') return selected
+    if (draft!.discardOnly) throw new DocumentFailure('unconfirmed', draft!.id)
     const saved = await this.save(draft!, current)
     const confirmed = this.selections.get(saved.id)
     if (!current() || !confirmed || confirmed.snapshot.revision !== saved.revision) throw new DocumentFailure('stale')

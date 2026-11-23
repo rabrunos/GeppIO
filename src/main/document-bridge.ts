@@ -7,7 +7,7 @@ import { validDocumentRequest } from '../shared/documents.ts'
 import type { DocumentDraft, DocumentResult } from '../shared/documents.ts'
 import { DirectoryStore, ExplorerFailure, explorerFailure, explorerFileNames } from './explorer.ts'
 import { explorerMutations, validExplorerMutationRequest, validExplorerRequest } from '../shared/explorer.ts'
-import type { ExplorerMutationResult, ExplorerResult } from '../shared/explorer.ts'
+import type { ExplorerMutationResult, ExplorerResult, RenameBinding } from '../shared/explorer.ts'
 import { mutateExplorer } from './explorer-write.ts'
 import { GitStore, GitFailure, gitFailure } from './git.ts'
 import { SearchExpired, SearchStore } from './search.ts'
@@ -20,7 +20,7 @@ import { readWorkspaceTools } from './workspace-tools.ts'
 import type { WorkspaceToolsResult } from '../shared/workspace-tools.ts'
 import { WorkspaceRecovery } from './workspace-recovery.ts'
 import { validWorkspaceRequest } from '../shared/workspace.ts'
-import type { WorkspaceEditor, WorkspaceResult } from '../shared/workspace.ts'
+import type { WorkspaceEditor, WorkspaceResult, WorkspaceView } from '../shared/workspace.ts'
 
 /** Installed for the exact app window, never a recovery window or another WebContents. */
 export function bindDocuments(win: BrowserWindow, expectedURL: string): WorkspaceOwner {
@@ -34,7 +34,12 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
   let busy = false, closing = false, remembering = false, ticket: string | null = null
   let explorerWriting = false, indexWriting = false, reloading = false
   const revoke = () => { workspace.revoke(); revokeProjectResults(); store.revoke(); directories.revoke(); ticket = null }
-  const decide = async (name = store.snapshot?.label ?? store.snapshot?.name ?? 'arquivo', id = store.snapshot?.id) => {
+  const decide = async (name = store.snapshot?.label ?? store.snapshot?.name ?? 'arquivo', id = store.snapshot?.id, discardOnly = false) => {
+    if (discardOnly) {
+      const choice = await dialog.showMessageBox(win, { type: 'warning', title: 'Renomeação não confirmada', message: 'Descartar o rascunho de ' + name + ' e fechar?',
+        detail: 'Para conferir o arquivo antes de salvar, cancele e use Recarregar do disco.', buttons: ['Cancelar', 'Descartar'], defaultId: 0, cancelId: 0, noLink: true })
+      return choice.response === 1 ? 'discard' : 'cancel'
+    }
     const path = id ? store.filePath(id) : null
     const result = await dialog.showMessageBox(win, { type: 'question', title: 'Alterações não salvas', message: 'Salvar as alterações de ' + name + ' antes de continuar?', detail: (path ? 'Arquivo: ' + path + '\n\n' : '') + 'Cancelar mantém as abas e os rascunhos abertos. Nenhum outro arquivo será salvo automaticamente.', buttons: ['Salvar', 'Descartar', 'Cancelar'], defaultId: 2, cancelId: 2, noLink: true })
     return (['save', 'discard', 'cancel'] as const)[result.response] ?? 'cancel'
@@ -111,12 +116,12 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
       if (operation === 'save') { await store.save(draft!, current); return await response(store.result(), current) }
       if (operation === 'release') {
         const document = store.snapshots.find(value => value.id === draft!.id)
-        const result = await store.release(draft!, () => decide(document?.label ?? document?.name, draft!.id), current)
+        const result = await store.release(draft!, () => decide(document?.label ?? document?.name, draft!.id, draft!.discardOnly), current)
         if (result.ok && !result.canceled) await workspace.persist(current)
         return await response(result, current)
       }
       const supplied = args[1] as DocumentDraft[] | DocumentDraft | null, drafts = supplied === null ? [] : Array.isArray(supplied) ? supplied : [supplied]
-      if (!await store.resolveAll(drafts, document => decide(document.label ?? document.name, document.id), current)) return await response(store.result(true), current)
+      if (!await store.resolveAll(drafts, document => decide(document.label ?? document.name, document.id, drafts.find(draft => draft.id === document.id)?.discardOnly), current)) return await response(store.result(true), current)
       await workspace.persist(current, true)
       if (workspace.recovery.snapshot.error && current()) await dialog.showMessageBox(win, { type: 'warning', title: 'Sessão local', message: 'Os arquivos foram resolvidos, mas a lembrança da sessão não pôde ser confirmada.', detail: 'Rascunhos não são armazenados para recuperação. Os metadados existentes foram preservados.' })
       if (!current()) throw new DocumentFailure('stale')
@@ -227,15 +232,26 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
   }
   for (const operation of explorerMutations) ipcMain.handle(`explorer:${operation}`, async (event, ...args: unknown[]): Promise<ExplorerMutationResult> => {
     const current = projectCaller(event)
-    if (!current?.() || !validExplorerMutationRequest(args)) return { outcome: 'refused', message: 'Solicitação do Explorador inválida ou expirada.' }
+    if (!current?.() || !validExplorerMutationRequest(args, operation)) return { outcome: 'refused', message: 'Solicitação do Explorador inválida ou expirada.' }
     if (busy || remembering || ticket || indexWriting) return { outcome: 'refused', message: 'Aguarde a operação de arquivo ou projeto em andamento.' }
     busy = explorerWriting = true
     const uncertain = { outcome: 'unconfirmed', message: 'Não foi possível confirmar o resultado. Confira a pasta antes de tentar outra operação.' } as const
     try {
-      const result = await mutateExplorer(directories, operation, args[0] as string, args[1] as string, args[2] as string, current, bound)
+      const result = await mutateExplorer(directories, operation, args[0] as string, args[1] as string, args[2] as string, current, bound,
+        args.length === 4 ? { openFile: { store, binding: args[3] as RenameBinding } } : {})
       if (result.outcome === 'refused') return result
       if (!current()) return uncertain
       revokeProjectResults()
+      if (args.length === 4) {
+        if (result.outcome === 'confirmed' && result.renamed) workspace.rememberRenamedView(args[3] as WorkspaceView, result.renamed.revision)
+        await workspace.persist(current)
+        if (!current()) return uncertain
+        if (result.outcome === 'confirmed' && result.renamed) {
+          const decorated = await response({ ok: true, document: result.renamed }, current)
+          if (!current() || !decorated.ok || !decorated.document) return uncertain
+          return { ...result, renamed: decorated.document, message: [result.message, workspace.status().notice].filter(Boolean).join(' ') }
+        }
+      }
       return result
     } catch {
       if (current()) revokeProjectResults()

@@ -10,6 +10,7 @@ export function FileEditor({ session }: { session: EditorSession }) {
   const state = useSyncExternalStore(session.subscribe, session.snapshot), input = useRef<HTMLDivElement>(null), tabs = useRef<HTMLDivElement>(null)
   const hasDocument = !!state.document
   const unresolved = state.document && session.documentState(state.document.id)?.unresolved
+  const renameUncertain = !!state.document && session.documentState(state.document.id)?.renameUncertain
   useLayoutEffect(() => {
     const element = input.current
     if (element) return monacoPresentation(session).attach(element)
@@ -31,7 +32,7 @@ export function FileEditor({ session }: { session: EditorSession }) {
     <div className="file-editor-toolbar">
       <strong title={state.document ? state.document.name + ' · ' + scope : undefined}>{state.document?.name ?? 'Nenhum arquivo aberto'}{session.dirty ? ' •' : ''}{state.document && <small> · {scope}</small>}</strong>
       <button className="ui-button tool-button" aria-label="Abrir arquivo" title="Abrir arquivo" disabled={state.busy || session.locked} onClick={() => { void session.open() }}><FolderOpenIcon className="icon" /><span>Abrir arquivo</span></button>
-      <button className="ui-button tool-button" aria-label="Salvar arquivo" title="Salvar arquivo" aria-keyshortcuts="Control+S" disabled={!state.document || state.busy || session.locked} onClick={() => { void session.save() }}><DocumentArrowDownIcon className="icon" /><span>Salvar arquivo</span></button>
+      <button className="ui-button tool-button" aria-label="Salvar arquivo" title={renameUncertain ? 'Confira a renomeação usando Recarregar do disco antes de salvar.' : 'Salvar arquivo'} aria-keyshortcuts="Control+S" disabled={!state.document || state.busy || session.locked || renameUncertain} onClick={() => { void session.save() }}><DocumentArrowDownIcon className="icon" /><span>Salvar arquivo</span></button>
       {state.document && <button className="ui-button tool-button" aria-label="Recarregar do disco" title="Recarregar do disco" disabled={state.busy || session.locked} onClick={() => { void session.reload() }}><ArrowPathIcon className="icon" /><span>Recarregar do disco</span></button>}
       {state.document && <button className="ui-button tool-button" aria-label="Fechar arquivo" title="Fechar arquivo" disabled={state.busy || session.locked} onClick={() => { void session.release() }}><XMarkIcon className="icon" /><span>Fechar arquivo</span></button>}
     </div>

@@ -27,9 +27,9 @@ async function fixture(t: TestContext, overrides: Partial<ExplorerBridge> = {}) 
   const createDirectory = t.mock.fn<ExplorerBridge['createDirectory']>(overrides.createDirectory ?? (async (_r, dir, name) => {
     files.get(dir)!.push({ id: 'new-dir', name, kind: 'directory' }); return { outcome: 'confirmed', message: 'Pasta criada.' }
   }))
-  const renameFile = t.mock.fn<ExplorerBridge['renameFile']>(overrides.renameFile ?? (async (_r, id, name) => {
+  const renameFile = t.mock.fn<ExplorerBridge['renameFile']>(overrides.renameFile ?? (async (_r, id, name, binding) => {
     const entries = files.get(root.id)!; entries[entries.findIndex(node => node.id === id)] = { id: 'renamed', name, kind: 'file' }
-    return { outcome: 'confirmed', message: 'Arquivo renomeado.' }
+    return { outcome: 'confirmed', message: 'Arquivo renomeado.', ...(binding ? { renamed: { ...document, name, revision: 'renamed' } } : {}) }
   }))
   const list = t.mock.fn<ExplorerBridge['list']>(overrides.list ?? (async (_r, id) => ({ ok: true, root, children: structuredClone(files.get(id) ?? []) })))
   const open = t.mock.fn<ExplorerBridge['open']>(overrides.open ?? (async (_r, id) => {
@@ -57,7 +57,11 @@ test('exact target and literal basename create one file, activate its receipt, a
   assert.deepEqual(p.createDirectory.mock.calls[0]!.arguments, [root.id, root.id, 'subpasta'])
   assert.equal(p.open.mock.callCount(), 1)
   await p.explorer.mutate('rename-file', root.id, old, root.id, 'outro.txt')
-  assert.equal(p.renameFile.mock.callCount(), 0, 'inactive open grant also protects its former name')
+  assert.deepEqual(p.renameFile.mock.calls[0]!.arguments, [root.id, old.id, 'outro.txt', { id: document.id, revision: document.revision,
+    dirty: true, language: 'Texto simples', selection: { start: 0, end: 0, top: 0, left: 0 } }])
+  assert.equal(p.editor.documentState(document.id)?.text, 'rascunho')
+  assert.equal(p.editor.documentState(document.id)?.document.name, 'outro.txt')
+  assert.equal(p.editor.snapshot().document?.name, name)
 })
 
 test('closed rename validates case, parent, node kind and raw names; collisions preserve the current tree', async t => {

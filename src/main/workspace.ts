@@ -19,6 +19,7 @@ export class WorkspaceOwner {
   constructor(directories: DirectoryStore, documents: DocumentStore, recovery: WorkspaceRecovery, changed: () => void) { this.directories = directories; this.documents = documents; this.recovery = recovery; this.changed = changed }
   revoke() { this.epoch++; this.views.clear(); this.message = null; this.transition = false }
   guard() { const epoch = this.epoch; return () => epoch === this.epoch }
+  rememberRenamedView(view: WorkspaceView, revision: string) { this.views.set(view.id, { ...structuredClone(view), revision }) }
   hasFileBinding(path: string) {
     if (this.documents.hasFileAt(path)) return true
     const { project, files } = this.recovery.snapshot.record

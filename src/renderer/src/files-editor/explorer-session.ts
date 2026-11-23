@@ -1,6 +1,7 @@
 import { validExplorerBasename } from '../../../shared/explorer.ts'
 import type { ExplorerBridge, ExplorerMutation, ExplorerMutationResult, ExplorerNode } from '../../../shared/explorer.ts'
-import type { EditorSession } from './session.ts'
+import type { EditorDocument, EditorSession } from './session.ts'
+import { documentLanguage } from '../../../shared/document-status.ts'
 import type { WorkspaceBridge, WorkspaceResult, WorkspaceStatus } from '../../../shared/workspace.ts'
 
 /** Display association only; native open/save still validate exact grants. */
@@ -239,27 +240,30 @@ export class ExplorerSession {
     finally { this.update({ busy: false }); if (this.workspace) await this.initialize() }
   }
   openFileNodes() {
-    const root = this.state.root, nodes = new Set<string>()
+    const root = this.state.root, nodes = new Map<string, EditorDocument>()
     if (!root) return nodes
-    for (const { document } of this.editor.snapshot().tabs) {
-      if (this.state.active && this.state.document === document.id) nodes.add(this.state.active)
+    for (const tab of this.editor.snapshot().tabs) {
+      const { document } = tab
+      if (this.state.active && this.state.document === document.id) nodes.set(this.state.active, tab)
       const location = document.location
       if (location?.root !== root.id) continue
       let node: ExplorerNode | undefined = root
       for (const name of location.names) node = node && findExplorerChild(this.state.children.get(node.id) ?? [], name, location.caseInsensitive)
-      if (node) nodes.add(node.id)
+      if (node) nodes.set(node.id, tab)
     }
     return nodes
   }
-  async mutate(operation: ExplorerMutation, root: string, node: ExplorerNode, parent: string | null, name: string) {
+  async mutate(operation: ExplorerMutation, root: string, node: ExplorerNode, parent: string | null, name: string,
+    expected: Pick<EditorDocument['document'], 'id' | 'revision'> | null = this.openFileNodes().get(node.id)?.document ?? null) {
     const generation = this.generation
     const current = () => generation === this.generation && this.state.root?.id === root && this.editor.snapshot().invalidRoot !== root && !this.locked
     const target = node.id === this.state.root?.id ? this.state.root : parent && this.state.children.get(parent)?.find(child => child.id === node.id)
     if (!current() || this.state.busy || this.editor.snapshot().busy) return
     const rename = operation === 'rename-file'
+    const open = rename ? this.openFileNodes().get(node.id) : undefined
     if (!validExplorerBasename(name) || !target || target.kind !== (rename ? 'file' : 'directory') ||
-        rename && (!parent || this.openFileNodes().has(node.id) || target.name.toLowerCase() === name.toLowerCase())) {
-      this.update({ mutationNotice: 'Confira o nome e o item selecionado. Para renomear, escolha um arquivo fechado e outro nome.' }); return
+        rename && (!parent || open?.unresolved || expected?.id !== open?.document.id || expected?.revision !== open?.document.revision || target.name.toLowerCase() === name.toLowerCase())) {
+      this.update({ mutationNotice: 'Confira o nome e o vínculo atual do arquivo antes de renomear.' }); return
     }
     const directory = rename ? parent! : node.id
     this.update({ busy: true, error: null, mutationNotice: null })
@@ -267,8 +271,11 @@ export class ExplorerSession {
     try {
       try {
         const method = { 'create-file': 'createFile', 'create-directory': 'createDirectory', 'rename-file': 'renameFile' } as const
-        receipt = await this.bridge[method[operation]](root, node.id, name)
+        receipt = rename && open && expected ? await this.bridge.renameFile(root, node.id, name, { id: expected.id, revision: expected.revision,
+          dirty: open.text !== open.document.text, language: open.language ?? documentLanguage(open.document.name), selection: { ...open.selection } }) :
+          await this.bridge[method[operation]](root, node.id, name)
       } catch { receipt = { outcome: 'unconfirmed', message: 'O resultado não foi confirmado. Confira a pasta antes de repetir a operação.' } }
+      if (rename && expected && receipt.outcome !== 'refused') this.editor.renamed(expected.id, expected.revision, receipt.outcome === 'confirmed' ? receipt.renamed : undefined)
       if (root !== this.state.root?.id) { this.update({ mutationNotice: 'Projeto anterior: ' + receipt.message }); return }
       this.update({ mutationNotice: receipt.message })
       if (receipt.outcome === 'refused') return

@@ -2,7 +2,7 @@ import { useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from
 import type { KeyboardEvent } from 'react'
 import { ArrowPathIcon, ChevronRightIcon, DocumentIcon, DocumentPlusIcon, FolderIcon, FolderOpenIcon, FolderPlusIcon, PencilSquareIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import { validExplorerBasename } from '../../../shared/explorer.ts'
-import type { ExplorerMutation, ExplorerNode } from '../../../shared/explorer.ts'
+import type { ExplorerMutation, ExplorerNode, RenameBinding } from '../../../shared/explorer.ts'
 import type { ExplorerSession } from './explorer-session.ts'
 import type { GitSession } from '../git/session.ts'
 import { gitDecorations } from '../git/decorations.ts'
@@ -16,7 +16,7 @@ export function Explorer({ session, git }: { session: ExplorerSession; git: GitS
   const decorations = useMemo(() => gitDecorations(status), [status])
   const viewport = useRef<HTMLDivElement>(null), tree = useRef<HTMLDivElement>(null)
   const [, renderFocus] = useState(0)
-  const [form, setForm] = useState<{ root: string; node: ExplorerNode; parent: string | null; path: string; operation: ExplorerMutation } | null>(null)
+  const [form, setForm] = useState<{ root: string; node: ExplorerNode; parent: string | null; path: string; operation: ExplorerMutation; binding: RenameBinding | null } | null>(null)
   const [name, setName] = useState('')
   const submitting = useRef(false)
   const disabled = state.busy || editor.busy || session.locked
@@ -27,18 +27,22 @@ export function Explorer({ session, git }: { session: ExplorerSession; git: GitS
   if (state.root) append([state.root], 1, null)
   const focused = rows.some(row => row.node.id === session.focus) ? session.focus : rows[0]?.node.id
   const selected = rows.find(row => row.node.id === focused)
-  const openFiles = session.openFileNodes(), canRename = selected?.node.kind === 'file' && !openFiles.has(selected.node.id)
+  const openFiles = session.openFileNodes()
+  const renameReason = (node?: ExplorerNode) => disabled ? 'Aguarde a operação em andamento ou conclua a edição do layout.' :
+    node?.kind !== 'file' ? 'Selecione um arquivo para renomear.' : openFiles.get(node.id)?.unresolved ? 'Confira o vínculo usando Recarregar do disco.' : ''
   function prompt(operation: ExplorerMutation, row = selected) {
     if (!state.root || !row || disabled || submitting.current || (operation === 'rename-file'
-      ? row.node.kind !== 'file' || openFiles.has(row.node.id) : row.node.kind !== 'directory')) return
+      ? !!renameReason(row.node) : row.node.kind !== 'directory')) return
     setName(operation === 'rename-file' ? row.node.name : '')
-    setForm({ root: state.root.id, node: row.node, parent: row.parent, path: row.path || state.root.name, operation })
+    const doc = openFiles.get(row.node.id)?.document
+    setForm({ root: state.root.id, node: row.node, parent: row.parent, path: row.path || state.root.name, operation, binding: doc ? { id: doc.id, revision: doc.revision } : null })
   }
   const validName = validExplorerBasename(name) && (form?.operation !== 'rename-file' || name.toLowerCase() !== form.node.name.toLowerCase())
   useLayoutEffect(() => { if (viewport.current) viewport.current.scrollTop = session.scroll }, [session])
   function focus(id: string | undefined) { if (id) { session.focus = id; tree.current?.querySelector<HTMLElement>(`[data-explorer-node="${id}"]`)?.focus() } }
   function key(event: KeyboardEvent, index: number) {
     const row = rows[index]!, node = row.node
+    if (event.key === 'F2') { event.preventDefault(); event.stopPropagation(); prompt('rename-file', row); return }
     if (!['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'Enter', ' '].includes(event.key)) return
     event.preventDefault(); event.stopPropagation()
     if (event.key === 'ArrowDown') focus(rows[Math.min(index + 1, rows.length - 1)]?.node.id)
@@ -62,7 +66,8 @@ export function Explorer({ session, git }: { session: ExplorerSession; git: GitS
       <span title={selected?.path || state.root.name}>{selected?.node.name}</span>
       <IconButton literalLabel label="Novo arquivo" disabled={disabled || selected?.node.kind !== 'directory'} onClick={() => prompt('create-file')}><DocumentPlusIcon className="icon" /></IconButton>
       <IconButton literalLabel label="Nova pasta" disabled={disabled || selected?.node.kind !== 'directory'} onClick={() => prompt('create-directory')}><FolderPlusIcon className="icon" /></IconButton>
-      <IconButton literalLabel label="Renomear arquivo" disabled={disabled || !canRename} onClick={() => prompt('rename-file')}><PencilSquareIcon className="icon" /></IconButton>
+      <button type="button" className="ui-button" aria-label="Renomear arquivo" aria-keyshortcuts="F2"
+        title={renameReason(selected?.node) || 'Renomear arquivo (F2)'} disabled={!!renameReason(selected?.node)} onClick={() => prompt('rename-file')}>Renomear</button>
     </div>}
     {state.root && <div className="explorer-git-status" role="status" title={gitState.error ?? 'Git usa o disco salvo; configuração global ignorada. Selecione a raiz exata de um repositório local comum.'}>
       {gitState.busy ? 'Git: consultando…' : gitState.error ? 'Git: ' + gitState.error : status ? `Git · ${status.branch} · ${status.changes.length ? status.changes.length + ' arquivo(s) com alterações' : 'árvore limpa'}` : 'Git: aguardando consulta'}
@@ -77,8 +82,8 @@ export function Explorer({ session, git }: { session: ExplorerSession; git: GitS
           onKeyDown={event => key(event, index)} onClick={() => { focus(node.id); if (node.kind === 'directory') void session.toggle(node); else void session.open(node) }}>
           {node.kind === 'directory' ? <><ChevronRightIcon className={'explorer-chevron ' + (state.expanded.has(node.id) ? 'is-open' : '')} /><FolderIcon className="explorer-node-icon" /></> : <><span className="explorer-chevron" /><DocumentIcon className="explorer-node-icon" /></>}<span className="explorer-name">{node.name}</span>
           {decoration && <span className="explorer-git-badge" aria-label={decoration.description} title={decoration.description}>{decoration.badge}</span>}
-          {node.kind === 'file' && <button className="ui-button explorer-row-rename" type="button" tabIndex={-1} title={'Renomear ' + node.name} aria-label={'Renomear ' + node.name}
-            disabled={disabled || openFiles.has(node.id)} onKeyDown={event => event.stopPropagation()}
+          {node.kind === 'file' && <button className="ui-button explorer-row-rename" type="button" tabIndex={-1} title={renameReason(node) || 'Renomear ' + node.name} aria-label={'Renomear ' + node.name}
+            disabled={!!renameReason(node)} onKeyDown={event => event.stopPropagation()}
             onClick={event => { event.stopPropagation(); focus(node.id); prompt('rename-file', rows[index]) }}><PencilSquareIcon className="icon" /></button>}
         </div>
         {state.expanded.has(node.id) && state.errors.has(node.id) && <p className="explorer-inline-error" role="alert">{state.errors.get(node.id)} <button className="ui-button" disabled={disabled} onClick={() => { void session.refresh() }}>Tentar novamente</button></p>}
@@ -93,7 +98,7 @@ export function Explorer({ session, git }: { session: ExplorerSession; git: GitS
         event.preventDefault()
         if (!validName || disabled || submitting.current) return
         submitting.current = true
-        try { await session.mutate(form.operation, form.root, form.node, form.parent, name) }
+        try { await session.mutate(form.operation, form.root, form.node, form.parent, name, form.binding) }
         finally { submitting.current = false; setForm(null) }
       }}>
         <p>{form.operation === 'rename-file' ? 'Arquivo: ' : 'Pasta de destino: '}{form.path}</p>
