@@ -2,6 +2,10 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.63.1] — 2026-11-22
+
+- Verify the portable composition bridge and its two picker methods in the desktop smoke.
+
 ## [0.1.0-alpha.63] — 2026-11-22
 
 - Export one saved composition to a new file and preview portable layouts before importing a separate library item. Apply geometry or resolve existing destination widgets explicitly.
