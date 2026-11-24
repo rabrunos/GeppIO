@@ -106,6 +106,27 @@ test('profile exclusion uses the canonical root and parent even when a destinati
   assert.equal(outsideApplicationProfile(join(dir, 'unavailable'), join(dir, 'new.txt')), false)
 }))
 
+for (const outcome of ['ready', 'cancel', 'revoked', 'changed'] as const) test('replacement revalidates after prior session metadata: ' + outcome, async () => fixture(async (dir, folders, root) => {
+  const path = join(dir, 'saved.txt'); await writeFile(path, 'before')
+  const docs = new DocumentStore(), search = new SearchStore(folders), prior = gate()
+  let authorized = true
+  const page = await finish(search, search.start(root, 'before', true, current))
+  const review = await search.preview(page.job, [page.items[0]!.id], 'after', [], docs, current)
+  const apply = () => search.applyFile(page.job, review.id, review.files[0]!.id, [], docs, () => authorized, prior.promise)
+  const pending = apply()
+  await assert.rejects(apply(), denied('stale'))
+  assert.equal(await readFile(path, 'utf8'), 'before')
+  if (outcome === 'cancel') await search.cancel(page.job, current)
+  if (outcome === 'revoked') authorized = false
+  if (outcome === 'changed') await writeFile(path, 'outside edit')
+  prior.open()
+  if (outcome === 'ready') { await pending; assert.equal(await readFile(path, 'utf8'), 'after') }
+  else {
+    await assert.rejects(pending)
+    assert.equal(await readFile(path, 'utf8'), outcome === 'changed' ? 'outside edit' : 'before')
+  }
+}))
+
 test('loss of acknowledgment after native replacement preserves uncertainty and stops later files', async () => fixture(async (dir, folders, root) => {
   const first = join(dir, 'a.txt'), second = join(dir, 'b.txt')
   await writeFile(first, 'before'); await writeFile(second, 'before')

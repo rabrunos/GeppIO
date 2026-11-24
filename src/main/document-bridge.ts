@@ -42,7 +42,8 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
   const quickOpen = new QuickOpenStore(directories)
   const revokeProjectResults = () => { git.revoke(); search.revoke(); quickOpen.revoke() }
   const workspace = new WorkspaceOwner(directories, store, new WorkspaceRecovery(app.getPath('userData')), revokeProjectResults)
-  let busy = false, closing = false, remembering = false, ticket: string | null = null
+  let busy = false, closing = false, ticket: string | null = null
+  let remembering: ReturnType<WorkspaceOwner['remember']> | null = null
   let releasedInFrame = false
   let explorerWriting = false, indexWriting = false, reloading = false, choosingDestination = false
   const revoke = () => { workspace.revoke(); revokeProjectResults(); store.revoke(); directories.revoke(); ticket = null; releasedInFrame = false }
@@ -219,8 +220,12 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
     const current = () => !win.isDestroyed() && !win.webContents.isDestroyed() && frame === win.webContents.mainFrame && frame.url === expectedURL && ownerCurrent()
     const exclusive = !['read', 'remember'].includes(operation)
     if (exclusive) busy = true
-    if (operation === 'remember') remembering = true
     try {
+      if (operation === 'remember') {
+        remembering = workspace.remember(args[0] as WorkspaceEditor, current)
+        const value = await remembering
+        return current() ? { ok: true, value } : fail()
+      }
       if (operation === 'read') { const value = await workspace.read(); return current() ? { ok: true, value } : fail() }
       if (operation === 'restore') {
         const result = await workspace.restore(current, async (name, path, unsaved) => {
@@ -243,11 +248,10 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
         if (!current()) return fail()
         return { ok: true, value: workspace.status(), documents: await response(document, current) }
       }
-      const value = operation === 'remember' ? await workspace.remember(args[0] as WorkspaceEditor, current)
-        : operation === 'configure' ? await workspace.configure(args[0] as boolean, current) : await workspace.forget(current)
+      const value = operation === 'configure' ? await workspace.configure(args[0] as boolean, current) : await workspace.forget(current)
       return current() ? { ok: true, value } : fail()
     } catch { return current() ? { ...fail(), value: workspace.status() } : fail() }
-    finally { if (exclusive) busy = false; if (operation === 'remember') remembering = false }
+    finally { if (exclusive) busy = false; if (operation === 'remember') remembering = null }
   })
   function projectCaller(event: IpcMainInvokeEvent) {
     const frame = event.senderFrame
@@ -299,7 +303,7 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
   for (const operation of replacementOperations) ipcMain.handle(`search:${operation}`, async (event, ...args: unknown[]) => {
     const current = projectCaller(event)
     if (!current?.() || !validSearchRequest(operation, args)) return { ok: false, error: 'Pedido de substituição inválido ou expirado.' }
-    if (busy || ticket || remembering || indexWriting) {
+    if (busy || ticket || indexWriting) {
       if (operation === 'applyFile') search.refusePreview(args[0] as string, args[1] as string)
       return { ok: false, error: 'Aguarde a operação de arquivo e gere outra prévia.' }
     }
@@ -311,7 +315,7 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
     busy = explorerWriting = true
     const before = store.writeCount
     try {
-      const document = await search.applyFile(job, args[1] as string, args[2] as string, marks, store, current)
+      const document = await search.applyFile(job, args[1] as string, args[2] as string, marks, store, current, remembering)
       let notice: string | undefined
       if (store.writeCount !== before) {
         git.revoke(); quickOpen.revoke()

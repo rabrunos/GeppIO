@@ -71,7 +71,9 @@ the replacement and the IDs/revisions of eligible open tabs. Limits are 100 file
 Main checks ancestors, file identity and bytes again when applying each reviewed file. It uses the
 document writer's flushed sibling replacement and its documented same-user race limitations.
 Each file holds the editor transaction through adoption. Other open drafts can still change between
-writes. A changed clean tab resets its Monaco undo history. Pending drafts, uncertain bindings and
+writes. If a cursor or tab metadata update is already in flight, the confirmed file waits in its
+transaction and revalidates the preview, caller, root and disk evidence before writing. A changed
+clean tab resets its Monaco undo history. Pending drafts, uncertain bindings and
 the app profile are ineligible. Confirmed changes to earlier files survive interruption. An uncertain
 receipt requires disk inspection and a fresh review before another batch. No batch writes run on scan,
 filter changes or preview alone.

@@ -11,6 +11,7 @@ const fixture = await mkdtemp(join(tmpdir(), 'geppio-smoke-search-replace-'))
 const profile = join(fixture, 'profile'), project = join(await realpath(fixture), 'project')
 const scaled = process.argv.includes('--scale125'), dev = process.argv.includes('--dev')
 let app: ElectronApplication | undefined, server: import('vite').ViteDevServer | undefined
+type RememberProbe = typeof globalThis & { replaceRemember: { entered: boolean; applyEntered: boolean; release(): void } }
 try {
   await mkdir(profile); await mkdir(join(project, 'src'), { recursive: true })
   const target = (name: string) => join(project, 'src', name)
@@ -70,11 +71,46 @@ try {
   const eligible = await preview.getByRole('listitem').filter({ hasNotText: 'Excluído' }).allTextContents()
   const names = eligible.map(row => row.split(' · ')[0]!.slice(4))
   assert.deepEqual(names, ['a.txt', 'b.txt', 'd.txt'])
+  // The user can confirm while the editor's debounced cursor metadata is being flushed.
+  // Hold only this test profile's metadata write until the real apply handler enters.
+  await app.evaluate(async ({ app, ipcMain }) => {
+    const fs = process.getBuiltinModule('fs/promises') as typeof import('node:fs/promises')
+    const path = process.getBuiltinModule('path') as typeof import('node:path')
+    const slot = path.join(await fs.realpath(app.getPath('userData')), '.workspace-session.v1.tmp')
+    const open = fs.open, handlers = (ipcMain as unknown as { _invokeHandlers: Map<string, (...args: unknown[]) => unknown> })._invokeHandlers
+    const apply = handlers.get('search:applyFile')!
+    let release!: () => void
+    const wait = new Promise<void>(resolve => { release = resolve })
+    const probe = { entered: false, applyEntered: false, release }
+    ;(globalThis as RememberProbe).replaceRemember = probe
+    fs.open = async (...args) => {
+      if (String(args[0]) === slot && args[1] === 'wx') {
+        fs.open = open; probe.entered = true; await wait
+      }
+      return open(...args)
+    }
+    handlers.set('search:applyFile', (...args) => {
+      handlers.set('search:applyFile', apply)
+      probe.applyEntered = true
+      try { return apply(...args) } finally { release() }
+    })
+  })
+  await editor.press('Control+Home')
+  await app.evaluate(async () => {
+    const deadline = Date.now() + 15000
+    while (!(globalThis as RememberProbe).replaceRemember.entered) {
+      if (Date.now() >= deadline) throw new Error('The editor did not flush its changed cursor metadata')
+      await new Promise(resolve => setTimeout(resolve, 10))
+    }
+  })
   await writeFile(target(names[1]!), 'edição externa')
   await button('Confirmar substituição').click()
   await preview.getByText(/Recusado/).waitFor()
-  assert.equal(await preview.getByText(/Confirmado/).count(), 1)
-  assert.equal(await preview.getByText(/Não executado/).count(), 1)
+  const receipts = await preview.getByRole('listitem').allTextContents()
+  assert.ok(await app.evaluate(() => (globalThis as RememberProbe).replaceRemember.applyEntered))
+  assert.match(receipts[0]!, /src\/a\.txt.*Confirmado/, JSON.stringify(receipts))
+  assert.match(receipts[1]!, /src\/b\.txt.*Recusado/, JSON.stringify(receipts))
+  assert.match(receipts[3]!, /src\/d\.txt.*Não executado/, JSON.stringify(receipts))
   assert.equal(await readFile(target(names[1]!), 'utf8'), 'edição externa')
   assert.equal(await readFile(target('d.txt'), 'utf8'), 'café')
   await page.getByRole('tab', { name: /a\.txt/ }).click()
@@ -86,6 +122,6 @@ try {
   assert.deepEqual(errors, [])
   console.log('PASS filtered literal replacement, selected spans, dirty exclusion, cancellation, stale file, confirmed prefix and open Monaco adoption')
 } finally {
-  try { await app?.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().forEach(win => win.destroy())).catch(() => {}); await app?.close().catch(() => {}) }
+  try { await app?.evaluate(({ BrowserWindow }) => { (globalThis as Partial<RememberProbe>).replaceRemember?.release(); BrowserWindow.getAllWindows().forEach(win => win.destroy()) }).catch(() => {}); await app?.close().catch(() => {}) }
   finally { await server?.close(); await rm(fixture, { recursive: true, force: true, maxRetries: 5 }) }
 }

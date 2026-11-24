@@ -130,7 +130,8 @@ export class SearchStore extends ProjectTraversal<Job, Limits> {
     const job = this.job
     if (job?.id === jobId && job.plan?.id === previewId && !job.plan.applying) job.plan = undefined
   }
-  async applyFile(id: string, preview: string, fileId: string, marks: ReplacementMark[], documents: DocumentStore, current: () => boolean) {
+  async applyFile(id: string, preview: string, fileId: string, marks: ReplacementMark[], documents: DocumentStore, current: () => boolean,
+    pendingRemember: Promise<unknown> | null = null) {
     const job = this.owned(id, current), plan = job.plan, file = plan?.pending[0]
     if (!plan || plan.applying || plan.id !== preview || !file || file.display.id !== fileId) {
       this.refusePreview(id, preview); throw stale()
@@ -140,6 +141,10 @@ export class SearchStore extends ProjectTraversal<Job, Limits> {
     plan.applying = true
     const { path, chain, witness } = file.target
     try {
+      if (pendingRemember) {
+        // Reserve this item first. The metadata receipt grants no file authority.
+        await pendingRemember.catch(() => undefined); check()
+      }
       await this.validateRoot(job, current); check()
       const doc = await documents.replaceSearchFile(path, witness, file.display.open, marks, this.readControl(path, chain, check, () => {}),
         valid, text => replacePositions(text, file.positions, plan.replacement))

@@ -2,6 +2,10 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.74.1] — 2026-11-24
+
+- Keep a reviewed replacement pending while earlier cursor and tab metadata finishes saving. Revalidate the pending file before writing and preserve per-file outcomes if the batch stops.
+
 ## [0.1.0-alpha.74] — 2026-11-24
 
 - Filter project text search by literal relative path and extension. Review selected matches before replacing them, see exclusions for changed documents, and track each file's outcome.
