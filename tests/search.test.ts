@@ -5,7 +5,7 @@ import { link, mkdir, mkdtemp, readFile, realpath, rename, rm, symlink, writeFil
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { setImmediate as nextTurn } from 'node:timers/promises'
-import { DocumentFailure, DocumentStore, inspectSearchDocument } from '../src/main/documents.ts'
+import { DocumentFailure, DocumentStore, inspectSearchDocument, outsideApplicationProfile } from '../src/main/documents.ts'
 import { DirectoryStore } from '../src/main/explorer.ts'
 import { SearchExpired, SearchStore } from '../src/main/search.ts'
 import { SEARCH_EXCLUDED_DIRECTORIES, SEARCH_LIMITS } from '../src/shared/search.ts'
@@ -32,6 +32,93 @@ async function finish(search: SearchStore, page: SearchPage) {
   return page
 }
 function gate() { let open!: () => void; const promise = new Promise<void>(resolve => { open = resolve }); return { open, promise } }
+
+test('reviewed replacements use literal spans and exact bytes, stop at a stale second file and reject a consumed preview', async () => fixture(async (dir, folders, root) => {
+  await mkdir(join(dir, 'src'))
+  const path = (name: string) => join(dir, 'src', name)
+  await writeFile(path('a.txt'), '\ufeff🌱CAFÉ\r\ncafé\rfim\n')
+  for (const name of ['b.txt', 'c.txt', 'skip.js']) await writeFile(path(name), 'café')
+  await writeFile(join(dir, 'outside.txt'), 'café')
+  const docs = new DocumentStore(), search = new SearchStore(folders)
+  await docs.select(path('a.txt'), null, async () => 'cancel', current)
+  const doc = docs.snapshot!, marks = [{ id: doc.id, revision: doc.revision, clean: true }]
+  const page = await finish(search, search.start(root, 'café', false, current, { path: 'src/', extensions: 'TXT' }))
+  assert.equal(page.found, 4); assert.equal(page.files, 3)
+  const ids = page.items.filter(match => match.line === 1).map(match => match.id)
+  const review = await search.preview(page.job, ids, '$&', marks, docs, current)
+  assert.deepEqual(review.files.map(f => f.file), ['src/a.txt', 'src/b.txt', 'src/c.txt'])
+  assert.deepEqual(review.files[0]!.open, { id: doc.id, revision: doc.revision })
+  const apply = (index: number) => search.applyFile(page.job, review.id, review.files[index]!.id, marks, docs, current)
+  await writeFile(path('b.txt'), 'outro conteúdo')
+  assert.equal((await apply(0))?.text, '🌱$&\r\ncafé\rfim\n')
+  assert.equal(await readFile(path('a.txt'), 'utf8'), '\ufeff🌱$&\r\ncafé\rfim\n')
+  await assert.rejects(apply(1), denied('stale')); await assert.rejects(apply(2), denied('stale'))
+  assert.equal(await readFile(path('b.txt'), 'utf8'), 'outro conteúdo')
+  assert.equal(await readFile(path('c.txt'), 'utf8'), 'café')
+  assert.equal(await readFile(path('skip.js'), 'utf8'), 'café')
+}))
+
+test('dirty and orphaned grants, post-review dirtiness, explicit refusal and cancel require a fresh review', async () => fixture(async (dir, folders, root) => {
+  const path = join(dir, 'example.txt'); await writeFile(path, 'find')
+  const docs = new DocumentStore(), search = new SearchStore(folders)
+  await docs.select(path, null, async () => 'cancel', current)
+  const { id, revision } = docs.snapshot!, dirty = [{ id, revision, clean: false }], clean = [{ id, revision, clean: true }]
+  const page = await finish(search, search.start(root, 'find', true, current)), ids = page.items.map(item => item.id)
+  const preview = (marks = clean) => search.preview(page.job, ids, 'changed', marks, docs, current)
+  assert.ok((await preview(dirty)).files[0]!.excluded)
+  let plan = await preview()
+  const apply = (marks = clean) => search.applyFile(page.job, plan.id, plan.files[0]!.id, marks, docs, current)
+  await assert.rejects(apply(dirty), denied('conflict')); await assert.rejects(apply(), denied('stale'))
+  plan = await preview(); search.refusePreview(page.job, plan.id); await assert.rejects(apply(), denied('stale'))
+  plan = await preview(); await search.cancel(page.job, current); await assert.rejects(apply(), denied('stale'))
+  plan = await preview(); await assert.rejects(search.applyFile(page.job, plan.id, randomUUID(), clean, docs, current))
+  await assert.rejects(apply(), denied('stale'))
+  await docs.release({ id, revision, text: 'find' }, async () => 'discard', current)
+  assert.ok((await preview(dirty)).files[0]!.excluded)
+  assert.equal(await readFile(path, 'utf8'), 'find')
+}))
+
+test('preview discloses truncation, checks output BOM budget and never replaces a changed root or linked leaf', async () => fixture(async (dir, folders, root) => {
+  const path = join(dir, 'example.txt'), source = '\ufeffxxx'; await writeFile(path, source)
+  const docs = new DocumentStore(), search = new SearchStore(folders, { limits: { matches: 2, fileBytes: 8 } })
+  const page = await finish(search, search.start(root, 'x', false, current)), ids = page.items.map(item => item.id)
+  const preview = (replacement: string) => search.preview(page.job, ids, replacement, [], docs, current)
+  const overflow = await preview('abc'); assert.ok(overflow.partial); assert.match(overflow.files[0]!.excluded!, /limite/)
+  const linked = await preview('y'), second = join(dir, 'other.txt')
+  await link(path, second)
+  await assert.rejects(search.applyFile(page.job, linked.id, linked.files[0]!.id, [], docs, current))
+  assert.equal(await readFile(second, 'utf8'), source)
+  await rm(second)
+  const fresh = await finish(search, search.start(root, 'x', false, current))
+  const plan = await search.preview(fresh.job, [fresh.items[0]!.id], 'z', [], docs, current)
+  await rename(dir, dir + '-original'); await mkdir(dir); await writeFile(path, 'replacement')
+  await assert.rejects(search.applyFile(fresh.job, plan.id, plan.files[0]!.id, [], docs, current))
+  assert.equal(await readFile(path, 'utf8'), 'replacement')
+}))
+
+test('profile exclusion uses the canonical root and parent even when a destination is new', async () => fixture(async dir => {
+  const profile = join(dir, 'application profile'), child = join(profile, 'nested'), alias = join(dir, 'alternate-profile')
+  await mkdir(child, { recursive: true })
+  await symlink(profile, alias, process.platform === 'win32' ? 'junction' : 'dir')
+  assert.equal(outsideApplicationProfile(alias, join(child, 'new.txt')), false)
+  assert.equal(outsideApplicationProfile(profile, join(alias, 'nested', 'new.txt')), false)
+  assert.equal(outsideApplicationProfile(profile, join(dir, 'new.txt')), true)
+  assert.equal(outsideApplicationProfile(join(dir, 'unavailable'), join(dir, 'new.txt')), false)
+}))
+
+test('loss of acknowledgment after native replacement preserves uncertainty and stops later files', async () => fixture(async (dir, folders, root) => {
+  const first = join(dir, 'a.txt'), second = join(dir, 'b.txt')
+  await writeFile(first, 'before'); await writeFile(second, 'before')
+  const docs = new DocumentStore(async (from, to) => { await rename(from, to); throw new Error('lost completion') })
+  await docs.select(first, null, async () => 'cancel', current)
+  const { id, revision } = docs.snapshot!, marks = [{ id, revision, clean: true }]
+  const search = new SearchStore(folders), page = await finish(search, search.start(root, 'before', true, current))
+  const plan = await search.preview(page.job, page.items.map(item => item.id), 'after', marks, docs, current)
+  await assert.rejects(search.applyFile(page.job, plan.id, plan.files[0]!.id, marks, docs, current), denied('unconfirmed'))
+  assert.equal(await readFile(first, 'utf8'), 'after'); assert.equal(docs.snapshot!.text, 'before')
+  await assert.rejects(search.applyFile(page.job, plan.id, plan.files[1]!.id, marks, docs, current), denied('stale'))
+  assert.equal(await readFile(second, 'utf8'), 'before')
+}))
 
 test('explicit Workspace roots at or below .git are refused before starting search', async () => fixture(async (dir, folders) => {
   const metadata = join(dir, '.GiT'), nested = join(metadata, 'nested')

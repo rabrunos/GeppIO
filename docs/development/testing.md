@@ -1178,6 +1178,11 @@ Use `pnpm test:isolated quick-open` and its `--scale125` variant for filename
 filtering, keyboard focus, revoked results, and preservation of an edited
 Monaco tab, shared Search/Git windows, Terminal and a plugin Worker.
 
+Run `pnpm.cmd test:isolated search-replace` at default scale, with `--scale125` and with
+`--dev`. The fixture exercises path and extension filters, selected literal replacements,
+dirty-tab exclusions, review cancellation, a change on disk after preview, and per-file receipts.
+It compares raw UTF-8 bytes and the open Monaco model after the first confirmed file.
+
 Link CI to the exact commit and distinguish global result, job,
 step and tested scope. A passed source check is not a semantic TypeScript build, effective model
 setting, physical mouse/DPI acceptance, Linux support or secure community-plugin boundary.

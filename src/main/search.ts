@@ -3,6 +3,8 @@ import { relative, sep } from 'node:path'
 import { setImmediate as yieldToMain } from 'node:timers/promises'
 import { SEARCH_LIMITS, searchText, validSearchQuery } from '../shared/search.ts'
 import type { SearchMatch, SearchOpenResult, SearchPage } from '../shared/search.ts'
+import { emptySearchFilters, includedByFilters, REPLACE_LIMITS, replacePositions, validSearchFilters } from '../shared/search-replacement.ts'
+import type { ReplacementFile, ReplacementMark, ReplacementPreview, SearchFilters } from '../shared/search-replacement.ts'
 import { DocumentFailure, inspectSearchDocument } from './documents.ts'
 import type { DocumentStore } from './documents.ts'
 import { DirectoryStore, inspectExplorerPath } from './explorer.ts'
@@ -14,9 +16,11 @@ type Limits = { [K in keyof typeof SEARCH_LIMITS]: number }
 type Inspected = Awaited<ReturnType<typeof inspectSearchDocument>>
 type Target = { path: string; chain: string; witness: Inspected['witness'] }
 type Hit = { match: SearchMatch; target: Target; bytes: number }
+type PreviewFile = { display: ReplacementFile; target: Target; positions: SearchMatch[] }
+type Plan = { id: string; replacement: string; pending: PreviewFile[]; applying: boolean }
 interface Job extends ProjectJob {
   query: string; matchCase: boolean; files: number; bytes: number
-  resultBytes: number; hits: Hit[]
+  resultBytes: number; hits: Hit[]; filters: SearchFilters; plan?: Plan
 }
 const stale = () => new DocumentFailure('stale')
 
@@ -26,10 +30,10 @@ export class SearchStore extends ProjectTraversal<Job, Limits> {
     super(directories, boundedScanLimits(SEARCH_LIMITS, options.limits), options.now)
     this.inspect = options.inspect ?? inspectSearchDocument
   }
-  start(root: string, query: string, matchCase: boolean, current: () => boolean): SearchPage {
+  start(root: string, query: string, matchCase: boolean, current: () => boolean, filters = emptySearchFilters): SearchPage {
     const scope = this.scope(root, current)
-    if (!validSearchQuery(query) || typeof matchCase !== 'boolean') throw new DocumentFailure('invalid')
-    const job: Job = { ...scope, query, matchCase, files: 0, bytes: 0, hits: [], resultBytes: 2 }
+    if (!validSearchQuery(query) || typeof matchCase !== 'boolean' || !validSearchFilters(filters)) throw new DocumentFailure('invalid')
+    const job: Job = { ...scope, query, matchCase, filters: { ...filters }, files: 0, bytes: 0, hits: [], resultBytes: 2 }
     this.launch(job)
     return this.page(job, 0)
   }
@@ -42,6 +46,7 @@ export class SearchStore extends ProjectTraversal<Job, Limits> {
   }
   async cancel(id: string, current: () => boolean): Promise<SearchPage> {
     const job = this.owned(id, current)
+    job.plan = undefined
     this.deadline(job)
     if (job.status === 'running') { job.status = 'canceled'; job.reason = 'Busca cancelada. Os resultados já encontrados continuam disponíveis.' }
     return this.read(id, 0, current)
@@ -59,6 +64,8 @@ export class SearchStore extends ProjectTraversal<Job, Limits> {
     return page
   }
   protected async scanFile(job: Job, path: string, chain: string) {
+    const file = relative(this.directories.descriptor!.path, path).split(sep).join('/')
+    if (!includedByFilters(file, job.filters)) return
     const control = this.readControl(path, chain, size => {
       this.running(job)
       if (size > this.limits.fileBytes) throw new DocumentFailure('oversized')
@@ -68,7 +75,6 @@ export class SearchStore extends ProjectTraversal<Job, Limits> {
     this.running(job)
     if ((await inspectExplorerPath(path, 'file')).chain !== chain) throw stale()
     this.running(job)
-    const file = relative(this.directories.descriptor!.path, path).split(sep).join('/')
     const target = { path, chain, witness }
     job.files++
     for (const position of searchText(text, job.query, job.matchCase)) {
@@ -80,6 +86,71 @@ export class SearchStore extends ProjectTraversal<Job, Limits> {
       if (job.hits.length === this.limits.matches || job.resultBytes === this.limits.resultBytes) this.stop(job, 'A busca atingiu o limite de resultados.')
       if (job.hits.length % 64 === 0) await yieldToMain()
     }
+  }
+  async preview(id: string, ids: string[], replacement: string, marks: ReplacementMark[], documents: DocumentStore, current: () => boolean): Promise<ReplacementPreview> {
+    const job = this.owned(id, current)
+    if (job.status === 'running' || job.status === 'failed' || job.plan?.applying) throw new DocumentFailure('busy')
+    const plan: Plan = { id: randomUUID(), replacement, pending: [], applying: false }
+    job.plan = plan
+    const check = () => { if (this.owned(id, current).plan !== plan) throw stale() }
+    await this.validateRoot(job, current); check()
+    const selected = new Set(ids), files = new Map<Target, PreviewFile>()
+    for (const hit of job.hits) {
+      if (!selected.delete(hit.match.id)) continue
+      let file = files.get(hit.target)
+      if (!file) {
+        if (files.size === REPLACE_LIMITS.files) throw new DocumentFailure('limit')
+        file = { display: { id: randomUUID(), file: hit.match.file, matches: 0, open: null }, target: hit.target, positions: [] }
+        files.set(hit.target, file)
+      }
+      file.display.matches++; file.positions.push(hit.match)
+    }
+    if (selected.size || !files.size) throw stale()
+    const ordered = [...files.values()].sort((a, b) => a.display.file < b.display.file ? -1 : a.display.file > b.display.file ? 1 : 0)
+    for (const file of ordered) {
+      const { path, chain, witness } = file.target
+      try {
+        file.display.open = documents.searchBinding(path, witness, marks)
+        const disk = await this.inspect(path, this.readControl(path, chain, check, () => {})); check()
+        if (disk.witness.identity !== witness.identity || disk.witness.fingerprint !== witness.fingerprint) throw stale()
+        if (Buffer.byteLength(replacePositions(disk.text, file.positions, replacement)) + (disk.bom ? 3 : 0) > this.limits.fileBytes) throw new DocumentFailure('oversized')
+        plan.pending.push(file)
+      } catch (error) {
+        check()
+        file.display.excluded = error instanceof DocumentFailure && error.kind === 'oversized' ? error.message :
+          'Arquivo alterado, indisponível, protegido ou com rascunho pendente. Confira-o e gere outra prévia.'
+      }
+    }
+    check()
+    const preview = { id: plan.id, files: ordered.map(file => file.display), partial: job.status !== 'complete' }
+    if (Buffer.byteLength(JSON.stringify({ ok: true, preview })) > this.limits.chunkBytes) { job.plan = undefined; throw new DocumentFailure('limit') }
+    return preview
+  }
+  refusePreview(jobId: string, previewId: string) {
+    const job = this.job
+    if (job?.id === jobId && job.plan?.id === previewId && !job.plan.applying) job.plan = undefined
+  }
+  async applyFile(id: string, preview: string, fileId: string, marks: ReplacementMark[], documents: DocumentStore, current: () => boolean) {
+    const job = this.owned(id, current), plan = job.plan, file = plan?.pending[0]
+    if (!plan || plan.applying || plan.id !== preview || !file || file.display.id !== fileId) {
+      this.refusePreview(id, preview); throw stale()
+    }
+    const valid = () => this.job === job && job.current() && current() && job.plan === plan
+    const check = () => { if (!valid()) throw stale() }
+    plan.applying = true
+    const { path, chain, witness } = file.target
+    try {
+      await this.validateRoot(job, current); check()
+      const doc = await documents.replaceSearchFile(path, witness, file.display.open, marks, this.readControl(path, chain, check, () => {}),
+        valid, text => replacePositions(text, file.positions, plan.replacement))
+      plan.pending.shift()
+      if (!plan.pending.length) job.plan = undefined
+      this.directories.invalidateFile(path)
+      return doc
+    } catch (error) {
+      if (job.plan === plan) job.plan = undefined
+      throw error
+    } finally { plan.applying = false }
   }
   async open(id: string, match: string, documents: DocumentStore, current: () => boolean): Promise<SearchOpenResult> {
     const job = this.owned(id, current)

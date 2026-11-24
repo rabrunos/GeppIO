@@ -2,6 +2,10 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.74] — 2026-11-24
+
+- Filter project text search by literal relative path and extension. Review selected matches before replacing them, see exclusions for changed documents, and track each file's outcome.
+
 ## [0.1.0-alpha.73.1] — 2026-11-23
 
 - Derive the editor tabs' accessible reorder shortcuts from the supported arrow keys. Record the verified historical false positive for the literal shortcut in Alpha.73.

@@ -3,6 +3,26 @@ import { randomUUID } from 'node:crypto'
 import test from 'node:test'
 import { SEARCH_LIMITS, searchText, validSearchQuery, validSearchRequest } from '../src/shared/search.ts'
 import { wellFormedText } from '../src/shared/documents.ts'
+import { includedByFilters, validSearchFilters } from '../src/shared/search-replacement.ts'
+
+test('path and suffix filters are bounded literal comparisons and mutation messages accept only reviewed opaque identities', () => {
+  const job = randomUUID(), id = randomUUID(), revision = randomUUID(), mark = { id, revision, clean: true }
+  for (const path of ['/a', '/', '../x', 'a//b', 'a/./b', 'a\\b', '*.txt', 'C:/private', 'x'.repeat(513)])
+    assert.equal(validSearchFilters({ path, extensions: 'txt' }), false, path)
+  for (const extensions of ['.txt', 'txt,,md', 'x'.repeat(17), Array(13).fill('md').join(',')])
+    assert.equal(validSearchFilters({ path: '', extensions }), false)
+  const filters = { path: 'src/', extensions: 'TXT, md' }
+  assert.ok(validSearchRequest('start', [job, 'a', false, filters]))
+  assert.ok(includedByFilters('src/a.TxT', filters))
+  assert.equal(includedByFilters('src2/a.txt', filters), false)
+  assert.equal(includedByFilters('src/a.txt', { path: 'src/a', extensions: '' }), false)
+  assert.ok(validSearchRequest('preview', [job, [id], '', [mark]]))
+  for (const ids of [[], [id, id], ['src/a.txt'], Array(1001).fill(id)]) assert.equal(validSearchRequest('preview', [job, ids, 'x', []]), false)
+  for (const replacement of ['x'.repeat(1025), '\u0000', '\ud800']) assert.equal(validSearchRequest('preview', [job, [id], replacement, []]), false)
+  assert.ok(validSearchRequest('applyFile', [job, revision, id, [mark]]))
+  for (const marks of [[mark, mark], [{ ...mark, path: 'src/a.txt' }], [{ ...mark, clean: 'yes' }]])
+    assert.equal(validSearchRequest('applyFile', [job, revision, id, marks]), false)
+})
 
 test('literal Unicode search uses source UTF-16 columns across CR, LF and CRLF', () => {
   const text = '🌱 É.[x]\\$\r\ne.[x]\\$\rÉ.[x]\\$\né.[x]\\$'

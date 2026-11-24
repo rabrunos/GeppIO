@@ -1,21 +1,30 @@
 import { validSearchQuery } from '../../../shared/search.ts'
 import type { SearchBridge, SearchMatch, SearchPage, SearchResult } from '../../../shared/search.ts'
 import type { ExplorerSession } from '../files-editor/explorer-session.ts'
+import { emptySearchFilters, validReplacement, validSearchFilters } from '../../../shared/search-replacement.ts'
+import type { ReplacementPreview, SearchFilters } from '../../../shared/search-replacement.ts'
 
 type SearchStatus = SearchPage['status'] | 'idle' | 'starting' | 'canceling'
 interface State {
   root: string | null; query: string; matchCase: boolean; submitted: string
   status: SearchStatus; page: SearchPage | null; matches: readonly SearchMatch[]
   feedback: string | null
+  filters: SearchFilters; submittedFilters: SearchFilters; submittedCase: boolean; replacement: string
+  selected: ReadonlySet<string>; preview: ReplacementPreview | null; preparing: boolean; applying: boolean
+  outcomes: ReadonlyMap<string, string>
 }
-const idle = { status: 'idle' as const, submitted: '', page: null, matches: [], feedback: null }
+const idle = { status: 'idle' as const, submitted: '', page: null, matches: [], feedback: null,
+  selected: new Set<string>(), preview: null, preparing: false, applying: false, outcomes: new Map<string, string>() }
 
 /** Owns the native job and its pages across Search panel and App switches. */
 export class SearchSession {
   private readonly bridge: SearchBridge
   private readonly explorer: ExplorerSession
   private readonly reveal: (document: string, match: SearchMatch) => boolean
-  private state: State = { root: null, query: '', matchCase: false, ...idle }
+  private state: State = { root: null, query: '', matchCase: false, filters: emptySearchFilters, submittedFilters: emptySearchFilters,
+    submittedCase: false, replacement: '', ...idle }
+  private reviewVersion = 0
+  private stopRequested = false
   private listeners = new Set<() => void>()
   private unsubscribe: (() => void) | null = null
   private timer: ReturnType<typeof setTimeout> | null = null
@@ -68,15 +77,81 @@ export class SearchSession {
     if (this.state.page?.status === 'running') this.release(this.state.page.job)
     this.update({ root: null, ...idle })
   }
-  setQuery(query: string) { this.update({ query }) }
-  setMatchCase(matchCase: boolean) { this.update({ matchCase }) }
-  async start() {
-    const { root, query, matchCase } = this.state
-    if (!root || this.locked || !validSearchQuery(query)) return
-    const generation = this.invalidate()
-    this.update({ ...idle, status: 'starting', submitted: query })
+  private changeReview(patch: Partial<State>) {
+    if (this.state.applying) return
+    this.reviewVersion++
+    if ((this.state.preview || this.state.preparing) && this.state.page) this.release(this.state.page.job)
+    this.update({ preview: null, preparing: false, outcomes: new Map(), ...patch })
+  }
+  setQuery(query: string) { this.changeReview({ query }) }
+  setMatchCase(matchCase: boolean) { this.changeReview({ matchCase }) }
+  setFilters(filters: SearchFilters) { this.changeReview({ filters }) }
+  setReplacement(replacement: string) { this.changeReview({ replacement }) }
+  selectMatch(id: string, checked: boolean) {
+    const selected = new Set(this.state.selected)
+    if (checked) selected.add(id); else selected.delete(id)
+    this.changeReview({ selected })
+  }
+  selectAll(checked: boolean) { this.changeReview({ selected: new Set(checked ? this.state.matches.map(match => match.id) : []) }) }
+  get previewUnavailable() {
+    const s = this.state
+    if (this.locked || s.preparing || s.applying) return 'Aguarde a operação em andamento.'
+    if (!s.page || !['complete','partial','canceled'].includes(s.status) || s.matches.length < s.page.found) return 'Conclua a busca para revisar os resultados.'
+    if (s.query !== s.submitted || s.matchCase !== s.submittedCase || s.filters.path !== s.submittedFilters.path || s.filters.extensions !== s.submittedFilters.extensions) return 'Execute a busca com os filtros atuais.'
+    if (!s.selected.size) return 'Selecione as ocorrências a substituir.'
+    if (!validReplacement(s.replacement)) return 'Use até 1.024 caracteres UTF-16 em uma linha.'
+    return null
+  }
+  async prepare() {
+    if (this.previewUnavailable) return
+    const s = this.state, review = ++this.reviewVersion, generation = this.generation
+    this.update({ preparing: true, preview: null, outcomes: new Map(), feedback: null })
     try {
-      const result = await this.bridge.start(root, query, matchCase)
+      const result = await this.bridge.preview(s.page!.job, [...s.selected], s.replacement, this.explorer.editor.replacementMarks())
+      if (generation !== this.generation || review !== this.reviewVersion) return
+      this.update(result.ok ? { preview: result.preview } : { feedback: result.error })
+    } catch {
+      if (generation === this.generation && review === this.reviewVersion) this.update({ feedback: 'Falha ao obter a prévia. Gere outra prévia.' })
+    } finally { if (generation === this.generation && review === this.reviewVersion) this.update({ preparing: false }) }
+  }
+  cancelReplacement() {
+    if (this.state.applying) { this.stopRequested = true; this.update({ feedback: 'Interrompendo após o arquivo em andamento.' }) }
+    else this.changeReview({ feedback: 'Prévia cancelada.' })
+  }
+  async apply() {
+    const { page, preview } = this.state
+    if (!page || !preview || this.previewUnavailable || this.state.outcomes.size) return
+    const pending = preview.files.filter(file => !file.excluded), generation = this.generation
+    if (!pending.length) return
+    this.stopRequested = false
+    const outcomes = new Map(pending.map(file => [file.id, 'Não executado']))
+    this.update({ applying: true, outcomes: new Map(outcomes), feedback: null })
+    let refresh = false
+    try {
+      for (const file of pending) {
+        if (this.stopRequested || generation !== this.generation || this.locked) break
+        const result = await this.explorer.editor.applyReplacement(file.open, marks => this.bridge.applyFile(page.job, preview.id, file.id, marks))
+        refresh ||= result.ok || result.uncertain === true
+        outcomes.set(file.id, result.ok ? ['Confirmado', result.notice].filter(Boolean).join('. ') : (result.uncertain ? 'Incerto. ' : 'Recusado. ') + result.error)
+        if (generation !== this.generation) break
+        this.update({ outcomes: new Map(outcomes) })
+        if (!result.ok) break
+      }
+    } finally {
+      if (generation === this.generation) {
+        this.release(page.job)
+        this.update({ applying: false, feedback: 'Confira o resultado por arquivo. Para outra substituição, revise uma nova prévia.' })
+        if (refresh) await this.explorer.refresh()
+      }
+    }
+  }
+  async start() {
+    const { root, query, matchCase, filters, applying } = this.state
+    if (!root || this.locked || applying || !validSearchQuery(query) || !validSearchFilters(filters)) return
+    const generation = this.invalidate()
+    this.update({ ...idle, status: 'starting', submitted: query, submittedCase: matchCase, submittedFilters: { ...filters } })
+    try {
+      const result = filters.path || filters.extensions ? await this.bridge.start(root, query, matchCase, filters) : await this.bridge.start(root, query, matchCase)
       if (generation !== this.generation) {
         if (result.ok && result.value.status === 'running') this.release(result.value.job)
         return

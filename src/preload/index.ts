@@ -70,10 +70,12 @@ const git = Object.freeze<import('../shared/git.ts').GitBridge>({
   historyCompare: (root, snapshot, commit, file) => ipcRenderer.invoke('git:historyCompare', root, snapshot, commit, file)
 })
 const search = Object.freeze<import('../shared/search.ts').SearchBridge>({
-  start: (root, query, matchCase) => ipcRenderer.invoke('search:start', root, query, matchCase),
+  start: (root, query, matchCase, ...filters) => ipcRenderer.invoke('search:start', root, query, matchCase, ...filters),
   read: (job, offset) => ipcRenderer.invoke('search:read', job, offset),
   cancel: job => ipcRenderer.invoke('search:cancel', job),
-  open: (job, match) => ipcRenderer.invoke('search:open', job, match)
+  open: (job, match) => ipcRenderer.invoke('search:open', job, match),
+  preview: (job, matches, replacement, marks) => ipcRenderer.invoke('search:preview', job, matches, replacement, marks),
+  applyFile: (job, preview, file, marks) => ipcRenderer.invoke('search:applyFile', job, preview, file, marks)
 })
 const workspace = Object.freeze<import('../shared/workspace.ts').WorkspaceBridge>({
   read: () => ipcRenderer.invoke('workspace:read'),

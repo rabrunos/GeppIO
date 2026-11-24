@@ -89,7 +89,7 @@ export function FileEditor({ session }: { session: EditorSession }) {
   const setRatio = (ratio: number) => { groups.ratio = Math.min(0.85, Math.max(0.15, ratio)); renderRatio(groups.ratio) }
   const unresolved = state.document && session.documentState(state.document.id)?.unresolved
   const active = state.document && session.documentState(state.document.id)
-  const writeBlocked = active?.renameUncertain || active?.destinationUncertain || active?.detached || session.focusUnconfirmed
+  const writeBlocked = active?.renameUncertain || active?.destinationUncertain || active?.replacementUncertain || active?.detached || session.focusUnconfirmed
   const canReload = !!state.document && !state.document.untitled && !active?.destinationUncertain && !active?.detached && !session.focusUnconfirmed
   useLayoutEffect(() => {
     const element = area.current

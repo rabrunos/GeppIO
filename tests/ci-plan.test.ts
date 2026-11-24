@@ -34,6 +34,7 @@ test('CI preserves all 38 distinct alpha.48 Electron invocations and public comm
   assert.deepEqual(actual, [...alpha48, 'tools/app-host-smoke.ts', 'tools/app-host-smoke.ts --scale125',
     'tools/git-window-smoke.ts', 'tools/git-window-smoke.ts --scale125',
     'tools/search-smoke.ts', 'tools/search-smoke.ts --scale125', 'tools/search-smoke.ts --dev',
+    'tools/search-replace-smoke.ts', 'tools/search-replace-smoke.ts --scale125', 'tools/search-replace-smoke.ts --dev',
     'tools/shared-windows-smoke.ts', 'tools/shared-windows-smoke.ts --scale125',
     'tools/portable-layout-smoke.ts', 'tools/portable-layout-smoke.ts --scale125',
     'tools/quick-open-smoke.ts', 'tools/quick-open-smoke.ts --scale125',

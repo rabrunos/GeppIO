@@ -1,5 +1,12 @@
 # Selected security baseline
 
+Issue #32 extends [project search](../architecture/search.md) with reviewed literal replacements.
+The primary window may submit match IDs from its own project scan. Main keeps the paths, original
+file witnesses, replacement text and ordered pending files. Each reviewed file is revalidated
+under the document transaction. The canonical app profile, unresolved bindings and dirty open
+documents are ineligible. Failure after possible substitution is reported separately from refusal
+before writing. Files have independent outcomes. Existing same-user filesystem race limits apply.
+
 Issue #55 separates [read-only Git worktree compatibility](../architecture/git.md) from the
 unchanged index mutation gate. Installed Git supplies ignore semantics in bounded immediate-child
 batches; ignored untracked trees are pruned, tracked ancestors remain validated, and rules and

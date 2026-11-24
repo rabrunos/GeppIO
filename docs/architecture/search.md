@@ -56,6 +56,26 @@ handle, sends Enter after switching back to Code, and verifies the canceled
 handle closes before iteration. Run it with `pnpm.cmd test:isolated search`, also with
 `--scale125` or `--dev`.
 
+## Filtered replacement
+
+A path filter is a literal, case-sensitive relative file name, or a directory prefix ending in
+`/`. Empty filters include all eligible paths. A path has at most 512 UTF-16 units and 32 segments.
+Empty internal segments, traversal components, backslashes, controls and Windows-reserved punctuation
+are rejected. The separate extension field accepts up to 12 comma-separated ASCII suffixes, without
+dots, matched case-insensitively. Filtering precedes source reads and keeps the traversal exclusions.
+
+After a scan, the user selects occurrences and enters a literal single-line replacement (empty text
+deletes a match). The preview binds the job and its root, the selected spans, saved file witnesses,
+the replacement and the IDs/revisions of eligible open tabs. Limits are 100 files, 1,000 matches,
+1,024 replacement UTF-16 units and 1 MiB per output including its BOM. Partial scans remain labeled.
+Main checks ancestors, file identity and bytes again when applying each reviewed file. It uses the
+document writer's flushed sibling replacement and its documented same-user race limitations.
+Each file holds the editor transaction through adoption. Other open drafts can still change between
+writes. A changed clean tab resets its Monaco undo history. Pending drafts, uncertain bindings and
+the app profile are ineligible. Confirmed changes to earlier files survive interruption. An uncertain
+receipt requires disk inspection and a fresh review before another batch. No batch writes run on scan,
+filter changes or preview alone.
+
 ## Quick Open
 
 In Code, **Abrir arquivo do projeto...** opens a filename dialog. Ctrl+P opens

@@ -1,8 +1,7 @@
 import { app, dialog, ipcMain } from 'electron'
 import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
 import { randomUUID } from 'node:crypto'
-import { isAbsolute, relative, sep } from 'node:path'
-import { DocumentFailure, DocumentStore, documentFailure, expiredDocumentResponse } from './documents.ts'
+import { DocumentFailure, DocumentStore, documentFailure, expiredDocumentResponse, outsideApplicationProfile } from './documents.ts'
 import { validDocumentRequest } from '../shared/documents.ts'
 import type { DocumentDraft, DocumentResult } from '../shared/documents.ts'
 import { DirectoryStore, ExplorerFailure, explorerFailure, explorerFileNames } from './explorer.ts'
@@ -12,6 +11,7 @@ import { mutateExplorer } from './explorer-write.ts'
 import { GitStore, GitFailure, gitFailure } from './git.ts'
 import { SearchExpired, SearchStore } from './search.ts'
 import { validSearchRequest } from '../shared/search.ts'
+import type { ReplacementMark, SearchFilters } from '../shared/search-replacement.ts'
 import { QuickOpenExpired, QuickOpenStore } from './quick-open.ts'
 import { validQuickOpenRequest } from '../shared/quick-open.ts'
 import { gitOperations, validGitRequest } from '../shared/git.ts'
@@ -34,7 +34,7 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
     reconcile: async () => (await dialog.showMessageBox(win, { type: 'warning', title: 'Conferir salvamento',
       message: 'Você conferiu no disco o resultado da operação anterior?', detail: 'O próximo seletor permite salvar este rascunho em um destino escolhido novamente.',
       buttons: ['Cancelar', 'Conferi, escolher destino'], defaultId: 0, cancelId: 0, noLink: true })).response === 1,
-    permitted: path => { const inside = relative(app.getPath('userData'), path); return isAbsolute(inside) || inside === '..' || inside.startsWith('..' + sep) }
+    permitted: path => outsideApplicationProfile(app.getPath('userData'), path)
   })
   const directories = new DirectoryStore()
   const git = new GitStore(directories)
@@ -48,7 +48,7 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
   const revoke = () => { workspace.revoke(); revokeProjectResults(); store.revoke(); directories.revoke(); ticket = null; releasedInFrame = false }
   const decide = async (name = store.snapshot?.label ?? store.snapshot?.name ?? 'arquivo', id = store.snapshot?.id, discardOnly = false) => {
     if (discardOnly) {
-      const choice = await dialog.showMessageBox(win, { type: 'warning', title: 'Renomeação não confirmada', message: 'Descartar o rascunho de ' + name + ' e fechar?',
+      const choice = await dialog.showMessageBox(win, { type: 'warning', title: 'Operação de arquivo não confirmada', message: 'Descartar o rascunho de ' + name + ' e fechar?',
         detail: 'Para conferir o arquivo antes de salvar, cancele e use Recarregar do disco.', buttons: ['Cancelar', 'Descartar'], defaultId: 0, cancelId: 0, noLink: true })
       return choice.response === 1 ? 'discard' : 'cancel'
     }
@@ -265,10 +265,7 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
     const result = await readWorkspaceTools(workspace, current)
     return current() ? result : expired
   })
-  const bound = (path: string) => {
-    const inside = relative(profile, path)
-    return (!isAbsolute(inside) && inside !== '..' && !inside.startsWith('..' + sep)) || workspace.hasFileBinding(path)
-  }
+  const bound = (path: string) => !outsideApplicationProfile(profile, path) || workspace.hasFileBinding(path)
   for (const operation of explorerMutations) ipcMain.handle(`explorer:${operation}`, async (event, ...args: unknown[]): Promise<ExplorerMutationResult> => {
     const current = projectCaller(event)
     if (!current?.() || !validExplorerMutationRequest(args, operation)) return { outcome: 'refused', message: 'Solicitação do Explorador inválida ou expirada.' }
@@ -298,6 +295,37 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
     } finally { busy = explorerWriting = false }
   })
   const searchOperations = ['start', 'read', 'cancel', 'open'] as const
+  const replacementOperations = ['preview', 'applyFile'] as const
+  for (const operation of replacementOperations) ipcMain.handle(`search:${operation}`, async (event, ...args: unknown[]) => {
+    const current = projectCaller(event)
+    if (!current?.() || !validSearchRequest(operation, args)) return { ok: false, error: 'Pedido de substituição inválido ou expirado.' }
+    if (busy || ticket || remembering || indexWriting) {
+      if (operation === 'applyFile') search.refusePreview(args[0] as string, args[1] as string)
+      return { ok: false, error: 'Aguarde a operação de arquivo e gere outra prévia.' }
+    }
+    const job = args[0] as string, marks = args[3] as ReplacementMark[]
+    if (operation === 'preview') {
+      try { return { ok: true, preview: await search.preview(job, args[1] as string[], args[2] as string, marks, store, current) } }
+      catch (error) { return { ok: false, error: error instanceof DocumentFailure && error.kind === 'limit' ? 'Reduza a seleção. Cada prévia comporta até 100 arquivos e 128 KiB de metadados.' : 'A prévia expirou ou está indisponível. Confira o projeto e os resultados.' } }
+    }
+    busy = explorerWriting = true
+    const before = store.writeCount
+    try {
+      const document = await search.applyFile(job, args[1] as string, args[2] as string, marks, store, current)
+      let notice: string | undefined
+      if (store.writeCount !== before) {
+        git.revoke(); quickOpen.revoke()
+        if (!await workspace.persist(current).catch(() => false) || workspace.recovery.snapshot.error) notice = 'A atualização da sessão lembrada não foi confirmada.'
+      }
+      if (!current()) throw new DocumentFailure(store.writeCount === before ? 'stale' : 'unconfirmed')
+      return { ok: true, document, ...(notice ? { notice } : {}) }
+    } catch (error) {
+      const uncertain = store.writeCount !== before || error instanceof DocumentFailure && error.kind === 'unconfirmed'
+      if (uncertain) { git.revoke(); quickOpen.revoke() }
+      return { ok: false, ...(uncertain ? { uncertain: true } : {}), error: uncertain ? 'Gravação não confirmada. Confira o arquivo no disco.' :
+        'Arquivo recusado. Confira a aba e o conteúdo do disco antes de gerar outra prévia.' }
+    } finally { busy = explorerWriting = false }
+  })
   for (const operation of searchOperations) ipcMain.handle(`search:${operation}`, async (event, ...args: unknown[]) => {
     const current = projectCaller(event)
     if (!current || !validSearchRequest(operation, args)) return documentFailure(new DocumentFailure('invalid'))
@@ -323,7 +351,7 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
     // Search owns its work independently. Enumeration and progress requests
     // never acquire the document transaction used for Open and Save.
     try {
-      const value = operation === 'start' ? await search.start(id, args[1] as string, args[2] as boolean, current)
+      const value = operation === 'start' ? await search.start(id, args[1] as string, args[2] as boolean, current, args[3] as SearchFilters | undefined)
         : operation === 'read' ? await search.read(id, args[1] as number, current) : await search.cancel(id, current)
       return current() ? { ok: true, value } : { ...documentFailure(new DocumentFailure('stale')), expired: true }
     } catch (error) {
@@ -370,6 +398,7 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
     for (const operation of explorerMutations) ipcMain.removeHandler(`explorer:${operation}`)
     for (const operation of gitOperations) ipcMain.removeHandler(`git:${operation}`)
     for (const operation of searchOperations) ipcMain.removeHandler(`search:${operation}`)
+    for (const operation of replacementOperations) ipcMain.removeHandler(`search:${operation}`)
     for (const operation of searchOperations) ipcMain.removeHandler(`quick-open:${operation}`)
     for (const operation of workspaceOperations) ipcMain.removeHandler(`workspace:${operation}`)
     ipcMain.removeHandler('workspace:readTools')

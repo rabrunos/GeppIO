@@ -167,7 +167,7 @@ test('project reload expires only current witnesses without starting tree, Git, 
     history: unexpected, historyPage: unexpected, historyCommit: unexpected, historyCompare: unexpected }, explorer)
   const quick = new QuickOpenSession({ start: async () => ({ ok: true, value: { job: 'names', status: 'complete', visited: 1, skipped: 0, total: 1, items: [{ id: 'name', file: file.name }], truncated: false } }),
     read: unexpected, cancel: async () => ({ ok: true }), open: unexpected }, explorer)
-  const search = new SearchSession({ start: async () => ({ ok: true, value: { job: 'text', status: 'complete', visited: 1, files: 1, skipped: 0, bytes: 4,
+  const search = new SearchSession({ preview: unexpected, applyFile: unexpected, start: async () => ({ ok: true, value: { job: 'text', status: 'complete', visited: 1, files: 1, skipped: 0, bytes: 4,
     found: 1, next: 1, more: false, items: [{ id: 'match', file: file.name, line: 1, column: 1, snippet: 'one', length: 3, highlightStart: 0, highlightEnd: 3 }] } }),
     read: unexpected, open: unexpected, cancel: unexpected }, explorer, () => false)
   git.connect(); quick.connect(); search.connect()
@@ -201,7 +201,7 @@ test('a new search cannot reveal native offsets in an unadopted draft after a cl
     open: unexpected, release: unexpected, createFile: unexpected, createDirectory: unexpected, renameFile: unexpected }, editor)
   await explorer.select()
   const reveal = t.mock.fn(() => true)
-  const search = new SearchSession({ start: async () => ({ ok: true, value: { job: 'new-job', status: 'complete', visited: 1, files: 1, skipped: 0, bytes: 7,
+  const search = new SearchSession({ preview: unexpected, applyFile: unexpected, start: async () => ({ ok: true, value: { job: 'new-job', status: 'complete', visited: 1, files: 1, skipped: 0, bytes: 7,
     found: 1, next: 1, more: false, items: [{ id: 'result', file: file.name, line: 1, column: 1, snippet: 'two', length: 3, highlightStart: 0, highlightEnd: 3 }] } }),
     read: unexpected, open: async () => ({ ...result(disk), matchesSnapshot: true }), cancel: unexpected }, explorer, reveal)
   search.connect(); t.after(() => { search.dispose(); explorer.dispose() })

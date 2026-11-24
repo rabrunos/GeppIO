@@ -6,9 +6,10 @@ import { editorText } from '../../../shared/documents.ts'
 import type { TabArrangement, WorkspaceEditor, WorkspaceSelection } from '../../../shared/workspace.ts'
 import { EditorGroups, oppositeGroup } from './editor-groups.ts'
 import type { GroupIndex } from './editor-groups.ts'
+import type { ApplyResult, ReplacementDocument, ReplacementMark } from '../../../shared/search-replacement.ts'
 
 export interface EditorSelection { start: number; end: number; top: number; left: number }
-export interface EditorDocument { document: DocumentSnapshot; text: string; cursor: number; language: DocumentLanguage | null; selection: EditorSelection; error: string | null; code: DocumentError | null; bytes: number; unresolved: boolean; renameUncertain?: boolean; destinationUncertain?: boolean; releaseUncertain?: boolean; detached?: boolean; historyVersion: number }
+export interface EditorDocument { document: DocumentSnapshot; text: string; cursor: number; language: DocumentLanguage | null; selection: EditorSelection; error: string | null; code: DocumentError | null; bytes: number; unresolved: boolean; replacementUncertain?: boolean; renameUncertain?: boolean; destinationUncertain?: boolean; releaseUncertain?: boolean; detached?: boolean; historyVersion: number }
 export interface EditorState { document: DocumentSnapshot | null; text: string; busy: boolean; reloading: string | null; error: string | null; code: DocumentError | null; cursor: number; language: DocumentLanguage | null; diskVersion: number; tabs: readonly EditorDocument[]; notice: string | null; invalidRoot: string | null; projectRoot: string | null; reloadWitness: DocumentSnapshot['location'] }
 const emptySelection = (): EditorSelection => ({ start: 0, end: 0, top: 0, left: 0 })
 type EditorOperation = 'open' | 'save' | 'saveAs' | 'saveAll' | 'release' | 'close' | 'activate'
@@ -68,9 +69,38 @@ export class EditorSession {
   }
   private draft(): DocumentDraft | null { return this.state.document ? { id: this.state.document.id, revision: this.state.document.revision, text: this.state.text } : null }
   private closingDraft(entry: EditorDocument): DocumentDraft {
-    return { id: entry.document.id, revision: entry.document.revision, text: entry.text, ...(entry.renameUncertain || entry.destinationUncertain ? { discardOnly: true } : {}) }
+    return { id: entry.document.id, revision: entry.document.revision, text: entry.text, ...(entry.renameUncertain || entry.destinationUncertain || entry.replacementUncertain ? { discardOnly: true } : {}) }
   }
   drafts(): DocumentDraft[] { return [...this.entries.values()].map(entry => this.closingDraft(entry)) }
+  replacementMarks(): ReplacementMark[] {
+    return [...this.entries.values()].map(entry => ({ id: entry.document.id, revision: entry.document.revision,
+      clean: entry.text === entry.document.text && !entry.unresolved && !entry.detached && !entry.releaseUncertain }))
+  }
+  async applyReplacement(binding: ReplacementDocument | null, apply: (marks: ReplacementMark[]) => Promise<ApplyResult>): Promise<ApplyResult> {
+    const marks = this.replacementMarks(), mark = binding && marks.find(item => item.id === binding.id)
+    if (this.locked || this.state.busy || this.navigationBusy || this.focusUnconfirmed || binding && (!mark?.clean || mark.revision !== binding.revision))
+      return { ok: false, error: 'A aba mudou ou está ocupada. Confira o rascunho e gere outra prévia.' }
+    const lost = (): ApplyResult => {
+      const error = 'Resultado da substituição incerto. Confira o arquivo no disco antes de gerar outra prévia.'
+      if (binding) { this.change(binding.id, { unresolved: true, replacementUncertain: true, code: 'unconfirmed', error }); this.view() }
+      return { ok: false, uncertain: true, error }
+    }
+    this.update({ busy: true, reloading: binding?.id ?? 'closed-search-file' })
+    try {
+      const result = await apply(marks)
+      if (!result.ok) return result.uncertain ? lost() : result
+      if (!binding) return result.document === null ? result : lost()
+      const entry = this.entries.get(binding.id), document = result.document
+      if (!entry || !document || document.id !== binding.id || entry.document.revision !== binding.revision || entry.text !== entry.document.text) return lost()
+      const length = editorText(document.text).length, changed = editorText(entry.text) !== editorText(document.text)
+      const selection = { ...entry.selection, start: Math.min(entry.selection.start, length), end: Math.min(entry.selection.end, length) }
+      this.change(binding.id, { document: { ...document, location: entry.document.location }, text: document.text, selection, cursor: selection.end,
+        bytes: new TextEncoder().encode(document.text).length + (document.bom ? 3 : 0), historyVersion: entry.historyVersion + Number(changed), code: null, error: null })
+      this.view(this.state.document?.id, { diskVersion: this.state.diskVersion + 1 })
+      return result
+    } catch { return lost() }
+    finally { this.update({ busy: false, reloading: null }) }
+  }
   edit(value: string) {
     return this.accept(applyEditorText(this.state.text, value))
   }
@@ -136,7 +166,7 @@ export class EditorSession {
     try {
       if (this.navigationBusy && !ownsNavigation) await new Promise<void>(resolve => this.navigationWaiters.add(resolve))
       const entry = target && this.entries.get(target)
-      if (entry && (kind === 'save' && entry.destinationUncertain || (kind === 'save' || kind === 'saveAs') && entry.renameUncertain)) return false
+      if (entry && (kind === 'save' && (entry.destinationUncertain || entry.replacementUncertain) || (kind === 'save' || kind === 'saveAs') && entry.renameUncertain)) return false
       const result = await action()
       if (kind === 'activate' && result.ok && result.document?.id !== target) throw new Error('Unconfirmed activation')
       const snapshots = result.documents ?? (result.ok ? result.document ? [result.document] : [] : result.confirmed ? [result.confirmed] : [])
@@ -144,7 +174,7 @@ export class EditorSession {
         const saved = (kind === 'save' || kind === 'saveAs') && target === document.id && result.ok && !result.canceled ||
           result.saves?.some(entry => entry.id === document.id && entry.status === 'saved') === true
         this.merge(document, saved)
-        if (saved) this.change(document.id, { error: null, code: null, unresolved: false, destinationUncertain: false })
+        if (saved) this.change(document.id, { error: null, code: null, unresolved: false, replacementUncertain: false, destinationUncertain: false })
       }
       if (result.documents) for (const [id, entry] of this.entries) {
         if (!entry.releaseUncertain) continue
@@ -316,7 +346,7 @@ export class EditorSession {
       if (!current() || !document || document.id !== draft.id || this.locked) return lost()
       const previous = this.entries.get(draft.id)!, length = editorText(document.text).length
       const selection = { ...previous.selection, start: Math.min(previous.selection.start, length), end: Math.min(previous.selection.end, length) }
-      this.change(draft.id, { document, renameUncertain: false, destinationUncertain: false, text: document.text, bytes: new TextEncoder().encode(document.text).length + (document.bom ? 3 : 0),
+      this.change(draft.id, { document, renameUncertain: false, replacementUncertain: false, destinationUncertain: false, text: document.text, bytes: new TextEncoder().encode(document.text).length + (document.bom ? 3 : 0),
         selection, cursor: selection.end, historyVersion: previous.historyVersion + (editorText(previous.text) === editorText(document.text) ? 0 : 1), error: null, code: null, unresolved: false })
       this.view(draft.id, { notice: 'Arquivo recarregado do disco.', invalidRoot: result.invalidRoot ?? this.state.invalidRoot, ...witness(document) })
       return true

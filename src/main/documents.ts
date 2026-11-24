@@ -1,10 +1,12 @@
 import { createHash, randomUUID } from 'node:crypto'
+import { realpathSync } from 'node:fs'
 import { lstat, open, realpath, rename, unlink } from 'node:fs/promises'
 import type { BigIntStats } from 'node:fs'
-import { basename, dirname, isAbsolute, join, parse, relative, resolve } from 'node:path'
+import { basename, dirname, isAbsolute, join, parse, relative, resolve, sep } from 'node:path'
 import { DOCUMENT_LIMIT, DOCUMENT_SESSION_LIMITS, wellFormedText } from '../shared/documents.ts'
 import type { DocumentDraft, DocumentError, DocumentResult, DocumentSnapshot } from '../shared/documents.ts'
 import type { SaveEntry } from '../shared/documents.ts'
+import type { ReplacementMark, ReplacementDocument } from '../shared/search-replacement.ts'
 import { inspectExplorerPath } from './explorer.ts'
 import { validExplorerBasename } from '../shared/explorer.ts'
 
@@ -32,6 +34,13 @@ export function expiredDocumentResponse(result: DocumentResult): DocumentResult 
 }
 type Evidence = { path: string; chain: string; stat: BigIntStats; bytes: Buffer; text: string; bom: boolean }
 type Selection = { evidence: Evidence | null; snapshot: DocumentSnapshot; reloadPredecessor?: string; unconfirmedSave?: boolean; pendingRename?: string; uncertainDestination?: string }
+/** A new destination need not have a leaf yet. Compare canonical parent spellings, including Windows short names. */
+export function outsideApplicationProfile(profile: string, path: string): boolean {
+  try {
+    const inside = relative(realpathSync.native(profile), join(realpathSync.native(dirname(path)), basename(path)))
+    return isAbsolute(inside) || inside === '..' || inside.startsWith('..' + sep)
+  } catch { return false }
+}
 export interface DocumentDestinationUI {
   select(name: string): Promise<string | null>
   confirmOverwrite(path: string): Promise<boolean>
@@ -114,7 +123,7 @@ function documentWitness(evidence: Evidence) {
 /** Discard source and descriptor after the caller has searched this one file. */
 export async function inspectSearchDocument(path: string, control: DocumentReadControl) {
   const evidence = await inspect(path, control)
-  return { text: evidence.text, witness: documentWitness(evidence) }
+  return { text: evidence.text, bom: evidence.bom, witness: documentWitness(evidence) }
 }
 export type DocumentDecision = 'save' | 'discard' | 'cancel'
 /** One window's bounded native grants. Adding/activating a tab never replaces another grant. */
@@ -134,6 +143,49 @@ export class DocumentStore {
   /** Main-only display association. Never returned through IPC. */
   filePath(id: string): string | null { const selection = this.selections.get(id); return selection && !selection.pendingRename ? selection.evidence?.path ?? null : null }
   hasFileAt(path: string) { return [...this.selections.values()].some(entry => [entry.evidence?.path, entry.pendingRename, entry.uncertainDestination].some(held => held && relative(held, path) === '')) }
+  searchBinding(path: string, witness: ReturnType<typeof documentWitness>, marks: ReplacementMark[]): ReplacementDocument | null {
+    if (this.destinations && !this.destinations.permitted(path)) throw new DocumentFailure('unsupported')
+    // A lost release receipt can leave an unbound draft in the editor. Its file
+    // cannot be ruled out as a candidate until the user resolves that grant.
+    if (marks.some(mark => !mark.clean && !this.selections.has(mark.id))) throw new DocumentFailure('unconfirmed')
+    for (const entry of this.selections.values()) {
+      const held = [entry.evidence?.path, entry.pendingRename, entry.uncertainDestination].some(other => other && relative(other, path) === '')
+      if (!held) continue
+      const mark = marks.find(candidate => candidate.id === entry.snapshot.id)
+      if (!entry.evidence || !mark?.clean || mark.revision !== entry.snapshot.revision || entry.pendingRename || entry.uncertainDestination || entry.unconfirmedSave)
+        throw new DocumentFailure('conflict', entry.snapshot.id)
+      const original = documentWitness(entry.evidence)
+      if (original.identity !== witness.identity || original.fingerprint !== witness.fingerprint) throw new DocumentFailure('stale', entry.snapshot.id)
+      return { id: entry.snapshot.id, revision: entry.snapshot.revision }
+    }
+    return null
+  }
+  async replaceSearchFile(path: string, witness: ReturnType<typeof documentWitness>, binding: ReplacementDocument | null, marks: ReplacementMark[],
+    control: DocumentReadControl, current: () => boolean, transform: (text: string) => string): Promise<DocumentSnapshot | null> {
+    const observed = this.searchBinding(path, witness, marks)
+    if (observed?.id !== binding?.id || observed?.revision !== binding?.revision) throw new DocumentFailure('stale')
+    const selected = binding && this.selections.get(binding.id)
+    const valid = () => current() && (selected ? this.selections.get(selected.snapshot.id) === selected : !this.hasFileAt(path))
+    const original = await inspect(path, control), actual = documentWitness(original)
+    if (actual.identity !== witness.identity || actual.fingerprint !== witness.fingerprint || !valid()) throw new DocumentFailure('stale')
+    const text = transform(original.text), bytes = encode(text, original.bom)
+    try {
+      const evidence = await this.replaceBytes(original, bytes, valid)
+      if (!valid()) throw new DocumentFailure(evidence === original ? 'stale' : 'unconfirmed')
+      if (evidence === original) return selected ? { ...selected.snapshot } : null
+      this.writeGeneration++
+      if (!selected) return null
+      const snapshot = { ...selected.snapshot, revision: randomUUID(), text }
+      this.selections.set(snapshot.id, { evidence, snapshot, reloadPredecessor: selected.snapshot.revision })
+      return { ...snapshot }
+    } catch (error) {
+      if (error instanceof DocumentFailure && error.kind === 'unconfirmed') {
+        this.writeGeneration++
+        if (selected && this.selections.get(selected.snapshot.id) === selected) selected.unconfirmedSave = true
+      }
+      throw error
+    }
+  }
   create(): DocumentResult {
     if (this.selections.size >= DOCUMENT_SESSION_LIMITS.count) throw new DocumentFailure('limit')
     const snapshot: DocumentSnapshot = { id: randomUUID(), revision: randomUUID(), name: 'Sem título ' + this.nextUntitled++, text: '', bom: false, untitled: true }

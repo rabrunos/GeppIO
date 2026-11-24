@@ -94,7 +94,7 @@ try {
   assert.equal(await page.evaluate(() => window.geppio!.demoFixtures), true, 'This geometry suite explicitly opts into disposable-profile fixtures')
   assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.plugins).sort()), ['install', 'installFile', 'link', 'list', 'reload', 'remove', 'setDeveloperMode', 'setEnabled'])
   assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.pluginData).sort()), ['begin', 'end', 'read', 'write'])
-  assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.search).sort()), ['cancel', 'open', 'read', 'start'])
+  assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.search).sort()), ['applyFile', 'cancel', 'open', 'preview', 'read', 'start'])
   assert.deepEqual(await page.evaluate(() => Object.keys(window.geppio!.quickOpen).sort()), ['cancel', 'open', 'read', 'start'])
   assert.deepEqual(await page.evaluate(() => Object.fromEntries(
     Object.entries(window.geppio!.portableLayouts).map(([name, method]) => [name, typeof method])

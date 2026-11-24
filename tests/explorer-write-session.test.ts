@@ -103,7 +103,7 @@ test('an ambiguous write revokes displayed filename and text search results and 
   const p = await fixture(t, { createFile: () => receipt.promise })
   const quick = new QuickOpenSession({ start: async () => ({ ok: true, value: { job: 'names', status: 'complete', total: 1, visited: 1, skipped: 0, truncated: false, items: [{ id: 'n', file: old.name }] } }),
     read: unexpected, cancel: async () => ({ ok: true }), open: unexpected }, p.explorer)
-  const search = new SearchSession({ start: async () => ({ ok: true, value: { job: 'text', status: 'complete', visited: 1, files: 1, skipped: 0, bytes: 3, found: 1, next: 1, more: false,
+  const search = new SearchSession({ preview: unexpected, applyFile: unexpected, start: async () => ({ ok: true, value: { job: 'text', status: 'complete', visited: 1, files: 1, skipped: 0, bytes: 3, found: 1, next: 1, more: false,
     items: [{ id: 't', file: old.name, line: 1, column: 1, snippet: 'abc', length: 3, highlightStart: 0, highlightEnd: 3 }] } }), read: unexpected, cancel: unexpected, open: unexpected }, p.explorer, () => false)
   quick.connect(); search.connect(); t.after(() => { quick.dispose(); search.dispose() })
   quick.show(); quick.setQuery('antigo'); t.mock.timers.tick(150); await setImmediate()

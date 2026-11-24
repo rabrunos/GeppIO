@@ -4,6 +4,7 @@ import test from 'node:test'
 import type { TestContext } from 'node:test'
 import { setImmediate } from 'node:timers/promises'
 import type { DocumentBridge, DocumentSnapshot } from '../src/shared/documents.ts'
+import type { ApplyResult, ReplacementFile } from '../src/shared/search-replacement.ts'
 import type { SearchBridge, SearchMatch, SearchOpenResult, SearchPage, SearchResult } from '../src/shared/search.ts'
 import { EditorSession } from '../src/renderer/src/files-editor/session.ts'
 import { ExplorerSession } from '../src/renderer/src/files-editor/explorer-session.ts'
@@ -38,7 +39,7 @@ async function fixture(t: TestContext, bridge: Partial<SearchBridge> = {}) {
   const cancel = t.mock.fn(bridge.cancel ?? (async (job: string) => page(job, 'canceled')))
   const open = t.mock.fn(bridge.open ?? (async () => ({ ok: true, document, matchesSnapshot: true } as const)))
   const reveal = t.mock.fn((_id: string, _match: SearchMatch) => true)
-  const search = new SearchSession({ start, read, cancel, open }, explorer, reveal)
+  const search = new SearchSession({ start, read, cancel, open, preview: bridge.preview ?? unexpected, applyFile: bridge.applyFile ?? unexpected }, explorer, reveal)
   search.connect()
   await explorer.select()
   t.after(() => search.dispose())
@@ -47,6 +48,47 @@ async function fixture(t: TestContext, bridge: Partial<SearchBridge> = {}) {
     async tick(ms: number) { t.mock.timers.tick(ms); await setImmediate() }
   }
 }
+
+for (const interrupt of ['edit', 'cancel'] as const) test('a batch preserves its confirmed prefix on ' + interrupt + ' during an earlier write', async t => {
+  const entered = deferred<void>(), finish = deferred<ApplyResult>(), calls: string[] = []
+  const files: ReplacementFile[] = [
+    { id: 'first', file: 'first.txt', matches: 1, open: null },
+    { id: 'second', file: 'texto.txt', matches: 1, open: { id: document.id, revision: document.revision } },
+    { id: 'third', file: 'remaining.txt', matches: 1, open: null }
+  ]
+  const p = await fixture(t, {
+    preview: async () => ({ ok: true, preview: { id: 'plan', partial: true, files } }),
+    applyFile: async (_job, _preview, id) => { calls.push(id); entered.resolve(); return finish.promise }
+  })
+  await p.editor.openAuthorized(async () => ({ ok: true, document }))
+  p.search.setQuery('café'); await p.search.start(); p.search.selectAll(true); await p.search.prepare()
+  const applying = p.search.apply(); await entered.promise
+  if (interrupt === 'edit') assert.ok(p.editor.editExact('novo rascunho', document.id))
+  else p.search.cancelReplacement()
+  finish.resolve({ ok: true, document: null, notice: 'Sessão lembrada indisponível.' })
+  await applying
+  assert.deepEqual(calls, ['first'])
+  const outcomes = p.search.snapshot().outcomes
+  assert.match(outcomes.get('first')!, /Confirmado.*lembrada/)
+  assert.match(outcomes.get('second')!, interrupt === 'edit' ? /Recusado/ : /Não executado/)
+  assert.equal(outcomes.get('third'), 'Não executado')
+  if (interrupt === 'edit') assert.equal(p.editor.documentState(document.id)?.text, 'novo rascunho')
+})
+
+test('an uncertain replacement keeps the original model for explicit reconciliation', async t => {
+  const p = await fixture(t)
+  await p.editor.openAuthorized(async () => ({ ok: true, document }))
+  const binding = { id: document.id, revision: document.revision }
+  const result = await p.editor.applyReplacement(binding, async () => {
+    assert.equal(p.editor.editExact('concurrent change', document.id), false)
+    throw new Error('lost receipt')
+  })
+  assert.ok(!result.ok && result.uncertain)
+  assert.equal(p.editor.documentState(document.id)?.text, document.text)
+  assert.equal(p.editor.replacementMarks()[0]?.clean, false)
+  assert.equal(await p.editor.save(), false)
+  assert.ok(p.editor.drafts()[0]?.discardOnly)
+})
 
 test('only an explicit search scans; changing controls or unmounting a panel retains the submitted job and its pages', async t => {
   const next = { ...hit, id: 'second', line: 3 }
