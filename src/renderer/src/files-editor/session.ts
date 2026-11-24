@@ -7,6 +7,8 @@ import type { TabArrangement, WorkspaceEditor, WorkspaceSelection } from '../../
 import { EditorGroups, oppositeGroup } from './editor-groups.ts'
 import type { GroupIndex } from './editor-groups.ts'
 import type { ApplyResult, ReplacementDocument, ReplacementMark } from '../../../shared/search-replacement.ts'
+import { EditorRecovery } from './draft-recovery.ts'
+import type { RecoveryBridge } from '../../../shared/draft-recovery.ts'
 
 export interface EditorSelection { start: number; end: number; top: number; left: number }
 export interface EditorDocument { document: DocumentSnapshot; text: string; cursor: number; language: DocumentLanguage | null; selection: EditorSelection; error: string | null; code: DocumentError | null; bytes: number; unresolved: boolean; replacementUncertain?: boolean; renameUncertain?: boolean; destinationUncertain?: boolean; releaseUncertain?: boolean; detached?: boolean; historyVersion: number }
@@ -31,7 +33,11 @@ export class EditorSession {
   beforeClose: (() => Promise<void>) | null = null
   locked = false
   get selection(): EditorSelection { return this.state.document ? this.entries.get(this.state.document.id)?.selection ?? emptySelection() : emptySelection() }
-  constructor(bridge: DocumentBridge) { this.bridge = bridge }
+  readonly recovery?: EditorRecovery
+  constructor(bridge: DocumentBridge, recovery?: RecoveryBridge) {
+    this.bridge = bridge
+    if (recovery) this.recovery = new EditorRecovery(this, recovery)
+  }
   snapshot = () => this.state
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener) } }
   private update(patch: Partial<EditorState>) { this.state = { ...this.state, ...patch }; for (const listener of this.listeners) listener() }
@@ -110,14 +116,19 @@ export class EditorSession {
     const text = editorText(value) === editorText(entry.document.text) ? entry.document.text : value
     return this.accept(text, id)
   }
-  private accept(text: string, id = this.state.document?.id) {
+  adoptRecoveredText(id: string, revision: string, text: string) {
+    const entry = this.entries.get(id)
+    if (!entry?.document.untitled || entry.document.revision !== revision || entry.text && entry.text !== text) return false
+    return this.accept(text, id, entry.text !== text)
+  }
+  private accept(text: string, id = this.state.document?.id, replaceModel = false) {
     const target = id ? this.entries.get(id) : undefined
     if (!target || this.editingLocked(target.document.id)) return false
     const bytes = new TextEncoder().encode(text).length + (target.document.bom ? 3 : 0)
     if (!wellFormedText(text) || bytes > DOCUMENT_LIMIT || [...this.entries.values()].reduce((sum, entry) => sum + (entry.document.id === id ? bytes : entry.bytes), 0) > DOCUMENT_SESSION_LIMITS.bytes) {
       this.change(target.document.id, { error: 'Edição recusada: Unicode inválido ou limite de 1 MiB por arquivo / 8 MiB na sessão. O rascunho anterior foi mantido.', code: 'oversized' }); this.view(); return false
     }
-    this.change(target.document.id, { text, bytes }); this.view()
+    this.change(target.document.id, { text, bytes, ...(replaceModel ? { historyVersion: target.historyVersion + 1 } : {}) }); this.view()
     return true
   }
   feedback(notice: string) { this.update({ notice }) }

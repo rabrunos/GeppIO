@@ -2,6 +2,10 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.75] — 2026-11-24
+
+- Offer explicit recovery of unsaved UTF-8 text from a bounded plaintext profile store. Recovered documents use fresh untitled identities and Save As to choose a destination.
+
 ## [0.1.0-alpha.74.1] — 2026-11-24
 
 - Keep a reviewed replacement pending while earlier cursor and tab metadata finishes saving. Revalidate the pending file before writing and preserve per-file outcomes if the batch stops.

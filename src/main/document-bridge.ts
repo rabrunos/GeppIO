@@ -19,6 +19,9 @@ import { WorkspaceOwner } from './workspace.ts'
 import { readWorkspaceTools } from './workspace-tools.ts'
 import type { WorkspaceToolsResult } from '../shared/workspace-tools.ts'
 import { WorkspaceRecovery } from './workspace-recovery.ts'
+import { DraftRecovery } from './draft-recovery.ts'
+import { RecoveryStale } from './draft-storage.ts'
+import { recoveryOperations, validRecoveryRequest } from '../shared/draft-recovery.ts'
 import { validWorkspaceRequest } from '../shared/workspace.ts'
 import type { WorkspaceEditor, WorkspaceResult, WorkspaceView } from '../shared/workspace.ts'
 
@@ -37,6 +40,7 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
     permitted: path => outsideApplicationProfile(app.getPath('userData'), path)
   })
   const directories = new DirectoryStore()
+  const recovery = new DraftRecovery(app.getPath('userData'), store)
   const git = new GitStore(directories)
   const search = new SearchStore(directories)
   const quickOpen = new QuickOpenStore(directories)
@@ -46,7 +50,7 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
   let remembering: ReturnType<WorkspaceOwner['remember']> | null = null
   let releasedInFrame = false
   let explorerWriting = false, indexWriting = false, reloading = false, choosingDestination = false
-  const revoke = () => { workspace.revoke(); revokeProjectResults(); store.revoke(); directories.revoke(); ticket = null; releasedInFrame = false }
+  const revoke = () => { recovery.revoke(); workspace.revoke(); revokeProjectResults(); store.revoke(); directories.revoke(); ticket = null; releasedInFrame = false }
   const decide = async (name = store.snapshot?.label ?? store.snapshot?.name ?? 'arquivo', id = store.snapshot?.id, discardOnly = false) => {
     if (discardOnly) {
       const choice = await dialog.showMessageBox(win, { type: 'warning', title: 'Operação de arquivo não confirmada', message: 'Descartar o rascunho de ' + name + ' e fechar?',
@@ -105,6 +109,10 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
     const current = () => !win.isDestroyed() && !win.webContents.isDestroyed() && win.webContents.mainFrame === frame && frame.url === expectedURL && generationCurrent()
     const draft = args[0] as DocumentDraft | null
     const writesBefore = store.writeCount
+    const recoveryBefore = recovery.capture()
+    const resolving = operation === 'close' ? args[1] : args[0]
+    const resolvedDrafts = (Array.isArray(resolving) ? resolving : resolving && typeof resolving === 'object' ? [resolving] : []) as DocumentDraft[]
+    const retire = (ids: string[]) => recovery.retire(ids, recoveryBefore, current, resolvedDrafts)
     const receipt = async (result: DocumentResult) => {
       const value = await response(result, current)
       return !current() && store.writeCount !== writesBefore ? documentFailure(new DocumentFailure('unconfirmed')) : value
@@ -113,13 +121,14 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
       if (operation === 'create') return await response(store.create(), current)
       if (operation === 'saveAll') {
         const result = await store.saveAll(args[0] as DocumentDraft[], current)
+        await retire(result.saves?.filter(item => item.status === 'saved' || item.status === 'clean').map(item => item.id) ?? [])
         const changed = result.saves?.some(entry => entry.status === 'saved' || entry.status === 'unconfirmed')
         if (changed) { revokeProjectResults(); await workspace.persist(current) }
         return await receipt(result)
       }
       if (operation === 'saveAs' || operation === 'save' && store.snapshots.some(doc => doc.id === draft!.id && doc.untitled)) {
         const saved = await store.saveAs(draft!, operation === 'saveAs' && args[1] === true, current)
-        if (saved) { revokeProjectResults(); await workspace.persist(current) }
+        if (saved) { await retire([saved.id]); revokeProjectResults(); await workspace.persist(current) }
         return await receipt(store.result(!saved))
       }
       if (operation === 'open') {
@@ -143,26 +152,30 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
         const result = await store.reload(draft!, args[1] as boolean, confirmDiscard, current)
         if (!current()) return expiredDocumentResponse(result)
         if (result.ok && !result.canceled && result.document) {
+          await retire([result.document.id])
           const path = store.filePath(result.document.id)
           if (path && directories.invalidateFile(path)) revokeProjectResults()
         }
         return await response(result, current)
       }
-      if (operation === 'save') { await store.save(draft!, current); return await receipt(store.result()) }
+      if (operation === 'save') { await store.save(draft!, current); await retire([draft!.id]); return await receipt(store.result()) }
       if (operation === 'release') {
         const document = store.snapshots.find(value => value.id === draft!.id)
         const result = await store.release(draft!, () => decide(document?.label ?? document?.name, draft!.id, draft!.discardOnly), current)
         if (result.ok && !result.canceled) {
           // Even an empty native registry may have a renderer draft awaiting this receipt.
           if (current()) releasedInFrame = true
+          await retire([draft!.id])
           await workspace.persist(current)
         }
         return await receipt(result)
       }
       const supplied = args[1] as DocumentDraft[] | DocumentDraft | null, drafts = supplied === null ? [] : Array.isArray(supplied) ? supplied : [supplied]
-      if (!await store.resolveAll(drafts, document => decide(document.label ?? document.name, document.id, drafts.find(draft => draft.id === document.id)?.discardOnly), current)) return await receipt(store.result(true))
+      if (!await store.resolveAll(drafts, document => decide(document.label ?? document.name, document.id, drafts.find(draft => draft.id === document.id)?.discardOnly), current,
+        id => retire([id]))) return await receipt(store.result(true))
+      await retire(drafts.map(draft => draft.id))
       const remembered = await workspace.persist(current, true)
-      if ((!remembered || workspace.recovery.snapshot.error) && current()) await dialog.showMessageBox(win, { type: 'warning', title: 'Sessão local', message: 'Os arquivos foram resolvidos, mas a lembrança da sessão não pôde ser confirmada.', detail: 'Rascunhos não são armazenados para recuperação. Os metadados existentes foram preservados.' })
+      if ((!remembered || workspace.recovery.snapshot.error || recovery.status().error) && current()) await dialog.showMessageBox(win, { type: 'warning', title: 'Sessão local', message: 'Os arquivos foram resolvidos, mas a atualização do perfil não pôde ser confirmada.', detail: 'Cópias em texto simples podem continuar no perfil, inclusive após um descarte. Confira as cópias e a lembrança do projeto ao reabrir.' })
       if (!current()) throw new DocumentFailure('stale')
       store.revoke()
       if (operation === 'close') { closing = true; setImmediate(() => { if (!win.isDestroyed()) win.close() }) }
@@ -229,7 +242,7 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
       if (operation === 'read') { const value = await workspace.read(); return current() ? { ok: true, value } : fail() }
       if (operation === 'restore') {
         const result = await workspace.restore(current, async (name, path, unsaved) => {
-          const choice = await dialog.showMessageBox(win, { type: 'question', title: 'Restaurar projeto', message: 'Restaurar ' + name + '?', detail: 'Pasta: ' + path + '\n\nSomente arquivos salvos, abas e estado limpo de visualização serão reabertos após validação. Rascunhos, undo e processos não são recuperados.' + (unsaved ? ` Há indicação de ${unsaved} rascunho(s) não salvo(s) na última lembrança do projeto; o conteúdo deles não foi armazenado.` : ''), buttons: ['Restaurar', 'Cancelar'], defaultId: 1, cancelId: 1, noLink: true })
+          const choice = await dialog.showMessageBox(win, { type: 'question', title: 'Restaurar projeto', message: 'Restaurar ' + name + '?', detail: 'Pasta: ' + path + '\n\nSomente arquivos salvos, abas e estado limpo de visualização serão reabertos após validação. As cópias de rascunhos são oferecidas separadamente no editor.' + (unsaved ? ` Havia ${unsaved} rascunho(s) na última lembrança do projeto.` : ''), buttons: ['Restaurar', 'Cancelar'], defaultId: 1, cancelId: 1, noLink: true })
           return choice.response === 0
         }, async name => {
           const choice = await dialog.showMessageBox(win, { type: 'question', title: 'Arquivo alterado', message: name + ' mudou desde a sessão anterior.', detail: 'Nenhum conteúdo será gravado. Escolha abrir a versão atual do disco sem restaurar a posição antiga, ignorar esta aba ou cancelar toda a restauração.', buttons: ['Abrir versão atual', 'Ignorar arquivo', 'Cancelar restauração'], defaultId: 2, cancelId: 2, noLink: true })
@@ -260,6 +273,56 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
     return () => !closing && !win.isDestroyed() && !win.webContents.isDestroyed() && win.webContents.mainFrame === frame && frame.url === expectedURL && documentCurrent() && directoryCurrent()
   }
   const profile = app.getPath('userData')
+  let pendingRecoveryCopies = 0
+  for (const operation of recoveryOperations) ipcMain.handle(`draft-recovery:${operation}`, async (event, ...args: unknown[]) => {
+    const frame = event.senderFrame, valid = store.guard()
+    const current = () => !closing && !win.isDestroyed() && !win.webContents.isDestroyed() && event.sender === win.webContents &&
+      frame === win.webContents.mainFrame && frame?.url === expectedURL && valid()
+    const fail = () => operation === 'restore' ? { result: documentFailure(new DocumentFailure('stale')) } :
+      { epoch: '', enabled: false, choices: [], error: 'Pedido de recuperação expirado. Confira o estado das cópias.' }
+    if (!current() || !validRecoveryRequest(operation, args)) return fail()
+    const epoch = args[0] as string
+    const exclusive = operation === 'restore' || operation === 'configure' || operation === 'clear'
+    if (exclusive && (busy || ticket)) return fail()
+    // One debounced write and one explicit adoption can overlap. Do not retain unbounded source-bearing calls.
+    if (operation === 'snapshot' && pendingRecoveryCopies >= 2) return fail()
+    if (operation === 'snapshot') pendingRecoveryCopies++
+    if (exclusive) busy = true
+    try {
+      const status = await recovery.read()
+      if (!current() || operation !== 'read' && status.epoch !== epoch) return fail()
+      if (operation === 'read') return status
+      if (operation === 'snapshot') {
+        const result = await recovery.snapshot(epoch, args[1] as number, args[2] as DocumentDraft[], current)
+        return current() ? result : fail()
+      }
+      if (operation === 'restore') {
+        const result = await recovery.restore(epoch, args[1] as string, current)
+        return current() ? result : fail()
+      }
+      const enabled = operation === 'clear' ? status.enabled : args[1] === true
+      if (operation === 'configure' && enabled === status.enabled) {
+        const result = await recovery.reconcile(epoch, current)
+        return current() ? result : fail()
+      }
+      if (operation === 'clear' || !enabled) {
+        const choice = await dialog.showMessageBox(win, { type: 'warning', title: 'Cópias de rascunhos', message: enabled ? 'Limpar todas as cópias de recuperação?' : 'Desativar a recuperação e apagar as cópias locais?',
+          detail: 'Rascunhos ainda abertos continuam no editor. Cópias de sessões anteriores serão perdidas.', buttons: ['Cancelar', 'Confirmar'], cancelId: 0, defaultId: 0, noLink: true })
+        if (!current()) return fail()
+        if (choice.response !== 1) return status
+      }
+      const result = await recovery.configure(epoch, enabled, current)
+      return current() ? result : fail()
+    } catch (error) {
+      if (operation === 'snapshot' && current() && error instanceof RecoveryStale) {
+        const live = store.snapshots
+        const staleIds = (args[2] as DocumentDraft[]).filter(d => !live.some(doc => doc.id === d.id && doc.revision === d.revision)).map(d => d.id)
+        return { ...recovery.status(), staleIds }
+      }
+      return fail()
+    }
+    finally { if (exclusive) busy = false; if (operation === 'snapshot') pendingRecoveryCopies-- }
+  })
   ipcMain.handle('workspace:readTools', async (event, ...args: unknown[]): Promise<WorkspaceToolsResult> => {
     const caller = projectCaller(event), owner = workspace.guard()
     const expired = { ok: false, expired: true, error: 'Autorização do projeto expirada.' } as const
@@ -406,6 +469,7 @@ export function bindDocuments(win: BrowserWindow, expectedURL: string): Workspac
     for (const operation of searchOperations) ipcMain.removeHandler(`quick-open:${operation}`)
     for (const operation of workspaceOperations) ipcMain.removeHandler(`workspace:${operation}`)
     ipcMain.removeHandler('workspace:readTools')
+    for (const operation of recoveryOperations) ipcMain.removeHandler(`draft-recovery:${operation}`)
   })
   return workspace
 }

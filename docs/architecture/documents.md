@@ -2,7 +2,7 @@
 
 Alpha.47 coordinates these independent grants through a [single-root Workspace](workspace.md).
 Project transitions retain drafts, while clean project tabs and bounded primary views can be
-offered after restart with fresh native authorization. Unsaved source/undo remains memory-only.
+offered after restart with fresh native authorization. Draft text can be recovered separately from the local profile. Undo stays in memory.
 
 ## Multiple documents — alpha.46 / Issue #53
 
@@ -214,8 +214,26 @@ guarantees are outside this pilot. No library/native helper is adopted to imply 
 TOCTOU remains between validation and rename; a submitted syscall cannot be recalled by later
 revocation. This is not protection against hostile same-user native processes. Temporary flush is
 not complete directory/OS crash durability. Remote/cloud-synchronized storage is not certified.
-Unsaved buffers are memory-only, with no source crash recovery. Alpha.47's explicit clean-session
+The editor keeps bounded plaintext recovery copies in the app profile. Alpha.47's explicit clean-session
 restoration never writes a remembered draft over a disk file.
+
+### Local draft recovery
+
+Core observes dirty and untitled source independently of the mounted editor. It submits changed
+documents after 500 ms of quiet or 2 seconds of continuous edits. Main validates the frame,
+live identities, revisions and increasing submission sequence. A confirmed Save, reload or
+discard retires only covered generations. An edit accepted after the operation keeps its copy.
+
+The profile file `draft-recovery.v1` contains a versioned header and raw UTF-8 text. Only display
+basenames, independent recovery keys and BOM flags accompany the source. Each generation is
+limited to eight records, 1 MiB per document and 8 MiB total, including BOM. A fixed staging
+slot and one previous generation protect replacement. Unrestored copies count toward the same
+quota. A failed or interrupted write requires inspection. Recovery is enabled by default.
+Disabling or clearing copies requires confirmation and leaves open editor buffers available.
+
+After restart the editor offers individual copies. Opening one creates a fresh untitled document.
+Save As requests a native destination. Undo history, processes and keystrokes after the most
+recent confirmed copy can be lost. Anyone able to read the profile can read the plaintext.
 
 Native/app close request all drafts with a one-use ticket, then Main presents Save/Discard/Cancel
 for each dirty target. Cancel/failed Save keeps the app and drafts. Opening another file never

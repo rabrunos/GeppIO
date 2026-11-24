@@ -9,7 +9,7 @@ export const ciGroups = {
   core: [
     smoke('terminal'), smoke('terminal', '--scale125'),
     smoke('plugin-package'), smoke('plugin-dev'), smoke('sidebar-stack'),
-    smoke('workspace-essentials'), smoke('time-tracker'), smoke('edit-lock'), ...variants('search-replace')
+    smoke('workspace-essentials'), smoke('time-tracker'), smoke('edit-lock'), ...variants('search-replace'), ...variants('draft-recovery')
   ],
   ide: [
     ...variants('monaco'), ...variants('git'),

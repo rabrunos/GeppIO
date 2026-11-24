@@ -24,7 +24,8 @@ Arquivos & Editor oferece até oito abas de arquivos UTF-8, com limite de 1 MiB
 por arquivo e 8 MiB de fonte na sessão. Cada aba preserva rascunho, linguagem, desfazer/refazer
 e posição; **Ctrl+S** salva apenas a ativa. Abrir outro arquivo não salva o anterior. Fechar
 uma aba alterada pede Salvar/Descartar/Cancelar; fechar a janela protege também abas inativas.
-Os rascunhos ainda ficam somente na sessão. O histórico tem limite explícito e, ao atingi-lo,
+O editor guarda cópias de recuperação em texto simples no perfil por padrão. Em **Recuperação ativa**, você pode desativar ou limpar as cópias. Ao reabrir, escolha **Recuperar** e use **Salvar como** para escolher um destino. Uma interrupção pode perder as últimas teclas.
+O histórico tem limite explícito e, ao atingi-lo,
 orienta salvar ou copiar e fechar/reabrir, sem expulsar abas. Veja os [limites de edição](docs/architecture/documents.md).
 O Explorador usa uma pasta local selecionada em diálogo nativo. No modo Editor, o Explorador
 ocupa a Sidebar; no modo Widgets, coloque seu widget explicitamente em Main ou Sidebar.

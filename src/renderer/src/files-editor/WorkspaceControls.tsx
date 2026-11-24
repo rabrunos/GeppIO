@@ -22,10 +22,10 @@ export function WorkspaceControls({ session, editing, edited }: { session: Explo
       <button className="ui-button tool-button" disabled={disabled} onClick={() => { void standalone() }}>Abrir arquivo avulso</button>
       <p>Trocar ou fechar projeto mantém as abas e o Terminal abertos. Salve os rascunhos antes de sair.</p>
       <label><input type="checkbox" checked={workspace?.remember ?? true} disabled={disabled || !workspace} onChange={event => { void session.workspaceAction(event.currentTarget.checked) }} /> Lembrar projeto e abas salvas</label>
-      <p>Somente pasta, nomes de arquivos e visualização limpa ficam neste computador. Rascunhos, undo e processos não são armazenados para recuperação.</p>
+      <p>A lembrança do projeto guarda a pasta, os nomes e a visualização. Consulte as cópias locais de rascunhos no editor.</p>
       {workspace?.recovery && !state.root && <div className="workspace-recovery">
         <span>Último projeto: {workspace.recovery.name} · {workspace.recovery.tabs} aba(s)</span>
-        {!!workspace.recovery.unsaved && <p>Havia rascunhos não salvos. O conteúdo deles não foi armazenado; a restauração lê somente o disco.</p>}
+        {!!workspace.recovery.unsaved && <p>Havia rascunhos não salvos. Consulte as cópias no editor. Restaurar o projeto abre os arquivos do disco.</p>}
         <button className="ui-button tool-button" disabled={disabled || !!editor.tabs.length} onClick={() => { void restore() }}>Restaurar projeto anterior</button>
         {!!editor.tabs.length && <p>A recuperação não substitui os arquivos já abertos. Abra uma pasta explicitamente para continuar com essas abas.</p>}
       </div>}

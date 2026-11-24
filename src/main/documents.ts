@@ -186,9 +186,9 @@ export class DocumentStore {
       throw error
     }
   }
-  create(): DocumentResult {
+  create(recovered?: { name: string; bom: boolean }): DocumentResult {
     if (this.selections.size >= DOCUMENT_SESSION_LIMITS.count) throw new DocumentFailure('limit')
-    const snapshot: DocumentSnapshot = { id: randomUUID(), revision: randomUUID(), name: 'Sem título ' + this.nextUntitled++, text: '', bom: false, untitled: true }
+    const snapshot: DocumentSnapshot = { id: randomUUID(), revision: randomUUID(), name: recovered?.name ?? 'Sem título ' + this.nextUntitled++, text: '', bom: recovered?.bom ?? false, untitled: true }
     this.selections.set(snapshot.id, { snapshot, evidence: null }); this.active = snapshot.id
     return this.result()
   }
@@ -533,11 +533,16 @@ export class DocumentStore {
     }
     return { ...this.result(), saves }
   }
-  async resolveAll(drafts: readonly DocumentDraft[], decide: (document: DocumentSnapshot) => Promise<DocumentDecision>, current: () => boolean): Promise<boolean> {
+  async resolveAll(drafts: readonly DocumentDraft[], decide: (document: DocumentSnapshot) => Promise<DocumentDecision>, current: () => boolean,
+    afterSave?: (id: string) => Promise<void>): Promise<boolean> {
     this.validateDrafts(drafts, current)
     for (const id of this.selections.keys()) {
       const draft = drafts.find(value => value.id === id)!
-      try { if (!await this.resolveDraft(draft, () => decide(this.selections.get(draft.id)!.snapshot), current)) return false }
+      try {
+        const before = this.writeCount
+        if (!await this.resolveDraft(draft, () => decide(this.selections.get(draft.id)!.snapshot), current)) return false
+        if (before !== this.writeCount) await afterSave?.(id)
+      }
       catch (error) { throw new DocumentFailure(error instanceof DocumentFailure ? error.kind : 'unavailable', draft.id) }
     }
     return true

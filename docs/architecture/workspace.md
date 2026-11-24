@@ -52,11 +52,10 @@ remembered history. Missing/unsupported individual files are skipped with visibl
 replaced or unavailable root is refused; the user can explicitly select its new location. Recovery
 never searches the disk, follows links or broadens an existing grant. Native file/grant budgets remain.
 
-**Unsaved source remains memory-only.** Normal project transitions retain it; native window close
-protects all tabs. The dirty marker in metadata is a warning, not a durable draft copy. After a crash
-only saved disk content can return, with an explicit warning. There is no complete unsaved-draft,
-undo, multi-cursor, process or task recovery. In-session Monaco views/undo remain richer than the
-bounded primary selection/scroll metadata restored across restart.
+Workspace restoration reads project files from disk. Its dirty marker identifies tabs that had
+unsaved edits. The editor separately offers confirmed [plaintext draft copies](documents.md#local-draft-recovery).
+Normal project transitions retain open buffers. Undo, secondary cursors, processes and tasks
+remain session-local.
 
 ## Persistence and native boundary
 

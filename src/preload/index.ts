@@ -86,6 +86,13 @@ const workspace = Object.freeze<import('../shared/workspace.ts').WorkspaceBridge
   forget: () => ipcRenderer.invoke('workspace:forget'),
   remember: editor => ipcRenderer.invoke('workspace:remember', editor)
 })
+const draftRecovery = Object.freeze<import('../shared/draft-recovery.ts').RecoveryBridge>({
+  read: () => ipcRenderer.invoke('draft-recovery:read'),
+  snapshot: (epoch, sequence, drafts) => ipcRenderer.invoke('draft-recovery:snapshot', epoch, sequence, drafts),
+  restore: (epoch, key) => ipcRenderer.invoke('draft-recovery:restore', epoch, key),
+  configure: (epoch, enabled) => ipcRenderer.invoke('draft-recovery:configure', epoch, enabled),
+  clear: epoch => ipcRenderer.invoke('draft-recovery:clear', epoch)
+})
 const portableLayouts = Object.freeze<import('../shared/portable-layout-bridge.ts').PortableLayoutBridge>({
   importFile: () => ipcRenderer.invoke('portable-layout:import'),
   exportFile: text => ipcRenderer.invoke('portable-layout:export', text)
@@ -96,5 +103,5 @@ const quickOpen = Object.freeze<import('../shared/quick-open.ts').QuickOpenBridg
   cancel: job => ipcRenderer.invoke('quick-open:cancel', job),
   open: (job, id) => ipcRenderer.invoke('quick-open:open', job, id)
 })
-contextBridge.exposeInMainWorld('geppio', Object.freeze({ name: IDENTITY.name, version: __APP_VERSION__, platform: process.platform, plugins, pluginData, windowControls, documents, explorer, terminal, git, workspace, search, portableLayouts, quickOpen,
+contextBridge.exposeInMainWorld('geppio', Object.freeze({ name: IDENTITY.name, version: __APP_VERSION__, platform: process.platform, plugins, pluginData, windowControls, documents, explorer, terminal, git, workspace, search, draftRecovery, portableLayouts, quickOpen,
   demoFixtures: process.argv.includes('--geppio-demo-fixtures') }))

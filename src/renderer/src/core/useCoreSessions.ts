@@ -10,7 +10,7 @@ import { WorkspaceToolsSession } from '../workspace-tools/session.ts'
 
 /** One owner per renderer window. Presentation adapters only borrow these sessions. */
 export function useCoreSessions(layoutEditing: boolean) {
-  const [editor] = useState(() => new EditorSession(window.geppio!.documents))
+  const [editor] = useState(() => new EditorSession(window.geppio!.documents, window.geppio!.draftRecovery))
   const [explorer] = useState(() => new ExplorerSession(window.geppio!.explorer, editor, window.geppio!.workspace))
   const [git] = useState(() => new GitSession(window.geppio!.git, explorer))
   const [search] = useState(() => new SearchSession(window.geppio!.search, explorer,
@@ -30,6 +30,7 @@ export function useCoreSessions(layoutEditing: boolean) {
     return () => presentation.dispose()
   }, [editor])
   useEffect(() => editor.bridge.onCloseRequested(ticket => { void editor.close(ticket) }), [editor])
+  useEffect(() => editor.recovery?.connect(), [editor])
   useEffect(() => {
     function save(event: KeyboardEvent) {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's' && editor.snapshot().document) {

@@ -29,6 +29,18 @@ export function parseWorkspaceRecord(value: unknown): WorkspaceRecord {
 const statKey = (stat: BigIntStats) => [stat.dev, stat.ino, stat.birthtimeNs, stat.mtimeNs, stat.ctimeNs, stat.size, stat.mode, stat.nlink].join(':')
 const digest = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex')
 
+/** Preserve lexical link checks even when Windows supplied an 8.3 profile path. */
+export async function profileDirectory(root: string) {
+  const chain: string[] = []
+  for (let path = resolve(root); ; path = dirname(path)) {
+    const stat = await lstat(path, { bigint: true })
+    if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error(workspaceMetadataError)
+    chain.push(`${stat.dev}:${stat.ino}:${stat.birthtimeNs}`)
+    if (path === parse(path).root) break
+  }
+  return { folder: await realpath(root), chain: chain.join('/') }
+}
+
 /** Fixed app-owned metadata only. No project writes and no source/draft storage. */
 export class WorkspaceRecovery {
   private record = emptyWorkspaceRecord()
@@ -43,15 +55,9 @@ export class WorkspaceRecovery {
   get snapshot() { return { record: structuredClone(this.record), error: this.error } }
   private async directory() {
     await mkdir(this.root, { recursive: true })
-    const chain: string[] = []
-    for (let path = resolve(this.root); ; path = dirname(path)) {
-      const stat = await lstat(path, { bigint: true })
-      if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error(workspaceMetadataError)
-      chain.push(`${stat.dev}:${stat.ino}:${stat.birthtimeNs}`)
-      if (path === parse(path).root) break
-    }
-    const folder = await realpath(this.root); this.canonicalRoot = folder
-    return { folder, chain: chain.join('/') }
+    const directory = await profileDirectory(this.root)
+    this.canonicalRoot = directory.folder
+    return directory
   }
   private async raw(forget = false) {
     const directory = await this.directory(), path = join(directory.folder, 'workspace-session.v1.json')

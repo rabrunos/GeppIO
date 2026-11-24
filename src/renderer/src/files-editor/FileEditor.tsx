@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { EditorSession } from './session.ts'
+import { DraftRecoveryControls } from './DraftRecoveryControls.tsx'
 import { oppositeGroup } from './editor-groups.ts'
 import type { GroupIndex } from './editor-groups.ts'
 import { monacoPresentation } from './monaco.ts'
@@ -56,7 +57,7 @@ function GroupPane({ session, side }: { session: EditorSession; side: GroupIndex
     {selected ? <div ref={input} className="monaco-host" id={panelId} role="tabpanel" aria-labelledby={tabId(selected)} data-file-editor="" data-active-group={session.groups.active === side} aria-describedby="file-editor-feedback" />
       : session.groups.split ? <div className="file-editor-empty"><p>Este grupo está vazio.</p><button className="ui-button" disabled={state.busy || session.locked} onClick={async () => { if (await session.focusGroup(side, null)) await session.open() }}>Abrir arquivo neste grupo</button>
       <button className="ui-button" disabled={state.busy || session.locked || state.tabs.length >= 8} onClick={async () => { if (await session.focusGroup(side, null)) await session.create() }}>Novo documento neste grupo</button></div>
-      : <div className="file-editor-empty"><h2>Seu primeiro documento</h2><p>Abra um arquivo de texto ou código UTF-8 de até 1 MiB. O mesmo documento fica disponível no widget Editor de arquivo.</p><p>O rascunho fica apenas nesta sessão. Salve antes de sair.</p></div>}
+      : <div className="file-editor-empty"><h2>Seu primeiro documento</h2><p>Abra um arquivo de texto ou código UTF-8 de até 1 MiB. O mesmo documento fica disponível no widget Editor de arquivo.</p></div>}
   </section>
 }
 
@@ -113,6 +114,7 @@ export function FileEditor({ session }: { session: EditorSession }) {
     </div>
     <div className="file-editor-group-tools" aria-label="Grupos do editor">
       <TabActions session={session} />
+      {session.recovery && <DraftRecoveryControls recovery={session.recovery} blocked={state.busy || session.locked} full={state.tabs.length >= 8} />}
       <button className="ui-button" disabled={state.busy || session.locked} onClick={() => { if (split) void session.mergeGroups(); else session.sendToOtherGroup() }}>{split ? 'Unir grupos' : 'Dividir editor'}</button>
       {split && <><button className="ui-button" disabled={!active || state.busy || session.locked} title={active ? 'Abrir a aba atual no outro grupo' : 'Selecione um documento.'} onClick={() => session.sendToOtherGroup()}>Abrir no outro grupo</button>
       <button className="ui-button" disabled={!active || state.busy || session.locked} title={active ? 'Mover a aba atual para o outro grupo' : 'Selecione um documento.'} onClick={() => session.sendToOtherGroup(true)}>Mover para o outro grupo</button>

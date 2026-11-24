@@ -255,9 +255,10 @@ This catches falsely clean same-size edits without adding repository writes or w
 
 Run documents, Explorer, Git, Monaco, Terminal, Status Bar, Sidebar and the entire uninterrupted
 desktop gate as well. Windows CI includes the new command. Audit remains explicitly FAILED under
-the existing Monaco/DOMPurify exception when present. Unsaved source, undo and processes are not
-persisted; no automated test establishes power-loss durability, Linux application support or
-owner physical acceptance. The [Workspace contract](../architecture/workspace.md) records limits.
+the existing Monaco/DOMPurify exception when present. Workspace restoration reads saved files.
+Draft recovery has its own tests below. Undo and processes remain session-local. Power-loss
+durability, Linux application support and owner physical acceptance require separate evidence.
+The [Workspace contract](../architecture/workspace.md) records limits.
 
 ## Git inspection and index actions (alpha.43–45 / Issues #50–52)
 
@@ -1191,3 +1192,11 @@ Preserve original bytes and security/solver/storage assertions when updating sup
 Apply the current Target Version and authorization policy; integration/CI never authorizes closure,
 publication or acceptance of unrelated Issues. Representative CPU/RAM and native-surface workloads
 remain separate measurements, not inferred from synthetic charts, solver timings or fixture counts.
+
+### Local draft recovery
+
+Run `pnpm.cmd test:isolated draft-recovery` at default scale, with `--scale125` and with
+`--dev`. The journey terminates the disposable Electron process after confirmed named and
+untitled snapshots, defers recovery, rejects an old grant and checks exact saved bytes and
+the external file after recovery. Storage and generation-order failures are covered by
+`tests/draft-recovery.test.ts`.
