@@ -2,6 +2,10 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.78] — 2026-11-25
+
+- Exercise Sidebar collapse resistance in a window inside the Windows work area. Verify the Chromium pointer event, target, capture and release coordinates before checking the resulting layout and saved state.
+
 ## [0.1.0-alpha.77] — 2026-11-25
 
 - Pass the disposable identity-migration fixture its profile and origin independently of the Electron launcher arguments. Attest short-lived Windows recovery windows at creation and check each process's receipts at shutdown.

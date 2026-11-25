@@ -70,8 +70,6 @@ async function dragToBar(name: string, bar: string) {
 }
 try {
   await launch()
-  await sidebarResistance(page, WORKBENCH_KEY)
-  evidence.collapseResistanceReversalAndRelease = 'passed'
   await page.getByRole('button', { name: 'Plugins', exact: true }).click()
   const manager = page.getByRole('dialog', { name: 'Plugins', exact: true })
   await app!.evaluate(({ dialog }, path) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }) }, resolve('.local/plugin-packages/workspace-essentials'))
@@ -81,6 +79,9 @@ try {
   await entry.getByRole('switch').click()
   await page.waitForFunction(id => document.querySelector(`[data-plugin="${id}"]`)?.getAttribute('data-status') === 'active', plugin)
   await manager.getByRole('button', { name: 'Fechar', exact: true }).click()
+  await manager.waitFor({ state: 'hidden' })
+  await sidebarResistance(app!, page, WORKBENCH_KEY)
+  evidence.collapseResistanceReversalAndRelease = 'passed'
   await edit()
   for (const name of names) await place(name)
   await order(names); await conclude()
