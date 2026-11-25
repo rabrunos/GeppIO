@@ -2,7 +2,7 @@
   "name": "@geppio/ui",
   "private": true,
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "exports": {
     ".": "./index.ts",
     "./layout": "./floating.ts",

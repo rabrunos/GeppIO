@@ -37,6 +37,7 @@ export async function packWebLibraries() {
     manifest.version = version
     await writeFile(join(staging, 'package.json'), JSON.stringify(manifest, null, 2) + '\n')
     await cp(join(source, 'README.md'), join(staging, 'README.md'))
+    await cp(join(root, 'LICENSE'), join(staging, 'LICENSE'))
     if (library === 'geppui') await cp(join(source, 'styles'), join(staging, 'styles'), { recursive: true })
     else {
       await cp(join(source, 'styles.css'), join(staging, 'styles.css'))

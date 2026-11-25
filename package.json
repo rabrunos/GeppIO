@@ -1,8 +1,8 @@
 {
   "name": "geppio",
-  "version": "0.1.0-alpha.96",
+  "version": "0.1.0-alpha.97",
   "private": true,
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "description": "GeppIO — a local desktop workbench, Windows first.",
   "type": "module",
   "main": "out/main/index.cjs",

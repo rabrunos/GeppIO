@@ -1,6 +1,7 @@
 {
   "name": "@geppio/standalone",
   "private": true,
+  "license": "Apache-2.0",
   "type": "module",
   "exports": {
     "./composition": "./src/composition.ts",

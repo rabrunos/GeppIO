@@ -1,6 +1,7 @@
 {
   "name": "@geppio/plugin-sdk",
   "private": true,
+  "license": "Apache-2.0",
   "type": "module",
   "exports": { ".": "./src/contracts.ts", "./surface": "./src/client.ts", "./v1": "./src/plugin.d.ts", "./v2": "./src/plugin-v2.d.ts" }
 }

@@ -2,6 +2,11 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.97] — 2026-11-25
+
+- Adopt Apache License 2.0 for GeppIO-owned repository material, with the canonical license at the root, consistent first-party package metadata and concise licensing guidance.
+- Include the license in generated GeppUI and Editor archives and as LICENSE-GeppIO in Standalone distributions, preserving the existing Electron and other third-party notices.
+
 ## [0.1.0-alpha.96] — 2026-11-25
 
 - Translate the public root README into English and align its durable language rule, retaining pt-BR owner communication and application UI.

@@ -75,5 +75,7 @@ the [architecture overview](docs/architecture/overview.md) explains how the modu
 - **Understanding data and limits?** Read about [documents and recovery](docs/architecture/documents.md),
   [security boundaries](docs/architecture/security.md), and [validation](docs/development/testing.md).
 
-**License pending.** The project is marked `UNLICENSED`. The license decision is tracked in
-[Issue #60](https://github.com/rabrunos/GeppIO/issues/60).
+## License
+
+GeppIO is licensed under the [Apache License 2.0](LICENSE).
+Third-party components retain their own licenses; see the [licensing notes](docs/legal/README.md).

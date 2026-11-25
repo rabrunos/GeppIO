@@ -25,6 +25,8 @@ export async function generateStandalone(input: Definition, selected: readonly E
   await mkdir(appDir, { recursive: true })
   const runtimeFiles = ['chrome_100_percent.pak','chrome_200_percent.pak','d3dcompiler_47.dll','dxcompiler.dll','dxil.dll','ffmpeg.dll','icudtl.dat','LICENSE','LICENSES.chromium.html','resources.pak','snapshot_blob.bin','v8_context_snapshot.bin','vk_swiftshader.dll','vk_swiftshader_icd.json','vulkan-1.dll']
   for (const name of runtimeFiles) await copyFile(join(dist, name), join(base, name))
+  // Electron retains LICENSE; this separate copy covers the GeppIO engine.
+  await copyFile(new URL('../../../LICENSE', import.meta.url), join(base, 'LICENSE-GeppIO'))
   await mkdir(join(base, 'locales'))
   for (const name of await readdir(join(dist, 'locales'))) {
     if (!/^[A-Za-z0-9-]+\.pak$/.test(name) || !(await lstat(join(dist, 'locales', name))).isFile()) throw new Error('Unexpected Electron locale')

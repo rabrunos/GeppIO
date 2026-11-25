@@ -2,7 +2,7 @@
   "name": "@geppio/editor",
   "private": true,
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "exports": {
     ".": "./index.ts",
     "./vite-workers": "./vite-workers.ts",
