@@ -1,7 +1,7 @@
 import { _electron } from 'playwright'
 import type { ElectronApplication, Page } from 'playwright'
 import { spawnSync } from 'node:child_process'
-import { createHash } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import { lstatSync, readFileSync, realpathSync, writeSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { basename, dirname, join, relative, resolve } from 'node:path'
@@ -9,6 +9,7 @@ import { launchMode } from './isolation/plan.ts'
 import type { IsolationConfig } from './isolation/controller.ts'
 
 const checks: Promise<void>[] = []
+const pendingIdentity = new Set<string>()
 let isolationFailure: Error | undefined
 let verifiedWindows = 0
 function native(config: IsolationConfig, args: string[]) {
@@ -34,8 +35,29 @@ async function windowCheck(app: ElectronApplication, page: Page, config: Isolati
   native(config, ['window', String(pid), hwnd, process.env.GEPPIO_ISOLATION_DESKTOP!])
   verifiedWindows++
 }
+export function countIdentityReceipts(helper: string, nonce: string, pid: number, desktop: string): number {
+  const path = join(dirname(helper), 'identity-' + nonce + '.jsonl')
+  const stat = lstatSync(path)
+  if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || realpathSync(path) !== path || stat.size > 1024 * 1024) throw new Error('IDENTITY_RECEIPT_FILE')
+  const lines = readFileSync(path, 'utf8').split('\n')
+  if (lines.pop() !== '' || lines.length < 2) throw new Error('IDENTITY_MISSING_WINDOW_OR_END')
+  const ids = new Set<number>()
+  for (const [index, line] of lines.entries()) {
+    const record = JSON.parse(line)
+    if (record?.nonce !== nonce || record.pid !== pid || record.desktop !== desktop) throw new Error('IDENTITY_RECEIPT_BINDING')
+    if (index === lines.length - 1) {
+      if (record.kind !== 'closed' || record.count !== ids.size) throw new Error('IDENTITY_RECEIPT_COUNT')
+    } else {
+      if (record.kind !== 'window' || !Number.isSafeInteger(record.id) || record.id <= 0 || ids.has(record.id) ||
+        typeof record.hwnd !== 'string' || !/^[1-9a-f][a-f0-9]{0,15}$/.test(record.hwnd)) throw new Error('IDENTITY_WINDOW_RECEIPT')
+      ids.add(record.id)
+    }
+  }
+  return ids.size
+}
 export async function finishIsolatedLaunches() {
   await Promise.all(checks)
+  if (pendingIdentity.size) throw new Error('IDENTITY_PROCESS_NOT_VERIFIED')
   if (isolationFailure) throw isolationFailure
   return verifiedWindows
 }
@@ -51,9 +73,22 @@ export const electron: Pick<typeof _electron, 'launch'> = {
     const env = options.env ?? process.env
     if (env.GEPPIO_ISOLATION_CONFIG !== process.env.GEPPIO_ISOLATION_CONFIG || env.GEPPIO_ISOLATION_DESKTOP !== desktop || env.GEPPIO_TEST_VISIBLE) throw new Error('LAUNCH_DROPPED_ISOLATION_ENVIRONMENT')
     const launchEnv: Record<string, string> = Object.fromEntries(Object.entries(env).filter((entry): entry is [string, string] => entry[1] !== undefined)); delete launchEnv.GEPPIO_ISOLATION_MAIN_ATTESTED
+    const identityNonce = config.suite === 'identity' ? randomBytes(16).toString('hex') : undefined
+    if (identityNonce) launchEnv.GEPPIO_ISOLATION_IDENTITY_NONCE = identityNonce
     const app = await _electron.launch({ ...options, env: launchEnv, args: ['-r', config.preload, '--disable-features=CalculateNativeWinOcclusion', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows', '--disable-background-timer-throttling', ...(options.args ?? [])] })
     const attested = await app.evaluate(() => process.env.GEPPIO_ISOLATION_MAIN_ATTESTED)
     if (attested !== desktop) { writeSync(2, 'ISOLATION_REFUSED MAIN_PRELOAD_NOT_ATTESTED\n'); process.exit(125) }
+    if (identityNonce) {
+      const pid = await app.evaluate(() => process.pid)
+      pendingIdentity.add(identityNonce)
+      const close = app.close.bind(app)
+      let closing: Promise<void> | undefined
+      app.close = () => closing ??= close().then(() => {
+        verifiedWindows += countIdentityReceipts(config.helper, identityNonce, pid, desktop)
+        pendingIdentity.delete(identityNonce)
+      })
+      return app
+    }
     app.on('window', page => {
       const check = windowCheck(app, page, config).catch(error => { isolationFailure = error instanceof Error ? error : new Error('WINDOW_ATTESTATION_FAILED'); writeSync(2, 'ISOLATION_REFUSED ' + isolationFailure.message + '\n'); process.exit(125) })
       checks.push(check)

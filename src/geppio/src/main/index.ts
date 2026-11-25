@@ -121,7 +121,7 @@ app.whenReady().then(async () => {
             if (!currentOwner()) return false
             const runtime = preview.apiVersion === 3
               ? 'A superfície web executa em um quadro isolado. Você controla as permissões de comunicação com outros plugins.'
-              : 'Este piloto executa plugins locais confiáveis em Workers. Use somente código de sua confiança.'
+              : 'Nenhum novo acesso é concedido. Este piloto executa plugins locais confiáveis em Workers, com os dados da própria instalação. Use somente código de sua confiança.'
             const change = preview.replacement ? 'Atualizar o pacote assinado desativado. A próxima ativação usa a nova versão.'
               : preview.adoption ? 'Adotar instalação existente: preservar identidade, ativação, dados e posições.'
               : 'Nova instalação: começa desativada. Ative e adicione os widgets explicitamente.'

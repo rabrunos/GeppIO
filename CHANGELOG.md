@@ -2,6 +2,11 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.77] — 2026-11-25
+
+- Pass the disposable identity-migration fixture its profile and origin independently of the Electron launcher arguments. Attest short-lived Windows recovery windows at creation and check each process's receipts at shutdown.
+- Restore the signed package preview's access disclosure for API 1/2 plugins. The API 3 preview describes its explicit communication grants.
+
 ## [0.1.0-alpha.76] — 2026-11-25
 
 - Organize the Electron application, Runtime, GeppUI, Monaco Editor, plugin SDK and Standalone into six workspaces. Extract continuous geometry, document contracts, capability lifecycles, web presentation and editor APIs. Replace the Tailwind reset and Motion effects with project-owned CSS and interactions.

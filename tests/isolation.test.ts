@@ -1,9 +1,11 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync, readdirSync } from 'node:fs'
+import { mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { incompatible, launchMode, parseSelection, selectSuite } from '../tools/isolation/plan.ts'
 import { completionCode } from '../tools/isolation/completion.ts'
-import { electron } from '../tools/test-electron.ts'
+import { countIdentityReceipts, electron } from '../tools/test-electron.ts'
 
 test('isolated suite selection accepts only known paths and literal supported runtime flags', () => {
   assert.deepEqual(selectSuite('monaco', '--dev'), { suite: 'monaco', step: { file: 'tools/monaco-smoke.ts', args: ['--dev'] } })
@@ -61,4 +63,26 @@ test('all test Electron imports use the shared guard; application and CI boundar
   const native = readFileSync('tools/isolation/desktop-bridge.cs', 'utf8')
   assert.doesNotMatch(native, /extern\s+\w+\s+(?:SwitchDesktop|SendInput|SetCursorPos|Nt\w+)\(/)
   assert.doesNotMatch(readFileSync('tools/test-electron.ts', 'utf8'), /--no-sandbox|webSecurity:\s*false/)
+})
+
+test('identity verification requires a complete, process-bound receipt for each native window', t => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'geppio-identity-receipts-')))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const nonce = 'a'.repeat(32), pid = 101, desktop = 'GeppIOTest' + 'b'.repeat(32)
+  const helper = join(root, 'desktop-bridge.exe'), path = join(root, 'identity-' + nonce + '.jsonl')
+  const window = { kind: 'window', nonce, pid, desktop, id: 1, hwnd: 'b1' }
+  const closed = { kind: 'closed', nonce, pid, desktop, count: 1 }
+  const verify = () => countIdentityReceipts(helper, nonce, pid, desktop)
+  const save = (...records: object[]) => writeFileSync(path, records.map(record => JSON.stringify(record) + '\n').join(''))
+  assert.throws(verify, /ENOENT/)
+  save(window, closed); assert.equal(verify(), 1)
+  save(window, { ...window, id: 2, hwnd: 'b7' }, { ...closed, count: 2 }); assert.equal(verify(), 2)
+  for (const records of [[], [closed], [window], [window, { ...closed, count: 2 }],
+    [window, window, { ...closed, count: 2 }], [{ ...window, pid: 202 }, closed],
+    [window, { ...closed, nonce: 'c'.repeat(32) }], [{ ...window, desktop: 'another' }, closed],
+    [{ ...window, hwnd: '0' }, closed], [{ ...window, kind: 'unverified' }, closed]]) {
+    save(...records); assert.throws(verify, /IDENTITY_/)
+  }
+  writeFileSync(path, JSON.stringify(window) + '\n' + JSON.stringify(closed))
+  assert.throws(verify, /IDENTITY_MISSING_WINDOW_OR_END/)
 })

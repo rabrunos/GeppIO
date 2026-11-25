@@ -18,18 +18,23 @@ import { projectRegion } from '../src/geppio/src/shared/freeform/projection.ts'
 const temporary = await mkdtemp(join(tmpdir(), 'geppio-smoke-identity-'))
 const environment: Record<string, string> = Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined))
 delete environment.ELECTRON_RUN_AS_NODE; delete environment.NODE_OPTIONS; delete environment.ELECTRON_RENDERER_URL; delete environment.GEPPIO_TEST_USER_DATA; delete environment.SEMNOME_TEST_USER_DATA
+delete environment.GEPPIO_TEST_SEED_PROFILE; delete environment.GEPPIO_TEST_SEED_URL
 let application: ElectronApplication | undefined
 let devServer: import('vite').ViteDevServer | undefined
 // Generated JS is an inert disposable fixture, compiled from TypeScript with the existing toolchain.
 const seed = join(temporary, 'seed.cjs')
 await writeFile(seed, ts.transpileModule(`
 import { app, BrowserWindow, protocol, session } from 'electron'
+import { basename, dirname, resolve } from 'node:path'
+const profile = process.env.GEPPIO_TEST_SEED_PROFILE
+const url = process.env.GEPPIO_TEST_SEED_URL
+if (!profile || resolve(profile) !== profile || dirname(dirname(profile)) !== __dirname || !['semnome', 'geppio'].includes(basename(profile))) throw new Error('Invalid identity fixture profile')
+if (!url || !['semnome://app/fixture.html', 'geppio://app/fixture.html', 'http://127.0.0.1:5173/fixture.html'].includes(url)) throw new Error('Invalid identity fixture URL')
 app.setName('semnome')
-app.setPath('userData', process.argv[2]!)
-app.setPath('sessionData', process.argv[2]!)
+app.setPath('userData', profile)
+app.setPath('sessionData', profile)
 protocol.registerSchemesAsPrivileged(['semnome', 'geppio'].map(scheme => ({ scheme, privileges: { standard: true, secure: true } })))
 app.whenReady().then(async () => {
-  const url = process.argv[3]!
   session.defaultSession.protocol.handle(new URL(url).protocol.slice(0, -1), request => new Response(request.url === url ? '<!doctype html><title>Fixture</title>' : null, { status: request.url === url ? 200 : 403, headers: { 'Content-Type': 'text/html' } }))
   const window = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true } })
   await window.loadURL(url)
@@ -38,7 +43,7 @@ app.whenReady().then(async () => {
 
 async function seedProfile(profile: string, url: string, legacy: string, current: string | null = null) {
   await mkdir(profile, { recursive: true })
-  application = await electron.launch({ args: [seed, profile, url], env: environment, timeout: 30000 })
+  application = await electron.launch({ args: [seed], env: { ...environment, GEPPIO_TEST_SEED_PROFILE: profile, GEPPIO_TEST_SEED_URL: url }, timeout: 30000 })
   const page = await application.firstWindow(); await page.waitForURL(url)
   await page.evaluate(({ legacy, current }) => {
     localStorage.setItem('semnome:layout:v1', legacy)
