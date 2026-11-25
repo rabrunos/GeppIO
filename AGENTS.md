@@ -1,7 +1,8 @@
-# GeppIO — Implementation Agent Rules
+# GeppIO — Agent Rules
 
 Read [PROJECT_GUIDE.md](PROJECT_GUIDE.md), the relevant Issue and only the context routed by
-[CONTEXT_INDEX](docs/.ai/CONTEXT_INDEX.md). The project is already materialized. Do not restart intake.
+[CONTEXT_INDEX](docs/.ai/CONTEXT_INDEX.md). Codex can plan and implement directly; ChatGPT support
+and handoff prompts are optional. No bootstrap or mandatory prompt template is needed.
 
 ## Authority and work records
 
@@ -13,8 +14,11 @@ unrelated work to make the checkout match a remote assumption.
 
 GitHub Issues own active tasks, acceptance, smoke and follow-up. No STATUS, ROADMAP, checkpoint,
 Decision Index or tracked last-report file. Reuse an Issue for repairs and continuations.
-If the shared record is unavailable, report it. The single ZIP-before-repository exception is
-explained in PROJECT_GUIDE; it does not authorize future issue-less development.
+If the shared record is unavailable, report it. Discussion, plan-only and record-only requests
+retain their scope. An explicit implementation request already authorizes its stated work; do not
+add a mandatory plan-approval step or require an external planner. Reuse checked session context
+and load only relevant skills/references; refresh on changed evidence. Recover scope, actual
+checks and explicit Git opt-outs from the Issue/session after a context or conversation transition.
 
 ## Execution
 
@@ -24,7 +28,8 @@ work with direct tests. Complex architecture/security needs XHigh or the highest
 supported setting. Prompt text does not change model settings; report requested/effective
 values honestly. Never lower security or validation to fit a consumption preset.
 
-Use the [project skills and roles](docs/.ai/execution.md) for bounded independent tasks.
+Use relevant [project skills and roles](docs/.ai/execution.md) for bounded independent tasks.
+Delegate only when an independent question or check benefits from it; do not run every role by default.
 The primary integrates. Serialize shared files and desktop interactions. No recursive fan-out
 or permanent reviewer. Role instructions do not override inherited technical permissions.
 
@@ -67,18 +72,20 @@ machine setup do not bump version. A future name is an explicit migration, not b
 Run relevant checks; distinguish passed/failed/blocked/not_run. Do not equate type stripping,
 static checks or screenshots with complete TypeScript/build/desktop verification. Review
 `git diff --check`, the intended files and staged diff. Stage only intended changes.
-For approved Issues in `rabrunos/GeppIO`, the owner's standing authorization is to commit and
-push completed, validated implementation to verified `origin/main` without asking again for
-task-level Git permission. The owner-initiated rename retains the same GitHub repository ID `1409287329` and Issue #22 authorization; verify the canonical name and ID, not an old redirect. Explicit do-not-commit/do-not-push instructions override this default.
+For approved Issues in `rabrunos/GeppIO`, automatically commit and push completed, validated
+in-scope changes to verified `origin/main`. This is the owner's standing instruction even when
+the request does not mention Git. Do not ask again for task-level Git permission or leave a
+finished delivery local merely to offer integration. The owner-initiated rename retains the same GitHub repository ID `1409287329` and Issue #22 authorization; verify the canonical name and ID, not an old redirect. Explicit do-not-commit/do-not-push instructions override this default.
 Verify the actual branch, origin fetch/push URLs and remote base; stop on divergence or an unknown
-remote outcome. No force push, unrelated staging or operations in BootCrate/other repositories.
+remote outcome. No force push, unrelated staging or operations in other repositories.
 Task-level Git authorization does not bypass technical sandbox or network approval requirements.
 Keep `workspace-write`, `on-request`, `auto_review` and sandbox network enabled as project defaults;
 routine workspace work needs no extra prompt. Request bounded elevation when a protected path or
 network operation requires it; never switch to Full Access/`never` or edit global Codex settings.
 Record actual checks, commit/push and CI evidence in the active Issue when comments are authorized.
 Issue closure, publication, provisioning and purchases still need separate owner authorization.
-Never close the foundation Issue before required Windows smoke and owner/ChatGPT acceptance.
+Report a real blocker or explicit opt-out that leaves work uncommitted/unpushed. Read-only work
+creates no empty commit. Required manual acceptance remains with the owner, not a mandatory ChatGPT reviewer.
 
 ## Local safety and language
 

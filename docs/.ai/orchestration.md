@@ -1,82 +1,81 @@
-# ChatGPT orchestration
+# Direct development workflow
 
-Normal chain: owner → ChatGPT → current GitHub/Issues + required research → bounded versioned
-contract → local Codex → checks + authorized Git/Issue evidence → ChatGPT/owner acceptance.
+Codex is the primary workspace for `rabrunos/GeppIO` investigation, planning, implementation and validation.
+ChatGPT can provide research, design discussion, review or a requested handoff. The owner can
+choose another available environment for an authorized task; the same scope and validation apply.
 
-Read the current repository and relevant Issue rather than assuming chat memory is current.
-Inspect the canonical version. Separate explicit owner requirements, provisional engineering
-choices and unresolved product questions. Route only relevant context. Do not replay the intake.
+## From request to delivery
 
-## Implementation handoff sequence
+1. Establish the requested outcome and intent. Discussion, plan-only and record-only requests do
+   not launch implementation. An explicit implementation request already authorizes its stated
+   scope; do not add a mandatory approval of a plan or require a separate ChatGPT conversation.
+2. Read PROJECT_GUIDE, applicable AGENTS and the relevant Issue. Inspect the actual checkout,
+   branch, HEAD, status, diffs and version before edits. Route additional files through
+   [CONTEXT_INDEX](CONTEXT_INDEX.md); GitHub code is remote evidence, not a substitute for local state.
+3. Use a proportionate plan when ambiguity or multiple boundaries warrant one. Plan mode can
+   support that discussion in Codex. Resolve ordinary engineering choices; ask the owner only
+   for consequential product decisions, missing authority or evidence that cannot be recovered.
+4. Keep the working agreement in the Issue: goal, scope, assigned target, acceptance, validation
+   and authority. An existing approved contract is sufficient. Allocate targets under
+   [TASK_POLICY](TASK_POLICY.md) before tracked changes; retain one Issue across its deliveries.
+5. Implement and validate the authorized outcome. Use relevant skills and bounded auxiliary roles
+   where independent work helps. Review actual behavior and the intended diff. Fix relevant
+   failures and continue through intermediate milestones without asking for the same authority again.
+6. Automatically commit and push completed, validated in-scope changes unless the owner explicitly
+   says not to. Apply the canonical repository and remote checks in TASK_POLICY; record the exact
+   SHA, checks and CI outcome. An actual technical or integration blocker is reported with the
+   remaining work. Integration does not establish manual acceptance or authorize Issue closure.
 
-1. Retrieve current PROJECT_GUIDE.md, the relevant Issue, package.json and repository-basis SHA;
-   use [CONTEXT_INDEX](CONTEXT_INDEX.md) for targeted context and [TASK_POLICY](TASK_POLICY.md)
-   for version, execution settings and authority. Chat memory and a remote SHA are not local preflight.
-2. Confirm the owner's intent from the active request. Approval to implement triggers this sequence
-   without a reminder to follow the method. A discussion-only or record-only request stops at that
-   scope: recording an Issue does not authorize implementation or an executor launch.
-3. Use [EXECUTION](prompts/EXECUTION.md) to prepare a new implementation contract. On
-   continuation, recover the existing contract, scope and unfinished evidence from the Issue.
-4. Populate the contract with concrete outcomes, acceptance, validation, authority and the
-   first Target Version. An approved contract can cover several versioned deliveries. Record
-   subsequent assigned targets and milestones in its Issue before their first tracked edits.
-   Each delivered application-source batch advances its version, including corrections pending
-   acceptance. Complete the remaining scope after an intermediate delivery.
-5. Perform the template's pre-delivery completeness review. Keep detail proportional to the task:
-   a narrow documentation change needs less detail than a trust-boundary change. Inherit canonical
-   policies by repository path instead of copying the policy library. Missing required evidence or
-   unresolved blocking scope is reported explicitly, not filled with guesses.
-   If the task deliberately adopts a new library or copied/adapted external implementation,
-   identify its individual owner approval under TASK_POLICY/Issue #19 before integration.
-   Issue #8 records the owner's preference for project-owned UI components and the history
-   of the shadcn/ui discussion. A proposed adoption of shadcn/ui follows the same review.
-6. If an authorized direct executor call is available, send the complete contract to it. Otherwise,
-   **automatically deliver the full copy-ready contract to the owner in a single fenced text block
-   per root contract**. Do not merely offer to generate it later. An Issue link, recorded task,
-   summary or abbreviated instructions cannot substitute for the executor handoff.
+## Context and continuity
 
-Repository guidance and ChatGPT website Project Instructions are separate surfaces. Editing these
-files specifies the repository method; it does not change site settings or prove model compliance.
+Use local source for code discovery, and remote reads for Issues, decisions and synchronization.
+Reuse verified session evidence while it remains relevant; refresh on changed files, a different
+checkout, new remote commits or conflicting information. Pre-edit and pre-integration Git checks
+remain necessary. Avoid making two assistants independently read the same entire repository.
 
-## Fresh-conversation acceptance scenario (specification)
+Keep durable rules in AGENTS, domain facts in their technical documents and repeatable procedures
+in skills. Load only relevant skills/references. Search narrowly first, expand when evidence needs it,
+and return concise findings with file/symbol references. Delegate bounded questions rather than a
+second complete audit. Select checks for the changed behavior and required gates; do not repeat
+successful checks without a changed input, failure hypothesis or required delivery gate.
 
-This is a behavioral acceptance specification, not a genuinely executed model-behavior test.
-Record any actual run and its observed response separately in the active Issue.
+Before a context reset or session transfer, update the authorized Issue with decisions, completed
+work, actual checks, pending work and the current version/SHA. Record uncommitted work as such;
+do not imply it is backed up remotely. On resumption, verify the checkout and recover the remaining
+scope. Compaction or a new conversation does not cancel the owner's explicit Git opt-out or other
+constraints. Do not create a tracked STATUS, ROADMAP, checkpoint or last-report copy of Issue state.
 
-| Owner action in a fresh project conversation | Expected assistant behavior |
+## Optional transfer
+
+Generate a prompt when the owner asks for one or an actual transfer requires it. Include enough
+context to act: the goal, Issue link, assigned target if applicable, observed basis, pending work,
+material constraints and authorized actions. Link canonical rules instead of repeating them.
+There is no required template, fixed heading or extra prompt artifact. Reading or discussing an
+Issue does not by itself authorize edits. Repository guidance and ChatGPT Project Instructions
+are separate configuration surfaces.
+
+## Fresh-conversation acceptance
+
+Observe behavior in a fresh task and record the environment and actual outcome in the Issue.
+These scenarios are a specification, not proof that a particular client has executed them.
+
+| Owner request | Expected behavior |
 | --- | --- |
-| Resumes with “continue” | Retrieves current repository/Issue/version context; does not assume chat memory or approval to implement. |
-| Approves “implement” without mentioning the method | Loads the applicable current template, fills and reviews the contract, then invokes the authorized executor or automatically delivers the full copy-ready contract. An Issue alone is insufficient. |
-| Requests discussion only or recording only | Keeps that scope; does not launch implementation. |
-| Resumes after an intermediate delivery under one contract | Verifies current checkout, target allocation and outstanding Issue criteria, then continues within the same authorization. |
+| Continue an existing task | Inspect current checkout/Issue and recover remaining scope and authority. |
+| Plan or discuss only | Investigate and explain the approach without implementing or writing remote records outside that request. |
+| Implement a defined change | Proceed in the available authorized environment without mandatory external planning or a handoff prompt. |
+| Finish a validated delivery | Commit and push automatically within standing authority, unless an explicit opt-out or real blocker applies. |
+| Implement but do not commit/push | Preserve that opt-out through continuations and report the local-only result. |
+| Request a prompt for another session | Produce a concise usable transfer based on current evidence. |
 
-Static document/schema checks establish consistency only. They do not execute this scenario,
-prove real ChatGPT behavior, physical Windows UX or effective Codex model effort.
+Static checks prove file/configuration consistency, not model behavior, effective permissions or
+physical Windows UX. Keep those evidence categories separate. Report results to the owner in pt-BR;
+technical repository guidance is English. No new model API calls, background agent, hooks or
+publishing service are part of this workflow.
 
-## Executor and integration boundaries
+## Reference principles
 
-Assign a target to a new tracked mutation; advance it for each newly delivered application-source
-batch, including repairs of unaccepted deliveries. Local repair/test iterations share that target. Select
-effort, risk and local discovery independently using TASK_POLICY. Add negative tests whenever
-untrusted inputs, native access, plugin authority or persistence boundaries change.
-
-The executor checks its actual checkout, branch, HEAD, status and diff before edits. It must not
-discard local work to match your repository-basis SHA. Request the smallest supported tests and
-manual smoke necessary; neither a screenshot nor a generic template check proves the full app.
-
-For approved GeppIO Issues, inherit the owner's standing commit/push authorization from TASK_POLICY
-unless the active owner/task instruction explicitly prohibits it. After in-scope checks pass,
-review the intended stage and secrets, verify `rabrunos/GeppIO` origin fetch/push URLs, local `main`
-and the remote base plus stable GitHub repository ID `1409287329` (same repository authorized in Issue #22), then commit and push normally without a new task-level permission question.
-Sandbox/path/network approvals remain separate technical requirements. Keep workspace-write,
-on-request automatic review and sandbox network enabled; do not modify global settings or other repos.
-Record the actual Git and CI outcomes in the Issue when authorized. Pending manual acceptance stays
-pending; integration never authorizes Issue closure, publication or deployment.
-
-Keep technical instructions in English and explain results to the owner in pt-BR. The final
-report is a response after authorized Git actions; Issues carry durable evidence and acceptance.
-If remote access is blocked, say so rather than writing local task state. Do not close work whose
-required Windows validation is still unobserved.
-
-No automatic AI API calls, scheduled background agent,
-MCP setup or GitHub-hosted model workflow is part of this project.
+[Codex best practices](https://learn.chatgpt.com/guides/best-practices) and
+[Claude Code best practices](https://code.claude.com/docs/en/best-practices) support concise durable
+instructions, task-specific context and observable validation. These are design references;
+GeppIO uses its existing Codex settings and tools, not another framework or client configuration.

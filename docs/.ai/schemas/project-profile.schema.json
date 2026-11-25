@@ -10,7 +10,7 @@
       "minLength": 1
     },
     "schema": {
-      "const": "geppio/project-profile/v4"
+      "const": "geppio/project-profile/v5"
     },
     "project": {
       "type": "object",
@@ -136,17 +136,20 @@
         "tracking": {
           "const": "github_issues"
         },
-        "primary_orchestrator": {
-          "const": "chatgpt"
+        "primary_environment": {
+          "const": "codex"
         },
-        "fallback_planners": {
+        "optional_assistants": {
           "type": "array",
           "items": {
             "enum": [
-              "codex_plan"
+              "chatgpt"
             ]
           },
           "uniqueItems": true
+        },
+        "handoff": {
+          "const": "optional"
         },
         "implementation_harnesses": {
           "const": [
@@ -168,8 +171,9 @@
       },
       "required": [
         "tracking",
-        "primary_orchestrator",
-        "fallback_planners",
+        "primary_environment",
+        "optional_assistants",
+        "handoff",
         "implementation_harnesses",
         "consumption_preset",
         "collaboration"
@@ -216,9 +220,6 @@
           "type": "array",
           "maxItems": 0
         },
-        "target_version_in_prompt_h1": {
-          "const": true
-        },
         "target_version_in_commit": {
           "const": true
         },
@@ -241,7 +242,6 @@
         "history_source",
         "history_format",
         "mirrors",
-        "target_version_in_prompt_h1",
         "target_version_in_commit",
         "target_version_in_report_h1",
         "source_delivery_requires_new_target",

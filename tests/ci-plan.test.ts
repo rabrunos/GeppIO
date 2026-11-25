@@ -62,15 +62,17 @@ test('CI preserves all 38 distinct alpha.48 Electron invocations and public comm
   assert.equal(scripts['check:repo'], 'node --experimental-strip-types tools/check-repo.ts && node --experimental-strip-types tools/check-modules.ts')
 })
 
-test('all 45 alpha.48 Node suite files still run through the full discovery gate', () => {
+test('all 44 retained alpha.48 Node suite files still run through the full discovery gate', () => {
+  // Issue #27 retires the one-time repository-binding bootstrap and its github-plan suite.
+  // The remaining original suites and all subsequently added suites use normal discovery.
   const baseline = `demo-retirement documents execution-policy explorer freeform-alignment freeform-geometry
-    freeform-projection freeform-storage git-compatibility git github-plan grid-coverage grid-geometry
+    freeform-projection freeform-storage git-compatibility git grid-coverage grid-geometry
     grid-horizontal grid-projection-continuity grid-projection grid-reflow grid-storage identity-migration
     layout-correction layout monaco plugin-data plugin-dev plugin-package plugin-runtime plugins
     real-presentations reflow region-policy security sidebar-stack status-bar storage terminal time-tracker
     widget-frame-layout window-controls workbench-compositions workbench-corrections workbench-groups
     workbench-model workbench-presentations workbench-regional-groups workspace`.split(/\s+/).filter(Boolean)
-  assert.equal(baseline.length, 45)
+  assert.equal(baseline.length, 44)
   const files = readdirSync('tests').filter(name => name.endsWith('.test.ts'))
   for (const name of baseline) assert.ok(files.includes(name + '.test.ts'), name)
   assert.equal(scripts.test, 'node --experimental-strip-types tools/test.ts')

@@ -1,53 +1,44 @@
 # GeppIO — Project Guide
 
-GeppIO is a local Electron workbench. Read the [requirements](docs/product/requirements.md)
-and the [project profile](docs/.ai/project-profile.json) for product scope and supported targets.
+GeppIO is a modular Electron workbench, Windows first. The repository is
+`rabrunos/GeppIO`, stable GitHub ID `1409287329`.
 
-## Read in this order
+## Start with the task
 
-Read the current repository and relevant GitHub Issue. Read [orchestration](docs/.ai/orchestration.md)
-and route only necessary product/code context through [CONTEXT_INDEX](docs/.ai/CONTEXT_INDEX.md).
-Use [TASK_POLICY](docs/.ai/TASK_POLICY.md) for target versions, effort and authorization.
-Use [SECURITY_BASELINE](docs/.ai/SECURITY_BASELINE.md) when a trust boundary changes.
-`AGENTS.md` addresses implementation agents; it is not a ChatGPT Project instruction dump.
+Codex is the primary environment for discussion, investigation, planning, implementation and
+validation. ChatGPT remains optional support for research, design, review and requested handoffs.
+Work directly from the owner's request and the relevant Issue; no external planning stage or
+prompt template is required. Discussion, plan-only and record-only requests retain their scope.
 
-When the owner approves implementation, follow [orchestration](docs/.ai/orchestration.md):
-load the applicable prompt template before preparing the handoff. For ordinary implementation,
-use [EXECUTION](docs/.ai/prompts/EXECUTION.md) and automatically deliver a complete, copy-ready
-Codex contract when no direct executor call is available. An Issue or task summary does not replace
-that handoff. Discussion-only and record-only requests do not launch implementation.
-These repository instructions do not update ChatGPT website Project Instructions; that is a
-separate configuration surface.
+Read [AGENTS.md](AGENTS.md) for durable working rules and the relevant Issue for the active
+goal, assigned target and remaining acceptance. Route further reading through
+[CONTEXT_INDEX](docs/.ai/CONTEXT_INDEX.md). Reuse relevant evidence already checked in the session;
+refresh it when the checkout, remote state or task changes. Verify the actual local checkout before edits.
 
-## Durable project facts
+| Need | Source |
+| --- | --- |
+| Direct work, planning, context budget and optional transfers | [Workflow](docs/.ai/orchestration.md) |
+| Versions, execution authority and external adoption | [Task policy](docs/.ai/TASK_POLICY.md) |
+| Product requirements and unresolved design | [Requirements](docs/product/requirements.md) |
+| Module ownership and public boundaries | [Architecture](docs/architecture/overview.md) |
+| Commands, setup and validation | [Local development](docs/development/local.md), [testing](docs/development/testing.md) |
+| Skills, auxiliary roles and requested client settings | [Execution](docs/.ai/execution.md) |
+| Trust-boundary changes | [Security baseline](docs/.ai/SECURITY_BASELINE.md) |
 
-The product name is **GeppIO**, technical namespace `geppio` (Issue #6).
-The full Windows x64 workbench integrates native Terminal, Git, Explorer and Monaco.
-Use [architecture](docs/architecture/overview.md) for module ownership, [layout](docs/architecture/layout.md)
-for region and projection rules, and [plugins](docs/architecture/plugins.md) for native and
-plugin trust boundaries. Historical fixture behavior, optional community identity and Linux
-direction are documented in [requirements](docs/product/requirements.md).
+## Delivery and continuity
 
-The owner prefers project-owned UI components. Issue #8 records the earlier selection of
-shadcn/ui and the later review of that decision. Any proposed use of shadcn/ui or other
-new external code needs individual owner approval under Issue #19 and
-[TASK_POLICY](docs/.ai/TASK_POLICY.md).
+Issues own active scope, decisions, acceptance and evidence. A continuation retrieves the same
+Issue and unfinished work; an intermediate delivery does not end the approved contract.
+`package.json` is the canonical version source; `CHANGELOG.md` is integrated history. Follow
+TASK_POLICY for concrete target allocation, local iterations and subsequent deliveries.
 
-`package.json` is the canonical version source; `CHANGELOG.md` is integrated product history.
-Each delivered application-source batch advances the version, including corrections pending
-acceptance. Local repair/test iterations share the batch target. Machine setup does not bump it.
+Completed, validated in-scope changes are committed and pushed automatically to verified
+`origin/main` under the owner's standing authorization, unless the owner explicitly opts out.
+Report any actual integration blocker. Publication and Issue closure require separate authority.
 
-## Remote identity and one-time packaging exception
+The owner prefers project-owned UI components. Proposed external libraries or adapted source
+follow the individual approval gate in TASK_POLICY and Issue #19; Issue #8 retains the visual history.
+Repository guidance does not update ChatGPT Project Instructions or prove effective client settings.
 
-The existing repository is `rabrunos/GeppIO`, ID `1409287329`. On continuation, recover unfinished scope and the assigned target from the same Issue.
-
-The owner explicitly requested a ZIP **before creating the new repository**. This was the only
-pre-repository materialization exception. There is no fabricated repository URL, HEAD, Issue,
-push receipt or release in that original handoff. Repository binding and materialization are
-now complete; do not run `tools/github-prepare.ts` or the first-run template merely to resume work.
-New executable project work requires an actual Issue; an unavailable shared record is a
-blocker to report, not permission to maintain a local imitation of GitHub.
-
-## Method provenance
-
-The original foundation drew on the owner's [BootCrate v0.9 source](https://github.com/rabrunos/BootCrate/tree/693679c5a2461f092537ce1bb220c7ec8c8c4957). The active GeppIO contract, project skills and bounded roles are maintained in this repository.
+The repository and its foundation already exist. Bootstrap and mandatory handoff templates are
+retired; original foundation provenance remains in Git history and [Issue #1](https://github.com/rabrunos/GeppIO/issues/1).

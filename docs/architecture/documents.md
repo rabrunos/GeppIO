@@ -1,6 +1,9 @@
-# Essential Files & Editor — alpha.46–47
+# Documents and basic Editor
 
-Alpha.47 coordinates these independent grants through a [single-root Workspace](workspace.md).
+The host coordinates independent document grants through a [single-root Workspace](workspace.md).
+The current implementation includes untitled documents, Save As/Save All, two editing groups,
+tab organization and explicit local draft recovery. Historical version labels identify when a
+boundary was introduced; the current behavior is described below.
 Project transitions retain drafts, while clean project tabs and bounded primary views can be
 offered after restart with fresh native authorization. Draft text can be recovered separately from the local profile. Undo stays in memory.
 
@@ -52,8 +55,9 @@ DocumentStore still owns native paths, revisions, confirmed bytes and file autho
 The LF Monaco model is an editing projection, not a second file service. It uses an opaque
 `inmemory://geppio/<document UUID>` URI without a native path or basename.
 
-One editor instance and its DOM are reattached between the direct Main and explicit widget
-containers, like the existing Terminal presentation. No model/editor is created per mode.
+The session-owned editor presentation is reattached between the direct Main and explicit widget
+containers. It supports up to two group editor instances sharing the document-model registry;
+changing workbench mode does not create a second independent draft or model registry.
 Monaco owns its undo/redo stack, multi-selections, focus and scroll state during detachment.
 The existing shared host viewport remains authoritative; ResizeObserver lays out Monaco inside
 its actual container. Themes select stock `vs`/`vs-dark`. Monaco-specific code stays in this
@@ -100,23 +104,23 @@ owner and survives mode changes alongside the existing unsaved draft.
 UUID/revision per file. Only bounded text, display labels, relative association, BOM flag, ID and revision reach the renderer.
 `EditorSession` owns per-file editable buffers and dirty/error state outside layout/plugin storage.
 Main accepts a frozen draft only for an explicit operation, not another independently editable copy.
-Both adapters render the same `FileEditor`, only one at a time, attaching the same Monaco DOM;
-selection/scroll, undo/redo, shared draft, confirmed bytes and document identity survive.
+Both workbench-mode adapters reuse the same `FileEditor` presentation, including its optional
+two groups; selection/scroll, undo/redo, shared draft, confirmed bytes and document identity survive.
 Editor covers Main's usable presentation while the workbench, Sidebar/Bottom and Workers remain mounted.
 Since alpha.38, `regionViewport` in `freeform/frame-layout.ts` supplies the same measured Main
 rectangle to direct Editor, maximized widget projection and the maximize backdrop. The direct
 container is a work-area sibling of Main in those shared coordinates, with the ordinary host card
 border, radius and clipping. Host padding/borders (including the unpadded expanded right edge)
 remain authoritative; content scrolling and Docked reservations do not shrink this rectangle.
-This presentation does not invoke maximize or create a placement. Its internal content can later
-be subdivided without changing region geometry ownership; no split view is implemented.
+This presentation does not invoke maximize or create a placement. Its optional two-group split
+uses that measured content rectangle without changing workbench region geometry ownership.
 Switching modes writes no layout bytes and is blocked during layout edits/gestures. Mode is
 session-only. The Main-only single-view widget is catalogued but never automatically inserted.
 
 ## Native boundary
 
-Six fixed calls (`open`, `activate`, `save`, `reload`, `release`, `close`) and one close-request subscription exist only
-in app preload. No renderer path/channel/directory argument or Worker facade exists. Main checks
+Nine fixed calls (`create`, `saveAs`, `saveAll`, `open`, `activate`, `save`, `reload`, `release`, `close`)
+and one close-request subscription exist only in app preload. No renderer path/channel/directory argument or Worker facade exists. Main checks
 exact WebContents/main-frame/app URL, argument count, fields, types and bounds. Native selection
 authorizes one ordinary regular file. Release revokes that grant; navigation/renderer loss/destruction
 revoke all handles and queued guards. Calls are serialized; closing cannot race an accepted operation.
@@ -155,7 +159,7 @@ close the file. Retrying revalidates the current disk state and requires a disca
 A reload of a project file expires its tree entry and project result IDs. New queries and
 tree enumeration are explicit. Reload never writes to the selected file.
 
-## Save integrity and Windows limitations
+## Editing groups, tabs and untitled documents
 
 The optional two-group editor keeps tab occurrences and their view states in the renderer
 session. Focus routes commands to a single active native grant. Both Monaco instances can
@@ -192,6 +196,8 @@ Save All visits the native registry in creation/open order. Each grant receives 
 for this invocation. Saved revisions survive later cancellation or failure and remaining work
 stays pending. The close transaction shares the same order and destination flow for untitled
 drafts. A confirmed close still requires resolution of all dirty documents.
+
+## Save integrity and Windows limitations
 
 The original is never truncated. A random exclusive sibling temporary receives complete new bytes,
 is flushed and closed; identity/content are checked again immediately before same-directory rename.
@@ -258,6 +264,11 @@ These platform references do not replace application tests or owner acceptance.
 Alpha.39 adds the [bounded first-party Explorer](explorer.md) through this same store/session.
 Its directory grant is independent from the open document and adds no Worker authority.
 
-Splits, search, LSP/debug/build, OS associations/CLI
-routing, second windows, automatic unsaved restoration, crash recovery, metadata-preserving native writes,
-public rich UI/grants, marketplace/distribution and layout portability remain separate scopes.
+Two editing groups, [project search and reviewed replacement](search.md), explicit draft recovery
+and bounded composition portability are implemented in their respective owners. They are not
+features of the standalone basic Editor library.
+
+Project-wide LSP/debug/build, OS associations/CLI routing, additional native editor windows,
+automatic saving of recovered drafts and metadata-preserving native writes remain separate scopes.
+API 3 [custom surfaces and grants](plugin-surfaces.md) are plugin-runtime capabilities; a public
+marketplace and broader distribution policy remain future work.

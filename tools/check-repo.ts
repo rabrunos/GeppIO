@@ -9,25 +9,34 @@ function requireFile(path: string) { if (!existsSync(join(root, path))) errors.p
 function check(condition: boolean, message: string) { if (!condition) errors.push(message) }
 interface Profile {
   schema: string; project: { name: string }; validation: { required_files: string[]; canonical_capabilities: string[] }
-  workflow: { tracking: string; primary_orchestrator: string; implementation_harnesses: string[] }
-  versioning: { canonical_source: string; value_path: string; history_source: string; source_delivery_requires_new_target: boolean; intermediate_deliveries_within_contract: boolean }
+  workflow: {
+    tracking: string; primary_environment: string; optional_assistants: string[]; handoff: string
+    implementation_harnesses: string[]; consumption_preset: string; collaboration: string
+  }
+  versioning: {
+    canonical_source: string; value_path: string; history_source: string
+    target_version_in_commit: boolean; target_version_in_report_h1: boolean
+    source_delivery_requires_new_target: boolean; intermediate_deliveries_within_contract: boolean
+  }
   execution_permissions: { safe_default: string }; console: { enabled: boolean }
   distribution: { mode: string; targets: unknown[] }; services: unknown[]; skills: string[]; roles: string[]
 }
 interface Package { name: string; version: string; scripts: Record<string, string>; dependencies: Record<string, string>; devDependencies: Record<string, string> }
 const pkg = JSON.parse(text('package.json')) as Package
 const profile = JSON.parse(text('docs/.ai/project-profile.json')) as Profile
-check(profile.schema === 'geppio/project-profile/v4', 'Unexpected project profile schema')
+check(profile.schema === 'geppio/project-profile/v5', 'Unexpected project profile schema')
 check(profile.project.name === pkg.name, 'Profile and package identity differ')
 check(/^\d+\.\d+\.\d+(?:-[\da-z.-]+)?$/.test(pkg.version), 'Expected semver project version')
 check(profile.versioning.canonical_source === 'package.json' && profile.versioning.value_path === '/version', 'Version must have one package.json source')
 check(profile.versioning.source_delivery_requires_new_target === true, 'Each delivered application-source batch must advance its target')
 check(profile.versioning.intermediate_deliveries_within_contract === true, 'A contract may span multiple versioned deliveries')
+check(profile.versioning.target_version_in_commit === true && profile.versioning.target_version_in_report_h1 === true,
+  'Implementation commits and reports must preserve the assigned target')
 const releases = [...text(profile.versioning.history_source).matchAll(/^## \[([^\]]+)\]/gm)].map(match => match[1])
 check(releases[0] === pkg.version && new Set(releases).size === releases.length,
   'Canonical version must head the changelog, and each release must be unique')
-check(profile.workflow.tracking === 'github_issues' && profile.workflow.primary_orchestrator === 'chatgpt', 'Selected work tracking/orchestration missing')
-check(profile.workflow.implementation_harnesses.length === 1 && profile.workflow.implementation_harnesses[0] === 'codex', 'Only the selected Codex harness belongs in this project')
+check(profile.workflow.tracking === 'github_issues', 'Executable work must use GitHub Issues')
+check(profile.workflow.handoff === 'optional', 'Work must not require a separate assistant handoff')
 check(profile.execution_permissions.safe_default === 'protected_auto', 'Unexpected safe execution default')
 // Active repository references are scoped separately from immutable release/provenance records.
 // This source gate does not verify a live Git remote or grant commit/push authorization.
@@ -50,8 +59,15 @@ check(text('AGENTS.md').includes('For approved Issues in `' + canonicalRepositor
 const profileSchema = JSON.parse(text('docs/.ai/schemas/project-profile.schema.json')) as {
   properties: {
     schema: { const: string }; skills: { const: string[] }; roles: { const: string[] }
+    workflow: {
+      properties: Record<keyof Profile['workflow'], { const?: string | string[]; enum?: string[]; items?: { enum: string[] }; uniqueItems?: boolean }>
+      required: string[]; additionalProperties: boolean
+    }
     execution_permissions: { properties: { safe_default: { const: string } } }
-    versioning: { properties: { source_delivery_requires_new_target: { const: boolean }; intermediate_deliveries_within_contract: { const: boolean } } }
+    versioning: { properties: {
+      source_delivery_requires_new_target: { const: boolean }; intermediate_deliveries_within_contract: { const: boolean }
+      target_version_in_commit: { const: boolean }; target_version_in_report_h1: { const: boolean }
+    } }
   }
 }
 check(profileSchema.properties.schema.const === profile.schema, 'Project profile and schema revision differ')
@@ -61,6 +77,23 @@ check(profileSchema.properties.versioning.properties.source_delivery_requires_ne
   'Profile schema and source-delivery version policy differ')
 check(profileSchema.properties.execution_permissions.properties.safe_default.const === profile.execution_permissions.safe_default,
   'Profile schema and execution default differ')
+for (const key of ['target_version_in_commit', 'target_version_in_report_h1'] as const) {
+  check(profileSchema.properties.versioning.properties[key].const === profile.versioning[key],
+    'Profile schema and delivery target policy differ: ' + key)
+}
+// Validate the small workflow contract, not a live client or the full JSON Schema vocabulary.
+const workflowSchema = profileSchema.properties.workflow
+for (const key of workflowSchema.required) check(Object.hasOwn(profile.workflow, key), 'Missing workflow setting: ' + key)
+check(workflowSchema.additionalProperties === false, 'Workflow schema must reject unknown settings')
+for (const key of Object.keys(profile.workflow)) {
+  const rule = workflowSchema.properties[key as keyof Profile['workflow']]
+  if (!rule) { errors.push('Unknown workflow setting: ' + key); continue }
+  const value = profile.workflow[key as keyof Profile['workflow']]
+  if (Object.hasOwn(rule, 'const')) check(JSON.stringify(value) === JSON.stringify(rule.const), 'Profile schema and workflow differ: ' + key)
+  if (rule.enum) check(typeof value === 'string' && rule.enum.includes(value), 'Invalid workflow setting: ' + key)
+  if (rule.items) check(Array.isArray(value) && value.every(item => rule.items!.enum.includes(item))
+    && (!rule.uniqueItems || new Set(value).size === value.length), 'Invalid workflow setting: ' + key)
+}
 check(!profile.console.enabled, 'No project console was requested')
 check(profile.services.length === 0 && profile.distribution.mode === 'none' && profile.distribution.targets.length === 0, 'This foundation must not silently provision/publish')
 for (const path of profile.validation.required_files) requireFile(path)
@@ -77,7 +110,7 @@ for (const [name, version] of Object.entries({ ...pkg.dependencies, ...pkg.devDe
 for (const script of Object.values(pkg.scripts)) for (const match of script.matchAll(/\btools\/([\w.-]+\.ts)\b/g)) requireFile('tools/' + match[1])
 for (const category of ['skills', 'roles'] as const) {
   const expected = profileSchema.properties[category].const
-  check(expected.length === (category === 'skills' ? 6 : 4)
+  check(expected.length > 0
     && new Set(expected).size === expected.length
     && JSON.stringify(profile[category]) === JSON.stringify(expected), 'Unexpected project ' + category)
 }

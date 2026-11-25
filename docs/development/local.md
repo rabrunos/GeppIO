@@ -79,7 +79,6 @@ The canonical command definitions are in [package.json](../../package.json).
 | `pnpm test:desktop` | Identity smoke, desktop smoke and the four built workbench smokes; prepare the build/examples first |
 | `pnpm test:workbench` | Built workbench, organization, plugin and corrections smokes in disposable profiles |
 | `pnpm test:desktop:dev` | Identity/desktop paths with built Main/preload and a Vite renderer; not the same chain as `test:workbench` |
-| `pnpm github:prepare` | Historical metadata helper; no need to rerun it for a materialized project; `--apply` requires explicit metadata authority |
 
 For read-only inspection or bounded documentation work, choose the checks required by the active
 contract. Direct Node can run `tools/check-repo.ts` or relevant dependency-free policy tests without
@@ -140,22 +139,17 @@ Keep disposable diagnostics/configuration under ignored `.local/` when needed. N
 machine paths, credentials, personal files or production data. No tracked status/checkpoint/report
 file is required; active evidence belongs in the GitHub Issue.
 
-## Executor entry and historical provenance
+## Working directly in Codex
 
-Read [PROJECT_GUIDE](../../PROJECT_GUIDE.md), [AGENTS](../../AGENTS.md), the active Issue and
-[TASK_POLICY](../.ai/TASK_POLICY.md). Approved implementation uses the populated
-[EXECUTION](../.ai/prompts/EXECUTION.md) contract. Verify actual branch/HEAD/status/diff and preserve
-unrelated work. A remote SHA is not a substitute for inspecting the checkout.
-Project TOML expresses requested settings; verify effective trust, effort, sandbox, reviewer and
-network settings in the running client. Any technical elevation remains bounded by its authority;
+Read [PROJECT_GUIDE](../../PROJECT_GUIDE.md), [AGENTS](../../AGENTS.md), the relevant Issue and
+[TASK_POLICY](../.ai/TASK_POLICY.md). Follow the [direct workflow](../.ai/orchestration.md) from
+investigation and optional planning through implementation and validation. No handoff template or
+foundation bootstrap is required. Verify branch/HEAD/status/diff and preserve unrelated work.
+Completed, validated changes receive commit and push automatically unless the owner opts out.
+
+Project TOML expresses requested settings; verify material trust, effort, sandbox, reviewer and
+network differences in the running client. Technical elevation stays bounded by its authority;
 do not switch to Full Access or edit global settings as a workaround.
 
-[FIRST_LOCAL_RUN](../.ai/prompts/FIRST_LOCAL_RUN.md) is historical foundation context, applicable
-only to an explicitly requested continuation of that foundation. It is not the default route for
-a new conversation or another machine. BootCrate intake/materialization are complete.
-
-The initial pre-repository ZIP had no resolved lockfile or bundled dependencies because its
-generation environment could not access npm. The real graph and desktop were subsequently
-validated and integrated under Issue #1. Those old limitations describe that handoff only, not
-the current checkout or a requirement to recreate its first commit. Source/build history remains
-in [CHANGELOG](../../CHANGELOG.md); actual task and acceptance evidence remains in Issues.
+Original foundation provenance is preserved in Git history and Issue #1. On another machine,
+clone the current repository and install the committed graph; do not recreate the initial commit.

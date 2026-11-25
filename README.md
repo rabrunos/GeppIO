@@ -324,8 +324,8 @@ Origens de desenvolvimento e produção podem manter estados de layout independe
 
 | Uso | Entrada |
 | --- | --- |
-| Planejamento e orquestração | [PROJECT_GUIDE.md](PROJECT_GUIDE.md) |
-| Implementação local | [AGENTS.md](AGENTS.md) e [contrato de execução](docs/.ai/prompts/EXECUTION.md) |
+| Conversar, planejar e implementar no Codex | [PROJECT_GUIDE.md](PROJECT_GUIDE.md) e [fluxo de trabalho](docs/.ai/orchestration.md) |
+| Regras de implementação e integração | [AGENTS.md](AGENTS.md) e [política de tarefas](docs/.ai/TASK_POLICY.md) |
 | Produto e limites | [Requisitos](docs/product/requirements.md) e [arquitetura](docs/architecture/overview.md) |
 | Checks e aceites | [Validação](docs/development/testing.md) e a issue relevante |
 
@@ -334,8 +334,11 @@ issue, confira o checkout e identifique as entregas e os critérios de aceite pe
 
 `package.json` é a fonte canônica da versão; `CHANGELOG.md` registra o histórico integrado.
 **Issues mantêm tarefas, decisões, evidências e aceites.** Não há banco paralelo de status/roadmap.
-Commit e push seguem a [política de tarefas](docs/.ai/TASK_POLICY.md) e o escopo autorizado;
-publicação e fechamento exigem autoridade própria. Adoção deliberada de nova biblioteca ou código
+O Codex pode planejar e implementar na mesma conversa. O ChatGPT continua como apoio opcional;
+um prompt de transferência só é necessário quando solicitado ou quando o trabalho realmente muda de sessão.
+Commit e push são automáticos para entregas concluídas e validadas no escopo autorizado, salvo
+orientação explícita em contrário. A [política de tarefas](docs/.ai/TASK_POLICY.md) mantém as
+verificações de identidade, versão e dados; publicação e fechamento exigem autoridade própria. Adoção deliberada de nova biblioteca ou código
 externo requer aprovação individual conforme a [issue #19](https://github.com/rabrunos/GeppIO/issues/19);
 o gate não exige aprovação de cada nó transitivo nem invalida a stack já escolhida.
 Configuração do projeto expressa defaults solicitados; verifique os valores efetivos do cliente

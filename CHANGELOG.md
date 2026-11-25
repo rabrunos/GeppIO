@@ -2,6 +2,12 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.94] — 2026-11-25
+
+- Make direct Codex investigation, planning, implementation and validation the normal workflow, with optional ChatGPT support and requested handoffs. Keep automatic commit/push for validated in-scope work unless the owner explicitly opts out.
+- Align the v5 project profile, schema, checks, skills, guidance and Issue forms. Preserve repository identity, protected settings, version discipline and negative policy tests. Retire the mandatory prompt templates and one-time foundation bootstrap helper and its obsolete tests.
+- Correct stale architecture summaries and reconcile active planning records after the modular Electron delivery. The interrupted alpha.79–93 targets remain historical and undelivered; this independent workflow delivery uses alpha.94 without changing product functionality.
+
 ## [0.1.0-alpha.78] — 2026-11-25
 
 - Exercise Sidebar collapse resistance in a window inside the Windows work area. Verify the Chromium pointer event, target, capture and release coordinates before checking the resulting layout and saved state.

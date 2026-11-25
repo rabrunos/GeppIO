@@ -26,6 +26,7 @@ Read only the rows needed for the active Issue. This is a route map, not task st
 | First-party signed package, offline signing, exact adoption and recovery | [Plugin package](../architecture/plugin-package.md), `src/geppio/src/main/plugin-package.ts`, `src/geppio/src/main/plugin-trust.ts`, `tests/plugin-package.test.ts`, `tools/plugin-package-smoke.ts` |
 | API 2 trusted-local text surfaces, durable ordinary data and retention | [Plugin data](../architecture/plugin-data.md), `src/geppio/src/main/plugin-data.ts`, `tests/plugin-data.test.ts`, `tools/workspace-essentials-smoke.ts` |
 | Native boundary or untrusted input | [Security baseline](SECURITY_BASELINE.md), [control map](../architecture/security.md) |
+| Direct Codex work, context budget, continuation and optional handoff | [Workflow](orchestration.md) |
 | Task version, effort, scope or approval | [Task policy](TASK_POLICY.md) |
 | External code approval and UI component preference | [Task policy](TASK_POLICY.md#external-library-and-source-adoption), Issues #19 and #8 |
 | New machine or GitHub binding | [Local setup](../development/local.md), [GitHub](../development/github.md) |

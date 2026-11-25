@@ -57,10 +57,9 @@ multi-key envelope or storage for plugin-owned data.
 New presentation helpers (`EditorPanel`, `PairDividers`, `PluginManager`, `CompositionThumbnail`,
 `useSwap`, `useCompositionReorder`, `DragLayer` and `ProjectMenu`) compose those existing owners.
 Static library-card previews use cached proportions. Drag pictures are inert snapshots with
-identity/command attributes removed; they never create models or execute plugin code. Project
-rename changes only local display metadata. Project filesystem/Git actions remain explicit
-demonstrations; the existing host download denial is retained. No project filesystem/Git/account
-authority is implied. Both composition orders are host metadata; provisional
+identity/command attributes removed; they never create models or execute plugin code. Host display-name changes affect local metadata. Native project selection, file operations and Git
+are implemented by the separate [Workspace](workspace.md), [Explorer](explorer.md) and
+[Git](git.md) services; host composition controls do not grant their native authority. Both composition orders are host metadata; provisional
 pointer order enters history only after an accepted drop. A Sidebar swap preserves other bars'
 memberships through another eligible view of the same model, subject to the existing view cap.
 New compositions capture format plus widget associations for explicit Main/Bottom scopes;
@@ -72,8 +71,10 @@ Main owns the native window, a bounded local asset protocol and the trusted loca
 The preload exposes immutable metadata plus fixed list/install/setEnabled/remove operations and
 the owner-authorized minimize/maximize/close controls for the application's main frame.
 There is no generic IPC entry point, arbitrary filesystem/process function
-or remote-content embedding. Each enabled external package runs in a renderer Web Worker;
-validated declarative contributions are rendered by React in the Main region.
+or remote-content embedding. API 1/2 packages run in trusted renderer Web Workers;
+validated declarative contributions are rendered by the host. API 3 packages use opaque-origin
+sandboxed frames and generation-bound brokered communication, described in [web surfaces](plugin-surfaces.md).
+Do not apply the Worker trust assumptions to API 3 or infer that all packages share one execution family.
 Manifest/API v1 maps them to Main-only, single-view cards in the host catalog. Host metadata
 for category, appearance, regions or multi-area presence does not imply matching author-facing
 manifest fields. Likewise, compact-rail actions, widget tab groups and general presentations
@@ -105,7 +106,7 @@ native identity recovery still uses its v1 contract. `src/geppio/src/shared/iden
 | Pure continuous geometry, alignment, collision and reflow | `src/geppio-runtime/src/layout/` |
 | Host constraints, projection, transfer, conversion and storage | `src/geppio/src/shared/freeform/` |
 | Historical integer codecs and regression/reference algorithms | `src/geppio/src/shared/grid/` |
-| Project checks and GitHub metadata reconciliation | `tools/` |
+| Repository checks, builds and validation | `tools/` |
 
 ## Intentional simplifications
 
@@ -124,7 +125,7 @@ Main edits continuous rectangles in both axes; Sidebar binds width and Bottom bi
 and declared contribution frames share a stable React parent; per-frame clipping maps each rectangle into its region's
 ordinary scrollport. Region transfer, scrolling, collapse and expansion do not remount content.
 Viewport/region changes derive presentation from a canonical reference and never write layouts.
-Plugin contributions use the host catalog and placement layer; App owns Worker lifetimes. Neither geometry nor
+Plugin contributions use the host catalog and placement layer; the application owns each execution family's controller/Worker lifetime independently of its presentations. Neither geometry nor
 widget constraints add native/plugin authority. The synthetic panel remains a session-only demo.
 Individual widget gestures require Edit, with DEV-only experimental individual keyboard controls.
 Paired dividers are a deliberate normal-mode exception: their typed bilateral command validates
@@ -133,10 +134,10 @@ Region and pair splitters retain production keyboard operation. The current opti
 snap does not implement or cancel the old general-guide wishes in #3/#10.
 
 React fixture components are trusted source in the application renderer. They are not isolated plugins. Do not infer that third-party React components can safely be loaded here.
-The current host has seven synthetic types, initially four Main/two Sidebar/one Bottom.
-All registered types use card appearance; seamless type/CSS support is infrastructure without
-an active fixture or manifest-v1 author option. A native window maximize action does not
-implement Main-scoped widget maximization (#25), and a visual project name is not a native folder.
+Historical synthetic fixtures remain separate from the current official and installed-plugin catalog.
+The host implements [presentations and Main maximize](layout.md) and widget tab groups; these
+features do not implicitly add public manifest-v1 capabilities. Native window maximize and
+Main-scoped widget maximize have different owners and lifecycles.
 
 ## Build and runtime
 
@@ -151,7 +152,7 @@ Before adding plugin-owned native UI surfaces, perform a separately scoped WebCo
 and define its z-order, clipping, focus, animation and lifecycle behavior. The trusted Worker runtime
 does not implement or certify those surfaces; the declarative contribution contract is separate from
 the logic lifecycle so they can be introduced later.
-The real modular IDE (#32), LAN companion (#30), community/forum/account (#34), widget tabs
-(#18), generalized presentations (#11), widget maximize (#25) and provisional catalog (#35)
-remain separate future scopes. Their presence in planning does not create implementation
-priority, a native bridge or an approved roadmap.
+GeppIO Code, native Explorer/Git/Terminal, host presentations, widget tabs and Main maximize have
+implemented scopes. Issues #32, #11, #18 and #25 retain their exact requirements and acceptance.
+LAN companion (#30), community/forum/account (#34) and further catalog capabilities (#35) remain
+separate future scopes. Planning does not itself grant a new native bridge or implementation authority.

@@ -1,10 +1,11 @@
 # Requested and effective executor settings
 
-Only Codex is enabled. `.codex/config.toml` carries project-scoped defaults: Main High, on-request
+Codex is the primary code environment; ChatGPT support and transfers are optional. `.codex/config.toml` carries project-scoped defaults: Main High, on-request
 automatic approval review, workspace-write, sandbox network enabled, and at most two simultaneous
 subagents. The normalized profile names this combination `protected_auto`. Network access does not
 expand writable roots, grant new task authority, or bypass automatic-review denials.
-Choose an auxiliary role for a specific question. `code-scout` traces source ownership,
+Use only the relevant skills and choose an auxiliary role for a specific independent question.
+The primary can plan and implement; no permanent planner or complete four-role sequence is required. `code-scout` traces source ownership,
 `boundary-reviewer` reviews authority or lifecycle changes, `ui-reviewer` examines specified
 interactions, and `validation-runner` executes the assigned checks. Review roles have a
 behavioral read-only assignment. Each role inherits the parent permission boundary.
@@ -33,6 +34,7 @@ In a fresh trusted project session, inspect the exposed skills and role inventor
 a bounded role if dispatch is available. Record the observed discovery and behavior in the
 active Issue separately from syntax, source checks and unobserved client settings.
 
-Sources verified 2026-10-07: [configuration reference](https://developers.openai.com/codex/config-reference)
-and [custom subagents](https://developers.openai.com/codex/subagents). The project files request these
-settings; actual Windows-client recognition remains a first-run verification step.
+Client references: [configuration](https://learn.chatgpt.com/guides/best-practices) and
+[subagents](https://learn.chatgpt.com/docs/agent-configuration/subagents). Project files request settings;
+actual client recognition and permissions must be observed in that client. Recheck when its version
+or configuration changes, rather than assuming file syntax proves enforcement.

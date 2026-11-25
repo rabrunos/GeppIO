@@ -1,11 +1,11 @@
-import test from 'node:test'
+import test, { type TestContext } from 'node:test'
 import assert from 'node:assert/strict'
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 
-test('repository gate preserves protected defaults and the canonical Git authorization scope', t => {
+function repositoryFixture(t: TestContext) {
   // Copy only project source into a disposable fixture; never edit actual client/global settings.
   const root = mkdtempSync(join(tmpdir(), 'geppio-policy-test-'))
   t.after(() => rmSync(root, { recursive: true, force: true }))
@@ -24,6 +24,11 @@ test('repository gate preserves protected defaults and the canonical Git authori
     if (result.error) throw result.error
     return result
   }
+  return { root, original, gate }
+}
+
+test('repository gate preserves protected defaults and the canonical Git authorization scope', t => {
+  const { root, original, gate } = repositoryFixture(t)
   assert.equal(gate(original).status, 0)
   assert.equal(gate(original.replace('sandbox_mode = "workspace-write"', '  sandbox_mode = "workspace-write" # retained boundary')).status, 0)
   for (const [before, after, key] of [
@@ -77,12 +82,21 @@ test('repository gate preserves protected defaults and the canonical Git authori
   const profilePath = join(root, 'docs/.ai/project-profile.json')
   const profile = JSON.parse(readFileSync(profilePath, 'utf8')) as {
     execution_permissions: { safe_default: string }
-    versioning: { source_delivery_requires_new_target: boolean; intermediate_deliveries_within_contract: boolean }
+    versioning: {
+      source_delivery_requires_new_target: boolean; intermediate_deliveries_within_contract: boolean
+      target_version_in_commit: boolean; target_version_in_report_h1: boolean
+    }
   }
   const schema = JSON.parse(readFileSync(join(root, 'docs/.ai/schemas/project-profile.schema.json'), 'utf8')) as {
     properties: { execution_permissions: { properties: { safe_default: { const: string } } } }
   }
   assert.equal(profile.execution_permissions.safe_default, schema.properties.execution_permissions.properties.safe_default.const)
+  for (const key of ['target_version_in_commit', 'target_version_in_report_h1'] as const) {
+    profile.versioning[key] = false
+    writeFileSync(profilePath, JSON.stringify(profile))
+    assert.match(gate(original).stderr, /Implementation commits and reports must preserve the assigned target/)
+    profile.versioning[key] = true
+  }
   profile.versioning.intermediate_deliveries_within_contract = false
   writeFileSync(profilePath, JSON.stringify(profile))
   assert.match(gate(original).stderr, /A contract may span multiple versioned deliveries/)
@@ -105,4 +119,47 @@ test('repository gate preserves protected defaults and the canonical Git authori
   const inconsistent = gate(original)
   assert.equal(inconsistent.status, 1)
   assert(inconsistent.stderr.includes('Profile schema and execution default differ'))
+})
+
+test('repository gate supports direct Codex work with optional assistance and detects workflow drift', t => {
+  const { root, original, gate } = repositoryFixture(t)
+  const profilePath = join(root, 'docs/.ai/project-profile.json')
+  const profile = JSON.parse(readFileSync(profilePath, 'utf8')) as { workflow: Record<string, unknown> }
+  const selectedWorkflow = profile.workflow
+  function workflowGate(overrides: Record<string, unknown>) {
+    profile.workflow = { ...selectedWorkflow, ...overrides }
+    writeFileSync(profilePath, JSON.stringify(profile))
+    return gate(original)
+  }
+  assert.equal(workflowGate({}).status, 0)
+  assert.equal(workflowGate({ optional_assistants: [] }).status, 0)
+  assert.equal(workflowGate({ optional_assistants: ['chatgpt'] }).status, 0)
+  for (const [change, expected] of [
+    [{ handoff: 'required' }, /Work must not require a separate assistant handoff/],
+    [{ primary_environment: 'chatgpt' }, /Profile schema and workflow differ: primary_environment/],
+    [{ primary_orchestrator: 'chatgpt' }, /Unknown workflow setting: primary_orchestrator/],
+    [{ fallback_planners: ['codex_plan'] }, /Unknown workflow setting: fallback_planners/],
+    [{ optional_assistants: ['chatgpt', 'chatgpt'] }, /Invalid workflow setting: optional_assistants/],
+    [{ optional_assistants: 'chatgpt' }, /Invalid workflow setting: optional_assistants/],
+    [{ implementation_harnesses: ['unselected'] }, /Profile schema and workflow differ: implementation_harnesses/],
+    [{ tracking: 'local_status_file' }, /Executable work must use GitHub Issues/]
+  ] as const) {
+    const result = workflowGate(change)
+    assert.equal(result.status, 1)
+    assert.match(result.stderr, expected)
+  }
+  profile.workflow = { ...selectedWorkflow }
+  delete profile.workflow.handoff
+  writeFileSync(profilePath, JSON.stringify(profile))
+  assert.match(gate(original).stderr, /Missing workflow setting: handoff/)
+  assert.equal(workflowGate({}).status, 0)
+  const schemaPath = join(root, 'docs/.ai/schemas/project-profile.schema.json')
+  const schema = JSON.parse(readFileSync(schemaPath, 'utf8')) as {
+    properties: { workflow: { properties: { handoff: { const: string } } } }
+  }
+  schema.properties.workflow.properties.handoff.const = 'required'
+  writeFileSync(schemaPath, JSON.stringify(schema))
+  const inconsistent = gate(original)
+  assert.equal(inconsistent.status, 1)
+  assert.match(inconsistent.stderr, /Profile schema and workflow differ: handoff/)
 })

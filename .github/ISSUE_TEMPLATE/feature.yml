@@ -42,7 +42,7 @@ body:
     id: authorization
     attributes:
       label: Authorized actions and sensitive boundaries
-      description: "Implementation, commit, push, metadata writes and publication are separate authorizations."
+      description: "State scope and any explicit Git opt-out. Validated in-scope commit/push uses standing authority; metadata writes and publication need applicable authority."
   - type: input
     id: related
     attributes:

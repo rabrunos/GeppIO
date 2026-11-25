@@ -1,6 +1,6 @@
 {
   "$schema": "./schemas/project-profile.schema.json",
-  "schema": "geppio/project-profile/v4",
+  "schema": "geppio/project-profile/v5",
   "project": {
     "name": "geppio",
     "kind": "desktop-workbench",
@@ -70,7 +70,6 @@
       "docs/architecture/security.md",
       ".codex/config.toml",
       ".github/workflows/checks.yml",
-      "docs/.ai/prompts/EXECUTION.md",
       "docs/.ai/TASK_POLICY.md",
       "docs/development/testing.md",
       "pnpm-lock.yaml"
@@ -78,10 +77,11 @@
   },
   "workflow": {
     "tracking": "github_issues",
-    "primary_orchestrator": "chatgpt",
-    "fallback_planners": [
-      "codex_plan"
+    "primary_environment": "codex",
+    "optional_assistants": [
+      "chatgpt"
     ],
+    "handoff": "optional",
     "implementation_harnesses": [
       "codex"
     ],
@@ -100,7 +100,6 @@
     "history_source": "CHANGELOG.md",
     "history_format": "markdown-headings",
     "mirrors": [],
-    "target_version_in_prompt_h1": true,
     "target_version_in_commit": true,
     "target_version_in_report_h1": true,
     "source_delivery_requires_new_target": true,
