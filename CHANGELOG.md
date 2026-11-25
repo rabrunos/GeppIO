@@ -2,6 +2,11 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.96] — 2026-11-25
+
+- Translate the public root README into English and align its durable language rule, retaining pt-BR owner communication and application UI.
+- Replace the previous SVG header with a cover combining the owner's mascot artwork and the requested moving-widget illustration. Preserve the concise navigation and documented capability boundaries.
+
 ## [0.1.0-alpha.95] — 2026-11-25
 
 - Replace the long public README with an original illustrated header, concise pt-BR product introduction, supported quick start and links to the six modules and canonical guides.

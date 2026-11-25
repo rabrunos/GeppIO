@@ -92,5 +92,5 @@ creates no empty commit. Required manual acceptance remains with the owner, not 
 Keep machine values and temporary diagnostics under ignored `.local/`. Test using disposable
 fixtures, not by deleting the owner's saved state. Keep credentials outside the agent workspace;
 .gitignore is not access control. Do not turn on full-access/bypass to fix a failure.
-Technical prose, code comments and contracts are English; UI, README and owner-facing reports
-are pt-BR. Reports are responses, never a tracked duplicate of Issue state.
+Technical prose, code comments, contracts and the public root README are English;
+UI and owner-facing reports are pt-BR. Reports are responses, never a tracked duplicate of Issue state.
