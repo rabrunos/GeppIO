@@ -3,9 +3,9 @@ import type { KeyObject } from 'node:crypto'
 import { lstat, realpath, readFile, writeFile } from 'node:fs/promises'
 import { relative, isAbsolute, resolve } from 'node:path'
 import { pathToFileURL, fileURLToPath } from 'node:url'
-import { inspectPackage } from '../src/main/plugins.ts'
-import type { Package } from '../src/main/plugin-package.ts'
-import { PACKAGE_DOMAIN, PACKAGE_MAGIC, PACKAGE_LIMITS, validatePackageFiles, verifyPluginPackage } from '../src/main/plugin-package.ts'
+import { inspectPackage } from '../src/geppio/src/main/plugins.ts'
+import type { Package } from '../src/geppio/src/main/plugin-package.ts'
+import { PACKAGE_DOMAIN, PACKAGE_MAGIC, PACKAGE_LIMITS, validatePackageFiles, verifyPluginPackage } from '../src/geppio/src/main/plugin-package.ts'
 
 export function publicIdentity(key: KeyObject): { publicKey: string; keyId: string } {
   const publicKey = createPublicKey(key)
@@ -22,7 +22,6 @@ export function signPluginPackage(pkg: Package, key: KeyObject): Buffer {
   PACKAGE_MAGIC.copy(header); header.writeUInt32BE(1, 8); header.writeUInt32BE(metadata.length, 12); header.writeUInt32BE(payload.length, 16)
   const body = Buffer.concat([header, metadata, payload]), bytes = Buffer.concat([body, sign(null, Buffer.concat([PACKAGE_DOMAIN, body]), key)])
   if (bytes.length > PACKAGE_LIMITS.bytes) throw new Error('Package exceeds 3 MiB')
-  if (pkg.manifest.id !== 'geppio.workspace-essentials') throw new Error('Only Workspace Essentials is in this pilot')
   verifyPluginPackage(bytes, [{ ...identity, pluginId: pkg.manifest.id, publisher: 'Local packaging self-check', revoked: false }])
   return bytes
 }

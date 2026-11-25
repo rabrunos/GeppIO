@@ -1,4 +1,4 @@
-import type { Json } from '../../../../sdk/plugin-v2.d.ts'
+import type { Json } from '@geppio/plugin-sdk/v2'
 export interface Entry { id: string; title: string; body: string }
 export interface Model { version: 1; notes: Entry[]; prompts: Entry[]; scratch: string; checklist: { id: string; text: string; done: boolean }[]; selectedNote: string; selectedPrompt: string }
 export function emptyModel(): Model { return { version: 1, notes: [], prompts: [], scratch: '', checklist: [], selectedNote: '', selectedPrompt: '' } }

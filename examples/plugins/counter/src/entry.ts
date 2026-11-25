@@ -1,4 +1,4 @@
-import type { PluginContext, PluginInstance } from '../../../../sdk/plugin.d.ts'
+import type { PluginContext, PluginInstance } from '@geppio/plugin-sdk/v1'
 
 export function activate(context: PluginContext): PluginInstance {
   let count = 0

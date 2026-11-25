@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "productId": "desk-notes",
+  "name": "Caderno local",
+  "tiles": [
+    { "id": "journal", "kind": "note", "title": "Anotações" },
+    { "id": "sessions", "kind": "counter", "title": "Sessões" }
+  ]
+}

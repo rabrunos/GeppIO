@@ -3,7 +3,7 @@ import type { Locator, Page } from 'playwright'
 import { writeFile } from 'node:fs/promises'
 import { initialWorkbench } from '../tests/fixtures/workbench.ts'
 import type { WorkbenchSnapshot } from '../tests/fixtures/workbench.ts'
-import type { Region } from '../src/shared/freeform/types.ts'
+import type { Region } from '@geppio/runtime/layout/types'
 import { settle } from './freeform-smoke.ts'
 
 type Box = { x: number; y: number; width: number; height: number }

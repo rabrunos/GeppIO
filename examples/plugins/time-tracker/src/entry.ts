@@ -1,4 +1,4 @@
-import type { PluginContextV2, PluginInstanceV2, DataDocument } from '../../../../sdk/plugin-v2.d.ts'
+import type { PluginContextV2, PluginInstanceV2, DataDocument } from '@geppio/plugin-sdk/v2'
 import { emptyTracker, parseTracker, startTimer, pauseTimer, elapsed, duration, dailyTotals, trackerDocument, MAX_SESSIONS } from './model.ts'
 import type { Tracker } from './model.ts'
 

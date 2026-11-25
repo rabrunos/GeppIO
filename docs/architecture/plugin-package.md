@@ -1,4 +1,4 @@
-# First-party signed package pilot — envelope 1
+# Signed local packages — envelope 1
 
 Issue #43 / alpha.34 adds local file installation only for `geppio.workspace-essentials`.
 Manifest schema 1 and APIs 1/2 retain their existing meanings. No library, archive extractor,
@@ -36,18 +36,17 @@ JSON in the property orders shown above, with no timestamp. Identical built byte
 identical output. UTF-8 decoding is fatal. Signature verification does not waive validation:
 
 - Existing limits: 512 KiB/file, 2 MiB decoded total, 16 KiB manifest, 64 files plus implicit
-  directories, and at most nine path components. Only `.js` and `.json` files are accepted.
+directories, and at most nine path components. API 1/2 accept `.js` and `.json`. [API 3](plugin-surfaces.md) also accepts HTML, CSS, JSX, TypeScript/TSX and local PNG resources. Preparation must succeed before acceptance.
 - Only regular files are represented. Directories are implicit; symlinks, devices, archive entry
   attributes and executable metadata have no representation. Other entry types are rejected.
 - Existing bounded path rules reject absolute/traversal/empty components, backslashes, ADS,
   reserved Windows names and trailing dots. Case-folded aliases (also directories), duplicate
   entries and file/directory prefix conflicts are rejected on every platform.
-- The manifest and declared `.js` entry must both exist, pass the existing parser and match the
-  key's plugin scope. Manifest schema 1/API 1 or 2 remain compatible.
+- The manifest, declared entry and required resources must exist. Validate the full namespace and exact manifest plugin ID against the signing key's scope.
 
 ## Production trust and owner custody
 
-`src/main/plugin-trust.ts` is the only production trust source. On 2026-11-13 the owner explicitly
+`src/geppio/src/main/plugin-trust.ts` is the only production trust source. On 2026-11-13 the owner explicitly
 authorized the Ed25519 public key below for `geppio.workspace-essentials`. Its SPKI DER fingerprint
 was independently recomputed and its public bytes compared with the owner's external public file.
 The trusted publisher label is `GeppIO (rabrunos)`.
@@ -102,11 +101,13 @@ Window/frame/document-generation checks expire confirmation on navigation/teardo
 or denial does not write an installation. Folder install remains explicit trusted development.
 
 Fresh install gets a new installation UUID, is disabled and places no widgets. Adoption requires
-a valid actual legacy folder with the exact complete relative file set and bytes, inspected again
-after confirmation and before commit. Same-ID signed/replacement conflicts or changed folder/state
-bytes fail without replacing valid state. The existing UUID, enabled preference and all data paths,
-widget/layout/model IDs, placements and historical recovery references remain unchanged. No host
-layout/composition file or confirmed plugin data is rewritten by installation.
+a valid legacy folder with the exact complete relative file set and bytes, inspected again
+after confirmation and before commit. A signed API 3 installation can instead receive a
+confirmed replacement while disabled. Both envelopes must verify for the same trusted key,
+plugin ID and widget ID, and the previous envelope must still match its pinned digest.
+A fresh snapshot UUID identifies the replacement generation. API 1/2 signed-ID conflicts
+continue to fail. The existing installation UUID, enabled preference, ordinary data and layout
+bindings persist. Layout and plugin-data files are outside this transaction.
 
 The signed envelope is staged with `wx`, renamed to `plugins/signed/<snapshot UUID>.gpp`, then
 `plugins/state.json` is atomically replaced through its existing serialized store. Each signed

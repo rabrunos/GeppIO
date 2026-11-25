@@ -6,9 +6,9 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { drag, portugueseFixture, settle } from './freeform-smoke.ts'
 import { fileEditor } from './monaco-support.ts'
-import type { MonacoHost } from '../src/renderer/src/files-editor/monaco.ts'
-import type { DocumentDraft, DocumentResult } from '../src/shared/documents.ts'
-import { WORKBENCH_KEY } from '../src/shared/workbench/model.ts'
+import type { MonacoHost } from '../src/geppio/src/renderer/src/files-editor/monaco.ts'
+import type { DocumentDraft, DocumentResult } from '@geppio/runtime/documents'
+import { WORKBENCH_KEY } from '../src/geppio/src/shared/workbench/model.ts'
 
 const profile = await mkdtemp(join(tmpdir(), 'geppio-smoke-multi-documents-')), root = await realpath(profile)
 const scope = join(root, 'project'), alternate = join(root, 'alternate'), nested = join(scope, 'nested')
@@ -30,7 +30,7 @@ try {
   if (dev) {
     const { loadConfigFromFile } = await import('electron-vite'), { createServer } = await import('vite')
     const config = await loadConfigFromFile({ command: 'serve', mode: 'development' }, 'electron.vite.config.ts')
-    server = await createServer({ ...config.config.renderer, root: resolve('src/renderer'), configFile: false }); await server.listen()
+    server = await createServer({ ...config.config.renderer, root: resolve('src/geppio/src/renderer'), configFile: false }); await server.listen()
     env.ELECTRON_RENDERER_URL = 'http://127.0.0.1:5173/'
   }
   app = await electron.launch({ args: ['.', ...(scale125 ? ['--force-device-scale-factor=1.25'] : [])], env })

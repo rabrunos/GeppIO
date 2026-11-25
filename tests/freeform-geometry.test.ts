@@ -1,12 +1,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { candidate, collides, validLayout } from '../src/shared/freeform/geometry.ts'
-import { CONSTRAINTS, constraintsFor, DEFAULT_FREEFORM, POLICY } from '../src/shared/freeform/policy.ts'
-import { reflow } from '../src/shared/freeform/reflow.ts'
-import { transfer } from '../src/shared/freeform/transfer.ts'
-import { settlePlacements, settleSnapshot } from '../src/shared/freeform/settlement.ts'
-import { DIRECTIONS } from '../src/shared/freeform/types.ts'
-import type { Constraints, Placement, Surface } from '../src/shared/freeform/types.ts'
+import { candidate, collides, validLayout } from '@geppio/runtime/layout/geometry'
+import { CONSTRAINTS, constraintsFor, DEFAULT_FREEFORM, POLICY } from '../src/geppio/src/shared/freeform/policy.ts'
+import { reflow } from '@geppio/runtime/layout/reflow'
+import { transfer } from '../src/geppio/src/shared/freeform/transfer.ts'
+import { settlePlacements, settleSnapshot } from '@geppio/runtime/layout/settlement'
+import { DIRECTIONS } from '@geppio/runtime/layout/types'
+import type { Constraints, Placement, Surface } from '@geppio/runtime/layout/types'
 
 const main: Surface = { region: 'main', width: 1000, height: 700, expanded: false }
 const p = (id: string, x: number, y: number, width = 200, height = 200): Placement => ({ id, region: 'main', x, y, width, height, preferred: { width, height } })

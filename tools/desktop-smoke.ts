@@ -82,7 +82,7 @@ try {
   if (process.argv.includes('--dev')) {
     const { loadConfigFromFile } = await import('electron-vite'), { createServer } = await import('vite')
     const config = await loadConfigFromFile({ command: 'serve', mode: 'development' }, 'electron.vite.config.ts')
-    devServer = await createServer({ ...config.config.renderer, root: resolve('src/renderer'), configFile: false })
+    devServer = await createServer({ ...config.config.renderer, root: resolve('src/geppio/src/renderer'), configFile: false })
     await devServer.listen()
     env.NODE_ENV = 'development'; env.ELECTRON_RENDERER_URL = 'http://127.0.0.1:5173/'
   }

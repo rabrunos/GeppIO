@@ -5,9 +5,9 @@ import { mkdtemp, mkdir, writeFile, readFile, rename, rm, readdir, symlink, acce
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
-import { PluginStore, inspectPackage } from '../src/main/plugins.ts'
-import { PACKAGE_DOMAIN, PACKAGE_LIMITS, PACKAGE_MAGIC, readPackageSnapshot, verifyPluginPackage } from '../src/main/plugin-package.ts'
-import { PLUGIN_TRUST } from '../src/main/plugin-trust.ts'
+import { PluginStore, inspectPackage } from '../src/geppio/src/main/plugins.ts'
+import { PACKAGE_DOMAIN, PACKAGE_LIMITS, PACKAGE_MAGIC, readPackageSnapshot, verifyPluginPackage } from '../src/geppio/src/main/plugin-package.ts'
+import { PLUGIN_TRUST } from '../src/geppio/src/main/plugin-trust.ts'
 import { signPluginPackage, publicIdentity } from '../tools/plugin-package.ts'
 import { template } from './fixtures/plugin-template.ts'
 
@@ -97,7 +97,7 @@ test('only authenticated closed templates are discovered in a disabled signed in
     signed.copy(changed, changed.length - 64, signed.length - 64)
     assert.throws(() => verifyPluginPackage(changed, trust), /Assinatura/)
     assert.throws(() => verifyPluginPackage(raw(entries([{ ...template(), execute: true }])), trust), /inválido/)
-    assert.throws(() => verifyPluginPackage(raw(entries([template()]), { keyId: trust[0].keyId, pluginId: 'geppio.composition-templates' }), trust), /Identidade/)
+    assert.throws(() => verifyPluginPackage(raw(entries([template()]), { keyId: trust[0].keyId, pluginId: 'geppio.composition-templates' }), trust), /escopo autorizado/)
     await writeFile(f.path, changed)
     await assert.rejects(f.store.installSigned(f.path, yes, current), /Assinatura/)
     assert.deepEqual((await f.store.list()).plugins, [])

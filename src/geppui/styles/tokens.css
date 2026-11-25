@@ -1,0 +1,45 @@
+:root {
+  --control-hover: #f7f3eb;
+  --menu-hover: #ebeff6;
+  --color-canvas: #fbf9f6;
+  --color-surface: #fff;
+  --color-text: #132b4e;
+  --color-text-muted: #59718d;
+  --color-border: #e8e4de;
+  --color-input: #f5f7fa;
+  --color-input-border: #dfe5ed;
+  --color-accent: #f58a30;
+  --color-accent-soft: #fff0e4;
+  --color-accent-border: #f6d4ba;
+  --color-success: #1bb77e;
+  --space-y: 9px;
+  --space-x: 11px;
+  --icon-control-size: 32px;
+  --icon-control-radius: 8px;
+  --control-inline-padding: 8px;
+  --type-ui: 13px;
+  --type-meta: 12px;
+}
+:root {
+  --destructive: #e81123;
+  --ring: var(--color-text);
+  --floating-radius: 14px;
+}
+:root[data-theme="dark"] {
+  --color-canvas: #12161e;
+  --color-surface: #232a35;
+  --color-elevated: #2a323f;
+  --color-text: #f8f8f2;
+  --color-text-muted: #acb7c9;
+  --color-border: #3c485b;
+  --color-input: #1a202b;
+  --color-input-border: #5c6e89;
+  --color-accent: #f49a56;
+  --color-accent-soft: #382c27;
+  --color-accent-border: #775841;
+  --color-success: #65cba1;
+  --destructive: #f38a96;
+  --ring: #a4bff0;
+  --control-hover: #313c4d;
+  --menu-hover: #354153;
+}

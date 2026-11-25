@@ -31,7 +31,8 @@ function expand(name: string): string[] {
 test('CI preserves all 38 distinct alpha.48 Electron invocations and public commands', () => {
   const actual = Object.values(ciGroups).flat().map(step => [step.file, ...(step.args ?? [])].join(' ')).sort()
   assert.equal(alpha48.length, 38)
-  assert.deepEqual(actual, [...alpha48, 'tools/app-host-smoke.ts', 'tools/app-host-smoke.ts --scale125',
+  assert.deepEqual(actual, [...alpha48, 'tools/surface-smoke.ts', 'tools/standalone-smoke.ts', 'tools/external-libraries-smoke.ts',
+    'tools/app-host-smoke.ts', 'tools/app-host-smoke.ts --scale125',
     'tools/git-window-smoke.ts', 'tools/git-window-smoke.ts --scale125',
     'tools/search-smoke.ts', 'tools/search-smoke.ts --scale125', 'tools/search-smoke.ts --dev',
     'tools/draft-recovery-smoke.ts', 'tools/draft-recovery-smoke.ts --scale125', 'tools/draft-recovery-smoke.ts --dev',
@@ -58,6 +59,7 @@ test('CI preserves all 38 distinct alpha.48 Electron invocations and public comm
   for (const step of actual) assert.ok(existsSync(step.split(' ')[0]!))
   for (const group of Object.keys(ciGroups)) assert.equal(scripts['test:ci:' + group], 'node --experimental-strip-types tools/ci-tests.ts ' + group)
   assert.equal(scripts.check, 'pnpm check:repo && pnpm typecheck && pnpm lint && pnpm test && pnpm plugins:build && pnpm build')
+  assert.equal(scripts['check:repo'], 'node --experimental-strip-types tools/check-repo.ts && node --experimental-strip-types tools/check-modules.ts')
 })
 
 test('all 45 alpha.48 Node suite files still run through the full discovery gate', () => {

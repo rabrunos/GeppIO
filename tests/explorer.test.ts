@@ -5,13 +5,13 @@ import { randomUUID } from 'node:crypto'
 import { link, mkdir, mkdtemp, readFile, realpath, rename, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { DirectoryStore, ExplorerFailure, explorerFailure, safeExplorerName } from '../src/main/explorer.ts'
-import { DocumentStore, documentFailure } from '../src/main/documents.ts'
-import { EXPLORER_LIMITS, validExplorerRequest } from '../src/shared/explorer.ts'
-import type { ExplorerNode, ExplorerResult } from '../src/shared/explorer.ts'
-import { EditorSession } from '../src/renderer/src/files-editor/session.ts'
-import type { DocumentResult } from '../src/shared/documents.ts'
-import { ExplorerSession, findExplorerChild } from '../src/renderer/src/files-editor/explorer-session.ts'
+import { DirectoryStore, ExplorerFailure, explorerFailure, safeExplorerName } from '../src/geppio/src/main/explorer.ts'
+import { DocumentStore, documentFailure } from '../src/geppio/src/main/documents.ts'
+import { EXPLORER_LIMITS, validExplorerRequest } from '../src/geppio/src/shared/explorer.ts'
+import type { ExplorerNode, ExplorerResult } from '../src/geppio/src/shared/explorer.ts'
+import { EditorSession } from '../src/geppio/src/renderer/src/files-editor/session.ts'
+import type { DocumentResult } from '@geppio/runtime/documents'
+import { ExplorerSession, findExplorerChild } from '../src/geppio/src/renderer/src/files-editor/explorer-session.ts'
 
 const current = () => true
 test('display following uses exact names first and only unique case-folded Windows associations', () => {
@@ -156,7 +156,7 @@ test('shared Explorer follows active tabs and refreshed identity without saving 
   await writeFile(join(path, 'one.txt'), 'one'); await writeFile(join(path, 'two.txt'), 'two')
   const dirs = new DirectoryStore(), docs = new DocumentStore(); const decision: 'save' | 'discard' | 'cancel' = 'cancel'
   const reply = (value: DocumentResult): DocumentResult => {
-    const locate = (document: import('../src/shared/documents.ts').DocumentSnapshot) => ({ ...document, ...(dirs.snapshot ? { location: { root: dirs.snapshot.id, names: [document.name] } } : {}) })
+    const locate = (document: import('@geppio/runtime/documents').DocumentSnapshot) => ({ ...document, ...(dirs.snapshot ? { location: { root: dirs.snapshot.id, names: [document.name] } } : {}) })
     return value.ok ? { ...value, document: value.document ? locate(value.document) : null, documents: docs.snapshots.map(locate) } : value
   }
   const editor = new EditorSession({ ...unusedDocumentAuthoring, reload: async () => { throw new Error('Unexpected reload') }, activate: async id => reply(docs.activate(id)), open: async () => ({ ok: true, document: null }), save: async draft => { await docs.save(draft, current); return reply(docs.result()) }, release: async draft => reply(await docs.release(draft, async () => decision, current)), close: async () => ({ ok: true, document: null }), onCloseRequested: () => () => {} })

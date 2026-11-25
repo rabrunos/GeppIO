@@ -4,7 +4,7 @@
 
 **GeppIO** is a Windows-first local desktop workbench, with its product identity approved in Issue #6 and technical namespace `geppio`. Windows and Linux are the product direction; current Windows evidence does not establish Linux runtime or distribution support. The owner wants to compose useful workspaces from widgets and, later, community plugins. This is a new codebase, not an adoption of the old Electron prototype or of the review HTML application. No application account, backend, subscription integration or cloud sync is implemented.
 
-The original foundation explored approximately ten synthetic formats. The current host registry has seven demonstration widget types, initially placed as four in Main, two in Sidebar and one in Bottom. The alpha.13/alpha.14 workbench integrates the approved external V1.141 presentation with real host organization and editing features. Its illustrative content does not implement ChatGPT, Codex, Git, an editor, a terminal or a filesystem-connected project. Product decisions and scoped acceptance remain in the relevant Issues, especially #2, rather than being inferred from screenshots or a successful CI run.
+Seven historical demonstration widget identities remain available for compatibility and disposable tests. New profiles start with empty regions. The workbench integrates real first-party Explorer, Monaco editing, Git and native Terminal sessions. The illustrative profile and presentation controls retain their synthetic scope. Product decisions and manual acceptance remain in the relevant Issues.
 
 ## Decision provenance and interpretation
 
@@ -21,13 +21,13 @@ The request to begin implementation authorizes a bounded foundation with provisi
 
 ## Platform and visual stack
 
-Electron, TypeScript, React, Tailwind CSS, Heroicons and Motion are the implemented stack. Prefer project-owned UI components and preserve GeppIO tokens and visuals. Issue #8 records this preference and the earlier shadcn/ui selection. Any proposal to adopt shadcn/ui or another new external library or copied implementation needs individual owner approval under #19. Its exceptions for the existing stack and normal transitive-dependency review still apply. Check compatibility, licenses and required notices for each actual integration. TypeScript is mandatory for product and project tooling code. Runtime validation is still required at data/native boundaries; erased TypeScript types are not validation of untrusted JSON.
+Electron, TypeScript and React are the desktop foundation. Keep project-owned components, tokens and visual behavior. Issue #39 assigns the GeppUI extraction and removal of the legacy styling dependencies. Issue #8 records the earlier shadcn/ui decision. New external libraries and copied implementations require individual owner approval under #19. Review licenses and notices for actual integrations. TypeScript is mandatory for application and tooling logic. Validate untrusted JSON at runtime.
 
 Windows is the initial runtime validation target. Linux remains a product target without a demonstrated application smoke or distribution in the examined baseline; pure geometry checks on Linux do not prove desktop installation, UX or Codex permission enforcement on either platform. Six or seven simultaneously visible widgets and background activity must eventually be measured with real representative content. No RAM budget or performance guarantee is inferred from using Electron or React. A fake chart is not telemetry.
 
 The visual system should be elegant, coherent and reusable by widgets. Themes are intended to change broad visual identity, not functionality. Begin with design tokens and dark/light examples. Future theme packages must not gain script or native permissions merely because they are called themes. Permission identity and scope must remain legible and trustworthy.
 
-Motion is intended for structural transitions, while CSS handles simple states. Respect reduced motion. During active drag/resize, response to input matters more than decorative animation. Do not assume animations of React DOM nodes also animate future native WebContentsView surfaces.
+Use project-owned animation behavior for structural transitions and simple states. Honor reduced motion. During an active drag or resize, prioritize response to input. Native surfaces require their own lifecycle and presentation checks.
 
 ## Workbench and regions
 

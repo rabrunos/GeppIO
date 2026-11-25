@@ -1,5 +1,9 @@
 # Selected security baseline
 
+API 3 uses a sandboxed, opaque-origin document and a host-owned broker. Keep author content
+outside the app DOM, enforce generation and exact endpoint consent on supervised ports,
+and retain fixed main-frame-only native handlers. See [surface isolation and limits](../architecture/plugin-surfaces.md).
+
 Issue #32 extends [project search](../architecture/search.md) with reviewed literal replacements.
 The primary window may submit match IDs from its own project scan. Main keeps the paths, original
 file witnesses, replacement text and ordered pending files. Each reviewed file is revalidated
@@ -123,14 +127,13 @@ frame and exact application URL. Main obtains the filename from its native dialo
 revalidates the owner after asynchronous boundaries. Export validates the recipe before
 selection and uses exclusive creation. An error after creation leaves the selected output
 for inspection and reports uncertainty. The usual same-user filesystem race limitation applies.
-Do not evaluate imported text, install code from a layout file or render raw HTML. A failed read
+Do not evaluate imported layout text, install code from a layout file or insert author HTML into the privileged app DOM. A failed read
 must not erase a draft. User-initiated saving is separate from initial loading.
 
 Keep secrets and machine/private paths out of source, logs, prompts and diagnostics. Ignore patterns
 are not encryption. Preserve least privilege and explicit approvals. Never use a successful check
 to infer permission to push, publish or close an Issue.
 
-Before executing third-party plugins, the separate task must define ownership, caller identity,
-capability broker, limits, per-plugin storage/session boundaries, inter-plugin APIs, surface scripting
-risk and how native process permissions interact with vault isolation. Those controls are not
-implemented by this starter. Do not claim QuickJS, isolated worlds or safeStorage solve every boundary.
+Any expansion beyond the supported local execution paths needs an approved task defining the
+additional trust model, identity, resource and storage limits, revocation and native effects.
+The API 3 sandbox and broker do not authorize a vault, native plugin execution or public distribution.

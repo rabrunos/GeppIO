@@ -91,7 +91,7 @@ scene; invalid candidates fall back to ordinary reflow within the same budget.
 Main supports both axes, Bottom only horizontal geometry, and Sidebar retains its
 packed-height resize path and fixed width. Pair dividers/shell splitters are separate.
 
-`shared/freeform/alignment.ts` owns same-edge, opposite-edge and center candidates,
+Runtime's [alignment solver](../../src/geppio-runtime/src/layout/alignment.ts) owns same-edge, opposite-edge and center candidates,
 7px entry/14px release hysteresis in CSS pixels and distance/anchor/identity tie
 ordering. It first retains ordinary reflow, then tries snapping within the remaining
 solver budget. Invalid geometry, failed clearance or a peer moved off the guide
@@ -445,8 +445,8 @@ presence from an omitted region. Format first arranges the current included widg
 Format can replace them with session reservations. Click, catalog and existing-view moves share
 current-identity exact-slot admission, reject invalid slots without free-space fallback and
 record accepted filling/removal as one reversible intention. Reservations are never executable
-persisted widgets. See `src/shared/workbench/compositions.ts`, `src/shared/workbench/slots.ts`
-and `src/renderer/src/workbench/EditorPanel.tsx`.
+persisted widgets. See `src/geppio/src/shared/workbench/compositions.ts`, `src/geppio/src/shared/workbench/slots.ts`
+and `src/geppio/src/renderer/src/workbench/EditorPanel.tsx`.
 
 ## Current continuous solver — Issue #29 with host adapters from Issue #2
 
@@ -457,8 +457,7 @@ contracts preserved later; no mandatory cell engine has been reintroduced.
 Mandatory cell placement is superseded. The only active renderer is App → freeform/; no grid
 metrics, cell rounding, square requirement, row count or column count participates in placement.
 The workbench still uses structural CSS grid to arrange peer regions, independently of widgets.
-Pure TypeScript in src/shared/freeform owns rectangles in CSS pixels (including fractional pixels),
-region ownership, constraints, collision, projection, transfers, codecs and storage adapters.
+The [Runtime layout engine](../../src/geppio-runtime/src/layout/) owns CSS-pixel rectangles, fractional geometry, alignment, reflow and collision settlement. GeppIO's [freeform adapters](../../src/geppio/src/shared/freeform/) own persisted layout codecs, projection, transfers and storage policy for its regions.
 
 ### Coordinates, constraints and regions
 
@@ -735,7 +734,7 @@ This is a reversible prototype with bounded adaptive limits, subject to owner ac
 
 ## Policy and measured rendering
 
-`src/shared/grid/policy.ts` centralizes the 12×8 reference composition, provisional 10 CSS-pixel symmetric
+`src/geppio/src/shared/grid/policy.ts` centralizes the 12×8 reference composition, provisional 10 CSS-pixel symmetric
 gutters and 9px Main inset. Placements are integer `{id,x,y,w,h,preferred:{w,h}}`, independent of pixel
 size, content, presentation and plugin authority. Fixture minima are 3 columns × 2 rows (the nearest
 safe grid minima covering the retained normalized v1 minimums); maxima use the stored bounds. Each

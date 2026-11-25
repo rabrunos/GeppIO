@@ -5,11 +5,11 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { generateKeyPairSync, randomUUID } from 'node:crypto'
-import { PluginStore, inspectPackage, packageDigest } from '../src/main/plugins.ts'
+import { PluginStore, inspectPackage, packageDigest } from '../src/geppio/src/main/plugins.ts'
 import { publicIdentity, signPluginPackage } from '../tools/plugin-package.ts'
-import { initialWorkbench, widgetRegistry } from '../src/shared/workbench/model.ts'
-import { addWidget } from '../src/shared/workbench/commands.ts'
-import { parseWorkbench, serializeWorkbench } from '../src/shared/workbench/codec.ts'
+import { initialWorkbench, widgetRegistry } from '../src/geppio/src/shared/workbench/model.ts'
+import { addWidget } from '../src/geppio/src/shared/workbench/commands.ts'
+import { parseWorkbench, serializeWorkbench } from '../src/geppio/src/shared/workbench/codec.ts'
 import { initialWorkbench as demoWorkbench, widgetRegistry as demoRegistry } from './fixtures/workbench.ts'
 import { template } from './fixtures/plugin-template.ts'
 
@@ -41,6 +41,33 @@ test('mode defaults off and Main gates source operations; fresh source is disabl
     await f.store.setEnabled(id, true); assert.ok(f.store.asset(asset(installed.generation!)))
   } finally { await f.clean() }
 })
+test('an API 3 development update retains its supervised surface execution boundary', async () => {
+  const f = await fixture()
+  try {
+    const manifestPath = join(f.source, 'plugin.json'), state = join(f.managed, 'state.json')
+    await writeFile(manifestPath, JSON.stringify({ ...f.manifest, apiVersion: 3,
+      widgets: [{ id: 'notes', title: 'Notes', surface: 'web' }],
+      surface: { html: 'panel.html', css: 'panel.css', uses: [], offers: [] } }))
+    await writeFile(join(f.source, 'entry.js'), 'void 0')
+    await writeFile(join(f.source, 'panel.html'), '<p>Notes</p>')
+    await writeFile(join(f.source, 'panel.css'), 'p { color: blue }')
+    await f.store.setDeveloperMode(true)
+    const first = (await f.store.loadExternal(f.source)).plugins[0]!
+    await f.store.setEnabled(id, true)
+    const original = await readFile(state)
+    const url = `geppio-surface://${first.generation}/${id}/index.html`
+    const prepared = f.store.surface(url)
+    assert.ok(prepared)
+    await writeFile(manifestPath, JSON.stringify(f.manifest))
+    await rm(join(f.source, 'panel.html'))
+    await rm(join(f.source, 'panel.css'))
+    await assert.rejects(f.store.reload(id), /preservar a superfície isolada/)
+    assert.deepEqual(await readFile(state), original)
+    assert.equal(f.store.surface(url), prepared)
+    assert.equal(f.store.asset(asset(first.generation!)), null)
+  } finally { await f.clean() }
+})
+
 test('disabled external templates follow accepted bytes across rejection, explicit reload, pause and restart', async () => {
   const f = await fixture()
   try {

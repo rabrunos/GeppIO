@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { link, lstat, mkdir, opendir, readFile, readlink, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { gitEnvironment, resolveGitExecutable } from '../src/main/git.ts'
+import { gitEnvironment, resolveGitExecutable } from '../src/geppio/src/main/git.ts'
 
 /** Fixture setup/verifier only, never application code. Keep verification itself
  * from executing the malicious fsmonitor/hooks deliberately stored by tests. */

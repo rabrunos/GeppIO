@@ -3,12 +3,12 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, readdirSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { prepareProfile, snapshotTree, recoveryProfile, BACKUP_DIRECTORY, validatedTestProfile } from '../src/main/profile-migration.ts'
-import { migratedLayout } from '../src/shared/layout-migration.ts'
-import { IDENTITY } from '../src/shared/identity.ts'
-import { DEFAULT_LAYOUT, MINIMUMS } from '../src/renderer/src/fixtures.ts'
-import { PluginStore } from '../src/main/plugins.ts'
-import { recoveryURL, recoveryResponse, rendererAsset, DEVELOPMENT_CSP } from '../src/main/security.ts'
+import { prepareProfile, snapshotTree, recoveryProfile, BACKUP_DIRECTORY, validatedTestProfile } from '../src/geppio/src/main/profile-migration.ts'
+import { migratedLayout } from '../src/geppio/src/shared/layout-migration.ts'
+import { IDENTITY } from '../src/geppio/src/shared/identity.ts'
+import { DEFAULT_LAYOUT, MINIMUMS } from '../src/geppio/src/renderer/src/fixtures.ts'
+import { PluginStore } from '../src/geppio/src/main/plugins.ts'
+import { recoveryURL, recoveryResponse, rendererAsset, DEVELOPMENT_CSP } from '../src/geppio/src/main/security.ts'
 
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), 'geppio-migration-test-'))

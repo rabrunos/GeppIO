@@ -1,8 +1,8 @@
 /** Region interactions run only in the caller's disposable Electron profile. */
 import assert from 'node:assert/strict'
 import type { Page } from 'playwright'
-import { GRID_KEY } from '../src/shared/grid/policy.ts'
-import { IDENTITY } from '../src/shared/identity.ts'
+import { GRID_KEY } from '../src/geppio/src/shared/grid/policy.ts'
+import { IDENTITY } from '../src/geppio/src/shared/identity.ts'
 
 const names = { sidebar: 'Largura da Sidebar', bottom: 'Altura da Bottom' } as const
 type Kind = keyof typeof names

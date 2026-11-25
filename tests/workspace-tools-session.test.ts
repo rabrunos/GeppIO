@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { setImmediate } from 'node:timers/promises'
-import { WorkspaceToolsSession } from '../src/renderer/src/workspace-tools/session.ts'
-import type { WorkspaceToolReport, WorkspaceToolsResult } from '../src/shared/workspace-tools.ts'
+import { WorkspaceToolsSession } from '../src/geppio/src/renderer/src/workspace-tools/session.ts'
+import type { WorkspaceToolReport, WorkspaceToolsResult } from '../src/geppio/src/shared/workspace-tools.ts'
 
 function observable<T>(value: T) {
   const listeners = new Set<() => void>()

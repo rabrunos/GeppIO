@@ -1,9 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
-import { emptyTerminal, terminalFailed, terminalLabel, TerminalOutput, TERMINAL_OUTPUT_LIMIT, TERMINAL_PAGE_LIMIT, validTerminalRequest } from '../src/shared/terminal.ts'
-import { TERMINAL_TYPE } from '../src/shared/terminal-widget.ts'
-import { widgetRegistry } from '../src/shared/workbench/model.ts'
+import { emptyTerminal, terminalFailed, terminalLabel, TerminalOutput, TERMINAL_OUTPUT_LIMIT, TERMINAL_PAGE_LIMIT, validTerminalRequest } from '../src/geppio/src/shared/terminal.ts'
+import { TERMINAL_TYPE } from '../src/geppio/src/shared/terminal-widget.ts'
+import { widgetRegistry } from '../src/geppio/src/shared/workbench/model.ts'
 import { terminalOutputBudget } from '../tools/terminal-output-budget.ts'
 
 test('fixed terminal requests reject malformed fields, dimensions, input and stale token shapes', () => {

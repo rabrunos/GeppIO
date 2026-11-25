@@ -5,11 +5,11 @@ import { link, mkdir, mkdtemp, readFile, realpath, rename, rm, symlink, writeFil
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { setImmediate as nextTurn } from 'node:timers/promises'
-import { DocumentFailure, DocumentStore, inspectSearchDocument, outsideApplicationProfile } from '../src/main/documents.ts'
-import { DirectoryStore } from '../src/main/explorer.ts'
-import { SearchExpired, SearchStore } from '../src/main/search.ts'
-import { SEARCH_EXCLUDED_DIRECTORIES, SEARCH_LIMITS } from '../src/shared/search.ts'
-import type { SearchPage } from '../src/shared/search.ts'
+import { DocumentFailure, DocumentStore, inspectSearchDocument, outsideApplicationProfile } from '../src/geppio/src/main/documents.ts'
+import { DirectoryStore } from '../src/geppio/src/main/explorer.ts'
+import { SearchExpired, SearchStore } from '../src/geppio/src/main/search.ts'
+import { SEARCH_EXCLUDED_DIRECTORIES, SEARCH_LIMITS } from '../src/geppio/src/shared/search.ts'
+import type { SearchPage } from '../src/geppio/src/shared/search.ts'
 
 const current = () => true
 const denied = (kind: string) => (error: unknown) => error instanceof DocumentFailure && error.kind === kind

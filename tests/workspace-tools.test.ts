@@ -4,12 +4,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import type { TestContext } from 'node:test'
-import { DocumentStore } from '../src/main/documents.ts'
-import { DirectoryStore } from '../src/main/explorer.ts'
-import { WorkspaceOwner } from '../src/main/workspace.ts'
-import { WorkspaceRecovery } from '../src/main/workspace-recovery.ts'
-import { readWorkspaceTools } from '../src/main/workspace-tools.ts'
-import { parseWorkspaceTools, WORKSPACE_TOOLS_LIMITS } from '../src/shared/workspace-tools.ts'
+import { DocumentStore } from '../src/geppio/src/main/documents.ts'
+import { DirectoryStore } from '../src/geppio/src/main/explorer.ts'
+import { WorkspaceOwner } from '../src/geppio/src/main/workspace.ts'
+import { WorkspaceRecovery } from '../src/geppio/src/main/workspace-recovery.ts'
+import { readWorkspaceTools } from '../src/geppio/src/main/workspace-tools.ts'
+import { parseWorkspaceTools, WORKSPACE_TOOLS_LIMITS } from '../src/geppio/src/shared/workspace-tools.ts'
 
 const text = { kind: 'text', text: '<script>literal</script> **texto** https://example.invalid/' }
 const list = { kind: 'list', items: ['build', 'test'] }

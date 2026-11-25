@@ -7,7 +7,7 @@ import type { ElectronApplication } from 'playwright'
 import { fileEditor } from './monaco-support.ts'
 import { portugueseFixture } from './freeform-smoke.ts'
 import { electron } from './test-electron.ts'
-import { decodeGeneration, recoveryFile } from '../src/main/draft-storage.ts'
+import { decodeGeneration, recoveryFile } from '../src/geppio/src/main/draft-storage.ts'
 
 const profile = await mkdtemp(join(tmpdir(), 'geppio-smoke-draft-recovery-'))
 const dev = process.argv.includes('--dev'), scale = process.argv.includes('--scale125') ? 1.25 : 1
@@ -41,7 +41,7 @@ try {
   if (dev) {
     const { loadConfigFromFile } = await import('electron-vite'), { createServer } = await import('vite')
     const config = await loadConfigFromFile({ command: 'serve', mode: 'development' }, 'electron.vite.config.ts')
-    server = await createServer({ ...config.config.renderer, root: resolve('src/renderer'), configFile: false })
+    server = await createServer({ ...config.config.renderer, root: resolve('src/geppio/src/renderer'), configFile: false })
     await server.listen(); env.ELECTRON_RENDERER_URL = 'http://127.0.0.1:5173/'
   }
   const project = await realpath(profile), original = join(project, 'nome.txt'), output = join(project, 'recuperado.txt')

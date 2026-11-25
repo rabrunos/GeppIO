@@ -8,9 +8,9 @@ import { join, resolve } from 'node:path'
 import { electron } from './test-electron.ts'
 import type { ElectronApplication, Page } from 'playwright'
 import { portugueseFixture, settle } from './freeform-smoke.ts'
-import { WORKBENCH_KEY } from '../src/shared/workbench/model.ts'
-import type { ExplorerResult } from '../src/shared/explorer.ts'
-import type { DocumentResult } from '../src/shared/documents.ts'
+import { WORKBENCH_KEY } from '../src/geppio/src/shared/workbench/model.ts'
+import type { ExplorerResult } from '../src/geppio/src/shared/explorer.ts'
+import type { DocumentResult } from '@geppio/runtime/documents'
 
 const scale125 = process.argv.includes('--scale125')
 const profile = await mkdtemp(join(tmpdir(), 'geppio-smoke-explorer-')), canonical = await realpath(profile), scope = join(canonical, 'scope')

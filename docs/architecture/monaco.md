@@ -1,4 +1,8 @@
-# Monaco dependency and asset boundary — alpha.42 / Issue #49
+# Monaco dependency and asset boundary
+
+The [GeppIO Editor workspace](../../src/geppio-editor/README.md) owns the engine integration, common construction options, local Worker factory and read-only comparison. Application sessions use its public exports to attach presentations and reconcile acknowledged revisions, history budgets, view state and exact draft edits. Multiple editor surfaces in one page share the same Worker configuration through explicit leases.
+
+`pnpm libraries:pack` emits local tarballs of the editor and [GeppUI](../../src/geppui/README.md), with JS, type declarations, CSS and the applicable Monaco notices. `pnpm test:isolated external-libraries` installs both archives into a disposable consumer outside the workspace, builds and opens it with a live local JSON Worker. The consumer creates React controls and two presentations of one document and exercises editing, undo/redo and disposal.
 
 The owner individually approved Microsoft Monaco and specifically authorized the exact official
 `monaco-editor@0.57.0` package despite the documented DOMPurify advisories:
@@ -10,7 +14,7 @@ The official 0.57.0 tarball and lockfile integrity are
 `sha512-5BkI9KGoqrNvBGUe15/QlZq3OooZ8WLg1AxTpaqHRCP3HNpzPPZKE2EDz8M7c+VRmCeUw1Brp4cx/PWm3kI/5A==`.
 Its ESM bundle includes DOMPurify 3.4.15; separate production dependencies are DOMPurify 3.4.15
 and marked 14.0.0, with optional @types/trusted-types 2.0.7. A transitive override does not repair
-the bundled sanitizer. No vendor edits, postinstall patch, wrapper or copied VS Code source is used.
+the bundled sanitizer. The project-owned package uses Monaco's public APIs and the official unmodified dependency.
 
 Known accepted advisories, checked against the official npm advisory endpoint and GitHub database:
 

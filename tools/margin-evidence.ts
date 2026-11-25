@@ -1,8 +1,8 @@
 /** Sanitized coverage evidence; run --before only on the baseline projector. */
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
-import { projectGrid } from '../src/shared/grid/projection.ts'
-import type { GridProjection } from '../src/shared/grid/projection.ts'
+import { projectGrid } from '../src/geppio/src/shared/grid/projection.ts'
+import type { GridProjection } from '../src/geppio/src/shared/grid/projection.ts'
 import { COMPOSITIONS } from '../tests/fixtures/grid-compositions.ts'
 import { assertContinuous, assertNoSpike, assertSafe, changes, rectangles, spatialViolations } from '../tests/helpers/projection-oracle.ts'
 

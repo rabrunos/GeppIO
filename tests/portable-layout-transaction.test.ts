@@ -6,19 +6,19 @@ import { compileFunction } from 'node:vm'
 import { setImmediate } from 'node:timers/promises'
 import type { ReactElement } from 'react'
 import ts from 'typescript'
-import { parseWorkbench, serializeWorkbench } from '../src/shared/workbench/codec.ts'
-import { addWidget } from '../src/shared/workbench/commands.ts'
-import { initialWorkbench, widgetRegistry, WORKBENCH_KEY } from '../src/shared/workbench/model.ts'
-import { importPortableComposition, parsePortableLayout } from '../src/shared/workbench/portable.ts'
-import type { useTransaction } from '../src/renderer/src/freeform/useTransaction.ts'
-import type { usePortableCompositions } from '../src/renderer/src/workbench/usePortableCompositions.tsx'
-import type { usePlugins } from '../src/renderer/src/Plugins.tsx'
-import { disabledWidgetOwners } from '../src/renderer/src/plugin-runtime.ts'
-import type { InstalledPlugin } from '../src/shared/plugins.ts'
+import { parseWorkbench, serializeWorkbench } from '../src/geppio/src/shared/workbench/codec.ts'
+import { addWidget } from '../src/geppio/src/shared/workbench/commands.ts'
+import { initialWorkbench, widgetRegistry, WORKBENCH_KEY } from '../src/geppio/src/shared/workbench/model.ts'
+import { importPortableComposition, parsePortableLayout } from '../src/geppio/src/shared/workbench/portable.ts'
+import type { useTransaction } from '../src/geppio/src/renderer/src/freeform/useTransaction.ts'
+import type { usePortableCompositions } from '../src/geppio/src/renderer/src/workbench/usePortableCompositions.tsx'
+import type { usePlugins } from '../src/geppio/src/renderer/src/Plugins.tsx'
+import { disabledWidgetOwners } from '../src/geppio/src/renderer/src/plugin-runtime.ts'
+import type { InstalledPlugin } from '../src/geppio/src/shared/plugins.ts'
 
 // Keep the actual transaction and codec. Only React's hook slots, browser
 // storage and the browser lock scheduler are supplied by this fixture.
-const source = new URL('../src/renderer/src/freeform/useTransaction.ts', import.meta.url)
+const source = new URL('../src/geppio/src/renderer/src/freeform/useTransaction.ts', import.meta.url)
 const requireFromSource = createRequire(source)
 const load = compileFunction(ts.transpileModule(readFileSync(source, 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2023 }
@@ -151,7 +151,7 @@ test('storage quota rejection preserves the edit, confirmed bytes and import eli
 })
 
 function portableFixture(p: ReturnType<typeof fixture>, inventory: InstalledPlugin[] = []) {
-  const module = new URL('../src/renderer/src/workbench/usePortableCompositions.tsx', import.meta.url)
+  const module = new URL('../src/geppio/src/renderer/src/workbench/usePortableCompositions.tsx', import.meta.url)
   const loadPortable = compileFunction(ts.transpileModule(readFileSync(module, 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2023 }
   }).outputText, ['require', 'exports', 'window'])
@@ -192,7 +192,7 @@ test('plugin management starting inside the preview confirmation cancels both ki
 })
 
 function lostRemovalReceipt(provider: InstalledPlugin) {
-  const module = new URL('../src/renderer/src/Plugins.tsx', import.meta.url), require = createRequire(module)
+  const module = new URL('../src/geppio/src/renderer/src/Plugins.tsx', import.meta.url), require = createRequire(module)
   // CommonJS fixture supplies the entry URL used by the dormant Worker factory.
   const source = ts.transpileModule(readFileSync(module, 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2023 }
@@ -207,7 +207,7 @@ function lostRemovalReceipt(provider: InstalledPlugin) {
     async remove() { removed = true; throw new Error('lost management receipt') }
   }
   compileFunction(source, ['require', 'exports', 'window'])(
-    (id: string) => id === 'react' ? hooks.react : id.endsWith('Locale.tsx') ? {} : require(id), owner, { geppio: { plugins: bridge } })
+    (id: string) => id === 'react' ? hooks.react : (id.endsWith('Locale.tsx') || id.endsWith('web-surfaces.tsx')) ? {} : require(id), owner, { geppio: { plugins: bridge } })
   const render = () => { hooks.reset(); return owner.usePlugins() }
   render()
   return render

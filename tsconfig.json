@@ -29,7 +29,6 @@
     "src",
     "tools",
     "tests",
-    "sdk",
     "examples",
     "electron.vite.config.ts"
   ]

@@ -1,9 +1,9 @@
 # GeppIO
 
 Workbench desktop local com widgets e plugins modulares. O nome do produto é **GeppIO**;
-o namespace técnico é `geppio`. A base usa Electron, TypeScript, React, Tailwind, Heroicons
-e Motion. O projeto prioriza componentes próprios. A decisão anterior sobre shadcn/ui e a
-preferência atual do proprietário estão registradas na [issue #8](https://github.com/rabrunos/GeppIO/issues/8).
+o namespace técnico é `geppio`. A base usa Electron, TypeScript e React. O projeto mantém
+seus componentes visuais e usa Monaco para edição. A direção de UI e as decisões de adoção
+externa estão registradas nas issues [#8](https://github.com/rabrunos/GeppIO/issues/8) e [#39](https://github.com/rabrunos/GeppIO/issues/39).
 
 O workbench tem geometria contínua, catálogo, barras, composições, histórico de edição e
 persistência de layout. Há um runtime experimental real para plugins locais confiáveis.
@@ -268,7 +268,7 @@ O gerenciamento também está disponível na área de desenvolvimento das config
 A instalação começa desativada. Counter publica contador e ação reais; Pulse executa atividade
 em segundo plano sem widget. As contribuições v1 entram no catálogo como cards **Main only** e
 **single view**, com movimentação e persistência de posição pelo host. O manifesto não oferece
-campos públicos de categoria, região, appearance ou ação na rail. O SDK publica texto, ação e status;
+campos públicos de categoria, região, aparência ou ação na barra. O SDK v1 publica texto, ação e status;
 não concede filesystem, PTY, processos, rede remota, segredos, APIs entre plugins ou storage próprio.
 
 Remover apenas a presença do widget conserva o Worker. Desativar encerra a execução e retira a
@@ -287,9 +287,21 @@ de tentar novamente ou usar **Recarregar descartando rascunhos**.
 
 Os exemplos têm `plugin.json` e TypeScript independentes em `examples/plugins/`. Instale a pasta
 gerada de `.js`/`.json`, não a fonte. Pacotes adicionais compatíveis não exigem recompilar o Core.
-Use somente código local revisado e confiável: Workers compartilham autoridade de origem/storage
-e não certificam isolamento comunitário. Não há marketplace, broker, cofre ou superfície HTML/CSS
-arbitrária. Consulte [limites do runtime e SDK](docs/architecture/plugins.md).
+Os Workers v1/v2 destinam-se a código local confiável e compartilham autoridade de origem.
+Consulte os [limites de execução e persistência](docs/architecture/plugins.md).
+
+Para uma superfície web da **API 3**, carregue as pastas originais dos exemplos
+[Quadro](examples/standalone/plugins/board) e [Carimbo](examples/standalone/plugins/stamp).
+Ative ambos, adicione os widgets e conceda ao Carimbo os endpoints do Quadro que desejar testar
+em **Configurações → Plugins**. Edite o HTML, CSS ou script na pasta e clique **Atualizar**.
+O host prepara o código, preserva a versão anterior quando a validação falha e mostra o
+resultado da ativação. Consulte o [contrato da API 3](docs/architecture/plugin-surfaces.md).
+
+## Gerar um aplicativo e reutilizar as bibliotecas
+
+Em Windows x64, gere o exemplo em uma pasta nova com `pnpm.cmd standalone:generate examples/standalone/desk.json .local/Caderno`. Dentro dela, abra `geppio-export-desk-notes.exe`. Distribua a pasta completa para manter os recursos do Electron junto ao aplicativo. Os exemplos, a seleção de superfícies e os diretórios de dados estão no [guia Standalone](src/geppio-standalone/README.md).
+
+Para usar os controles ou o editor em outro projeto, execute `pnpm.cmd libraries:pack`. O comando mostra os caminhos dos dois arquivos `.tgz`. Instale no consumidor o pacote desejado e siga a configuração de [GeppUI](src/geppui/README.md) ou [GeppIO Editor](src/geppio-editor/README.md).
 
 ## Atalhos no VS Code
 
@@ -317,10 +329,8 @@ Origens de desenvolvimento e produção podem manter estados de layout independe
 | Produto e limites | [Requisitos](docs/product/requirements.md) e [arquitetura](docs/architecture/overview.md) |
 | Checks e aceites | [Validação](docs/development/testing.md) e a issue relevante |
 
-GitHub e intake já estão materializados em **rabrunos/GeppIO**, ID `1409287329`. Não repita Git init,
-bootstrap ou o handoff original. [FIRST_LOCAL_RUN](docs/.ai/prompts/FIRST_LOCAL_RUN.md) é contexto
-histórico da fundação, usado apenas em continuação explicitamente autorizada. O ZIP inicial não
-incluía dependências, executável ou lockfile resolvido; isso descreve a origem, não o checkout atual.
+O repositório é **rabrunos/GeppIO**, ID `1409287329`. Para retomar um contrato, consulte a
+issue, confira o checkout e identifique as entregas e os critérios de aceite pendentes.
 
 `package.json` é a fonte canônica da versão; `CHANGELOG.md` registra o histórico integrado.
 **Issues mantêm tarefas, decisões, evidências e aceites.** Não há banco paralelo de status/roadmap.

@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { REGION_POLICY, regionBounds, regionSize } from '../src/renderer/src/workbench/region-policy.ts'
+import { REGION_POLICY, regionBounds, regionSize } from '../src/geppio/src/renderer/src/workbench/region-policy.ts'
 
 test('approved chrome keeps the 48px rail separate, content caps and a usable Main reserve', () => {
   assert.equal(REGION_POLICY.sidebar.initial, 283); assert.equal(REGION_POLICY.bottom.initial, 167)

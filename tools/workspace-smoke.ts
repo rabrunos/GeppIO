@@ -9,11 +9,11 @@ import { fileEditor, pluginWorkers } from './monaco-support.ts'
 import { gitFingerprint, initializeGit } from './git-fixtures.ts'
 import { portugueseFixture, settle } from './freeform-smoke.ts'
 import { enableDeveloperMode } from './plugin-dev-support.ts'
-import { IDENTITY } from '../src/shared/identity.ts'
-import { WORKBENCH_KEY } from '../src/shared/workbench/model.ts'
-import { CHROME_LIMITS } from '../src/shared/workbench/chrome.ts'
-import type { DocumentDraft } from '../src/shared/documents.ts'
-import type { MonacoHost } from '../src/renderer/src/files-editor/monaco.ts'
+import { IDENTITY } from '../src/geppio/src/shared/identity.ts'
+import { WORKBENCH_KEY } from '../src/geppio/src/shared/workbench/model.ts'
+import { CHROME_LIMITS } from '../src/geppio/src/shared/workbench/chrome.ts'
+import type { DocumentDraft } from '@geppio/runtime/documents'
+import type { MonacoHost } from '../src/geppio/src/renderer/src/files-editor/monaco.ts'
 
 const profile = await mkdtemp(join(tmpdir(), 'geppio-smoke-workspace-')), root = await realpath(profile)
 const project = join(root, 'project one'), other = join(root, 'project two'), standalone = join(root, 'standalone.txt')
@@ -81,7 +81,7 @@ try {
   if (dev) {
     const { loadConfigFromFile } = await import('electron-vite'), { createServer } = await import('vite')
     const config = await loadConfigFromFile({ command: 'serve', mode: 'development' }, 'electron.vite.config.ts')
-    server = await createServer({ ...config.config.renderer, root: resolve('src/renderer'), configFile: false }); await server.listen(); env.ELECTRON_RENDERER_URL = 'http://127.0.0.1:5173/'
+    server = await createServer({ ...config.config.renderer, root: resolve('src/geppio/src/renderer'), configFile: false }); await server.listen(); env.ELECTRON_RENDERER_URL = 'http://127.0.0.1:5173/'
   }
   await launch(); assert.equal(await page.locator('.workspace-controls').getAttribute('data-workspace-root'), '')
   const fresh = await page.evaluate(() => window.geppio!.workspace.read()); assert.ok(fresh.ok && !fresh.value.root && !fresh.value.recovery)

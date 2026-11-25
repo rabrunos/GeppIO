@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readLayout, writeLayout } from '../src/shared/storage.ts'
-import { DEFAULT_LAYOUT, MINIMUMS } from '../src/renderer/src/fixtures.ts'
+import { readLayout, writeLayout } from '../src/geppio/src/shared/storage.ts'
+import { DEFAULT_LAYOUT, MINIMUMS } from '../src/geppio/src/renderer/src/fixtures.ts'
 test('reading a corrupt or incompatible draft never overwrites the old bytes', () => {
   for (const old of ['corrupt', JSON.stringify({ schemaVersion: 9 })]) {
     let writes = 0

@@ -1,9 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { projectGrid } from '../src/shared/grid/projection.ts'
-import { fitGrid, resizeRect } from '../src/shared/grid/geometry.ts'
-import { constraintsFor } from '../src/shared/grid/policy.ts'
-import { reflow } from '../src/shared/grid/reflow.ts'
+import { projectGrid } from '../src/geppio/src/shared/grid/projection.ts'
+import { fitGrid, resizeRect } from '../src/geppio/src/shared/grid/geometry.ts'
+import { constraintsFor } from '../src/geppio/src/shared/grid/policy.ts'
+import { reflow } from '../src/geppio/src/shared/grid/reflow.ts'
 import { COMPOSITIONS } from './fixtures/grid-compositions.ts'
 import { assertContinuous, assertNoSpike, assertSafe } from './helpers/projection-oracle.ts'
 

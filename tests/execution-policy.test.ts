@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 
 test('repository gate preserves protected defaults and the canonical Git authorization scope', t => {
@@ -10,8 +10,10 @@ test('repository gate preserves protected defaults and the canonical Git authori
   const root = mkdtempSync(join(tmpdir(), 'geppio-policy-test-'))
   t.after(() => rmSync(root, { recursive: true, force: true }))
   for (const path of ['AGENTS.md', 'PROJECT_GUIDE.md', 'README.md', 'CHANGELOG.md', 'package.json',
-    '.codex', '.agents', '.github', '.vscode', 'docs', 'tools', 'src', 'tests', 'sdk', 'examples']) {
-    cpSync(path, join(root, path), { recursive: true })
+    '.codex', '.agents', '.github', '.vscode', 'docs', 'tools', 'src', 'tests', 'examples', 'pnpm-lock.yaml', 'pnpm-workspace.yaml']) {
+    cpSync(path, join(root, path), {
+      recursive: true, filter: source => !['node_modules', 'dist', 'out'].includes(basename(source))
+    })
   }
   const path = join(root, '.codex/config.toml'), original = readFileSync(path, 'utf8')
   function gate(config: string) {
@@ -37,6 +39,18 @@ test('repository gate preserves protected defaults and the canonical Git authori
     assert.equal(result.status, 1, key)
     assert(result.stderr.includes('Unexpected requested Codex default: ' + key), result.stderr)
   }
+  const rolePath = join(root, '.codex/agents/code-scout.toml')
+  const role = readFileSync(rolePath, 'utf8')
+  writeFileSync(rolePath, 'sandbox_mode = "danger-full-access"\n' + role)
+  assert.match(gate(original).stderr, /Invalid project role definition: code-scout/)
+  writeFileSync(rolePath, role)
+  const packagePath = join(root, 'package.json'), pkg = JSON.parse(readFileSync(packagePath, 'utf8')) as { version: string }
+  const oldVersion = pkg.version
+  pkg.version = '0.1.0-alpha.1'
+  writeFileSync(packagePath, JSON.stringify(pkg))
+  assert.match(gate(original).stderr, /Canonical version must head the changelog/)
+  pkg.version = oldVersion
+  writeFileSync(packagePath, JSON.stringify(pkg))
   // Old release evidence and the explicitly labelled historical name remain valid.
   assert.equal(gate(original).status, 0)
   assert.match(readFileSync(join(root, 'CHANGELOG.md'), 'utf8'), /retain rabrunos\/Geptor/)
@@ -61,11 +75,18 @@ test('repository gate preserves protected defaults and the canonical Git authori
   assert.equal(gate(original).status, 0)
   // The profile and its schema must agree with the owner-selected project defaults.
   const profilePath = join(root, 'docs/.ai/project-profile.json')
-  const profile = JSON.parse(readFileSync(profilePath, 'utf8')) as { execution_permissions: { safe_default: string }; versioning: { source_delivery_requires_new_target: boolean } }
+  const profile = JSON.parse(readFileSync(profilePath, 'utf8')) as {
+    execution_permissions: { safe_default: string }
+    versioning: { source_delivery_requires_new_target: boolean; intermediate_deliveries_within_contract: boolean }
+  }
   const schema = JSON.parse(readFileSync(join(root, 'docs/.ai/schemas/project-profile.schema.json'), 'utf8')) as {
     properties: { execution_permissions: { properties: { safe_default: { const: string } } } }
   }
   assert.equal(profile.execution_permissions.safe_default, schema.properties.execution_permissions.properties.safe_default.const)
+  profile.versioning.intermediate_deliveries_within_contract = false
+  writeFileSync(profilePath, JSON.stringify(profile))
+  assert.match(gate(original).stderr, /A contract may span multiple versioned deliveries/)
+  profile.versioning.intermediate_deliveries_within_contract = true
   profile.versioning.source_delivery_requires_new_target = false
   writeFileSync(profilePath, JSON.stringify(profile))
   const reused = gate(original)

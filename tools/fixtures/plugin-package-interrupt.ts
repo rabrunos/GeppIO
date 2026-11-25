@@ -2,7 +2,7 @@ import fs from 'node:fs/promises'
 import { readFileSync } from 'node:fs'
 import { syncBuiltinESMExports } from 'node:module'
 import { basename } from 'node:path'
-import type { PluginTrustEntry } from '../../src/main/plugin-trust.ts'
+import type { PluginTrustEntry } from '../../src/geppio/src/main/plugin-trust.ts'
 
 // Fault injection lives only in this child-process fixture, never in application configuration.
 const [root, source, phase] = process.argv.slice(2)
@@ -18,7 +18,7 @@ fs.rename = async (from, to) => {
   return rename(from, to)
 }
 syncBuiltinESMExports()
-const { PluginStore } = await import('../../src/main/plugins.ts')
+const { PluginStore } = await import('../../src/geppio/src/main/plugins.ts')
 try { await new PluginStore(root, roots).installSigned(source, async () => true, () => true) }
 catch (error) { if (phase === 'failure' && error instanceof Error && error.message === 'Injected state rename failure') process.exit(75); throw error }
 throw new Error('Expected forced interruption')

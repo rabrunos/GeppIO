@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { test } from 'node:test'
-import { rankQuickOpen, validQuickOpenRequest } from '../src/shared/quick-open.ts'
+import { rankQuickOpen, validQuickOpenRequest } from '../src/geppio/src/shared/quick-open.ts'
 
 test('Quick Open ranks literal basenames and paths deterministically and strips private metadata', () => {
   const names = ['dir/[x]/demo', 'abc[x].md', 'z/[X].txt', 'A/[x].txt', 'a/[x].txt', 'x.txt']

@@ -3,10 +3,10 @@ import test from 'node:test'
 import { readFileSync } from 'node:fs'
 import { activate } from '../examples/plugins/workspace-essentials/src/entry.ts'
 import { document, emptyModel, parseModel } from '../examples/plugins/workspace-essentials/src/model.ts'
-import type { DataSnapshot, PluginContextV2, PluginInstanceV2, WidgetEvent, WidgetViewV2 } from '../sdk/plugin-v2.d.ts'
-import { PluginRuntime } from '../src/renderer/src/plugin-runtime.ts'
-import type { PluginWorker } from '../src/renderer/src/plugin-runtime.ts'
-import { parseManifest } from '../src/shared/plugins.ts'
+import type { DataSnapshot, PluginContextV2, PluginInstanceV2, WidgetEvent, WidgetViewV2 } from '@geppio/plugin-sdk/v2'
+import { PluginRuntime } from '../src/geppio/src/renderer/src/plugin-runtime.ts'
+import type { PluginWorker } from '../src/geppio/src/renderer/src/plugin-runtime.ts'
+import { parseManifest } from '../src/geppio/src/shared/plugins.ts'
 
 function storage() {
   const disk = {

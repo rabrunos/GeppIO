@@ -1,6 +1,6 @@
 # Security control map
 
-This is a selected control map, not a security certification or a list of claimed test outcomes. Read the active Issue for executed evidence. The current product has trusted bundled fixtures, trusted local Worker plugins, local layout input and a native window; it has no users/login service, remote embeds or untrusted plugin runtime.
+Read the active Issue for executed evidence. The Windows workbench handles local files, trusted API 1/2 Worker plugins and [API 3 web surfaces](plugin-surfaces.md). Assess each execution context against its own controls.
 
 | Exposure | Control / implementation | Check and limitation |
 | --- | --- | --- |
@@ -15,9 +15,10 @@ This is a selected control map, not a security certification or a list of claime
 | API 2 text and prompt copy | Literal host controls, exact owning-widget events, bounded queues; user click copies the current field draft through browser clipboard with failure feedback | Independent pilot smoke including immediate edit/copy and denied clipboard; global permission policy unchanged, no Worker clipboard bridge |
 | Trusted local plugin package input | Developer Mode and native directory picker, bounded manifest/files, no links/traversal, accepted in-memory snapshots, legacy exact linking, main-frame IPC validation | `tests/plugins.test.ts`, `pnpm test:plugin-dev` and desktop cases; no persistent external code copy or automatic acceptance; not safe for hostile third-party packages or same-user disk attacks |
 | Signed first-party plugin file | Bounded immutable file, domain-separated Ed25519 framing/metadata/payload verification, narrowly pinned roots, native confirmation, exact adoption and atomic signed reference | `tests/plugin-package.test.ts`, `pnpm test:plugin-package`; production rejects injected test keys; no shared-origin Worker isolation claim |
-| Plugin lifecycle/contributions | Worker-bound identity, literal declarative UI, timeout/terminate, bounded events/message rate | `tests/plugin-runtime.test.ts` and real desktop activation/actions/disposal/restart; no OS resource/storage/session isolation |
+| Declarative Worker lifecycle | Worker-bound identity, literal UI, timeout/terminate, bounded events/message rate | `tests/plugin-runtime.test.ts` and desktop activation/actions/disposal/restart; no OS resource/storage/session isolation |
+| API 3 web surfaces and communication | Opaque sandboxed frames, accepted-generation resource URLs, hash-bound script/style CSP, captured caller identity, explicit generation-bound endpoint grants and cancellation | [Surface boundary and limitations](plugin-surfaces.md), `pnpm test:surfaces`, `tests/surface-resources.test.ts` |
 | External page/new window/navigation | Reject window-open, navigation away and attached webviews; production web requests restricted; permissions and downloads denied | Source controls plus actual desktop smoke; a future remote surface requires separate tests |
-| Production asset request | Fixed custom origin, GET only, allowlisted MIME and path containment in `src/main/security.ts`; CSP and nosniff | Parser/traversal negative tests; production startup smoke still required |
+| Production asset request | Fixed custom origin, GET only, allowlisted MIME and path containment in `src/geppio/src/main/security.ts`; CSP and nosniff | Parser/traversal negative tests; production startup smoke still required |
 | Dev server selected by environment | Exact validated `127.0.0.1:5173` origin; no arbitrary host fallback | Unit tests; dev-only CSP has HMR allowances and is not production policy |
 | Stored/imported layout | 64 KiB input bound, known schema/constraint version/IDs/regions, finite pixel sizes/coordinates, minima and clearance; separate `geppio:workbench:v1` envelope and explicit historical adoption | `tests/workbench-model.test.ts`, `tests/freeform-*.test.ts`, historical `tests/layout.test.ts` / grid codecs; byte CAS plus cooperative Web Lock, not a transaction across independent keys or hostile-origin isolation |
 | Local disk storage fails/corrupts | Error result and fallback copy; do not overwrite malformed state automatically | Storage tests; no guarantee against every OS/browser failure |
@@ -31,17 +32,17 @@ No arbitrary content injection, safe-storage credential service, unrestricted lo
 Disabling a plugin clears its runtime publications and terminates its Worker; the host may retain
 the saved widget presence and position as paused. Removing only a presence does not stop an enabled
 Worker. Ordinary plugin persistence requires explicit API 2 opt-in and its separate channel;
-these layout/lifecycle distinctions grant no credential access or cross-plugin capability broker.
+the API 3 communication broker has a separate channel and grants no credential access.
 See [the current runtime contract](plugins.md).
 
 The owner explicitly authorized minimize/maximize/close for the alpha.13 frameless header.
 `window-controls.ts` validates the fixed host request; Main resolves the sender's own window.
 No window identifier, channel, path, script or arbitrary argument comes from the renderer.
-This host-only bridge is not part of `sdk/plugin.d.ts` and is absent in plugin Workers.
+This host-only bridge is not part of `src/plugin-sdk/src/plugin.d.ts` and is absent in plugin Workers.
 
 ## Production versus development
 
-The production renderer is served from `geppio://app/`, not an arbitrary local file navigation. The renderer's `style-src` permits inline style attributes because continuous layout and animation require them; scripts remain bundled/local. Nothing parses user-supplied HTML. Future custom theme/HTML inputs must not assume this policy alone makes them safe.
+The production app renderer is served from `geppio://app/`. Its `style-src` permits inline styles for continuous layout and animation. API 3 HTML is parsed only in its own sandboxed document, under the separate accepted-generation protocol and response CSP.
 
 Dev runs Vite on loopback with HMR, not on all network interfaces. Do not bind it publicly without a new exposure decision. Do not disable sandbox/CSP/web security to repair a failing test.
 

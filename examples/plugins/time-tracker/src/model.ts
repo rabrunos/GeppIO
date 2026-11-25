@@ -1,4 +1,4 @@
-import type { Json, DataDocument } from '../../../../sdk/plugin-v2.d.ts'
+import type { Json, DataDocument } from '@geppio/plugin-sdk/v2'
 export interface Interval { id: string; start: number; end: number }
 export interface Tracker { version: 1; running: { id: string; start: number } | null; sessions: Interval[] }
 export const MAX_SESSIONS = 200

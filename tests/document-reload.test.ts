@@ -6,9 +6,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import type { TestContext } from 'node:test'
-import { DocumentFailure, DocumentStore } from '../src/main/documents.ts'
-import { DOCUMENT_LIMIT } from '../src/shared/documents.ts'
-import type { DocumentDraft, DocumentSnapshot } from '../src/shared/documents.ts'
+import { DocumentFailure, DocumentStore } from '../src/geppio/src/main/documents.ts'
+import { DOCUMENT_LIMIT } from '@geppio/runtime/documents'
+import type { DocumentDraft, DocumentSnapshot } from '@geppio/runtime/documents'
 
 const live = () => true, discard = async () => true
 const noDialog = async (): Promise<never> => { throw new Error('unexpected discard prompt') }

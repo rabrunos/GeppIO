@@ -1,14 +1,14 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { constraintsFor, DEFAULT_FREEFORM, FREEFORM_KEY } from '../src/shared/freeform/policy.ts'
-import { validLayout } from '../src/shared/freeform/geometry.ts'
+import { constraintsFor, DEFAULT_FREEFORM, FREEFORM_KEY } from '../src/geppio/src/shared/freeform/policy.ts'
+import { validLayout } from '@geppio/runtime/layout/geometry'
 import { widgetRegistry, adoptLayout, activePlacements, constraintsForViews, evaluatePlacement, initialWorkbench, modelId, WORKBENCH_KEY } from './fixtures/workbench.ts'
-import { serializeWorkbench, parseWorkbench } from '../src/shared/workbench/codec.ts'
-import { readWorkbench, writeWorkbench } from '../src/shared/workbench/storage.ts'
-import { addWidget, moveView, removePresence, resizePair, updateBar, deleteBar, swapViews } from '../src/shared/workbench/commands.ts'
-import { EditHistory } from '../src/shared/workbench/history.ts'
+import { serializeWorkbench, parseWorkbench } from '../src/geppio/src/shared/workbench/codec.ts'
+import { readWorkbench, writeWorkbench } from '../src/geppio/src/shared/workbench/storage.ts'
+import { addWidget, moveView, removePresence, resizePair, updateBar, deleteBar, swapViews } from '../src/geppio/src/shared/workbench/commands.ts'
+import { EditHistory } from '../src/geppio/src/shared/workbench/history.ts'
 import { applyComposition, captureComposition, compositionOrder, compositionSlots, favoriteComposition, projectSessionSlot, reorderComposition, systemCompositions } from './fixtures/compositions.ts'
-import { defaultChrome, parseChrome } from '../src/shared/workbench/chrome.ts'
+import { defaultChrome, parseChrome } from '../src/geppio/src/shared/workbench/chrome.ts'
 
 const registry = widgetRegistry([{ enabled: false, revision: 'test', manifest: { schemaVersion: 1, apiVersion: 1,
   id: 'local.counter', name: 'Counter', version: '1.0.0', entry: 'index.js', widgets: [{ id: 'counter', title: 'Counter', surface: 'declarative' }] } }])

@@ -1,9 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { canvasGap, canPlaceWithGap, decodeLayout, normalizeSpacing, reflow, RESIZE_DIRECTIONS, resizeDirectional, snapMove, snapResize, tooClose } from '../src/shared/layout.ts'
-import type { LayoutConstraint, Placement, PlanningContext } from '../src/shared/layout.ts'
-import { DEFAULT_LAYOUT, MAIN_CONSTRAINTS, MINIMUMS } from '../src/shared/layout-defaults.ts'
-import { readLayout } from '../src/shared/storage.ts'
+import { canvasGap, canPlaceWithGap, decodeLayout, normalizeSpacing, reflow, RESIZE_DIRECTIONS, resizeDirectional, snapMove, snapResize, tooClose } from '../src/geppio/src/shared/layout.ts'
+import type { LayoutConstraint, Placement, PlanningContext } from '../src/geppio/src/shared/layout.ts'
+import { DEFAULT_LAYOUT, MAIN_CONSTRAINTS, MINIMUMS } from '../src/geppio/src/shared/layout-defaults.ts'
+import { readLayout } from '../src/geppio/src/shared/storage.ts'
 
 const c: LayoutConstraint = { min: { width: .1, height: .1 }, max: { width: 1, height: 1 }, resizeX: true, resizeY: true }
 const constraints = (ps: Placement[]) => Object.fromEntries(ps.map(p => [p.id, structuredClone(c)]))

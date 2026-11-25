@@ -1,5 +1,5 @@
-import { DEFAULT_GRID } from '../../src/shared/grid/policy.ts'
-import type { GridSnapshot } from '../../src/shared/grid/types.ts'
+import { DEFAULT_GRID } from '../../src/geppio/src/shared/grid/policy.ts'
+import type { GridSnapshot } from '../../src/geppio/src/shared/grid/types.ts'
 
 /** Sanitized arrangements, not a reconstruction of the owner's unavailable JSON/screenshots. */
 const left: GridSnapshot = { ...structuredClone(DEFAULT_GRID), columns: 12, rows: 12, placements: [

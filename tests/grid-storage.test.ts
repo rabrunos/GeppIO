@@ -1,10 +1,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { DEFAULT_LAYOUT } from '../src/shared/layout-defaults.ts'
-import { IDENTITY } from '../src/shared/identity.ts'
-import { DEFAULT_GRID, GRID_KEY } from '../src/shared/grid/policy.ts'
-import { importGrid, migrateV1, parseGrid } from '../src/shared/grid/schema.ts'
-import { readGrid, writeGrid } from '../src/shared/grid/storage.ts'
+import { DEFAULT_LAYOUT } from '../src/geppio/src/shared/layout-defaults.ts'
+import { IDENTITY } from '../src/geppio/src/shared/identity.ts'
+import { DEFAULT_GRID, GRID_KEY } from '../src/geppio/src/shared/grid/policy.ts'
+import { importGrid, migrateV1, parseGrid } from '../src/geppio/src/shared/grid/schema.ts'
+import { readGrid, writeGrid } from '../src/geppio/src/shared/grid/storage.ts'
 
 function storage(entries: [string, string][] = []) {
   const values = new Map(entries)

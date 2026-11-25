@@ -1,4 +1,5 @@
 import { enableDeveloperMode } from './plugin-dev-support.ts'
+import { sidebarResistance } from './sidebar-resistance.ts'
 import assert from 'node:assert/strict'
 import { electron } from './test-electron.ts'
 import type { ElectronApplication, Page } from 'playwright'
@@ -6,8 +7,8 @@ import { mkdtemp, mkdir, rm, writeFile, readdir, readFile } from 'node:fs/promis
 import { tmpdir } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'
 import { portugueseFixture, settle } from './freeform-smoke.ts'
-import { WORKBENCH_KEY } from '../src/shared/workbench/model.ts'
-import { IDENTITY } from '../src/shared/identity.ts'
+import { WORKBENCH_KEY } from '../src/geppio/src/shared/workbench/model.ts'
+import { IDENTITY } from '../src/geppio/src/shared/identity.ts'
 
 const profile = await mkdtemp(join(tmpdir(), 'geppio-smoke-sidebar-'))
 const diagnostics = '.local/diagnostics/sidebar-stack-alpha22'
@@ -69,6 +70,8 @@ async function dragToBar(name: string, bar: string) {
 }
 try {
   await launch()
+  await sidebarResistance(page, WORKBENCH_KEY)
+  evidence.collapseResistanceReversalAndRelease = 'passed'
   await page.getByRole('button', { name: 'Plugins', exact: true }).click()
   const manager = page.getByRole('dialog', { name: 'Plugins', exact: true })
   await app!.evaluate(({ dialog }, path) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }) }, resolve('.local/plugin-packages/workspace-essentials'))

@@ -1,9 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { fitGrid, moveRect, pixelRect, resizeRect } from '../src/shared/grid/geometry.ts'
-import { DIRECTIONS } from '../src/shared/grid/types.ts'
-import { constraintsFor, DEFAULT_GRID } from '../src/shared/grid/policy.ts'
-import { validLayout } from '../src/shared/grid/occupancy.ts'
+import { fitGrid, moveRect, pixelRect, resizeRect } from '../src/geppio/src/shared/grid/geometry.ts'
+import { DIRECTIONS } from '../src/geppio/src/shared/grid/types.ts'
+import { constraintsFor, DEFAULT_GRID } from '../src/geppio/src/shared/grid/policy.ts'
+import { validLayout } from '../src/geppio/src/shared/grid/occupancy.ts'
 
 test('square cells always center in both dimensions; tiny viewports reduce symmetric gutters', () => {
   for (const [width, height] of [[1200, 800], [400, 800], [1500, 250], [1, 1], [0, 0]]) {

@@ -6,12 +6,12 @@ import { join, resolve } from 'node:path'
 import { build } from 'vite'
 import { electron } from './test-electron.ts'
 import type { ElectronApplication, Page } from 'playwright'
-import { inspectPackage, PluginStore } from '../src/main/plugins.ts'
-import { readPackageSnapshot, verifyPluginPackage } from '../src/main/plugin-package.ts'
+import { inspectPackage, PluginStore } from '../src/geppio/src/main/plugins.ts'
+import { readPackageSnapshot, verifyPluginPackage } from '../src/geppio/src/main/plugin-package.ts'
 import { publicIdentity, signPluginPackage } from './plugin-package.ts'
 import { portugueseFixture, settle } from './freeform-smoke.ts'
 import { emptyModel, document as modelDocument } from '../examples/plugins/workspace-essentials/src/model.ts'
-import type { PluginInventory } from '../src/shared/plugins.ts'
+import type { PluginInventory } from '../src/geppio/src/shared/plugins.ts'
 
 // Only this test builds an isolated host with injected temporary PUBLIC trust. The normal build
 // has no test-key switch, reads no trust environment/profile and must reject the same package.
@@ -96,7 +96,7 @@ try {
     await cp(resolve(officialPath!), packageFile)
     evidence.officialPublisher = `passed: normal production build, pinned owner key ${official.keyId}`
   } else {
-    await build({ configFile: false, logLevel: 'error', plugins: [{ name: 'disposable-public-trust-only', load(path) { if (path.replaceAll('\\', '/').endsWith('/src/main/plugin-trust.ts')) return `export const PLUGIN_TRUST = Object.freeze(${JSON.stringify(roots)});` } }], build: { target: 'node24', ssr: true, outDir: join(host, 'main'), emptyOutDir: true, lib: { entry: resolve('src/main/index.ts'), formats: ['cjs'], fileName: () => 'index.cjs' }, rollupOptions: { external: ['electron', /^node:/] } } })
+    await build({ configFile: false, logLevel: 'error', plugins: [{ name: 'disposable-public-trust-only', load(path) { if (path.replaceAll('\\', '/').endsWith('/src/geppio/src/main/plugin-trust.ts')) return `export const PLUGIN_TRUST = Object.freeze(${JSON.stringify(roots)});` } }], build: { target: 'node24', ssr: true, outDir: join(host, 'main'), emptyOutDir: true, lib: { entry: resolve('src/geppio/src/main/index.ts'), formats: ['cjs'], fileName: () => 'index.cjs' }, rollupOptions: { external: ['electron', /^node:/] } } })
     await cp('out/preload', join(host, 'preload'), { recursive: true }); await cp('out/renderer', join(host, 'renderer'), { recursive: true })
   }
 

@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import type { InstalledPlugin } from '../src/shared/plugins.ts'
-import { initialWorkbench, widgetRegistry, constraintsForViews } from '../src/shared/workbench/model.ts'
-import { addWidget, moveView, removePresence, swapViews } from '../src/shared/workbench/commands.ts'
-import { groupWidgets } from '../src/shared/workbench/groups.ts'
-import { availablePresentations, changePresentation, returnToNormal, arrangePresentations, EDGES } from '../src/shared/workbench/presentations.ts'
-import { parseWorkbench, serializeWorkbench } from '../src/shared/workbench/codec.ts'
-import { captureComposition, applyComposition } from '../src/shared/workbench/compositions.ts'
+import type { InstalledPlugin } from '../src/geppio/src/shared/plugins.ts'
+import { initialWorkbench, widgetRegistry, constraintsForViews } from '../src/geppio/src/shared/workbench/model.ts'
+import { addWidget, moveView, removePresence, swapViews } from '../src/geppio/src/shared/workbench/commands.ts'
+import { groupWidgets } from '../src/geppio/src/shared/workbench/groups.ts'
+import { availablePresentations, changePresentation, returnToNormal, arrangePresentations, EDGES } from '../src/geppio/src/shared/workbench/presentations.ts'
+import { parseWorkbench, serializeWorkbench } from '../src/geppio/src/shared/workbench/codec.ts'
+import { captureComposition, applyComposition } from '../src/geppio/src/shared/workbench/compositions.ts'
 
 const plugin: InstalledPlugin = { enabled: true, revision: 'pilot', manifest: { schemaVersion: 1, apiVersion: 2, id: 'geppio.workspace-essentials', name: 'Workspace Essentials', version: '1.0.0', entry: 'entry.js', widgets: ['notes', 'checklist'].map(id => ({ id, title: id, surface: 'declarative' })) } }
 const registry = widgetRegistry([plugin]), main = { region: 'main' as const, width: 1800, height: 1200, expanded: false }

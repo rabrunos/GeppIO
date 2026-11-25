@@ -1,5 +1,20 @@
 # Architecture
 
+## Workspace ownership
+
+The root package owns the application version, lockfile and verification commands. Each product composes its own capabilities and data identity. Importing the Runtime catalog constructs no services. Window and product teardown release capabilities in reverse dependency order.
+
+| Workspace | Public responsibility |
+| --- | --- |
+| `src/geppio` | Full Electron product, native authorization in Main, fixed preload, renderer navigation, workbench and application session composition. |
+| `src/geppio-runtime` | Continuous geometry, document ports and edit/history rules, capability activation and versioned peer mediation. Web frame supervision and Node surface preparation have separate exports. |
+| `src/geppui` | Web primitives, design tokens, dialogs, scroll, floating layout and motion. See [GeppUI](../../src/geppui/README.md). |
+| `src/geppio-editor` | Basic Monaco editor/model, comparisons, workers and styling. File authority, tabs and recovery belong to the product. See [Editor](../../src/geppio-editor/README.md). |
+| `src/plugin-sdk` | Supported v1/v2 author types and the API 3 surface client, endpoint contracts and wire validation. See [plugin surfaces](plugin-surfaces.md). |
+| `src/geppio-standalone` | Selected composition, independent Electron entry and portable Windows distribution. |
+
+Runtime does not create a background process. A full window activates the editor, Explorer and the first-party IDE services. A generated product starts the capabilities selected by its definition. An API 3 activation owns its controller independently of its widget presentations. The renderer's document session retains exact draft text and talks to Main's native document store through a port. Monaco models project these drafts and keep presentation history across tab and widget changes.
+
 ## Implemented boundaries
 
 Alpha.44 adds explicit per-file [Git index actions](git.md) through the same first-party
@@ -68,29 +83,28 @@ preferences persist independently of layout. Alpha.21 adds opt-in API 2 ordinary
 Issue #23; see [the data/surface contract](plugin-data.md). The native data bridge is fixed and
 activation-bound; API 1 keeps its exact facade and reset behavior.
 
-The renderer owns visual state. Pure modules in `src/shared/freeform/` own continuous CSS-pixel
-geometry, region constraints, bounded contact reflow, reversible interval projection and independent
-versioned persistence without Electron/React/DOM. `src/shared/grid/` remains historical codec and
-regression context, not active placement. `src/shared/layout.ts` supplies fractional v1 validation
+The renderer owns visual state. The Runtime owns pure continuous geometry, contact reflow and alignment. The application supplies region constraints, reversible interval projection and versioned persistence under `src/geppio/src/shared/freeform/`. `src/geppio/src/shared/grid/` remains historical codec and
+regression context, not active placement. `src/geppio/src/shared/layout.ts` supplies fractional v1 validation
 and the reused projection-based clearance predicate;
-native identity recovery still uses its v1 contract. `src/shared/identity.ts` centralizes identity.
+native identity recovery still uses its v1 contract. `src/geppio/src/shared/identity.ts` centralizes identity.
 
 | Responsibility | Files |
 | --- | --- |
-| Native window, production assets, session restrictions | `src/main/index.ts`, `src/main/security.ts` |
-| Metadata, fixed plugin management and owner-authorized window controls | `src/preload/index.ts`, `src/shared/window-controls.ts` |
-| Managed package snapshots and installation preferences | `src/main/plugins.ts` |
-| Plugin lifecycle, Worker adapter and Settings/widgets | `plugin-runtime.ts`, `plugin-worker.ts`, `Plugins.tsx` in `src/renderer/src/` |
-| Versioned plugin contract and validators | `src/shared/plugins.ts`, `sdk/plugin.d.ts` |
-| Renderer shell, experience-independent document, Workspace/Explorer, Git and Terminal sessions | `App.tsx`, `core/useCoreSessions.ts` in `src/renderer/src/` |
-| Official App identity, experience selection and GeppIO Code presentation | `src/renderer/src/apps/` |
-| Workbench composition, header/sidebar and pixel region splitters | `src/renderer/src/workbench/`, `App.tsx` |
-| Freeform rendering, stable fixture frames, pointer/keyboard capture and edit transaction | `src/renderer/src/freeform/` |
-| Modal and Development controls, independently composed plugin settings | `src/renderer/src/settings/`, `Plugins.tsx` |
-| Synthetic content, host types/models/views and current initial composition | `src/renderer/src/WidgetContent.tsx`, `src/shared/workbench/model.ts`; legacy fixtures in `src/renderer/src/fixtures.ts` |
+| Native window, production assets, session restrictions | `src/geppio/src/main/index.ts`, `src/geppio/src/main/security.ts` |
+| Metadata, fixed plugin management and owner-authorized window controls | `src/geppio/src/preload/index.ts`, `src/geppio/src/shared/window-controls.ts` |
+| Managed package snapshots and installation preferences | `src/geppio/src/main/plugins.ts` |
+| Plugin lifecycle, Worker adapter and Settings/widgets | `plugin-runtime.ts`, `plugin-worker.ts`, `Plugins.tsx` in `src/geppio/src/renderer/src/` |
+| Versioned plugin contract and validators | `src/geppio/src/shared/plugins.ts`, `src/plugin-sdk/src/plugin.d.ts` |
+| Renderer shell, experience-independent document, Workspace/Explorer, Git and Terminal sessions | `App.tsx`, `core/useCoreSessions.ts` in `src/geppio/src/renderer/src/` |
+| Official App identity, experience selection and GeppIO Code presentation | `src/geppio/src/renderer/src/apps/` |
+| Workbench composition, header/sidebar and pixel region splitters | `src/geppio/src/renderer/src/workbench/`, `App.tsx` |
+| Freeform rendering, stable fixture frames, pointer/keyboard capture and edit transaction | `src/geppio/src/renderer/src/freeform/` |
+| Modal and Development controls, independently composed plugin settings | `src/geppio/src/renderer/src/settings/`, `Plugins.tsx` |
+| Synthetic content, host types/models/views and current initial composition | `src/geppio/src/renderer/src/WidgetContent.tsx`, `src/geppio/src/shared/workbench/model.ts`; legacy fixtures in `src/geppio/src/renderer/src/fixtures.ts` |
 | Visual tokens, fixtures and domain styles | `styles.css`, `fixtures.css`, `freeform/freeform.css`, `workbench/design/`, `workbench/host.css`, `settings/settings.css` |
-| Continuous geometry, constraints, projection, collisions, transfer, conversion and storage | `src/shared/freeform/` |
-| Historical integer codecs and regression/reference algorithms | `src/shared/grid/` |
+| Pure continuous geometry, alignment, collision and reflow | `src/geppio-runtime/src/layout/` |
+| Host constraints, projection, transfer, conversion and storage | `src/geppio/src/shared/freeform/` |
+| Historical integer codecs and regression/reference algorithms | `src/geppio/src/shared/grid/` |
 | Project checks and GitHub metadata reconciliation | `tools/` |
 
 ## Intentional simplifications

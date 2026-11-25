@@ -3,12 +3,12 @@ import test from 'node:test'
 import type { TestContext } from 'node:test'
 import assert from 'node:assert/strict'
 import { setImmediate } from 'node:timers/promises'
-import type { ExplorerBridge, ExplorerNode, ExplorerMutationResult } from '../src/shared/explorer.ts'
-import type { DocumentSnapshot } from '../src/shared/documents.ts'
-import { EditorSession } from '../src/renderer/src/files-editor/session.ts'
-import { ExplorerSession } from '../src/renderer/src/files-editor/explorer-session.ts'
-import { SearchSession } from '../src/renderer/src/search/session.ts'
-import { QuickOpenSession } from '../src/renderer/src/quick-open/session.ts'
+import type { ExplorerBridge, ExplorerNode, ExplorerMutationResult } from '../src/geppio/src/shared/explorer.ts'
+import type { DocumentSnapshot } from '@geppio/runtime/documents'
+import { EditorSession } from '../src/geppio/src/renderer/src/files-editor/session.ts'
+import { ExplorerSession } from '../src/geppio/src/renderer/src/files-editor/explorer-session.ts'
+import { SearchSession } from '../src/geppio/src/renderer/src/search/session.ts'
+import { QuickOpenSession } from '../src/geppio/src/renderer/src/quick-open/session.ts'
 
 const root: ExplorerNode = { id: 'root', name: 'Projeto', kind: 'directory' }
 const folder: ExplorerNode = { id: 'folder', name: 'pasta', kind: 'directory' }

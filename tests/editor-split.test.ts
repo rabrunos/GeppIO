@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { EditorSession } from '../src/renderer/src/files-editor/session.ts'
-import type { DocumentBridge, DocumentResult, DocumentSnapshot } from '../src/shared/documents.ts'
+import { EditorSession } from '../src/geppio/src/renderer/src/files-editor/session.ts'
+import type { DocumentBridge, DocumentResult, DocumentSnapshot } from '@geppio/runtime/documents'
 import { unusedDocumentAuthoring } from './document-authoring-fixture.ts'
 
 async function fixture(override: Partial<DocumentBridge> = {}) {

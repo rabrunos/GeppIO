@@ -1,8 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { alignedGesture, alignedMove, resolveAlignment } from '../src/shared/freeform/alignment.ts'
-import { candidate, validLayout } from '../src/shared/freeform/geometry.ts'
-import type { Constraints, Placement, Surface } from '../src/shared/freeform/types.ts'
+import { alignedGesture, alignedMove, resolveAlignment } from '@geppio/runtime/layout/alignment'
+import { candidate, validLayout } from '@geppio/runtime/layout/geometry'
+import type { Constraints, Placement, Surface } from '@geppio/runtime/layout/types'
 const box = (id: string, x: number, y: number, width = 100, height = 100): Placement => ({ id, x, y, width, height, region: 'main', preferred: { width, height } })
 const surface: Surface = { region: 'main', width: 800, height: 600, expanded: false }
 const cs: Constraints = Object.fromEntries(['moving', 'a', 'b'].map(id => [id, { min: { width: 100, height: 100 }, default: { width: 100, height: 100 }, max: { width: 800, height: 600 }, resizeX: true, resizeY: true, regions: ['main'], overflow: 'auto', responsive: 'region' }]))

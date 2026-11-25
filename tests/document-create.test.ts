@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import type { TestContext } from 'node:test'
-import { DocumentStore } from '../src/main/documents.ts'
-import type { DocumentDestinationUI } from '../src/main/documents.ts'
-import { DOCUMENT_LIMIT, validDocumentRequest } from '../src/shared/documents.ts'
+import { DocumentStore } from '../src/geppio/src/main/documents.ts'
+import type { DocumentDestinationUI } from '../src/geppio/src/main/documents.ts'
+import { DOCUMENT_LIMIT, validDocumentRequest } from '@geppio/runtime/documents'
 
 const current = () => true
 async function fixture(t: TestContext, replace?: (source: string, target: string) => Promise<void>) {

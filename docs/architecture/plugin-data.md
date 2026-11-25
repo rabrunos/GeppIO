@@ -44,8 +44,8 @@ applies to a live activation; a lost response followed by Worker termination
 does not persist unsaved drafts. Existing installation and data schemas apply.
 
 `schemaVersion:1, apiVersion:2` opts in using the existing manifest keys/widget declarations.
-`sdk/plugin.d.ts` and the exact API 1 text/action validator remain unchanged. API 2 uses
-`sdk/plugin-v2.d.ts`: literal status text, at most eight text fields, four lists (100 items each),
+`src/plugin-sdk/src/plugin.d.ts` and the exact API 1 text/action validator remain unchanged. API 2 uses
+`src/plugin-sdk/src/plugin-v2.d.ts`: literal status text, at most eight text fields, four lists (100 items each),
 eight actions and one host copy declaration bound to a published text field. Control IDs are unique.
 Text fields are bounded to 32,768 UTF-16 code units, with optional smaller maxima; pilot titles/items
 use 512. Publications are at most 256 KiB UTF-8. No HTML, Markdown evaluation, custom CSS or

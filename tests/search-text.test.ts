@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import test from 'node:test'
-import { SEARCH_LIMITS, searchText, validSearchQuery, validSearchRequest } from '../src/shared/search.ts'
-import { wellFormedText } from '../src/shared/documents.ts'
-import { includedByFilters, validSearchFilters } from '../src/shared/search-replacement.ts'
+import { SEARCH_LIMITS, searchText, validSearchQuery, validSearchRequest } from '../src/geppio/src/shared/search.ts'
+import { wellFormedText } from '@geppio/runtime/documents'
+import { includedByFilters, validSearchFilters } from '../src/geppio/src/shared/search-replacement.ts'
 
 test('path and suffix filters are bounded literal comparisons and mutation messages accept only reviewed opaque identities', () => {
   const job = randomUUID(), id = randomUUID(), revision = randomUUID(), mark = { id, revision, clean: true }

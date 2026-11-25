@@ -13,7 +13,7 @@ fs.rename = async (from, to) => {
   return rename(from, to)
 }
 syncBuiltinESMExports()
-const { PluginStore } = await import('../../src/main/plugins.ts')
+const { PluginStore } = await import('../../src/geppio/src/main/plugins.ts')
 try { await new PluginStore(root).reload(id) }
 catch (error) { if (phase === 'failure' && error instanceof Error && error.message === 'Injected state rename failure') process.exit(75); throw error }
 throw new Error('Expected forced interruption')

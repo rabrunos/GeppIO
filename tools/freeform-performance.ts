@@ -4,9 +4,9 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import assert from 'node:assert/strict'
-import { DEFAULT_FREEFORM } from '../src/shared/freeform/policy.ts'
-import { adoptLayout, widgetRegistry, WORKBENCH_KEY } from '../src/shared/workbench/model.ts'
-import { serializeWorkbench } from '../src/shared/workbench/codec.ts'
+import { DEFAULT_FREEFORM } from '../src/geppio/src/shared/freeform/policy.ts'
+import { adoptLayout, widgetRegistry, WORKBENCH_KEY } from '../src/geppio/src/shared/workbench/model.ts'
+import { serializeWorkbench } from '../src/geppio/src/shared/workbench/codec.ts'
 
 /** Disposable, built Windows renderer; opt-in diagnostics never extend the native bridge. */
 const temporary = await mkdtemp(join(tmpdir(), 'geppio-smoke-performance-'))

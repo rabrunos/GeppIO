@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { emptyTracker, startTimer, pauseTimer, parseTracker, dailyTotals, elapsed, trackerDocument } from '../examples/plugins/time-tracker/src/model.ts'
 import { activate } from '../examples/plugins/time-tracker/src/entry.ts'
-import type { DataSnapshot, PluginContextV2, WidgetViewV2 } from '../sdk/plugin-v2.d.ts'
+import type { DataSnapshot, PluginContextV2, WidgetViewV2 } from '@geppio/plugin-sdk/v2'
 const id = 'session.00000000-0000-4000-8000-000000000001'
 test('timestamp timer survives absence, single start/pause is idempotent and clock rollback is nonnegative', () => {
   const running = startTimer(emptyTracker(), 1000, id)

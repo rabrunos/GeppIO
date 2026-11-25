@@ -7,7 +7,10 @@ Issue for discovery, implementation, failed smoke, correction and acceptance. Do
 Issue for every command or a parallel task/status database. The seed file is a one-time creation
 recipe, not a status record. Leave the Issue open while required acceptance evidence is missing.
 
-Every independent root mutation of tracked files receives an orchestrator-assigned target version.
+Assign a concrete target before tracked changes. One approved contract may span several deliveries
+under one Issue. When it delegates target allocation, inspect HEAD, package version and concurrent
+reservations, then record the next unused monotonically increasing target and its milestone
+in that Issue before the next delivery's first tracked edit.
 Read package.json and actual HEAD first. Every newly delivered batch changing application source
 must advance the app version monotonically, including bug fixes and corrective continuations of
 an unaccepted delivery. Files, local repairs and test iterations within the same delivery share
@@ -49,7 +52,7 @@ dependencies. [Issue #8](https://github.com/rabrunos/GeppIO/issues/8)
 
 | Class | Normal execution | Escalation |
 | --- | --- | --- |
-| E0 — deterministic command | Canonical tool; bounded Worker only when useful | Main if judgment is required |
+| E0 — deterministic command | Canonical tool or a bounded validation runner | Primary if judgment is required |
 | E1 — narrow resolved change | Medium only if every gate below holds; otherwise High | High on new ambiguity |
 | E2 — normal implementation | Main High | XHigh for complex unresolved interactions |
 | E3 — architecture, complex debugging/security | XHigh or highest verified supported equivalent | Owner input when reasoning cannot supply missing evidence |
@@ -107,8 +110,8 @@ checks and authorized actions. Add threat boundaries/local questions only when r
 ChatGPT is the normal planner. Owner-directed E0/eligible E1 work may go directly to Codex when
 scope and deterministic acceptance are already resolved. Unexpected ambiguity returns to planning.
 
-Default to no subagents. Scout reads and explains scoped evidence; Worker does bounded mechanical
-work. Main integrates. No recursive fan-out, permanent reviewer or duplicate Main roles.
+Select a bounded [project role](execution.md) for an independent task where useful. One
+primary integrates. No recursive fan-out, permanent reviewer or duplicate primary roles.
 
 Use temporary roots for tests. Report commands, environment and pass/fail/blocked/not_run honestly.
 Keep manual Windows smoke in its Issue until observed. Apply the standing GeppIO Git authorization

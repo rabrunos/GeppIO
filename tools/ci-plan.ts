@@ -7,6 +7,7 @@ const variants = (name: string) => [smoke(name), smoke(name, '--scale125'), smok
 // Pure tests run once in core's pnpm check; public focused commands remain unchanged.
 export const ciGroups = {
   core: [
+    smoke('surface'), smoke('standalone'), smoke('external-libraries'),
     smoke('terminal'), smoke('terminal', '--scale125'),
     smoke('plugin-package'), smoke('plugin-dev'), smoke('sidebar-stack'),
     smoke('workspace-essentials'), smoke('time-tracker'), smoke('edit-lock'), ...variants('search-replace'), ...variants('draft-recovery')

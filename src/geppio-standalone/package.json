@@ -1,0 +1,17 @@
+{
+  "name": "@geppio/standalone",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./composition": "./src/composition.ts",
+    "./generate": "./packaging/generate.ts"
+  },
+  "dependencies": {
+    "@geppio/runtime": "workspace:*",
+    "typescript": "6.0.3"
+  },
+  "devDependencies": {
+    "electron": "44.6.0",
+    "vite": "7.3.6"
+  }
+}

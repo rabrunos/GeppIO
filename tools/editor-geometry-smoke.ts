@@ -4,7 +4,7 @@ import { readFile, realpath, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { ElectronApplication, Page } from 'playwright'
 import { expansion, settle } from './freeform-smoke.ts'
-import { WORKBENCH_KEY } from '../src/shared/workbench/model.ts'
+import { WORKBENCH_KEY } from '../src/geppio/src/shared/workbench/model.ts'
 
 /** Runs inside the real installed-widget maximize smoke, with its disposable profile. */
 export async function editorGeometry(app: ElectronApplication, page: Page, profile: string, diagnostics: string, scale: number) {

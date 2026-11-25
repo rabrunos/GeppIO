@@ -1,4 +1,4 @@
-/** Dependency-free materialization checks. This is not a runtime/security certification. */
+/** Offline repository checks. Runtime, remote identity and manual acceptance require separate evidence. */
 import { existsSync, readFileSync, readdirSync, lstatSync } from 'node:fs'
 import { resolve, relative, dirname, join } from 'node:path'
 
@@ -10,19 +10,22 @@ function check(condition: boolean, message: string) { if (!condition) errors.pus
 interface Profile {
   schema: string; project: { name: string }; validation: { required_files: string[]; canonical_capabilities: string[] }
   workflow: { tracking: string; primary_orchestrator: string; implementation_harnesses: string[] }
-  versioning: { canonical_source: string; value_path: string; history_source: string; source_delivery_requires_new_target: boolean }
+  versioning: { canonical_source: string; value_path: string; history_source: string; source_delivery_requires_new_target: boolean; intermediate_deliveries_within_contract: boolean }
   execution_permissions: { safe_default: string }; console: { enabled: boolean }
-  distribution: { mode: string; targets: unknown[] }; services: unknown[]; skills: string[]
+  distribution: { mode: string; targets: unknown[] }; services: unknown[]; skills: string[]; roles: string[]
 }
 interface Package { name: string; version: string; scripts: Record<string, string>; dependencies: Record<string, string>; devDependencies: Record<string, string> }
 const pkg = JSON.parse(text('package.json')) as Package
 const profile = JSON.parse(text('docs/.ai/project-profile.json')) as Profile
-check(profile.schema === 'project-profile/v3', 'Unexpected normalized profile schema')
+check(profile.schema === 'geppio/project-profile/v4', 'Unexpected project profile schema')
 check(profile.project.name === pkg.name, 'Profile and package identity differ')
 check(/^\d+\.\d+\.\d+(?:-[\da-z.-]+)?$/.test(pkg.version), 'Expected semver project version')
 check(profile.versioning.canonical_source === 'package.json' && profile.versioning.value_path === '/version', 'Version must have one package.json source')
 check(profile.versioning.source_delivery_requires_new_target === true, 'Each delivered application-source batch must advance its target')
-check(text(profile.versioning.history_source).includes('## [' + pkg.version + ']'), 'Canonical changelog needs the integrated version')
+check(profile.versioning.intermediate_deliveries_within_contract === true, 'A contract may span multiple versioned deliveries')
+const releases = [...text(profile.versioning.history_source).matchAll(/^## \[([^\]]+)\]/gm)].map(match => match[1])
+check(releases[0] === pkg.version && new Set(releases).size === releases.length,
+  'Canonical version must head the changelog, and each release must be unique')
 check(profile.workflow.tracking === 'github_issues' && profile.workflow.primary_orchestrator === 'chatgpt', 'Selected work tracking/orchestration missing')
 check(profile.workflow.implementation_harnesses.length === 1 && profile.workflow.implementation_harnesses[0] === 'codex', 'Only the selected Codex harness belongs in this project')
 check(profile.execution_permissions.safe_default === 'protected_auto', 'Unexpected safe execution default')
@@ -31,7 +34,7 @@ check(profile.execution_permissions.safe_default === 'protected_auto', 'Unexpect
 const canonicalRepository = 'rabrunos/GeppIO'
 for (const path of ['PROJECT_GUIDE.md', 'AGENTS.md', 'README.md', 'docs/.ai/TASK_POLICY.md',
   'docs/.ai/orchestration.md', 'docs/.ai/project-profile.json', 'docs/development/github.md',
-  'docs/development/renaming.md', 'src/shared/identity.ts']) {
+  'docs/development/renaming.md', 'src/geppio/src/shared/identity.ts']) {
   const source = text(path)
   check(source.includes(canonicalRepository), 'Missing canonical repository reference: ' + path)
   for (const line of source.split(/\r?\n/)) {
@@ -39,21 +42,21 @@ for (const path of ['PROJECT_GUIDE.md', 'AGENTS.md', 'README.md', 'docs/.ai/TASK
   }
 }
 const taskPolicy = text('docs/.ai/TASK_POLICY.md')
-check(taskPolicy.includes('must advance the app version monotonically') && taskPolicy.includes('local repairs and test iterations within the same delivery share'),
-  'Task policy must distinguish new source deliveries from local iterations')
-for (const path of ['AGENTS.md', 'PROJECT_GUIDE.md', 'docs/.ai/orchestration.md', 'docs/.ai/prompts/EXECUTION.md']) {
-  const source = text(path)
-  check(source.includes('application-source batch') && !/repairs keep their unaccepted target|continuations\s+of an unaccepted target keep it|retain an unaccepted target for its repairs/.test(source),
-    'Current execution guidance must advance delivered source repairs: ' + path)
-}
 check(taskPolicy.includes('## Standing Git authorization — `' + canonicalRepository + '` only')
   && taskPolicy.includes('approved `' + canonicalRepository + '` Issue')
   && taskPolicy.includes('both origin fetch and push URLs identify `' + canonicalRepository + '`')
   && taskPolicy.includes('GitHub repository ID `1409287329`'), 'Standing Git gate must name only the canonical repository and stable ID')
 check(text('AGENTS.md').includes('For approved Issues in `' + canonicalRepository + '`'), 'Agent Git gate must name the canonical repository')
 const profileSchema = JSON.parse(text('docs/.ai/schemas/project-profile.schema.json')) as {
-  properties: { execution_permissions: { properties: { safe_default: { const: string } } }; versioning: { properties: { source_delivery_requires_new_target: { const: boolean } } } }
+  properties: {
+    schema: { const: string }; skills: { const: string[] }; roles: { const: string[] }
+    execution_permissions: { properties: { safe_default: { const: string } } }
+    versioning: { properties: { source_delivery_requires_new_target: { const: boolean }; intermediate_deliveries_within_contract: { const: boolean } } }
+  }
 }
+check(profileSchema.properties.schema.const === profile.schema, 'Project profile and schema revision differ')
+check(profileSchema.properties.versioning.properties.intermediate_deliveries_within_contract.const === profile.versioning.intermediate_deliveries_within_contract,
+  'Profile schema and contract delivery policy differ')
 check(profileSchema.properties.versioning.properties.source_delivery_requires_new_target.const === profile.versioning.source_delivery_requires_new_target,
   'Profile schema and source-delivery version policy differ')
 check(profileSchema.properties.execution_permissions.properties.safe_default.const === profile.execution_permissions.safe_default,
@@ -62,13 +65,46 @@ check(!profile.console.enabled, 'No project console was requested')
 check(profile.services.length === 0 && profile.distribution.mode === 'none' && profile.distribution.targets.length === 0, 'This foundation must not silently provision/publish')
 for (const path of profile.validation.required_files) requireFile(path)
 for (const name of profile.validation.canonical_capabilities) check(typeof pkg.scripts[name] === 'string', 'Missing canonical command: ' + name)
-for (const [name, version] of Object.entries({ ...pkg.dependencies, ...pkg.devDependencies })) check(/^\d+\.\d+\.\d+(?:-[\da-z.-]+)?$/.test(version), 'Dependency needs an explicit pin: ' + name)
-for (const script of Object.values(pkg.scripts)) for (const match of script.matchAll(/\btools\/([\w.-]+\.ts)\b/g)) requireFile('tools/' + match[1])
-for (const skill of profile.skills) {
-  const path = `.agents/skills/${skill}/SKILL.md`; requireFile(path)
-  if (existsSync(path)) check(text(path).startsWith('---\nname: ' + skill + '\n'), 'Invalid skill frontmatter: ' + skill)
+const workspaceNames = new Set<string>()
+for (const dir of readdirSync('src', { withFileTypes: true })) {
+  const path = join('src', dir.name, 'package.json')
+  if (dir.isDirectory() && existsSync(path)) workspaceNames.add((JSON.parse(text(path)) as Package).name)
 }
-for (const path of ['docs/.human/bootstrap', '.claude', 'CLAUDE.md', 'project-console', 'VERSION', '.github/workflows/bootcrate-validate.yml']) check(!existsSync(path), 'Unselected/upstream material was retained: ' + path)
+for (const [name, version] of Object.entries({ ...pkg.dependencies, ...pkg.devDependencies })) {
+  const pinned = /^\d+\.\d+\.\d+(?:-[\da-z.-]+)?$/.test(version)
+  check(pinned || (version === 'workspace:*' && workspaceNames.has(name)), 'Dependency needs an explicit pin or local workspace: ' + name)
+}
+for (const script of Object.values(pkg.scripts)) for (const match of script.matchAll(/\btools\/([\w.-]+\.ts)\b/g)) requireFile('tools/' + match[1])
+for (const category of ['skills', 'roles'] as const) {
+  const expected = profileSchema.properties[category].const
+  check(expected.length === (category === 'skills' ? 6 : 4)
+    && new Set(expected).size === expected.length
+    && JSON.stringify(profile[category]) === JSON.stringify(expected), 'Unexpected project ' + category)
+}
+const skillRoot = '.agents/skills'
+const discoveredSkills = readdirSync(skillRoot).filter(dir => existsSync(join(skillRoot, dir, 'SKILL.md')))
+check(discoveredSkills.sort().join() === [...profile.skills].sort().join(), 'Skill discovery and project inventory differ')
+for (const skill of profile.skills) {
+  if (!/^[a-z]+(?:-[a-z]+)+$/.test(skill)) { errors.push('Invalid skill name'); continue }
+  const path = join(skillRoot, skill, 'SKILL.md')
+  requireFile(path)
+  if (existsSync(path)) {
+    const frontmatter = /^---\r?\nname: ([\w-]+)\r?\ndescription: (.+)\r?\n---\r?\n/.exec(text(path))
+    check(frontmatter?.[1] === skill && Boolean(frontmatter[2]?.trim()), 'Invalid skill frontmatter: ' + skill)
+  }
+}
+const roleRoot = '.codex/agents'
+check(readdirSync(roleRoot).filter(name => name.endsWith('.toml')).sort().join()
+  === profile.roles.map(name => name + '.toml').sort().join(), 'Role discovery and project inventory differ')
+for (const role of profile.roles) {
+  if (!/^[a-z]+(?:-[a-z]+)+$/.test(role)) { errors.push('Invalid role name'); continue }
+  const path = join(roleRoot, role + '.toml')
+  requireFile(path)
+  if (!existsSync(path)) continue
+  // Repository convention: two simple strings and one multiline assignment, no role-level overrides.
+  const definition = /^name = "([\w-]+)"\r?\ndescription = "([^"\r\n]+)"\r?\ndeveloper_instructions = """\r?\n([^"]+)"""\s*$/.exec(text(path))
+  check(definition?.[1] === role && Boolean(definition[3]?.trim()), 'Invalid project role definition: ' + role)
+}
 const config = text('.codex/config.toml')
 // Inspect active flat defaults in their section, not comments or matching values in another table.
 // This bounded source check is not a general TOML parser or proof of effective client permissions.
@@ -83,14 +119,13 @@ for (const line of config.split(/\r?\n/)) {
   settings.set(key, [...(settings.get(key) ?? []), assignment[2]!])
 }
 for (const [key, expected] of Object.entries({
-  '.model_reasoning_effort': '"high"', '.approval_policy': '"on-request"',
+  'agents.enabled': 'true', 'agents.max_concurrent_threads_per_session': '2', '.approval_policy': '"on-request"',
   '.sandbox_mode': '"workspace-write"', '.approvals_reviewer': '"auto_review"',
   'sandbox_workspace_write.network_access': 'true'
 })) {
   const values = settings.get(key)
   check(values?.length === 1 && values[0] === expected, 'Unexpected requested Codex default: ' + key)
 }
-check(text('.codex/agents/scout.toml').includes('sandbox_mode = "read-only"'), 'Scout must request read-only execution')
 check(!config.includes('api_key'), 'Do not place credentials in the Codex config')
 const labels = JSON.parse(text('.github/labels.json')) as { name: string; color: string; description: string }[]
 check(labels.length > 0 && new Set(labels.map(label => label.name)).size === labels.length, 'Labels must be non-empty and unique')
@@ -106,7 +141,7 @@ for (const match of workflow.matchAll(/uses:\s*([^\s#]+)/g)) check(/@[a-f0-9]{40
 check(workflow.includes('--frozen-lockfile') && workflow.includes('run: pnpm test:ci:${{ matrix.group }}')
   && existsSync('tests/ci-plan.test.ts'), 'CI needs a real lock and the coverage-verified built desktop groups')
 check(!workflow.includes('pull_request_target'), 'Do not execute untrusted PR code with elevated target context')
-const excluded = new Set(['node_modules', '.git', '.local', 'out', 'dist'])
+const excluded = new Set(['node_modules', '.pnpm-store', '.git', '.local', 'out', 'dist'])
 function walk(dir: string): string[] {
   return readdirSync(dir).filter(name => !excluded.has(name)).flatMap(name => {
     const path = join(dir, name)
@@ -127,7 +162,6 @@ for (const file of files.filter(path => path.endsWith('.md'))) {
     check(existsSync(resolve(dirname(file), decoded)), `Broken local link: ${relative(root, file)} -> ${target}`)
   }
 }
-if (!existsSync('pnpm-lock.yaml')) console.log('NOTE: lockfile awaits the first real local dependency install; CI will require it.')
 if (errors.length) {
   console.error(errors.map(error => 'FAIL  ' + error).join('\n')); process.exitCode = 1
 } else console.log(`PASS  Materialized source checks: ${files.length} files, version ${pkg.version}, links, selected policies and commands. Effective agent settings/runtime behavior were not tested by this check.`)

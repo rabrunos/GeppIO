@@ -1,12 +1,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { projectGrid } from '../src/shared/grid/projection.ts'
+import { projectGrid } from '../src/geppio/src/shared/grid/projection.ts'
 import { COMPOSITIONS } from './fixtures/grid-compositions.ts'
 import { assertContinuous, assertNoSpike, assertSafe, spatialViolations } from './helpers/projection-oracle.ts'
-import type { GridSnapshot } from '../src/shared/grid/types.ts'
-import { constraintsFor } from '../src/shared/grid/policy.ts'
-import { resizeRect } from '../src/shared/grid/geometry.ts'
-import { reflow } from '../src/shared/grid/reflow.ts'
+import type { GridSnapshot } from '../src/geppio/src/shared/grid/types.ts'
+import { constraintsFor } from '../src/geppio/src/shared/grid/policy.ts'
+import { resizeRect } from '../src/geppio/src/shared/grid/geometry.ts'
+import { reflow } from '../src/geppio/src/shared/grid/reflow.ts'
 
 function sample(source: GridSnapshot, width: number, height: number) {
   const p = projectGrid(source, width, height)

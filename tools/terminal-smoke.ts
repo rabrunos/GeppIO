@@ -10,9 +10,9 @@ import { stripVTControlCharacters } from 'node:util'
 import { randomUUID } from 'node:crypto'
 import { portugueseFixture, settle } from './freeform-smoke.ts'
 import { enableDeveloperMode } from './plugin-dev-support.ts'
-import { TERMINAL_TYPE } from '../src/shared/terminal-widget.ts'
-import { WORKBENCH_KEY } from '../src/shared/workbench/model.ts'
-import type { TerminalRead, TerminalResult } from '../src/shared/terminal.ts'
+import { TERMINAL_TYPE } from '../src/geppio/src/shared/terminal-widget.ts'
+import { WORKBENCH_KEY } from '../src/geppio/src/shared/workbench/model.ts'
+import type { TerminalRead, TerminalResult } from '../src/geppio/src/shared/terminal.ts'
 import { editorRegionGeometry } from './editor-region-geometry-smoke.ts'
 
 const profile = await mkdtemp(join(tmpdir(), 'geppio-smoke-terminal-')), root = join(await realpath(profile), 'project')

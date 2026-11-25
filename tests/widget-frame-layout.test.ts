@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { projectFrame } from '../src/renderer/src/freeform/frame-layout.ts'
-import type { Measurement } from '../src/renderer/src/freeform/useSurfaces.ts'
-import type { Placement } from '../src/shared/freeform/types.ts'
+import { projectFrame } from '../src/geppio/src/renderer/src/freeform/frame-layout.ts'
+import type { Measurement } from '../src/geppio/src/renderer/src/freeform/useSurfaces.ts'
+import type { Placement } from '@geppio/runtime/layout/types'
 
 test('content widgets and anchored compact widgets share the same measured Main origin through fractional Sidebar frames', () => {
   for (const left of [331, 300.125, 210.25, 100.75, 48]) {

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { moveWithArrow } from '../src/renderer/src/shared-views/movement.ts'
+import { moveWithArrow } from '../src/geppio/src/renderer/src/shared-views/movement.ts'
 
 test('keyboard movement preserves fractional origins, shares pointer bounds and ignores unrelated keys', () => {
   const origin = { x: 45.5, y: 80.25 }, area = { width: 500, height: 400 }, size = { width: 200, height: 150 }

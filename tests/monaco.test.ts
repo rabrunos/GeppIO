@@ -2,10 +2,10 @@ import { unusedDocumentAuthoring } from './document-authoring-fixture.ts'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
-import { applyDocumentChanges, DocumentHistoryBudget } from '../src/shared/document-edits.ts'
-import { EditorSession } from '../src/renderer/src/files-editor/session.ts'
-import { DOCUMENT_LIMIT } from '../src/shared/documents.ts'
-import type { DocumentBridge } from '../src/shared/documents.ts'
+import { applyDocumentChanges, DocumentHistoryBudget } from '@geppio/runtime/document-edits'
+import { EditorSession } from '../src/geppio/src/renderer/src/files-editor/session.ts'
+import { DOCUMENT_LIMIT } from '@geppio/runtime/documents'
+import type { DocumentBridge } from '@geppio/runtime/documents'
 
 test('history limits reject growth without evicting other tabs and release only an explicitly closed owner', () => {
   const budget = new DocumentHistoryBudget(100, 2)

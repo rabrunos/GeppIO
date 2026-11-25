@@ -7,11 +7,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import type { TestContext } from 'node:test'
-import { DirectoryStore } from '../src/main/explorer.ts'
-import { DocumentStore } from '../src/main/documents.ts'
-import { moveExplorerFile, mutateExplorer } from '../src/main/explorer-write.ts'
-import type { ExplorerMutation } from '../src/shared/explorer.ts'
-import { EXPLORER_LIMITS } from '../src/shared/explorer.ts'
+import { DirectoryStore } from '../src/geppio/src/main/explorer.ts'
+import { DocumentStore } from '../src/geppio/src/main/documents.ts'
+import { moveExplorerFile, mutateExplorer } from '../src/geppio/src/main/explorer-write.ts'
+import type { ExplorerMutation } from '../src/geppio/src/shared/explorer.ts'
+import { EXPLORER_LIMITS } from '../src/geppio/src/shared/explorer.ts'
 
 const current = () => true, unbound = () => false
 async function fixture(t: TestContext) {

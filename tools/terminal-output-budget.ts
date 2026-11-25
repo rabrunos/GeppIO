@@ -1,5 +1,5 @@
-import { TERMINAL_PAGE_LIMIT } from '../src/shared/terminal.ts'
-import type { TerminalResult } from '../src/shared/terminal.ts'
+import { TERMINAL_PAGE_LIMIT } from '../src/geppio/src/shared/terminal.ts'
+import type { TerminalResult } from '../src/geppio/src/shared/terminal.ts'
 
 /** Measure one fixed output interval, not the sum of a tail window that keeps receiving output. */
 export async function terminalOutputBudget(read: (after: number) => Promise<TerminalResult>) {

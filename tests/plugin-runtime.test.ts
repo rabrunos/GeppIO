@@ -1,10 +1,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { PluginRuntime } from '../src/renderer/src/plugin-runtime.ts'
-import type { PluginWorker, RuntimePlugin } from '../src/renderer/src/plugin-runtime.ts'
-import type { InstalledPlugin } from '../src/shared/plugins.ts'
-import type { PluginDataBridge } from '../src/shared/plugin-data.ts'
-import type { DataSnapshot } from '../src/shared/plugin-data.ts'
+import { PluginRuntime } from '../src/geppio/src/renderer/src/plugin-runtime.ts'
+import type { PluginWorker, RuntimePlugin } from '../src/geppio/src/renderer/src/plugin-runtime.ts'
+import type { InstalledPlugin } from '../src/geppio/src/shared/plugins.ts'
+import type { PluginDataBridge } from '../src/geppio/src/shared/plugin-data.ts'
+import type { DataSnapshot } from '../src/geppio/src/shared/plugin-data.ts'
 
 const plugin: InstalledPlugin = { enabled: true, revision: 'test-revision', manifest: { schemaVersion: 1, apiVersion: 1, id: 'test.plugin', name: 'Test', version: '1.0.0', entry: 'entry.js', widgets: [{ id: 'counter', title: 'Counter', surface: 'declarative' }] } }
 class FakeWorker implements PluginWorker {

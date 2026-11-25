@@ -1,14 +1,14 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import type { InstalledPlugin } from '../src/shared/plugins.ts'
-import { initialWorkbench, widgetRegistry, groupFor, constraintsForViews, surfacePlacements } from '../src/shared/workbench/model.ts'
-import type { WorkbenchSnapshot } from '../src/shared/workbench/model.ts'
-import { addWidget, moveView, removePresence } from '../src/shared/workbench/commands.ts'
-import { groupWidgets, detachWidget, reorderGroup } from '../src/shared/workbench/groups.ts'
-import { parseWorkbench, serializeWorkbench } from '../src/shared/workbench/codec.ts'
-import { captureComposition, applyComposition } from '../src/shared/workbench/compositions.ts'
-import { maximizableSurface } from '../src/shared/workbench/maximize.ts'
-import { EditHistory, formatSignature } from '../src/shared/workbench/history.ts'
+import type { InstalledPlugin } from '../src/geppio/src/shared/plugins.ts'
+import { initialWorkbench, widgetRegistry, groupFor, constraintsForViews, surfacePlacements } from '../src/geppio/src/shared/workbench/model.ts'
+import type { WorkbenchSnapshot } from '../src/geppio/src/shared/workbench/model.ts'
+import { addWidget, moveView, removePresence } from '../src/geppio/src/shared/workbench/commands.ts'
+import { groupWidgets, detachWidget, reorderGroup } from '../src/geppio/src/shared/workbench/groups.ts'
+import { parseWorkbench, serializeWorkbench } from '../src/geppio/src/shared/workbench/codec.ts'
+import { captureComposition, applyComposition } from '../src/geppio/src/shared/workbench/compositions.ts'
+import { maximizableSurface } from '../src/geppio/src/shared/workbench/maximize.ts'
+import { EditHistory, formatSignature } from '../src/geppio/src/shared/workbench/history.ts'
 const plugin: InstalledPlugin = { enabled: true, revision: 'fixture', manifest: { schemaVersion: 1, apiVersion: 2, id: 'geppio.workspace-essentials', name: 'Workspace Essentials', version: '1.0.0', entry: 'entry.js', widgets: ['notes', 'checklist', 'prompts', 'scratch'].map(id => ({ id, title: id, surface: 'declarative' })) } }
 const registry = widgetRegistry([plugin]), main = { region: 'main' as const, width: 1800, height: 1200, expanded: false }
 function scene() { let next = initialWorkbench(); for (const name of ['notes', 'checklist', 'prompts', 'scratch']) next = addWidget(next, registry, `plugin:geppio.workspace-essentials:${name}`, main)!; return next }

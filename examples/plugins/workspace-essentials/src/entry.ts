@@ -1,4 +1,4 @@
-import type { DataDocument, DataSnapshot, Json, PluginContextV2, PluginInstanceV2, WidgetViewV2, WidgetEvent } from '../../../../sdk/plugin-v2.d.ts'
+import type { DataDocument, DataSnapshot, Json, PluginContextV2, PluginInstanceV2, WidgetViewV2, WidgetEvent } from '@geppio/plugin-sdk/v2'
 import { emptyModel, parseModel, document } from './model.ts'
 
 // JSON object member order is not part of the stored document's identity.

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { GIT_TYPE } from '../src/shared/git-widget.ts'
-import { closeFloatingPresentation, floatingBounds, GIT_SHARED_VIEW, openFloatingPresentation, raiseFloatingPresentation, resolveSharedView, SEARCH_SHARED_VIEW, SHARED_VIEWS, TOOLS_SHARED_VIEW } from '../src/renderer/src/shared-views/definition.ts'
+import { GIT_TYPE } from '../src/geppio/src/shared/git-widget.ts'
+import { closeFloatingPresentation, floatingBounds, GIT_SHARED_VIEW, openFloatingPresentation, raiseFloatingPresentation, resolveSharedView, SEARCH_SHARED_VIEW, SHARED_VIEWS, TOOLS_SHARED_VIEW } from '../src/geppio/src/renderer/src/shared-views/definition.ts'
 import { selectSuite } from '../tools/isolation/plan.ts'
 
 test('Git is a host View with separate widget identity and two supported presentations', () => {

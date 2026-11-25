@@ -6,13 +6,13 @@ import { createRequire } from 'node:module'
 import { setImmediate } from 'node:timers/promises'
 import { compileFunction } from 'node:vm'
 import ts from 'typescript'
-import { emptyTerminal, TERMINAL_PAGE_LIMIT, TerminalOutput } from '../src/shared/terminal.ts'
-import type { TerminalBridge, TerminalResult, TerminalState } from '../src/shared/terminal.ts'
-import type { TerminalSession } from '../src/renderer/src/terminal/session.ts'
+import { emptyTerminal, TERMINAL_PAGE_LIMIT, TerminalOutput } from '../src/geppio/src/shared/terminal.ts'
+import type { TerminalBridge, TerminalResult, TerminalState } from '../src/geppio/src/shared/terminal.ts'
+import type { TerminalSession } from '../src/geppio/src/renderer/src/terminal/session.ts'
 
 // Exercise the renderer session with controlled IPC and geometry. No browser,
 // test-only application API, or change to production xterm module resolution.
-const source = new URL('../src/renderer/src/terminal/session.ts', import.meta.url)
+const source = new URL('../src/geppio/src/renderer/src/terminal/session.ts', import.meta.url)
 const requireFromSession = createRequire(source)
 const loadSession = compileFunction(ts.transpileModule(readFileSync(source, 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2023 }

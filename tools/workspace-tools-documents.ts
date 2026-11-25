@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFile, readdir, stat, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import type { ElectronApplication, Page } from 'playwright'
-import type { MonacoHost } from '../src/renderer/src/files-editor/monaco.ts'
+import type { MonacoHost } from '../src/geppio/src/renderer/src/files-editor/monaco.ts'
 import { fileEditor } from './monaco-support.ts'
 
 /** Continue the same disposable Code session with its active dirty buffer, PTY and plugin. */

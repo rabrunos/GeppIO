@@ -1,13 +1,13 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { collides } from '../src/shared/freeform/geometry.ts'
-import { CONSTRAINTS, DEFAULT_FREEFORM } from '../src/shared/freeform/policy.ts'
-import { projectRegion } from '../src/shared/freeform/projection.ts'
-import { transfer } from '../src/shared/freeform/transfer.ts'
-import { candidate, same } from '../src/shared/freeform/geometry.ts'
-import { constraintsFor } from '../src/shared/freeform/policy.ts'
-import { reflow } from '../src/shared/freeform/reflow.ts'
-import { DIRECTIONS } from '../src/shared/freeform/types.ts'
+import { collides } from '@geppio/runtime/layout/geometry'
+import { CONSTRAINTS, DEFAULT_FREEFORM } from '../src/geppio/src/shared/freeform/policy.ts'
+import { projectRegion } from '../src/geppio/src/shared/freeform/projection.ts'
+import { transfer } from '../src/geppio/src/shared/freeform/transfer.ts'
+import { candidate, same } from '@geppio/runtime/layout/geometry'
+import { constraintsFor } from '../src/geppio/src/shared/freeform/policy.ts'
+import { reflow } from '@geppio/runtime/layout/reflow'
+import { DIRECTIONS } from '@geppio/runtime/layout/types'
 
 test('every feasible intermediate resize is identical at its own reference, including diagonal sub-gap contacts', () => {
   const source = DEFAULT_FREEFORM, surface = { ...source.reference.main, region: 'main' as const, expanded: false }, cs = constraintsFor(surface)

@@ -4,7 +4,7 @@ import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { ElectronApplication, Page } from 'playwright'
 import { settle } from './freeform-smoke.ts'
-import { WORKBENCH_KEY } from '../src/shared/workbench/model.ts'
+import { WORKBENCH_KEY } from '../src/geppio/src/shared/workbench/model.ts'
 
 /** Real DOM owner/port oracle, exercised by the live PowerShell/document smoke at both DPRs. */
 export async function editorRegionGeometry(app: ElectronApplication, page: Page, diagnostics: string, scale: number) {

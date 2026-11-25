@@ -2,6 +2,12 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.76] — 2026-11-25
+
+- Organize the Electron application, Runtime, GeppUI, Monaco Editor, plugin SDK and Standalone into six workspaces. Extract continuous geometry, document contracts, capability lifecycles, web presentation and editor APIs. Replace the Tailwind reset and Motion effects with project-owned CSS and interactions.
+- Add API 3 opaque-origin HTML/CSS/JavaScript surfaces, optional TypeScript/JSX preparation, versioned peer endpoints and explicit session grants. Keep API 1/2 Workers, development-folder snapshots and signed publisher pins. Permit compatible disabled API 3 signed updates.
+- Generate independent portable Windows applications from selected definitions. Add packed-library consumer and product/surface isolation checks. Route the work through the unified contract, project skills and scoped roles.
+
 ## [0.1.0-alpha.75] — 2026-11-24
 
 - Offer explicit recovery of unsaved UTF-8 text from a bounded plaintext profile store. Recovered documents use fresh untitled identities and Save As to choose a destination.

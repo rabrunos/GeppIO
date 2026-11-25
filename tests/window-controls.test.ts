@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { validWindowControlRequest } from '../src/shared/window-controls.ts'
+import { validWindowControlRequest } from '../src/geppio/src/shared/window-controls.ts'
 test('window chrome accepts only the exact host main-frame URL and no arguments', () => {
   for (const expected of ['geppio://app/index.html', 'http://127.0.0.1:5173/']) {
     assert.equal(validWindowControlRequest(expected, expected, true, []), true)

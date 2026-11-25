@@ -125,9 +125,10 @@ Install/activate it through the same manager and explicitly place Cronômetro an
 Relatórios de tempo in any region. `pnpm test:time-tracker` exercises the real
 package in a disposable profile. Count continues from the persisted start until
 Pausar; no process must stay running while the app is closed. Wait for Salvo.
-The plugin SDK exposes no filesystem,
-process, PTY, remote-network, secret or cross-plugin authority. Workers share origin/storage authority;
-they are not an untrusted community sandbox. See [plugin boundaries](../architecture/plugins.md).
+The API 1/2 SDK exposes no filesystem, process, PTY, remote-network, secret or cross-plugin
+authority. Workers share origin/storage. For the separate API 3 folder workflow, load a
+surface example directly, authorize its declared communication endpoints and press **Atualizar**
+after editing. See [web surfaces](../architecture/plugin-surfaces.md).
 
 Issue #6's bounded migration copies eligible old profile data only when the new destination is
 absent, preserves original/backup bytes and refuses to merge an existing destination. Close the

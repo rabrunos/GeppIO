@@ -3,11 +3,11 @@ import test from 'node:test'
 import type { TestContext } from 'node:test'
 import assert from 'node:assert/strict'
 import { setImmediate } from 'node:timers/promises'
-import type { GitBridge, GitHistoryCommit, GitHistoryPage, GitResult } from '../src/shared/git.ts'
-import { GIT_HISTORY_LIMITS } from '../src/shared/git.ts'
-import { EditorSession } from '../src/renderer/src/files-editor/session.ts'
-import { ExplorerSession } from '../src/renderer/src/files-editor/explorer-session.ts'
-import { GitSession } from '../src/renderer/src/git/session.ts'
+import type { GitBridge, GitHistoryCommit, GitHistoryPage, GitResult } from '../src/geppio/src/shared/git.ts'
+import { GIT_HISTORY_LIMITS } from '../src/geppio/src/shared/git.ts'
+import { EditorSession } from '../src/geppio/src/renderer/src/files-editor/session.ts'
+import { ExplorerSession } from '../src/geppio/src/renderer/src/files-editor/explorer-session.ts'
+import { GitSession } from '../src/geppio/src/renderer/src/git/session.ts'
 
 const unexpected = (): never => { throw new Error('Unexpected native operation') }
 const summary = (id: string) => ({ id, hash: 'c01dc0de', author: 'Autor <nome>', date: '2026-11-23', subject: 'Alterou <arquivo> & texto' })

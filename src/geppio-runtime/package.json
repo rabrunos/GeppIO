@@ -1,0 +1,25 @@
+{
+  "name": "@geppio/runtime",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/capabilities.ts",
+    "./broker": "./src/broker.ts",
+    "./web": "./src/web/surfaces.ts",
+    "./node/surfaces": "./src/node/surface-document.ts",
+    "./document-history": "./src/document-history.ts",
+    "./layout/types": "./src/layout/types.ts",
+    "./layout/geometry": "./src/layout/geometry.ts",
+    "./layout/reflow": "./src/layout/reflow.ts",
+    "./layout/alignment": "./src/layout/alignment.ts",
+    "./layout/settlement": "./src/layout/settlement.ts",
+    "./documents": "./src/documents.ts",
+    "./document-edits": "./src/document-edits.ts",
+    "./layout/clearance": "./src/layout/clearance.ts",
+    "./layout/policy": "./src/layout/policy.ts"
+  },
+  "dependencies": {
+    "@geppio/plugin-sdk": "workspace:*",
+    "typescript": "6.0.3"
+  }
+}

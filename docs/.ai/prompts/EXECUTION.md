@@ -3,7 +3,9 @@
 Load this template before preparing an approved implementation handoff. Replace every placeholder
 with task-specific content; do not deliver this instruction sheet as the contract. Keep detail
 proportional to the task and inherit canonical policies instead of reproducing them.
-Use one root contract per Target Version, including for separately sequenced work.
+Use one contract for the approved outcome and state all covered internal milestones. Identify
+the initial concrete Target Version and, for optional intermediate deliveries, the allocation
+rule, reservation checks and principal Issue where the next target must be recorded before edits.
 
 ```text
 # [TARGET_VERSION] Bounded task title
@@ -11,7 +13,7 @@ Use one root contract per Target Version, including for separately sequenced wor
 Repository: canonical owner/name and stable ID.
 Issue: real Issue URL. Target Version: assigned version, advancing for each newly delivered application-source batch even when correcting an unaccepted delivery; local iterations share this target.
 Observed basis: package version and repository-basis SHA, or explicitly unavailable evidence.
-Execution: E-class / requested Main effort, risk, discovery and consumption; report effective client settings separately.
+Execution: specify risk, discovery and requested reasoning effort for the actual task. Report only observable effective settings.
 
 Goal: exact intended outcome.
 Scope: relevant files/behaviors and task-specific implementation steps.

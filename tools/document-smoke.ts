@@ -7,8 +7,8 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { portugueseFixture, settle } from './freeform-smoke.ts'
 import { enableDeveloperMode } from './plugin-dev-support.ts'
-import { WORKBENCH_KEY } from '../src/shared/workbench/model.ts'
-import type { DocumentDraft, DocumentResult } from '../src/shared/documents.ts'
+import { WORKBENCH_KEY } from '../src/geppio/src/shared/workbench/model.ts'
+import type { DocumentDraft, DocumentResult } from '@geppio/runtime/documents'
 
 const profile = await mkdtemp(join(tmpdir(), 'geppio-smoke-documents-')), documentRoot = await realpath(profile)
 // Retain the lexical profile under os.tmpdir() for the existing profile guard;

@@ -67,7 +67,7 @@ editor/model and locally created Workers; React StrictMode effect replay does no
 owner reconnected in the same turn. Language Workers are reused across mode changes and may
 remain idle while no file is open until Monaco's worker lifecycle or app teardown ends them.
 
-`shared/document-edits.ts` applies simultaneous LF-model change intervals to the exact draft,
+Runtime's [document edits](../../src/geppio-runtime/src/document-edits.ts) apply simultaneous LF-model change intervals to the exact draft,
 preserving original CRLF/LF/CR bytes outside changed intervals. Inserted newlines use the first
 existing draft convention, falling back to the confirmed file convention through native delete/insert
 replacement events with a temporarily empty draft, otherwise LF. Monaco undo-version metadata retains newline-token sequences
@@ -85,7 +85,7 @@ See [Monaco dependency/asset boundary](monaco.md) for the explicit advisory exce
 
 Issue #45 introduced one real selected file; Issue #53 extends it to bounded tabs. The essential official module
 comprises `shared/files-editor.ts` (host registration) and renderer `files-editor/` (session/UI).
-The Core owns `main/documents.ts` and `main/document-bridge.ts`. Final essential-plugin packaging
+The GeppIO host owns native file access and grants in [documents.ts](../../src/geppio/src/main/documents.ts) and [document-bridge.ts](../../src/geppio/src/main/document-bridge.ts). Runtime supplies [document contracts](../../src/geppio-runtime/src/documents.ts) and [history operations](../../src/geppio-runtime/src/document-history.ts). Final essential-plugin packaging
 is provisional: this bundled module is not installable/uninstallable and has no Worker or manifest.
 Public API 1/2 is unchanged.
 

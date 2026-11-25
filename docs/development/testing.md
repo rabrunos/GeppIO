@@ -1,5 +1,17 @@
 # Validation guide
 
+## Module, SDK and product checks
+
+`pnpm.cmd check:repo` verifies the repository contract, public package imports, package dependency directions and native-free Runtime/SDK entries. `pnpm.cmd check` includes that gate, semantic TypeScript checks, the Node suite and the production build. After building, run the following on the isolated Windows desktop. Hosted Windows CI includes the same three journeys in the core shard.
+
+| Command | Evidence produced |
+| --- | --- |
+| `pnpm.cmd test:surfaces` | Loads and activates the original API 3 plugin folders, grants endpoints, mounts the slot, observes caller identity, rejects an invalid refresh, then times a valid refresh through the changed interactive view. |
+| `pnpm.cmd test:standalone` | Builds two products with different module selections, removes the disposable authoring inputs, launches and restarts each, and compares their data directories, retained state and runtime grants. |
+| `pnpm.cmd test:libraries` | Packs GeppUI and the Editor, installs their public tarballs in an external web project and checks control styles, keyboard focus, Monaco's worker, shared editing, undo/redo and disposal. |
+
+The results of individual runs and owner acceptance belong in the active Issue.
+
 ## Isolated local Windows smokes (alpha.50 / Issue #57)
 
 Build current application/plugin assets first with `pnpm check`, or use

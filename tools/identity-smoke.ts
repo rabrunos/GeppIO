@@ -6,14 +6,14 @@ import { join, resolve } from 'node:path'
 import assert from 'node:assert/strict'
 import { settle, portugueseFixture } from './freeform-smoke.ts'
 import ts from 'typescript'
-import { PluginStore } from '../src/main/plugins.ts'
-import { snapshotTree, BACKUP_DIRECTORY } from '../src/main/profile-migration.ts'
-import { IDENTITY } from '../src/shared/identity.ts'
-import { DEFAULT_LAYOUT } from '../src/renderer/src/fixtures.ts'
-import { GRID_KEY } from '../src/shared/grid/policy.ts'
+import { PluginStore } from '../src/geppio/src/main/plugins.ts'
+import { snapshotTree, BACKUP_DIRECTORY } from '../src/geppio/src/main/profile-migration.ts'
+import { IDENTITY } from '../src/geppio/src/shared/identity.ts'
+import { DEFAULT_LAYOUT } from '../src/geppio/src/renderer/src/fixtures.ts'
+import { GRID_KEY } from '../src/geppio/src/shared/grid/policy.ts'
 import { WORKBENCH_KEY as FREEFORM_KEY } from '../tests/fixtures/workbench.ts'
-import { convertHistorical } from '../src/shared/freeform/migration.ts'
-import { projectRegion } from '../src/shared/freeform/projection.ts'
+import { convertHistorical } from '../src/geppio/src/shared/freeform/migration.ts'
+import { projectRegion } from '../src/geppio/src/shared/freeform/projection.ts'
 
 const temporary = await mkdtemp(join(tmpdir(), 'geppio-smoke-identity-'))
 const environment: Record<string, string> = Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined))
@@ -67,7 +67,7 @@ try {
   if (process.argv.includes('--dev')) {
     const { loadConfigFromFile } = await import('electron-vite'), { createServer } = await import('vite')
     const config = await loadConfigFromFile({ command: 'serve', mode: 'development' }, 'electron.vite.config.ts')
-    devServer = await createServer({ ...config.config.renderer, root: resolve('src/renderer'), configFile: false }); await devServer.listen()
+    devServer = await createServer({ ...config.config.renderer, root: resolve('src/geppio/src/renderer'), configFile: false }); await devServer.listen()
   }
   const oldURL = devServer ? 'http://127.0.0.1:5173/fixture.html' : 'semnome://app/fixture.html'
   const newURL = devServer ? oldURL : 'geppio://app/fixture.html'

@@ -1,7 +1,7 @@
 import ts from 'typescript'
 import { readdir, readFile, mkdir, writeFile, rm } from 'node:fs/promises'
 import { resolve, join, relative, isAbsolute } from 'node:path'
-import { parseManifest } from '../src/shared/plugins.ts'
+import { parseManifest } from '../src/geppio/src/shared/plugins.ts'
 
 /** Build each package independently. Never imports sample code into the application bundle. */
 const outputRoot = resolve('.local/plugin-packages')

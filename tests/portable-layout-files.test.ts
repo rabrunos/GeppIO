@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import type { TestContext } from 'node:test'
-import { exportLayoutFile, importLayoutFile } from '../src/main/portable-layout-files.ts'
+import { exportLayoutFile, importLayoutFile } from '../src/geppio/src/main/portable-layout-files.ts'
 import { selectSuite } from '../tools/isolation/plan.ts'
 
 const recipe = { kind: 'geppio-layout', version: 1, name: 'Base', mode: 'format', scopes: ['main'],

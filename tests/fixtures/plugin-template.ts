@@ -1,4 +1,4 @@
-import type { PluginCompositionTemplate } from '../../src/shared/plugins.ts'
+import type { PluginCompositionTemplate } from '../../src/geppio/src/shared/plugins.ts'
 
 export function template(name = 'Formato local'): PluginCompositionTemplate {
   return { id: 'simple', composition: { kind: 'geppio-layout', version: 1, name, mode: 'format', scopes: ['main'],

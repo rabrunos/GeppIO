@@ -1,12 +1,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { DEFAULT_GRID, constraintsFor, GRID_KEY, RESPONSIVE_POLICY } from '../src/shared/grid/policy.ts'
-import { fitGrid, pixelRect } from '../src/shared/grid/geometry.ts'
-import { validLayout } from '../src/shared/grid/occupancy.ts'
-import { projectGrid } from '../src/shared/grid/projection.ts'
+import { DEFAULT_GRID, constraintsFor, GRID_KEY, RESPONSIVE_POLICY } from '../src/geppio/src/shared/grid/policy.ts'
+import { fitGrid, pixelRect } from '../src/geppio/src/shared/grid/geometry.ts'
+import { validLayout } from '../src/geppio/src/shared/grid/occupancy.ts'
+import { projectGrid } from '../src/geppio/src/shared/grid/projection.ts'
 import { assertSafe } from './helpers/projection-oracle.ts'
-import { readGrid, writeGrid } from '../src/shared/grid/storage.ts'
-import { parseGrid } from '../src/shared/grid/schema.ts'
+import { readGrid, writeGrid } from '../src/geppio/src/shared/grid/storage.ts'
+import { parseGrid } from '../src/geppio/src/shared/grid/schema.ts'
 
 test('owner wide/short regression: real redistribution, square cells and both-axis coverage', () => {
   for (const [width, height] of [[1200, 500], [1800, 700], [740, 860], [900, 650], [500, 1200]]) {

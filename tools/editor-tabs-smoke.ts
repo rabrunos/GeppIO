@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, realpath, rename, rm, writeFile } from 'node:
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { ElectronApplication, Page } from 'playwright'
-import type { MonacoHost } from '../src/renderer/src/files-editor/monaco.ts'
+import type { MonacoHost } from '../src/geppio/src/renderer/src/files-editor/monaco.ts'
 import { portugueseFixture } from './freeform-smoke.ts'
 import { electron } from './test-electron.ts'
 import { closeWorkspaceWindow } from './workspace-close.ts'
@@ -32,7 +32,7 @@ try {
   if (dev) {
     const { loadConfigFromFile } = await import('electron-vite'), { createServer } = await import('vite')
     const config = await loadConfigFromFile({ command: 'serve', mode: 'development' }, 'electron.vite.config.ts')
-    server = await createServer({ ...config.config.renderer, root: resolve('src/renderer'), configFile: false })
+    server = await createServer({ ...config.config.renderer, root: resolve('src/geppio/src/renderer'), configFile: false })
     await server.listen(); env.ELECTRON_RENDERER_URL = 'http://127.0.0.1:5173/'
   }
   async function launch(restore: boolean) {

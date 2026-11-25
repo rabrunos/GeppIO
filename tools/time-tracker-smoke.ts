@@ -6,7 +6,7 @@ import { mkdtemp, mkdir, readFile, writeFile, readdir, rename, rm } from 'node:f
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { portugueseFixture, settle } from './freeform-smoke.ts'
-import { IDENTITY } from '../src/shared/identity.ts'
+import { IDENTITY } from '../src/geppio/src/shared/identity.ts'
 const profile = await mkdtemp(join(tmpdir(), 'geppio-smoke-time-'))
 const diagnostics = '.local/diagnostics/time-tracker-alpha25'; await mkdir(diagnostics, { recursive: true })
 const env: Record<string, string> = Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined))

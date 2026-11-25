@@ -1,9 +1,7 @@
 # GeppIO — Project Guide
 
-Stable entry point for ChatGPT and repository-aware planners. This is a **materialized new
-product**, not the BootCrate template. The owner's discovery/review is already normalized in
-[requirements](docs/product/requirements.md) and the [profile](docs/.ai/project-profile.json).
-Do not launch an intake or a setup/console application. Do not rebuild the old prototype.
+GeppIO is a local Electron workbench. Read the [requirements](docs/product/requirements.md)
+and the [project profile](docs/.ai/project-profile.json) for product scope and supported targets.
 
 ## Read in this order
 
@@ -23,35 +21,12 @@ separate configuration surface.
 
 ## Durable project facts
 
-The product name is **GeppIO**, with lowercase technical namespace `geppio` (Issue #6). The canonical GitHub repository is `rabrunos/GeppIO` (GitHub repository ID `1409287329`), following the owner-initiated rename on 2026-10-08. Verify both origin URLs and the same repository identity before synchronization. The initial target is Windows and the stack is Electron,
-TypeScript, React, Tailwind, Heroicons and Motion. The alpha.1 foundation introduced static fixtures;
-alpha.2 added the trusted experimental local plugin runtime (Issue #21), not an untrusted-plugin
-platform. Issue #29 supersedes mandatory cell grids with continuous CSS-pixel widget geometry in Main,
-Sidebar and Bottom. Placement is bounded by default, with optional content-bounded horizontal
-expansion in Main. Sidebar scrolls vertically; Bottom never scrolls and exposes infeasibility recovery.
-Historical layouts remain read-only recovery sources. Visual policies remain provisional.
-The fixed header is outside the widget layout. Regions are logically peers. Product choices
-not explicitly closed by the owner remain labelled provisional in the specification.
-
-The alpha.13/alpha.14 workbench adds host-owned bars, catalog placement, compositions,
-reservations, checkpoints and session undo/redo. Individual widget movement/resize requires
-Edit mode; adjacent-pair resize also works in normal mode through its own validated commit.
-Since alpha.20, normal startup and built-in compositions have empty regions. Seven retired
-synthetic types remain compatibility identities and opt-in disposable-profile test fixtures.
-API 1 plugin contributions use Main-only, single-view declarative cards. The host also permits
-Workspace Essentials notes/checklist/prompts in Sidebar since alpha.22; host metadata is not
-automatically an author-facing SDK capability. The original illustrative project/profile and
-presentation controls are separate from the first-party Files/Monaco, native Terminal and Git
-owners. Alpha.47's [local Workspace](docs/architecture/workspace.md) binds actual root identity,
-clean-session restoration and new-terminal cwd; display-only layout names never grant native access.
-Avatar/profile controls remain illustrative and do not implement accounts.
-
-The owner's recorded product direction retains Electron for Windows and Linux; the currently
-validated platform/profile is Windows x64. Linux app smoke, packaging and distribution remain
-unimplemented/unverified, not implied by the Ubuntu secrets job. A complete modular IDE and
-the provisional plugin/widget catalog are future product work in Issues #32/#35, not an
-approved implementation sequence. Local desktop use does not require a GeppIO account;
-the optional community identity in #34 is a separate future scope.
+The product name is **GeppIO**, technical namespace `geppio` (Issue #6).
+The full Windows x64 workbench integrates native Terminal, Git, Explorer and Monaco.
+Use [architecture](docs/architecture/overview.md) for module ownership, [layout](docs/architecture/layout.md)
+for region and projection rules, and [plugins](docs/architecture/plugins.md) for native and
+plugin trust boundaries. Historical fixture behavior, optional community identity and Linux
+direction are documented in [requirements](docs/product/requirements.md).
 
 The owner prefers project-owned UI components. Issue #8 records the earlier selection of
 shadcn/ui and the later review of that decision. Any proposed use of shadcn/ui or other
@@ -59,14 +34,12 @@ new external code needs individual owner approval under Issue #19 and
 [TASK_POLICY](docs/.ai/TASK_POLICY.md).
 
 `package.json` is the canonical version source; `CHANGELOG.md` is integrated product history.
-The initial source baseline is `0.1.0-alpha.1`; its owner acceptance remains in Issue #1.
-Issue #21 assigns the independent plugin increment `0.1.0-alpha.2`. Every newly delivered
-application-source batch advances the app version, including corrections pending acceptance.
-Local repair/test iterations share the batch target; machine setup does not itself justify a new release.
+Each delivered application-source batch advances the version, including corrections pending
+acceptance. Local repair/test iterations share the batch target. Machine setup does not bump it.
 
 ## Remote identity and one-time packaging exception
 
-The existing repository is `rabrunos/GeppIO`; intake and GitHub binding are complete. Do not repeat them. The following paragraph describes the original pre-repository handoff only.
+The existing repository is `rabrunos/GeppIO`, ID `1409287329`. On continuation, recover unfinished scope and the assigned target from the same Issue.
 
 The owner explicitly requested a ZIP **before creating the new repository**. This was the only
 pre-repository materialization exception. There is no fabricated repository URL, HEAD, Issue,
@@ -77,10 +50,4 @@ blocker to report, not permission to maintain a local imitation of GitHub.
 
 ## Method provenance
 
-The selected workflow is adapted from the owner's [BootCrate repository](https://github.com/rabrunos/BootCrate)
-at commit `693679c5a2461f092537ce1bb220c7ec8c8c4957` (BootCrate v0.9), consulted on 2026-10-07.
-Retained: stable entry point, normalized profile, scoped context, orchestrator/executor contracts,
-Main/Scout/Worker conventions, selected skills, native versioning, GitHub forms/labels and
-project-specific safety checks. Removed/not copied: Setup, Console, bootstrap question library,
-raw intake, upstream product code/history, Claude adapter, publication tooling and maintenance CI.
-This is a selective adaptation, not a claim of complete BootCrate certification.
+The original foundation drew on the owner's [BootCrate v0.9 source](https://github.com/rabrunos/BootCrate/tree/693679c5a2461f092537ce1bb220c7ec8c8c4957). The active GeppIO contract, project skills and bounded roles are maintained in this repository.

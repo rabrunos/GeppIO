@@ -15,15 +15,13 @@ choices and unresolved product questions. Route only relevant context. Do not re
 2. Confirm the owner's intent from the active request. Approval to implement triggers this sequence
    without a reminder to follow the method. A discussion-only or record-only request stops at that
    scope: recording an Issue does not authorize implementation or an executor launch.
-3. Select and **load the applicable template before preparing the handoff**. Use
-   [EXECUTION](prompts/EXECUTION.md) for ordinary implementation. [FIRST_LOCAL_RUN](prompts/FIRST_LOCAL_RUN.md)
-   is historical foundation context, applicable only to an explicitly requested foundation continuation;
-   it is not a reason to restart intake or setup for a materialized project.
-4. Populate the template with task-specific facts, actions, acceptance, validation and authority.
-   Use one independently identifiable root contract per Target Version, with the exact version in
-   its H1 and its Issue/basis. Separate independent versions into distinct contracts and state their
-   order/dependencies. Each newly delivered application-source batch advances its version, including
-   repairs pending acceptance; local iterations share the batch target. Do not blend versions into one root.
+3. Use [EXECUTION](prompts/EXECUTION.md) to prepare a new implementation contract. On
+   continuation, recover the existing contract, scope and unfinished evidence from the Issue.
+4. Populate the contract with concrete outcomes, acceptance, validation, authority and the
+   first Target Version. An approved contract can cover several versioned deliveries. Record
+   subsequent assigned targets and milestones in its Issue before their first tracked edits.
+   Each delivered application-source batch advances its version, including corrections pending
+   acceptance. Complete the remaining scope after an intermediate delivery.
 5. Perform the template's pre-delivery completeness review. Keep detail proportional to the task:
    a narrow documentation change needs less detail than a trust-boundary change. Inherit canonical
    policies by repository path instead of copying the policy library. Missing required evidence or
@@ -50,7 +48,7 @@ Record any actual run and its observed response separately in the active Issue.
 | Resumes with “continue” | Retrieves current repository/Issue/version context; does not assume chat memory or approval to implement. |
 | Approves “implement” without mentioning the method | Loads the applicable current template, fills and reviews the contract, then invokes the authorized executor or automatically delivers the full copy-ready contract. An Issue alone is insufficient. |
 | Requests discussion only or recording only | Keeps that scope; does not launch implementation. |
-| Approves two independent implementation versions | Produces two distinguishable root contracts, each with its own Target Version and Issue/basis, sequencing dependent work. |
+| Resumes after an intermediate delivery under one contract | Verifies current checkout, target allocation and outstanding Issue criteria, then continues within the same authorization. |
 
 Static document/schema checks establish consistency only. They do not execute this scenario,
 prove real ChatGPT behavior, physical Windows UX or effective Codex model effort.

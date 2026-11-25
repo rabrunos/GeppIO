@@ -1,11 +1,11 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { reflow } from '../src/shared/grid/reflow.ts'
-import { validLayout } from '../src/shared/grid/occupancy.ts'
-import { moveRect, resizeRect } from '../src/shared/grid/geometry.ts'
-import { constraintsFor, DEFAULT_GRID } from '../src/shared/grid/policy.ts'
-import { DIRECTIONS } from '../src/shared/grid/types.ts'
-import type { GridConstraints, GridPlacement } from '../src/shared/grid/types.ts'
+import { reflow } from '../src/geppio/src/shared/grid/reflow.ts'
+import { validLayout } from '../src/geppio/src/shared/grid/occupancy.ts'
+import { moveRect, resizeRect } from '../src/geppio/src/shared/grid/geometry.ts'
+import { constraintsFor, DEFAULT_GRID } from '../src/geppio/src/shared/grid/policy.ts'
+import { DIRECTIONS } from '../src/geppio/src/shared/grid/types.ts'
+import type { GridConstraints, GridPlacement } from '../src/geppio/src/shared/grid/types.ts'
 
 const p = (id: string, x: number, y: number, w = 2, h = 2): GridPlacement => ({ id, x, y, w, h, preferred: { w, h } })
 function constraints(ps: GridPlacement[], columns: number, rows: number): GridConstraints {

@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "apiVersion": 3,
+  "id": "sample.board",
+  "name": "Quadro",
+  "version": "1.0.0",
+  "entry": "entry.ts",
+  "widgets": [
+    {
+      "id": "panel",
+      "title": "Quadro",
+      "surface": "web"
+    }
+  ],
+  "surface": {
+    "html": "panel.html",
+    "css": "panel.css",
+    "offers": [
+      {
+        "kind": "service",
+        "name": "title",
+        "version": 1
+      },
+      {
+        "kind": "command",
+        "name": "mark",
+        "version": 1
+      },
+      {
+        "kind": "event",
+        "name": "pulse",
+        "version": 1
+      },
+      {
+        "kind": "slot",
+        "name": "footer",
+        "version": 1
+      }
+    ],
+    "uses": []
+  }
+}

@@ -1,10 +1,13 @@
-# Plugin boundary — trusted local v1/v2 and future design
+# Plugin boundaries
+
+Use [API 3 web surfaces](plugin-surfaces.md) for author-owned HTML/CSS/JS, supervised commands,
+services, events and slots. The following Worker and ordinary-data contracts apply to API 1/2.
 
 ## Inert composition templates (alpha.68)
 
 Manifest schema 1 accepts an optional `compositionTemplates` array on API 1 and
 API 2 packages. Each entry has a unique package-local `id` and a `composition`
-validated as the exact [portable composition format](../../src/shared/workbench/portable-format.ts).
+validated as the exact [portable composition format](../../src/geppio/src/shared/workbench/portable-format.ts).
 The array allows four entries, with the entire manifest still limited to 16 KiB.
 Earlier hosts reject the extra manifest key. Existing manifests that omit the
 field keep their prior behavior.
@@ -154,7 +157,7 @@ sending window, main frame and exact app URL.
 
 Every activation creates a module Web Worker and imports the independently compiled external entry.
 The entry exports `activate(context)` and returns `{ dispose(), onAction?(widgetId, actionId) }`.
-The compile-time experimental facade is [plugin.d.ts](../../sdk/plugin.d.ts).
+The compile-time experimental facade is [plugin.d.ts](../../src/plugin-sdk/src/plugin.d.ts).
 `context.pluginId` is host assigned; `publishWidget(widgetId, { text, action?: { id, label } })`
 must match the manifest. `reportStatus(text)` exposes bounded lifecycle/background evidence in
 Settings. The host binds identity to the Worker callback, renders text literally and routes only
@@ -208,15 +211,15 @@ or rebuild. The counter contributes a working button; pulse runs a disposable ti
 External service authentication belongs to its corresponding plugin. The proposed optional
 [community identity in Issue #34](https://github.com/rabrunos/GeppIO/issues/34) does not make an
 account mandatory for local desktop work or replace service-specific authentication. No community
-account, OAuth service, broker or vault is implemented by this runtime.
+account, OAuth service or vault is implemented. The API 3 broker only routes local, versioned peer endpoints.
 
 ## One developer experience
 
 The desired output is one approachable SDK. Public functions/commands, context-aware UI slots and generic surface contributions can live behind the same facade. They do not need independent registration bureaucracy, but retain different semantics and authorizations. Prefer extending a small core facade after a real example proves the need.
 
-A plugin can have zero or multiple widgets and background services. The trusted fixture registry is
-not that SDK. The experimental runtime above covers local packaging and lifecycle only; no untrusted
-JavaScript sandbox, permission dialog, broker, network grant, vault or content-injection API exists.
+API 1/2 plugins can have zero or multiple declarative widgets. API 3 currently contributes one
+web widget per plugin. Each activation has its own supervised caller identity. Future changes
+to data access, credentials or native capabilities need scope and host controls.
 
 ## Example: a button in another surface
 

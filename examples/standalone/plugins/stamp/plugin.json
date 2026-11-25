@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "apiVersion": 3,
+  "id": "sample.stamp",
+  "name": "Carimbo",
+  "version": "1.0.0",
+  "entry": "entry.ts",
+  "widgets": [
+    {
+      "id": "panel",
+      "title": "Carimbo",
+      "surface": "web"
+    }
+  ],
+  "surface": {
+    "html": "panel.html",
+    "css": "panel.css",
+    "offers": [],
+    "uses": [
+      {
+        "kind": "service",
+        "name": "title",
+        "version": 1,
+        "provider": "sample.board"
+      },
+      {
+        "kind": "command",
+        "name": "mark",
+        "version": 1,
+        "provider": "sample.board"
+      },
+      {
+        "kind": "event",
+        "name": "pulse",
+        "version": 1,
+        "provider": "sample.board"
+      },
+      {
+        "kind": "slot",
+        "name": "footer",
+        "version": 1,
+        "provider": "sample.board"
+      }
+    ]
+  }
+}

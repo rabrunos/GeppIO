@@ -6,12 +6,12 @@ import { mkdtemp, writeFile, readFile, rm, rename, chmod, link, mkdir, symlink, 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { DocumentStore, DocumentFailure, documentFailure, expiredDocumentResponse } from '../src/main/documents.ts'
-import { DOCUMENT_LIMIT, DOCUMENT_SESSION_LIMITS, applyEditorText, editorText, validDocumentRequest } from '../src/shared/documents.ts'
-import type { DocumentBridge, DocumentDraft, DocumentSnapshot } from '../src/shared/documents.ts'
-import { EditorSession } from '../src/renderer/src/files-editor/session.ts'
-import { widgetRegistry, initialWorkbench } from '../src/shared/workbench/model.ts'
-import { FILE_EDITOR_TYPE } from '../src/shared/files-editor.ts'
+import { DocumentStore, DocumentFailure, documentFailure, expiredDocumentResponse } from '../src/geppio/src/main/documents.ts'
+import { DOCUMENT_LIMIT, DOCUMENT_SESSION_LIMITS, applyEditorText, editorText, validDocumentRequest } from '@geppio/runtime/documents'
+import type { DocumentBridge, DocumentDraft, DocumentSnapshot } from '@geppio/runtime/documents'
+import { EditorSession } from '../src/geppio/src/renderer/src/files-editor/session.ts'
+import { widgetRegistry, initialWorkbench } from '../src/geppio/src/shared/workbench/model.ts'
+import { FILE_EDITOR_TYPE } from '../src/geppio/src/shared/files-editor.ts'
 
 async function fixture(run: (root: string, path: string, store: DocumentStore) => Promise<void>) {
   // Windows runners may spell os.tmpdir() with an 8.3 alias. Mock selection must use

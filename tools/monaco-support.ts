@@ -1,5 +1,5 @@
 import type { Page } from 'playwright'
-import type { MonacoHost } from '../src/renderer/src/files-editor/monaco.ts'
+import type { MonacoHost } from '../src/geppio/src/renderer/src/files-editor/monaco.ts'
 
 /** Existing document journeys now drive/inspect the actual Monaco instance, never an input surrogate. */
 export function fileEditor(page: Page) {

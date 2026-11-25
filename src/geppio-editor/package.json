@@ -1,0 +1,14 @@
+{
+  "name": "@geppio/editor",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "exports": {
+    ".": "./index.ts",
+    "./vite-workers": "./vite-workers.ts",
+    "./styles.css": "./styles.css"
+  },
+  "dependencies": {
+    "monaco-editor": "0.57.0"
+  }
+}

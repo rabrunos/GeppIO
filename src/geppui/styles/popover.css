@@ -1,0 +1,59 @@
+/* @section popover-controls */
+.workspace-popover {
+  width: 346px;
+  max-width: calc(100vw - 2 * var(--space-x));
+  max-height: var(--popover-available-height, calc(100dvh - 110px));
+  border: 1px solid var(--color-border);
+  border-radius: var(--floating-radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  margin: 0;
+  padding: 16px;
+  font-size: 13px;
+  position: fixed;
+  inset: auto;
+  overflow-y: auto;
+  box-shadow: 0 12px 32px -10px #132b4e3d;
+}
+
+.workspace-popover::backdrop {
+  background: 0 0;
+}
+
+.workspace-popover:popover-open {
+  animation: 0.14s ease-out profile-enter;
+}
+
+.workspace-popover-heading {
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-x);
+  margin-bottom: 16px;
+  display: flex;
+}
+
+.workspace-popover-heading h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 24px;
+}
+
+.workspace-popover-heading p {
+  color: var(--color-text-muted);
+  margin: 3px 0 0;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.workspace-popover-close {
+  color: var(--color-text-muted);
+  margin: -4px -4px 0 0;
+}
+
+.workspace-popover-close .icon {
+  width: 18px;
+  height: 18px;
+}
+
+@media (prefers-reduced-motion: reduce) { .workspace-popover:popover-open { animation: none; } }

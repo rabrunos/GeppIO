@@ -5,14 +5,14 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { electron } from './test-electron.ts'
 import type { ElectronApplication, Page } from 'playwright'
-import type { GitResult } from '../src/shared/git.ts'
-import { parseGitStatus } from '../src/main/git.ts'
-import type { GitStatus } from '../src/shared/git.ts'
-import type { GitDiffHost, MonacoHost } from '../src/renderer/src/files-editor/monaco.ts'
+import type { GitResult } from '../src/geppio/src/shared/git.ts'
+import { parseGitStatus } from '../src/geppio/src/main/git.ts'
+import type { GitStatus } from '../src/geppio/src/shared/git.ts'
+import type { GitDiffHost, MonacoHost } from '../src/geppio/src/renderer/src/files-editor/monaco.ts'
 import { gitFingerprint, ignoredGitTrees, initializeGit } from './git-fixtures.ts'
 import { fileEditor, pluginWorkers } from './monaco-support.ts'
 import { portugueseFixture, settle } from './freeform-smoke.ts'
-import { WORKBENCH_KEY } from '../src/shared/workbench/model.ts'
+import { WORKBENCH_KEY } from '../src/geppio/src/shared/workbench/model.ts'
 import { enableDeveloperMode } from './plugin-dev-support.ts'
 
 const profile = await mkdtemp(join(tmpdir(), 'geppio-smoke-git-')), canonical = await realpath(profile), scope = join(canonical, 'repository')
@@ -43,7 +43,7 @@ try {
   if (dev) {
     const { loadConfigFromFile } = await import('electron-vite'), { createServer } = await import('vite')
     const config = await loadConfigFromFile({ command: 'serve', mode: 'development' }, 'electron.vite.config.ts')
-    server = await createServer({ ...config.config.renderer, root: resolve('src/renderer'), configFile: false }); await server.listen(); env.ELECTRON_RENDERER_URL = 'http://127.0.0.1:5173/'
+    server = await createServer({ ...config.config.renderer, root: resolve('src/geppio/src/renderer'), configFile: false }); await server.listen(); env.ELECTRON_RENDERER_URL = 'http://127.0.0.1:5173/'
   }
   app = await electron.launch({ args: ['.', ...(scale125 ? ['--force-device-scale-factor=1.25'] : [])], env })
   app.process().stderr?.on('data', data => { void writeFile(join(diagnostics, 'electron-stderr.log'), data, { flag: 'a' }) })

@@ -1,12 +1,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { activePlacements, initialWorkbench, sidebarInsertion, widgetRegistry, WORKBENCH_KEY } from '../src/shared/workbench/model.ts'
-import type { WorkbenchSnapshot } from '../src/shared/workbench/model.ts'
-import type { InstalledPlugin } from '../src/shared/plugins.ts'
-import { addWidget, moveView, removePresence, resizePair } from '../src/shared/workbench/commands.ts'
-import { parseWorkbench, serializeWorkbench } from '../src/shared/workbench/codec.ts'
-import { readWorkbench } from '../src/shared/workbench/storage.ts'
-import { EditHistory } from '../src/shared/workbench/history.ts'
+import { activePlacements, initialWorkbench, sidebarInsertion, widgetRegistry, WORKBENCH_KEY } from '../src/geppio/src/shared/workbench/model.ts'
+import type { WorkbenchSnapshot } from '../src/geppio/src/shared/workbench/model.ts'
+import type { InstalledPlugin } from '../src/geppio/src/shared/plugins.ts'
+import { addWidget, moveView, removePresence, resizePair } from '../src/geppio/src/shared/workbench/commands.ts'
+import { parseWorkbench, serializeWorkbench } from '../src/geppio/src/shared/workbench/codec.ts'
+import { readWorkbench } from '../src/geppio/src/shared/workbench/storage.ts'
+import { EditHistory } from '../src/geppio/src/shared/workbench/history.ts'
 
 const plugin: InstalledPlugin = { enabled: true, revision: 'fixture', manifest: { schemaVersion: 1, apiVersion: 2,
   id: 'geppio.workspace-essentials', name: 'Workspace Essentials', version: '1.0.0', entry: 'index.js',

@@ -1,11 +1,11 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { DEFAULT_HORIZONTAL, HORIZONTAL, HORIZONTAL_KEY, HORIZONTAL_BOUNDS, horizontalCandidate, horizontalConstraints,
-  horizontalExtent, horizontalMetrics, parseHorizontal, readHorizontal, serializeHorizontal, validHorizontalLayout, writeHorizontal } from '../src/shared/grid/horizontal.ts'
-import { horizontalReflow } from '../src/shared/grid/horizontal-reflow.ts'
-import { parseGrid } from '../src/shared/grid/schema.ts'
-import { DEFAULT_GRID, GRID_KEY } from '../src/shared/grid/policy.ts'
-import { DIRECTIONS } from '../src/shared/grid/types.ts'
+  horizontalExtent, horizontalMetrics, parseHorizontal, readHorizontal, serializeHorizontal, validHorizontalLayout, writeHorizontal } from '../src/geppio/src/shared/grid/horizontal.ts'
+import { horizontalReflow } from '../src/geppio/src/shared/grid/horizontal-reflow.ts'
+import { parseGrid } from '../src/geppio/src/shared/grid/schema.ts'
+import { DEFAULT_GRID, GRID_KEY } from '../src/geppio/src/shared/grid/policy.ts'
+import { DIRECTIONS } from '../src/geppio/src/shared/grid/types.ts'
 
 test('ten height-derived square rows, one perimeter, content-only extent, finite pathological measurements', () => {
   const m = horizontalMetrics(1700, 940)

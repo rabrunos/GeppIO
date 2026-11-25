@@ -3,12 +3,12 @@ import { test } from 'node:test'
 import { initialWorkbench, widgetRegistry } from './fixtures/workbench.ts'
 import type { SessionSlot } from './fixtures/workbench.ts'
 import { applyComposition, captureComposition, captureCurrentComposition, compositionChrome, compositionScene, compositionSlots, systemCompositions } from './fixtures/compositions.ts'
-import { parseWorkbench, serializeWorkbench } from '../src/shared/workbench/codec.ts'
-import { EditHistory } from '../src/shared/workbench/history.ts'
-import { fillReservation } from '../src/shared/workbench/slots.ts'
-import { importPortableComposition, parsePortableLayout, portableDependencies, resolvePortableWidgets } from '../src/shared/workbench/portable.ts'
-import type { InstalledPlugin } from '../src/shared/plugins.ts'
-import { compositionTemplates, currentCompositionTemplate } from '../src/renderer/src/workbench/plugin-templates.ts'
+import { parseWorkbench, serializeWorkbench } from '../src/geppio/src/shared/workbench/codec.ts'
+import { EditHistory } from '../src/geppio/src/shared/workbench/history.ts'
+import { fillReservation } from '../src/geppio/src/shared/workbench/slots.ts'
+import { importPortableComposition, parsePortableLayout, portableDependencies, resolvePortableWidgets } from '../src/geppio/src/shared/workbench/portable.ts'
+import type { InstalledPlugin } from '../src/geppio/src/shared/plugins.ts'
+import { compositionTemplates, currentCompositionTemplate } from '../src/geppio/src/renderer/src/workbench/plugin-templates.ts'
 
 const registry = widgetRegistry()
 test('only accepted templates are discoverable and saved copies keep their own identity after the provider changes or disappears', () => {

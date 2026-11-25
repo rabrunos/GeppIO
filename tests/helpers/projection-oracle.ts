@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
-import type { GridMetrics } from '../../src/shared/grid/geometry.ts'
-import type { GridSnapshot } from '../../src/shared/grid/types.ts'
+import type { GridMetrics } from '../../src/geppio/src/shared/grid/geometry.ts'
+import type { GridSnapshot } from '../../src/geppio/src/shared/grid/types.ts'
 
 export interface ProjectionSample { width: number; height: number; snapshot: GridSnapshot; metrics: GridMetrics }
 export function rectangles(sample: ProjectionSample) {

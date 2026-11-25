@@ -6,7 +6,7 @@ import { mkdtemp, mkdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { initialWorkbench, widgetRegistry, WORKBENCH_KEY } from '../tests/fixtures/workbench.ts'
-import { serializeWorkbench } from '../src/shared/workbench/codec.ts'
+import { serializeWorkbench } from '../src/geppio/src/shared/workbench/codec.ts'
 import { beginEdit, portugueseFixture, settle } from './freeform-smoke.ts'
 const profile = await mkdtemp(join(tmpdir(), 'geppio-smoke-edit-lock-'))
 const diagnostics = '.local/diagnostics/edit-lock-alpha32'; await mkdir(diagnostics, { recursive: true })

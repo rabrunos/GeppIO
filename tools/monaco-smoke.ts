@@ -5,9 +5,9 @@ import { mkdtemp, realpath, readFile, writeFile, mkdir, rm } from 'node:fs/promi
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import { fileEditor } from './monaco-support.ts'
-import type { MonacoHost } from '../src/renderer/src/files-editor/monaco.ts'
+import type { MonacoHost } from '../src/geppio/src/renderer/src/files-editor/monaco.ts'
 import { portugueseFixture, settle } from './freeform-smoke.ts'
-import { WORKBENCH_KEY } from '../src/shared/workbench/model.ts'
+import { WORKBENCH_KEY } from '../src/geppio/src/shared/workbench/model.ts'
 
 const profile = await mkdtemp(join(tmpdir(), 'geppio-smoke-monaco-')), root = await realpath(profile)
 const scale125 = process.argv.includes('--scale125'), dev = process.argv.includes('--dev')
@@ -25,7 +25,7 @@ try {
   if (dev) {
     const { loadConfigFromFile } = await import('electron-vite'), { createServer } = await import('vite')
     const config = await loadConfigFromFile({ command: 'serve', mode: 'development' }, 'electron.vite.config.ts')
-    server = await createServer({ ...config.config.renderer, root: resolve('src/renderer'), configFile: false }); await server.listen()
+    server = await createServer({ ...config.config.renderer, root: resolve('src/geppio/src/renderer'), configFile: false }); await server.listen()
     env.ELECTRON_RENDERER_URL = 'http://127.0.0.1:5173/'
   }
   app = await electron.launch({ args: ['.', ...(scale125 ? ['--force-device-scale-factor=1.25'] : [])], env })

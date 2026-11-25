@@ -3,8 +3,8 @@ import assert from 'node:assert/strict'
 import { mkdtemp, mkdir, writeFile, readFile, readdir, rename, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { PluginStore, inspectPackage } from '../src/main/plugins.ts'
-import { parseManifest, parseWidgetView, PLUGIN_LIMITS } from '../src/shared/plugins.ts'
+import { PluginStore, inspectPackage } from '../src/geppio/src/main/plugins.ts'
+import { parseManifest, parseWidgetView, PLUGIN_LIMITS } from '../src/geppio/src/shared/plugins.ts'
 import { template } from './fixtures/plugin-template.ts'
 
 const manifest = { schemaVersion: 1, apiVersion: 1, id: 'test.plugin', name: 'Teste local', version: '1.0.0', entry: 'entry.js', widgets: [] }

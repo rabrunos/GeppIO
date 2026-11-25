@@ -3,12 +3,12 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { TestContext } from 'node:test'
 import { setImmediate } from 'node:timers/promises'
-import type { DocumentBridge, DocumentSnapshot } from '../src/shared/documents.ts'
-import type { ApplyResult, ReplacementFile } from '../src/shared/search-replacement.ts'
-import type { SearchBridge, SearchMatch, SearchOpenResult, SearchPage, SearchResult } from '../src/shared/search.ts'
-import { EditorSession } from '../src/renderer/src/files-editor/session.ts'
-import { ExplorerSession } from '../src/renderer/src/files-editor/explorer-session.ts'
-import { SearchSession } from '../src/renderer/src/search/session.ts'
+import type { DocumentBridge, DocumentSnapshot } from '@geppio/runtime/documents'
+import type { ApplyResult, ReplacementFile } from '../src/geppio/src/shared/search-replacement.ts'
+import type { SearchBridge, SearchMatch, SearchOpenResult, SearchPage, SearchResult } from '../src/geppio/src/shared/search.ts'
+import { EditorSession } from '../src/geppio/src/renderer/src/files-editor/session.ts'
+import { ExplorerSession } from '../src/geppio/src/renderer/src/files-editor/explorer-session.ts'
+import { SearchSession } from '../src/geppio/src/renderer/src/search/session.ts'
 
 const hit: SearchMatch = { id: 'result', file: 'src/texto.txt', line: 2, column: 3, length: 4,
   snippet: '😀café', highlightStart: 2, highlightEnd: 6 }

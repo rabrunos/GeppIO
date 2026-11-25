@@ -6,9 +6,9 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { enableDeveloperMode } from './plugin-dev-support.ts'
 import { portugueseFixture, settle } from './freeform-smoke.ts'
-import { WORKBENCH_KEY } from '../src/shared/workbench/model.ts'
-import { IDENTITY } from '../src/shared/identity.ts'
-import type { Edge, Presentation } from '../src/shared/workbench/presentations.ts'
+import { WORKBENCH_KEY } from '../src/geppio/src/shared/workbench/model.ts'
+import { IDENTITY } from '../src/geppio/src/shared/identity.ts'
+import type { Edge, Presentation } from '../src/geppio/src/shared/workbench/presentations.ts'
 
 const profile = await mkdtemp(join(tmpdir(), 'geppio-smoke-real-presentations-'))
 const scale125 = process.argv.includes('--scale125'), directory = `.local/diagnostics/real-presentations-alpha36-${scale125 ? '1.25' : '1'}`

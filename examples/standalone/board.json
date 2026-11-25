@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "productId": "board-and-stamp",
+  "name": "Quadro e carimbo",
+  "tiles": [
+    {
+      "id": "board",
+      "kind": "surface",
+      "title": "Quadro",
+      "source": "board"
+    },
+    {
+      "id": "stamp",
+      "kind": "surface",
+      "title": "Carimbo",
+      "source": "stamp"
+    }
+  ]
+}

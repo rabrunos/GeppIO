@@ -14,7 +14,7 @@ body:
     id: target
     attributes:
       label: Target Version
-      description: "Required before tracked changes; use not applicable for read-only work. Continuations retain the unaccepted target."
+      description: "Assign before tracked changes. Record each subsequent delivered-source target in this Issue. Read-only work has no version bump."
   - type: input
     id: basis
     attributes:

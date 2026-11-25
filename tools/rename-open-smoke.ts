@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { ElectronApplication } from 'playwright'
-import type { MonacoHost } from '../src/renderer/src/files-editor/monaco.ts'
+import type { MonacoHost } from '../src/geppio/src/renderer/src/files-editor/monaco.ts'
 import { fileEditor } from './monaco-support.ts'
 import { portugueseFixture } from './freeform-smoke.ts'
 import { electron } from './test-electron.ts'
@@ -17,13 +17,15 @@ try {
   const bytes = Buffer.from('\ufeffconst numero = 1\r\n// fim\n')
   const source = join(folder, 'teste.js'), clean = join(folder, 'limpo.js'), dirty = join(folder, 'final.txt')
   await writeFile(source, bytes); await writeFile(join(folder, 'ocupado.txt'), 'existing')
+  const neighbours = ['teste.jsx', 'teste-1.js', 'final-1.txt']
+  for (const name of neighbours) await writeFile(join(folder, name), '\ufeff' + name + '\r\nπ\n')
   const env = Object.fromEntries(Object.entries(process.env).filter((pair): pair is [string, string] => pair[1] !== undefined))
   for (const key of ['ELECTRON_RUN_AS_NODE', 'ELECTRON_RENDERER_URL', 'NODE_OPTIONS', 'GEPPIO_TEST_DEMO_WIDGETS']) delete env[key]
   env.GEPPIO_TEST_USER_DATA = profile; env.NODE_ENV = dev ? 'development' : 'production'
   if (dev) {
     const { loadConfigFromFile } = await import('electron-vite'), { createServer } = await import('vite')
     const config = await loadConfigFromFile({ command: 'serve', mode: 'development' }, 'electron.vite.config.ts')
-    server = await createServer({ ...config.config.renderer, root: resolve('src/renderer'), configFile: false })
+    server = await createServer({ ...config.config.renderer, root: resolve('src/geppio/src/renderer'), configFile: false })
     await server.listen(); env.ELECTRON_RENDERER_URL = 'http://127.0.0.1:5173/'
   }
   app = await electron.launch({ args: ['.', ...(scale125 ? ['--force-device-scale-factor=1.25'] : [])], env })
@@ -105,6 +107,7 @@ try {
   await page.getByRole('tab', { name: 'conferir.txt', exact: true }).waitFor()
   assert.equal(await editor.inputValue(), edited.text); await assert.rejects(stat(dirty), { code: 'ENOENT' })
   assert.deepEqual(errors, []); await model.dispose()
+  for (const name of neighbours) assert.deepEqual(await readFile(join(folder, name)), Buffer.from('\ufeff' + name + '\r\nπ\n'))
   console.log('PASS open-file rename, disk bytes, model, undo and explicit recovery at DPR', scale125 ? 1.25 : 1, dev ? 'development' : 'built')
 } finally {
   try { await app?.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().forEach(win => win.destroy())).catch(() => {}); await app?.close().catch(() => {}) }

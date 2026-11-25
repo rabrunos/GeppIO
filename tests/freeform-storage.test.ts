@@ -1,12 +1,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { DEFAULT_LAYOUT } from '../src/shared/layout-defaults.ts'
-import { DEFAULT_GRID, GRID_KEY } from '../src/shared/grid/policy.ts'
-import { DEFAULT_HORIZONTAL, HORIZONTAL_KEY, serializeHorizontal } from '../src/shared/grid/horizontal.ts'
-import { DEFAULT_FREEFORM, FREEFORM_KEY } from '../src/shared/freeform/policy.ts'
-import { convertHistorical, importFreeform } from '../src/shared/freeform/migration.ts'
-import { parseFreeform } from '../src/shared/freeform/schema.ts'
-import { readFreeform, writeFreeform } from '../src/shared/freeform/storage.ts'
+import { DEFAULT_LAYOUT } from '../src/geppio/src/shared/layout-defaults.ts'
+import { DEFAULT_GRID, GRID_KEY } from '../src/geppio/src/shared/grid/policy.ts'
+import { DEFAULT_HORIZONTAL, HORIZONTAL_KEY, serializeHorizontal } from '../src/geppio/src/shared/grid/horizontal.ts'
+import { DEFAULT_FREEFORM, FREEFORM_KEY } from '../src/geppio/src/shared/freeform/policy.ts'
+import { convertHistorical, importFreeform } from '../src/geppio/src/shared/freeform/migration.ts'
+import { parseFreeform } from '../src/geppio/src/shared/freeform/schema.ts'
+import { readFreeform, writeFreeform } from '../src/geppio/src/shared/freeform/storage.ts'
 
 function memory() {
   const values = new Map<string, string>(), writes: string[] = []

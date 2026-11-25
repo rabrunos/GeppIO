@@ -6,7 +6,7 @@ import { mkdtemp, mkdir, rm, readFile, writeFile, rename, readdir } from 'node:f
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import { portugueseFixture, settle } from './freeform-smoke.ts'
-import { IDENTITY } from '../src/shared/identity.ts'
+import { IDENTITY } from '../src/geppio/src/shared/identity.ts'
 
 const profile = await mkdtemp(join(tmpdir(), 'geppio-smoke-essentials-'))
 const diagnostics = '.local/diagnostics/workspace-essentials-alpha21'

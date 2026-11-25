@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { resolve } from 'node:path'
 import { readFileSync } from 'node:fs'
-import { rendererAsset, validatedDevURL, PRODUCTION_CSP } from '../src/main/security.ts'
+import { rendererAsset, validatedDevURL, PRODUCTION_CSP } from '../src/geppio/src/main/security.ts'
 const root = resolve('out/renderer')
 test('custom protocol resolves only known renderer file types within root', () => {
   assert.equal(rendererAsset(root, 'geppio://app/')?.path, resolve(root, 'index.html'))
@@ -19,11 +19,11 @@ test('production script CSP is not the development inline-script policy', () => 
   assert.ok(!PRODUCTION_CSP.includes('unsafe-eval'))
 })
 test('static security regression: renderer has only fixed management, activation-bound data and authorized window chrome', () => {
-  const preload = readFileSync('src/preload/index.ts', 'utf8'), main = readFileSync('src/main/index.ts', 'utf8')
+  const preload = readFileSync('src/geppio/src/preload/index.ts', 'utf8'), main = readFileSync('src/geppio/src/main/index.ts', 'utf8')
   assert.ok(!/child_process|node:fs|sendSync|\.send\(/.test(preload))
   assert.deepEqual([...preload.matchAll(/ipcRenderer.invoke\('([^']+)'/g)].map(match => match[1]), ['plugins:list', 'plugins:install', 'plugins:install-file', 'plugins:set-developer-mode', 'plugins:reload', 'plugins:link', 'plugins:set-enabled', 'plugins:remove', 'window:minimize', 'window:maximize', 'window:close', 'plugin-data:begin', 'plugin-data:read', 'plugin-data:write', 'plugin-data:end', 'document:create', 'document:saveAs', 'document:saveAll', 'document:open', 'document:save', 'document:reload', 'document:release', 'document:activate', 'document:close', 'explorer:select', 'explorer:list', 'explorer:open', 'explorer:release', 'explorer:create-file', 'explorer:create-directory', 'explorer:rename-file', 'terminal:read', 'terminal:start', 'terminal:input', 'terminal:resize', 'terminal:close', 'git:status', 'git:compare', 'git:stage', 'git:unstage', 'git:history', 'git:historyPage', 'git:historyCommit', 'git:historyCompare', 'search:start', 'search:read', 'search:cancel', 'search:open', 'search:preview', 'search:applyFile', 'workspace:read', 'workspace:readTools', 'workspace:restore', 'workspace:standalone', 'workspace:configure', 'workspace:forget', 'workspace:remember', 'draft-recovery:read', 'draft-recovery:snapshot', 'draft-recovery:restore', 'draft-recovery:configure', 'draft-recovery:clear', 'portable-layout:import', 'portable-layout:export', 'quick-open:start', 'quick-open:read', 'quick-open:cancel', 'quick-open:open'])
-  assert.doesNotMatch(readFileSync('sdk/plugin.d.ts', 'utf8'), /PortableLayoutBridge|portable-layout:/)
-  const documents = readFileSync('src/main/document-bridge.ts', 'utf8')
+  assert.doesNotMatch(readFileSync('src/plugin-sdk/src/plugin.d.ts', 'utf8'), /PortableLayoutBridge|portable-layout:/)
+  const documents = readFileSync('src/geppio/src/main/document-bridge.ts', 'utf8')
   assert.match(documents, /event.sender !== win.webContents/)
   assert.match(documents, /frame !== win.webContents.mainFrame/)
   assert.match(documents, /frame\?\.url !== expectedURL/)
@@ -32,15 +32,15 @@ test('static security regression: renderer has only fixed management, activation
   assert.match(documents, /validSearchRequest\(operation, args\)/)
   assert.match(documents, /validQuickOpenRequest\(operation, args\)/)
   assert.match(documents, /validExplorerMutationRequest\(args, operation\)/)
-  assert.doesNotMatch(readFileSync('sdk/plugin.d.ts', 'utf8'), /explorer:(create-file|create-directory|rename-file)|ExplorerMutationResult/)
-  assert.doesNotMatch(readFileSync('sdk/plugin.d.ts', 'utf8'), /QuickOpenBridge|quick-open:/)
-  assert.doesNotMatch(readFileSync('sdk/plugin.d.ts', 'utf8'), /SearchBridge|search:(start|read|cancel|open)/)
-  const terminal = readFileSync('src/main/terminal-bridge.ts', 'utf8')
+  assert.doesNotMatch(readFileSync('src/plugin-sdk/src/plugin.d.ts', 'utf8'), /explorer:(create-file|create-directory|rename-file)|ExplorerMutationResult/)
+  assert.doesNotMatch(readFileSync('src/plugin-sdk/src/plugin.d.ts', 'utf8'), /QuickOpenBridge|quick-open:/)
+  assert.doesNotMatch(readFileSync('src/plugin-sdk/src/plugin.d.ts', 'utf8'), /SearchBridge|search:(start|read|cancel|open)/)
+  const terminal = readFileSync('src/geppio/src/main/terminal-bridge.ts', 'utf8')
   assert.match(terminal, /event.sender !== win.webContents/)
   assert.match(terminal, /event.senderFrame !== win.webContents.mainFrame/)
   assert.match(terminal, /event.senderFrame\?\.url !== expectedURL/)
   assert.match(terminal, /validTerminalRequest\(operation, args\)/)
-  assert.doesNotMatch(readFileSync('sdk/plugin.d.ts', 'utf8'), /DocumentBridge|document:open|ExplorerBridge|explorer:|TerminalBridge|terminal:|GitBridge|git:status|git:compare|git:stage|git:unstage|git:history/)
+  assert.doesNotMatch(readFileSync('src/plugin-sdk/src/plugin.d.ts', 'utf8'), /DocumentBridge|document:open|ExplorerBridge|explorer:|TerminalBridge|terminal:|GitBridge|git:status|git:compare|git:stage|git:unstage|git:history/)
   assert.match(main, /event.senderFrame !== event.sender.mainFrame/)
   assert.match(main, /sandbox: true/); assert.match(main, /contextIsolation: true/)
   assert.match(main, /nodeIntegration: false/); assert.match(main, /webviewTag: false/)

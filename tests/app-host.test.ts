@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { DEFAULT_EXPERIENCE, EXPERIENCES, experienceTransition, officialApp } from '../src/renderer/src/apps/registry.ts'
+import { DEFAULT_EXPERIENCE, EXPERIENCES, experienceTransition, officialApp } from '../src/geppio/src/renderer/src/apps/registry.ts'
 import { selectSuite } from '../tools/isolation/plan.ts'
 
 test('Workbench is the default experience independently of the official App registry', () => {

@@ -1,13 +1,13 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { initialWorkbench, modelId, groupFor, activePlacements } from '../src/shared/workbench/model.ts'
-import type { Registry, WidgetType } from '../src/shared/workbench/model.ts'
-import { groupTransferPlan, detachWidget, validateGroups } from '../src/shared/workbench/groups.ts'
-import { moveView, configureBar, deleteBar } from '../src/shared/workbench/commands.ts'
-import { serializeWorkbench, parseWorkbench } from '../src/shared/workbench/codec.ts'
-import { captureComposition, applyComposition } from '../src/shared/workbench/compositions.ts'
-import { readWorkbench } from '../src/shared/workbench/storage.ts'
-import { WORKBENCH_KEY } from '../src/shared/workbench/model.ts'
+import { initialWorkbench, modelId, groupFor, activePlacements } from '../src/geppio/src/shared/workbench/model.ts'
+import type { Registry, WidgetType } from '../src/geppio/src/shared/workbench/model.ts'
+import { groupTransferPlan, detachWidget, validateGroups } from '../src/geppio/src/shared/workbench/groups.ts'
+import { moveView, configureBar, deleteBar } from '../src/geppio/src/shared/workbench/commands.ts'
+import { serializeWorkbench, parseWorkbench } from '../src/geppio/src/shared/workbench/codec.ts'
+import { captureComposition, applyComposition } from '../src/geppio/src/shared/workbench/compositions.ts'
+import { readWorkbench } from '../src/geppio/src/shared/workbench/storage.ts'
+import { WORKBENCH_KEY } from '../src/geppio/src/shared/workbench/model.ts'
 const ids = ['a','b','c','d','e'].map(id => `host:${id}:view:main`)
 // Controlled host declarations exist only in this fixture; real plugin eligibility is unchanged.
 function fixture(eligible: number[], hosts = [0,1,2,3,4]) {

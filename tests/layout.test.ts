@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { validRect, overlaps, canPlace, moveRect, resizeRect, snapMove, decodeLayout, MAX_LAYOUT_BYTES } from '../src/shared/layout.ts'
-import { DEFAULT_LAYOUT, MINIMUMS, WIDGETS } from '../src/renderer/src/fixtures.ts'
+import { validRect, overlaps, canPlace, moveRect, resizeRect, snapMove, decodeLayout, MAX_LAYOUT_BYTES } from '../src/geppio/src/shared/layout.ts'
+import { DEFAULT_LAYOUT, MINIMUMS, WIDGETS } from '../src/geppio/src/renderer/src/fixtures.ts'
 const rect = { x: .1, y: .2, width: .25, height: .3 }
 const ids = DEFAULT_LAYOUT.placements.map(p => p.id)
 test('ten fixtures exist; initial seven-main composition fits without overlaps', () => {

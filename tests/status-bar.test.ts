@@ -2,9 +2,9 @@ import { unusedDocumentAuthoring } from './document-authoring-fixture.ts'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
-import { documentCursor, documentEOL, documentLanguage } from '../src/shared/document-status.ts'
-import { EditorSession } from '../src/renderer/src/files-editor/session.ts'
-import type { DocumentBridge, DocumentSnapshot } from '../src/shared/documents.ts'
+import { documentCursor, documentEOL, documentLanguage } from '../src/geppio/src/shared/document-status.ts'
+import { EditorSession } from '../src/geppio/src/renderer/src/files-editor/session.ts'
+import type { DocumentBridge, DocumentSnapshot } from '@geppio/runtime/documents'
 
 test('EOL and cursor reflect actual bytes and normalized editor selection coordinates', () => {
   for (const [text, expected] of [['', 'Sem EOL'], ['x\n', 'LF'], ['x\r\n', 'CRLF'], ['x\r', 'CR'], ['x\r\ny\nz\r', 'Misto']]) assert.equal(documentEOL(text!), expected)

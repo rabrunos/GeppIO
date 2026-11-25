@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import test from 'node:test'
-import { validExplorerBasename, validExplorerMutationRequest } from '../src/shared/explorer.ts'
+import { validExplorerBasename, validExplorerMutationRequest } from '../src/geppio/src/shared/explorer.ts'
 
 test('Explorer writes accept only a literal Windows basename and two opaque IDs', () => {
   const root = randomUUID(), item = randomUUID()

@@ -24,32 +24,30 @@ work with direct tests. Complex architecture/security needs XHigh or the highest
 supported setting. Prompt text does not change model settings; report requested/effective
 values honestly. Never lower security or validation to fit a consumption preset.
 
-Scout is a bounded read-only investigator; Worker performs explicitly delegated mechanical
-work. Default to no delegation. No recursive fan-out or permanent reviewer. The configured
-models inherit the available signed-in client model; no unavailable model or paid API is presumed.
+Use the [project skills and roles](docs/.ai/execution.md) for bounded independent tasks.
+The primary integrates. Serialize shared files and desktop interactions. No recursive fan-out
+or permanent reviewer. Role instructions do not override inherited technical permissions.
 
 ## Product boundaries
 
-Keep source separated into main/preload/renderer/shared. Widgets use region-aware continuous CSS-pixel geometry
+Keep native, preload, renderer and pure-library ownership separate. Widgets use region-aware continuous CSS-pixel geometry
 (Issue #29), bounded by default with optional content-bounded horizontal expansion. Main edits both
 axes; Sidebar follows width with vertical-only scrolling; Bottom follows height and never scrolls.
 Stable-source viewport projections never
 write saved layouts; historical cell-grid data remains preserved. Trial visual policies still
 require owner acceptance.
-The alpha.1 static fixtures remain; alpha.2 added a trusted experimental local plugin runtime
-with managed packages, disposable Web Workers and declarative widgets (Issue #21). It is not a
-secure untrusted-plugin platform. Preserve its existing authority and lifecycle boundaries;
-see [plugin boundaries](docs/architecture/plugins.md) for current limitations and future gates.
+Preserve the accepted authority and lifecycle of existing plugins and their data. Check the
+implemented isolation and resource-loading boundary before changing trust assumptions.
+See [plugin boundaries](docs/architecture/plugins.md) for the current supported paths.
 Do not add Node, Electron, filesystem, process execution or arbitrary IPC to the renderer.
 Accounts, telemetry, a backend, a vault, SQLite, PTY, code injection, WebContentsView and new
 plugin capabilities require their own approved task and safety controls.
 
 The active host also owns catalog/views, bars, compositions, reservations and session history.
 Individual widget gestures require Edit mode; normal-mode adjacent-pair resize has its own
-validated transaction. Keep host metadata separate from manifest v1 author APIs. Synthetic
-fixtures, display-only project/Git/profile controls and the presentation panel are not real IDE
-tools. Windows/Linux is the recorded direction, while current app validation is Windows x64;
-do not report the Ubuntu secrets job as Linux application support.
+validated transaction. Keep host metadata separate from manifest v1 author APIs. Distinguish
+fixture controls from real native integrations. Current app validation is Windows x64. The
+Ubuntu secrets job provides no application smoke evidence.
 
 Before any new deliberate external-library or copied/adapted source adoption, follow the
 individual owner-approval gate in TASK_POLICY and Issue #19. The owner prefers project-owned

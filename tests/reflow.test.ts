@@ -1,8 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { allowsResize, canPlace, moveRect, reflow, RESIZE_DIRECTIONS, resizeDirectional } from '../src/shared/layout.ts'
-import type { LayoutConstraint, Placement } from '../src/shared/layout.ts'
-import { DEFAULT_LAYOUT, MAIN_CONSTRAINTS } from '../src/shared/layout-defaults.ts'
+import { allowsResize, canPlace, moveRect, reflow, RESIZE_DIRECTIONS, resizeDirectional } from '../src/geppio/src/shared/layout.ts'
+import type { LayoutConstraint, Placement } from '../src/geppio/src/shared/layout.ts'
+import { DEFAULT_LAYOUT, MAIN_CONSTRAINTS } from '../src/geppio/src/shared/layout-defaults.ts'
 
 const constraint: LayoutConstraint = { min: { width: .1, height: .1 }, max: { width: .8, height: .8 }, resizeX: true, resizeY: true }
 const constraints = (ps: Placement[], overrides: Record<string, Partial<LayoutConstraint>> = {}) => Object.fromEntries(ps.map(p => [p.id, { ...constraint, ...overrides[p.id] }]))
