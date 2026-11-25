@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="440" viewBox="0 0 1280 440" role="img" aria-labelledby="title description">
+  <title id="title">GeppIO — seu espaço de trabalho, do seu jeito</title>
+  <desc id="description">Original illustration of a modular workspace. Cream typography and orange accents on deep blue, alongside abstract note, code and checklist tiles. This is artwork, not an application screenshot.</desc>
+  <defs>
+    <linearGradient id="canvas" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#192333"/>
+      <stop offset="1" stop-color="#12161e"/>
+    </linearGradient>
+    <radialGradient id="glow">
+      <stop stop-color="#f58a30" stop-opacity=".16"/>
+      <stop offset="1" stop-color="#f58a30" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#fff7ed"/>
+      <stop offset="1" stop-color="#f4e4d3"/>
+    </linearGradient>
+    <pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse">
+      <circle cx="1" cy="1" r="1" fill="#acb7c9" fill-opacity=".1"/>
+    </pattern>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="180%" color-interpolation-filters="sRGB">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="12" result="blur"/>
+      <feOffset in="blur" dx="0" dy="12" result="offset"/>
+      <feFlood flood-color="#050a12" flood-opacity=".32" result="color"/>
+      <feComposite in="color" in2="offset" operator="in" result="drop"/>
+      <feMerge><feMergeNode in="drop"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <clipPath id="bounds"><rect width="1280" height="440" rx="26"/></clipPath>
+  </defs>
+  <g clip-path="url(#bounds)">
+    <rect width="1280" height="440" fill="url(#canvas)"/>
+    <rect x="623" width="657" height="440" fill="url(#dots)"/>
+    <ellipse cx="1080" cy="294" rx="460" ry="340" fill="url(#glow)"/>
+    <path d="M646-60V500M622 390H1340" stroke="#6a7c98" stroke-opacity=".12"/>
+    <circle cx="1120" cy="231" r="254" fill="none" stroke="#f49a56" stroke-opacity=".1"/>
+    <circle cx="1120" cy="231" r="296" fill="none" stroke="#f49a56" stroke-opacity=".05"/>
+
+    <g font-family="Segoe UI, Arial, sans-serif">
+      <g transform="translate(80 66)">
+        <rect width="28" height="28" rx="6" fill="#f49a56"/>
+        <rect x="35" width="18" height="12" rx="4" fill="#f49a56" fill-opacity=".55"/>
+        <rect x="35" y="19" width="18" height="28" rx="4" fill="#f49a56" fill-opacity=".85"/>
+        <rect y="35" width="28" height="12" rx="4" fill="#f49a56" fill-opacity=".4"/>
+        <text x="75" y="30" fill="#acb7c9" font-size="17" font-weight="600" letter-spacing="3">WORKBENCH MODULAR</text>
+      </g>
+      <text x="73" y="244" fill="#fbf9f6" font-size="142" font-weight="700" letter-spacing="-8">Gepp<tspan fill="#f49a56">IO</tspan></text>
+      <text x="82" y="299" fill="#c7ced9" font-size="28" letter-spacing="-.5">Seu espaço. Do seu jeito.</text>
+      <path d="M82 354H133" stroke="#f49a56" stroke-width="4" stroke-linecap="round"/>
+      <text x="149" y="361" fill="#8f9db1" font-size="17" letter-spacing="1">LOCAL · EXTENSÍVEL · MODULAR</text>
+    </g>
+
+    <g transform="translate(710 66)">
+      <rect x="0" y="0" width="452" height="308" rx="20" fill="#1b2432" stroke="#354153"/>
+      <path d="M0 44H452M64 44V308" stroke="#354153"/>
+      <circle cx="21" cy="22" r="4" fill="#f49a56"/>
+      <circle cx="36" cy="22" r="4" fill="#acb7c9" fill-opacity=".3"/>
+      <circle cx="51" cy="22" r="4" fill="#acb7c9" fill-opacity=".3"/>
+      <path d="M83 22H179M353 22H427" stroke="#58667c" stroke-width="5" stroke-linecap="round"/>
+      <rect x="17" y="65" width="30" height="30" rx="8" fill="#f49a56" fill-opacity=".14"/>
+      <g fill="none" stroke="#f49a56" stroke-width="1.8">
+        <rect x="25" y="73" width="5" height="5" rx="1"/>
+        <rect x="34" y="73" width="5" height="5" rx="1"/>
+        <rect x="25" y="82" width="5" height="5" rx="1"/>
+        <rect x="34" y="82" width="5" height="5" rx="1"/>
+      </g>
+      <g fill="none" stroke="#728198" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M24 119H31L34 123H41V135H24Z"/>
+        <path d="M28 158L22 164L28 170M37 158L43 164L37 170"/>
+        <circle cx="32" cy="273" r="7"/>
+        <path d="M32 263V266M32 280V283M22 273H25M39 273H42"/>
+      </g>
+      <rect x="84" y="65" width="166" height="114" rx="12" fill="#263244"/>
+      <path d="M104 88H173M104 106H225M104 119H209" stroke="#697d97" stroke-width="6" stroke-linecap="round"/>
+      <path d="M104 144H149" stroke="#f49a56" stroke-opacity=".7" stroke-width="6" stroke-linecap="round"/>
+      <rect x="84" y="197" width="166" height="91" rx="12" fill="#263244"/>
+      <g fill="none" stroke="#65cba1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M103 220L107 224L114 216M103 243L107 247L114 239"/>
+      </g>
+      <path d="M127 220H222M127 243H203" stroke="#697d97" stroke-width="5" stroke-linecap="round"/>
+      <circle cx="108" cy="266" r="4" fill="none" stroke="#697d97" stroke-width="2"/>
+      <path d="M127 266H215" stroke="#697d97" stroke-width="5" stroke-linecap="round"/>
+      <rect x="269" y="65" width="162" height="223" rx="12" fill="#151d2a" stroke="#364357" stroke-dasharray="5 6"/>
+    </g>
+
+    <g transform="translate(1011 108) rotate(7 83 99)" filter="url(#shadow)">
+      <rect width="172" height="214" rx="16" fill="url(#tile)"/>
+      <rect x="20" y="20" width="36" height="36" rx="10" fill="#f58a30"/>
+      <path d="M35 30L29 38L35 46M42 30L48 38L42 46" fill="none" stroke="#fff9f1" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M76 33H137M76 44H112" stroke="#bd9f84" stroke-width="5" stroke-linecap="round"/>
+      <path d="M23 84H80M37 103H128M37 122H109M23 141H70" stroke="#243852" stroke-width="6" stroke-linecap="round"/>
+      <path d="M92 84H135M78 141H132" stroke="#da7b35" stroke-width="6" stroke-linecap="round"/>
+      <rect x="21" y="166" width="130" height="27" rx="8" fill="#132b4e" fill-opacity=".07"/>
+      <circle cx="37" cy="180" r="4" fill="#26866b"/>
+      <path d="M51 180H111" stroke="#7e8a89" stroke-width="4" stroke-linecap="round"/>
+    </g>
+    <g transform="translate(940 345)">
+      <rect width="144" height="39" rx="19.5" fill="#f49a56"/>
+      <path d="M18 19.5H30M24 13.5V25.5" stroke="#132b4e" stroke-width="2" stroke-linecap="round"/>
+      <text x="42" y="25.5" fill="#132b4e" font-family="Segoe UI, Arial, sans-serif" font-size="17" font-weight="650">seu widget</text>
+    </g>
+    <rect x=".5" y=".5" width="1279" height="439" rx="25.5" fill="none" stroke="#acb7c9" stroke-opacity=".13"/>
+  </g>
+</svg>

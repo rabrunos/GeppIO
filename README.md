@@ -1,345 +1,79 @@
+<p align="center">
+  <img src="docs/assets/geppio-banner.svg" width="1280" alt="GeppIO — seu espaço de trabalho, do seu jeito. Ilustração de módulos em azul e laranja.">
+</p>
+
 # GeppIO
 
-Workbench desktop local com widgets e plugins modulares. O nome do produto é **GeppIO**;
-o namespace técnico é `geppio`. A base usa Electron, TypeScript e React. O projeto mantém
-seus componentes visuais e usa Monaco para edição. A direção de UI e as decisões de adoção
-externa estão registradas nas issues [#8](https://github.com/rabrunos/GeppIO/issues/8) e [#39](https://github.com/rabrunos/GeppIO/issues/39).
+**Suas ferramentas, no espaço que você organiza.**
 
-O workbench tem geometria contínua, catálogo, barras, composições, histórico de edição e
-persistência de layout. Há um runtime experimental real para plugins locais confiáveis.
-O perfil novo abre Main, Sidebar e Bottom vazios; escolha widgets dos plugins instalados
-no catálogo. Os sete demos foram retirados do uso normal. Layouts anteriores preservam
-plugins, barras e composições; referências dos demos ficam guardadas para recuperação.
-Na alpha.47, o menu **Projeto local** abre, troca e fecha uma pasta real; o cabeçalho acompanha
-essa raiz e o Git. Trocar/fechar projeto mantém abas, rascunhos e o Terminal já aberto. **Abrir
-arquivo avulso** deixa o contexto do projeto após a escolha e revela o Editor; cancelar mantém tudo.
-O próximo Terminal inicia na pasta autorizada; sem projeto válido, usa a pasta pessoal. O Terminal
-em execução conserva seu diretório e processo. Não há execução automática de scripts do projeto.
-**Lembrar projeto e abas salvas** guarda metadados locais e oferece restauração após reiniciar,
-com nova confirmação nativa. Arquivos alterados exigem uma decisão; nada é sobrescrito pela
-restauração. Desmarque a opção ou use **Esquecer recuperação local** para remover essa lembrança.
-**Rascunhos não salvos e desfazer/refazer não sobrevivem a uma falha/reinício**; a proteção ao
-fechar normalmente continua. Veja [restauração, privacidade e limites](docs/architecture/workspace.md).
-Arquivos & Editor oferece até oito abas de arquivos UTF-8, com limite de 1 MiB
-por arquivo e 8 MiB de fonte na sessão. Cada aba preserva rascunho, linguagem, desfazer/refazer
-e posição; **Ctrl+S** salva apenas a ativa. Abrir outro arquivo não salva o anterior. Fechar
-uma aba alterada pede Salvar/Descartar/Cancelar; fechar a janela protege também abas inativas.
-O editor guarda cópias de recuperação em texto simples no perfil por padrão. Em **Recuperação ativa**, você pode desativar ou limpar as cópias. Ao reabrir, escolha **Recuperar** e use **Salvar como** para escolher um destino. Uma interrupção pode perder as últimas teclas.
-O histórico tem limite explícito e, ao atingi-lo,
-orienta salvar ou copiar e fechar/reabrir, sem expulsar abas. Veja os [limites de edição](docs/architecture/documents.md).
-O Explorador usa uma pasta local selecionada em diálogo nativo. No modo Editor, o Explorador
-ocupa a Sidebar; no modo Widgets, coloque seu widget explicitamente em Main ou Sidebar.
-A árvore e as abas são compartilhadas; trocar de pasta conserva os arquivos abertos. Use **Atualizar árvore** após mudanças no disco ou
-antes de reabrir um item cujo arquivo foi substituído ao salvar. A navegação aceita até 512
-entradas por pasta e 32 níveis; não cria, move nem exclui arquivos. Veja os [limites](docs/architecture/explorer.md).
-No GeppIO Code, abra **Busca no projeto**, digite um trecho e pressione **Enter**. A busca lê o
-texto salvo na pasta selecionada. Os resultados mostram arquivo, linha e coluna. Abrir uma
-ocorrência preserva o rascunho e o histórico da aba. Veja os [limites da busca](docs/architecture/search.md).
-Em **Filtrar arquivos**, use `src/` para uma pasta ou `src/editor.ts` para um arquivo. Em **Extensões**,
-use, por exemplo, `ts, md`. Execute a busca, abra **Substituir ocorrências**, marque os resultados e
-escolha **Gerar prévia**. Confira os arquivos antes de confirmar. Abas com alterações pendentes ficam
-fora da prévia. A lista final informa quais arquivos foram gravados e onde a operação parou.
-Use **Abrir busca em janela** na atividade ou no menu do projeto para manter a busca ao lado
-de **Alterações Git**. Em **Mover janela**, pressione Enter ou Espaço e use as setas.
-Shift move dez pixels por vez. Enter confirma a posição e Escape restaura a anterior.
-Na alpha.44, **Alterações Git** consulta a raiz exata selecionada no Explorador, mostra branch,
-índice, alterações no disco e arquivos novos. Está no catálogo (Main/Sidebar) e nas atividades
-do modo Editor. **Atualizar Git** renova os dados; selecionar um arquivo compatível abre a
-comparação Monaco somente leitura de **HEAD para o arquivo salvo**, sem incluir seu rascunho.
-**Preparar** e **Despreparar** alteram apenas a entrada escolhida no índice real. Preparar usa
-o arquivo salvo, com conversões internas de EOL/atributos aceitas pelo Git isolado; nunca salva
-o rascunho. Renomes, conflitos, índices especiais e conteúdo acima de 256 KiB não permitem
-essas ações. Em caso de interrupção, atualize para conferir o resultado; não há repetição ou
-reversão automática. Tudo funciona localmente, sem conta GitHub/GitLab ou acesso remoto.
-O piloto usa Git para Windows instalado em Arquivos de Programas, ignora configuração global e
-recusa formatos/limites não suportados. Veja [segurança e limites](docs/architecture/git.md).
-Na alpha.48, árvores não rastreadas e ignoradas pelo Git são podadas antes da navegação nativa:
-dependências pnpm e outros diretórios gerados podem conter junctions/hardlinks sem impedir o
-status dos arquivos versionados. Regras de ignore continuam sendo decididas pelo Git instalado,
-inclusive quando há arquivos versionados sob uma pasta ignorada. Isso não libera Preparar ou
-comparar arquivos inseguros: índices especiais, links visíveis não confirmados, filtros ativos e
-metadados redirecionados continuam sujeitos a recusas específicas. Não há reparo automático.
-O Workspace local, Terminal e editor Monaco já são reais; IDE completa, ChatGPT, Codex e GitLayer
-continuam propostas. Não há conta GeppIO, backend,
-sincronização em nuvem ou API paga de IA.
+Um aplicativo desktop local que reúne widgets, código e plugins. Monte seu ambiente de trabalho,
+salve composições e crie novas ferramentas sobre uma base modular feita com Electron, React e TypeScript.
 
-Windows é o primeiro alvo validado. A direção de produto inclui Windows e Linux, mas não há
-validação equivalente do aplicativo Linux nem distribuição pronta para esses sistemas.
-`pnpm build` gera artefatos locais; não gera instalador, assinatura ou release.
+[Começar](#comece-no-windows) · [Criar plugins](#crie-para-o-geppio) · [Arquitetura](docs/architecture/overview.md) · [Roadmap](https://github.com/rabrunos/GeppIO/issues/2)
 
-## Começar no checkout existente
+> **Em desenvolvimento alpha.** O aplicativo é validado em Windows x64. Outras plataformas ainda fazem parte do planejamento.
 
-Use **Node.js 24.x**, **pnpm 11.25.0** e Git. O repositório já inclui o lockfile real.
-Na raiz do checkout, em PowerShell:
+## Um espaço, várias possibilidades
+
+- **Organize com widgets.** Mova, redimensione e agrupe ferramentas compatíveis em abas. Use a área principal,
+  a lateral e a inferior; salve composições para retomar uma organização.
+- **Trabalhe com código.** O GeppIO Code reúne editor Monaco, Explorador de arquivos, busca e
+  substituição, Git local e Terminal. Abas e dois grupos de edição compartilham os documentos.
+- **Crie suas ferramentas.** Desenvolva interfaces próprias, atualize plugins pela pasta de origem
+  e conecte suas funções por permissões explícitas.
+- **Leve uma composição para outro app.** O gerador Standalone cria aplicativos Windows x64 com
+  notas, contadores e superfícies de plugins selecionadas, com identidade e dados independentes.
+
+## Comece no Windows
+
+Tenha **Node.js 24.x**, **pnpm 11.25.0** e **Git para Windows** instalados.
 
 ```powershell
-node --version
-npm install --global pnpm@11.25.0
-node --experimental-strip-types tools/doctor.ts
+git clone https://github.com/rabrunos/GeppIO.git
+cd GeppIO
 pnpm install --frozen-lockfile
 pnpm run doctor
-pnpm check
 pnpm dev
 ```
 
-Ignore a instalação global se a versão indicada já estiver disponível. O diagnóstico anterior
-à instalação pode informar dependências ausentes; repita-o depois de instalar. `pnpm run doctor`
-é o diagnóstico do projeto; `pnpm doctor` pode selecionar o comando nativo do gerenciador.
-A invocação direta pelo Node evita o preflight de dependências que o pnpm pode iniciar antes
-de scripts. Não gere outro lockfile nem altere versões para contornar um erro de instalação.
+O primeiro perfil começa vazio: ative plugins e escolha seus widgets no catálogo.
+[Experimente os widgets locais](docs/usage/local-widgets.md) ou consulte o
+[guia de desenvolvimento](docs/development/local.md) para preparar o ambiente, compilar e testar.
 
-A primeira instalação precisa de internet para os pacotes e o binário do Electron. Depois
-do preparo, esta base local não exige serviço externo. Consulte a lista de comandos e os detalhes
-em [desenvolvimento local](docs/development/local.md).
+## Crie para o GeppIO
 
-Para abrir o código compilado ou executar a suíte desktop em perfil descartável:
+Na **API 3**, a interface usa HTML e CSS, com código em JavaScript ou TypeScript preparado pelo host.
+Carregue a pasta em **Modo desenvolvedor**, edite os arquivos e clique em **Atualizar** no aplicativo.
+Os exemplos [Quadro](examples/standalone/plugins/board) e [Carimbo](examples/standalone/plugins/stamp)
+mostram superfícies próprias e comunicação entre plugins.
 
-```powershell
-pnpm build
-pnpm start
-pnpm test:desktop
-```
+Essas superfícies são isoladas e conversam por canais autorizados. Os contratos anteriores, **API 1/2**,
+continuam destinados a plugins locais confiáveis. O piloto de pacotes **`.gpp` assinados** verifica
+os arquivos e o publicador conforme as chaves autorizadas pelo aplicativo.
 
-Esses comandos não representam resultados já obtidos nesta máquina. Evidências por commit,
-limites dos testes e aceites estão nas issues e no [guia de validação](docs/development/testing.md).
+[Superfícies e comunicação](docs/architecture/plugin-surfaces.md) · [Pacotes .gpp](docs/architecture/plugin-package.md) · [Gerar um Standalone](src/geppio-standalone/README.md)
 
-## Workspace Essentials local
+## Uma base em seis módulos
 
-O piloto de arquivo assinado usa **Instalar arquivo assinado** no mesmo painel Plugins e verifica
-Ed25519 antes de confirmar. A instalação nova começa desativada; a adoção de uma pasta com arquivos
-idênticos preserva identidade, ativação, dados e posições. A chave pública Ed25519 do proprietário,
-verificada e autorizada em 13/11/2026, é confiável somente para `geppio.workspace-essentials`.
-Consulte o [formato, comandos de assinatura e roteiro Windows](docs/architecture/plugin-package.md).
-`pnpm test:plugin-package` usa chaves temporárias em um host de teste separado e comprova sua recusa
-pelo build normal. A instalação de pasta abaixo continua sendo uma ação de desenvolvimento confiável.
-
-Execute `pnpm plugins:build` e abra o aplicativo com `pnpm start` após `pnpm build`.
-Abra o menu do perfil e **Configurações > Desenvolvimento e recuperação > Plugins > Instalar
-pasta local**. Selecione `.local/plugin-packages/workspace-essentials` e clique **Ativar** em
-**Workspace Essentials**. O menu **Plugins** do cabeçalho oferece o mesmo gerenciamento.
-Entre em **Editar layout**, escolha cada widget no catálogo, selecione uma área compatível e conclua.
-Ativar não adiciona widgets automaticamente. Anotações, Checklist e Prompts salvos aceitam
-Main, Sidebar e Bottom; Rascunho permanece apenas na Main. Na Bottom, selecione e leia
-anotações/prompts ou marque itens do checklist; os editores completos ficam na Main e na Sidebar.
-
-- **Anotações:** use **Nova anotação**, edite título/texto e selecione outra anotação na lista.
-- **Rascunho:** digite o texto; o autosave agrupa alterações por 500 ms. Aguarde **Salvo.**
-- **Checklist:** escreva em **Novo item**, clique **Adicionar item** e marque a conclusão.
-- **Prompts salvos:** use **Novo prompt**, edite título/texto e clique **Copiar prompt**.
-  Se a política de clipboard impedir a cópia, selecione o texto e copie manualmente.
-
-Os dados confirmados voltam ao reabrir, reiniciar e desativar/reativar a mesma instalação.
-Remover um widget da Main preserva seus dados. Desinstalar também mantém o arquivo recuperável,
-mas uma reinstalação recebe outra identidade e não herda os dados antigos. Não há transferência
-ou exclusão automática. Em falha, o texto pendente continua disponível na ativação: tente salvar
-novamente ou copie-o antes de fechar. Bytes inválidos/incompatíveis são preservados e bloqueiam
-gravação; consulte [retenção e recuperação](docs/architecture/plugin-data.md).
-São dados locais comuns, sem criptografia de credenciais ou isolamento contra plugins hostis.
-
-Teste focado em perfil descartável: `pnpm test:essentials`. O contrato v1 de Counter/Pulse permanece.
-
-## Time Tracker local
-
-Após `pnpm plugins:build`, instale `.local/plugin-packages/time-tracker` pelo mesmo menu
-**Plugins** e ative **Time Tracker**. Adicione **Cronômetro** e **Relatórios de tempo**
-explicitamente em qualquer uma das três áreas. Os dois compartilham um histórico por instalação.
-**Iniciar** começa a contagem por horário; ela continua ao ocultar o widget ou fechar o app
-e termina em **Pausar**. Aguarde **Salvo.**; em falha, use **Tentar salvar novamente**.
-O relatório oferece totais locais dos últimos sete dias e sessões paginadas, até 200 intervalos.
-Sidebar e Bottom mostram resumos compactos. Teste focado: `pnpm test:time-tracker`.
-
-## Alinhar, agrupar e maximizar na Main
-
-Em **Editar layout**, arraste um widget Normal para ver guias próximas de bordas e centros.
-As bordas e os cantos de resize também alinham, mantendo a borda oposta fixa. A guia
-tracejada de **10px** mostra o espaçamento entre bordas, inclusive antes de os widgets
-se encontrarem no outro eixo. Afaste o ponteiro para liberar o snap.
-Para agrupar Anotações, Checklist e Prompts salvos, arraste **Abas** até **Agrupar** no
-cabeçalho de outro widget compatível. Também é possível clicar **Abas** e escolher o destino.
-Amplie um alvo pequeno antes de agrupar. No grupo, troque de aba pelo título; em Editar,
-use as setas para reordenar ou **Separar aba** para voltar a um frame próprio, quando houver espaço.
-**Salvar edição**, **Concluir**, **Cancelar** e desfazer/refazer preservam o contrato de edição.
-Grupos seguem a geometria da área do seu quadro. Separe uma aba para movê-la sozinha;
-separe todas antes de converter o grupo em espaços reservados de um formato.
-
-No uso normal, o botão **Maximizar** de um widget compatível ou grupo ocupa a Main útil,
-mantendo Sidebar e Bottom acessíveis. **Restaurar** retorna à disposição anterior.
-As abas continuam disponíveis durante a maximização. O conteúdo permanece montado e
-o quadro cresce sobre os demais widgets, com um blur leve somente na Main durante
-a transição. Restaurar faz o caminho inverso. Movimento reduzido usa a mudança direta.
-A apresentação maximizada é temporária. Testes focados: `pnpm test:maximize`,
-`pnpm test:alignment` e `pnpm test:groups`; acrescente `--scale125` para DPR automatizado 1,25.
-
-Grupos de abas compatíveis funcionam em Main, Bottom e nas barras principal e personalizadas da Sidebar. Em Editar layout, arraste o quadro inteiro para outra área: a prévia informa quantas abas vão e quantas ficam. A transferência preserva a ordem e só acontece se as duas partes forem válidas e houver espaço. Use o controle Abas para agrupar e Separar aba para destacar o membro selecionado.
-
-Durante **Editar layout**, o conteúdo dos widgets continua visível, mas fica bloqueado para mouse e teclado, mesmo com o painel de opções fechado. Use os cabeçalhos e controles para mover, redimensionar, agrupar e trocar abas. **Concluir** ou **Cancelar** libera o conteúdo novamente; rascunhos já aceitos e cronômetros continuam preservados. Teste focado: `pnpm test:edit-lock`.
-
-## O que existe no workbench
-
-Cabeçalho fixo, barra contextual, Sidebar, Main, Bottom e barra de status compõem o shell.
-Minimizar, maximizar e fechar operam a janela Electron real; maximizar a janela não maximiza
-um widget dentro da Main. Tema claro/escuro, idioma e movimento reduzido fazem parte do host.
-
-O registro de compatibilidade preserva sete tipos sintéticos: **Panorama**, **Fila de trabalho**,
-**Biblioteca**, **Ideias em aberto**, **Atividade**, **Propriedades** e **Ritmo**. Eles ficam
-fora do catálogo e do perfil inicial normal; fixtures descartáveis exercitam leitura,
-formulários, layout e interação. Biblioteca não explora arquivos; Ritmo não mede recursos;
-Fila e Atividade não consultam tarefas ou Git. O nome do projeto é metadado local renomeável;
-`main`, `Clean`, caminho, abrir no Explorer e exportar configuração são demonstrações.
-O perfil e avatar também são visuais, sem login real.
-
-O catálogo tem busca, filtros, presença e avaliação de destino/espaço. É possível acrescentar,
-mover e trocar widgets entre regiões compatíveis sem recriar o conteúdo montado. Elegibilidade,
-restrições e multiplicidade são validadas pelo host; não implicam permissão nativa para um plugin.
-
-### Regiões e interação
-
-As posições usam pixels CSS contínuos, sem grade obrigatória de células. Main permite
-movimento bidimensional e oito direções de resize; Sidebar organiza verticalmente e acompanha
-sua largura útil; Bottom organiza horizontalmente e acompanha sua altura útil. Vizinhos podem
-ser empurrados ou comprimidos dentro dos mínimos. Reverter antes de soltar restaura a base do
-gesto; soltar consolida a referência para o próximo gesto. Tentativas impossíveis preservam uma
-prévia válida, sem sobreposição, descarte ou compactação automática dos espaços vazios.
-
-| Elemento | Medidas nominais atuais |
+| Módulo | Responsabilidade |
 | --- | --- |
-| Conteúdo Sidebar, sem rail | 180 a 430 px; inicial 283 px |
-| Rail persistente | 48 px; permanece quando o painel recolhe |
-| Sidebar flutuante | 238 px |
-| Bottom | 125 a 250 px; inicial 167 px |
-| Barra de status | 25 px, com conteúdo, fora do layout dos widgets |
+| [GeppIO](src/geppio) | Aplicativo, áreas de trabalho e serviços nativos. |
+| [Runtime](src/geppio-runtime) | Geometria, ativação e contratos compartilhados. |
+| [GeppUI](src/geppui/README.md) | Componentes, temas e comportamento visual. |
+| [Editor](src/geppio-editor/README.md) | Editor Monaco reutilizável. |
+| [Plugin SDK](src/plugin-sdk) | Contratos e comunicação para autores de plugins. |
+| [Standalone](src/geppio-standalone/README.md) | Composições em aplicativos independentes. |
 
-Os limites efetivos consideram a janela e a reserva da Main. O shell usa espaçamento de 11 px
-horizontal e 9 px vertical; Sidebar tem 15 px internos de cada lado. Widgets nativos elegíveis
-foram adaptados aos 150 px úteis da Sidebar mínima e aos 105 px úteis da Bottom mínima.
-O gap entre widgets é 10 px. Esses adaptadores não alteram os mínimos da Main ou dos legados.
+GeppUI e Editor podem ser empacotados para uso em outros projetos. Os guias de cada módulo
+explicam seus limites e a configuração; a [arquitetura](docs/architecture/overview.md) mostra como se conectam.
 
-Sidebar tem rolagem vertical própria; Bottom não rola. **Ativar expansão horizontal**, em
-**Configurações > Desenvolvimento e recuperação**, começa desligado e limita a expansão da Main
-ao conteúdo ocupado. Projeções por viewport não gravam novas posições. Conteúdo e Workers
-permanecem montados durante rolagem, transferência e recolhimento.
+## Explore o projeto
 
-Mover e redimensionar individualmente exige **Editar layout**. Divisores de pares adjacentes
-também funcionam no modo normal e confirmam uma transação bilateral própria. Divisores regionais
-e de pares mantêm teclado em produção; os atalhos experimentais de movimento/resize individual
-são exclusivos do renderer Vite de desenvolvimento. A opção **Guia e encaixe no centro** equaliza
-pares horizontais da Main e Bottom em 50%; não implementa todas as guias antigas nem bypass Alt.
+- **Para trabalhar no código:** comece pelo [guia do projeto](PROJECT_GUIDE.md).
+- **Para acompanhar a evolução:** veja o [roadmap](https://github.com/rabrunos/GeppIO/issues/2),
+  as [Issues](https://github.com/rabrunos/GeppIO/issues) e o [changelog](CHANGELOG.md).
+- **Para entender dados e limites:** consulte [documentos e recuperação](docs/architecture/documents.md),
+  [segurança](docs/architecture/security.md) e [validação](docs/development/testing.md).
 
-### Barras composições e edição
-
-Home é protegida. Barras personalizadas têm associações e posições independentes, reordenação,
-arquivamento, restauração e biblioteca. São permitidas 14 novas barras personalizadas ativas além
-de Home; documentos legados com até 20 continuam legíveis sem truncamento automático.
-
-**Salvar edição** confirma um checkpoint e mantém a edição aberta. **Cancelar** retorna ao último
-checkpoint; **Concluir** valida, confirma e sai. Desfazer e refazer registram intenções completas,
-com histórico de sessão em memória de até 256 entradas; não são backup persistido ou histórico Git.
-
-Novas composições salvam formato e associações dos widgets das áreas selecionadas. Main e Bottom
-têm escopo explícito; Sidebar contribui apenas com a largura, sem barras ou widgets. Painéis
-recolhidos começam desmarcados, mas podem ser incluídos. Restaurar preserva as áreas omitidas.
-**Formato** e **Widgets** são ações diferentes; repetir Formato pode criar reservas, preenchidas
-por catálogo ou view existente após validação de encaixe exato. Reservas transitórias não são
-widgets executáveis persistidos. Composições não salvam notas, tarefas ou sessões de futuros plugins.
-
-O envelope `geppio:workbench:v1` tem validação, Web Locks e comparação dos bytes observados para
-detectar conflitos. As chaves históricas permanecem como fontes de recuperação. Importar JSON e
-escolher uma prévia histórica são operações explícitas de desenvolvimento/recuperação; abrir a
-prévia não substitui o original. Outras preferências, como tema e idioma, usam chaves próprias,
-sem transação atômica geral.
-
-O widget demonstrativo **Propriedades** tem controles visíveis junto ao nome do projeto para
-**Normal**, **Docked**, **Overlay**, abrir/recolher e escolher a altura preferida do painel.
-Docked reserva espaço acima da Bottom; Overlay cobre Main sem reorganizar seu layout. A posição
-Normal fica reservada e o conteúdo continua montado. Para editar a geometria de Main, escolha Normal.
-Apresentação, abertura explícita, dimensões preferidas e âncora persistem no mesmo envelope, agora
-com versão 2; documentos anteriores continuam legíveis. Se Docked não couber, sua altura reduz
-até 220px; sem espaço para os mínimos, recolhe temporariamente com aviso. Ampliar restaura a
-preferência de abertura e o tamanho quando possível. Recolher explicitamente permanece salvo.
-Esse piloto não executa terminal nem amplia a API de plugins.
-
-## Plugins locais confiáveis
-
-Gere os exemplos com `pnpm plugins:build`. Em **Configurações → Desenvolvimento e recuperação →
-Plugins**, ative **Modo desenvolvedor**, use **Carregar pasta local** e selecione
-`.local/plugin-packages/counter` e `.local/plugin-packages/pulse` separadamente.
-O gerenciamento também está disponível na área de desenvolvimento das configurações.
-
-A instalação começa desativada. Counter publica contador e ação reais; Pulse executa atividade
-em segundo plano sem widget. As contribuições v1 entram no catálogo como cards **Main only** e
-**single view**, com movimentação e persistência de posição pelo host. O manifesto não oferece
-campos públicos de categoria, região, aparência ou ação na barra. O SDK v1 publica texto, ação e status;
-não concede filesystem, PTY, processos, rede remota, segredos, APIs entre plugins ou storage próprio.
-
-Remover apenas a presença do widget conserva o Worker. Desativar encerra a execução e retira a
-publicação; uma presença já salva pode continuar na cena com mensagem de pausa. Reativar reinicia
-o estado do Counter. Instalação e enabled persistem; o conteúdo próprio não ganha persistência por
-salvar o layout. Para pastas externas, recompile na mesma pasta e clique **Recarregar** explicitamente.
-O UUID, os dados confirmados e as posições permanecem; não há monitoramento ou aceitação automática.
-Desligar **Modo desenvolvedor** pausa as fontes externas e conserva a ativação desejada. Ao reiniciar,
-uma fonte ausente ou alterada fica indisponível até a recarga explícita.
-
-Cópias gerenciadas antigas oferecem **Vincular pasta original**: escolha uma pasta com exatamente
-os mesmos arquivos e bytes. A cópia antiga permanece para recuperação, sem execução automática se
-a fonte vinculada faltar. **Remover** conserva os arquivos da pasta externa. Aguarde **Salvo.** e
-conclua itens pendentes antes de recarregar/pausar. Em falha de runtime, copie os rascunhos antes
-de tentar novamente ou usar **Recarregar descartando rascunhos**.
-
-Os exemplos têm `plugin.json` e TypeScript independentes em `examples/plugins/`. Instale a pasta
-gerada de `.js`/`.json`, não a fonte. Pacotes adicionais compatíveis não exigem recompilar o Core.
-Os Workers v1/v2 destinam-se a código local confiável e compartilham autoridade de origem.
-Consulte os [limites de execução e persistência](docs/architecture/plugins.md).
-
-Para uma superfície web da **API 3**, carregue as pastas originais dos exemplos
-[Quadro](examples/standalone/plugins/board) e [Carimbo](examples/standalone/plugins/stamp).
-Ative ambos, adicione os widgets e conceda ao Carimbo os endpoints do Quadro que desejar testar
-em **Configurações → Plugins**. Edite o HTML, CSS ou script na pasta e clique **Atualizar**.
-O host prepara o código, preserva a versão anterior quando a validação falha e mostra o
-resultado da ativação. Consulte o [contrato da API 3](docs/architecture/plugin-surfaces.md).
-
-## Gerar um aplicativo e reutilizar as bibliotecas
-
-Em Windows x64, gere o exemplo em uma pasta nova com `pnpm.cmd standalone:generate examples/standalone/desk.json .local/Caderno`. Dentro dela, abra `geppio-export-desk-notes.exe`. Distribua a pasta completa para manter os recursos do Electron junto ao aplicativo. Os exemplos, a seleção de superfícies e os diretórios de dados estão no [guia Standalone](src/geppio-standalone/README.md).
-
-Para usar os controles ou o editor em outro projeto, execute `pnpm.cmd libraries:pack`. O comando mostra os caminhos dos dois arquivos `.tgz`. Instale no consumidor o pacote desejado e siga a configuração de [GeppUI](src/geppui/README.md) ou [GeppIO Editor](src/geppio-editor/README.md).
-
-## Atalhos no VS Code
-
-As tarefas **Dev**, **Start**, **Plugins** e **Check** ficam em **Terminal > Run Task**. A extensão
-recomendada **Task Buttons** (`spencerwmiles.vscode-task-buttons`) também as expõe na barra de status.
-Dev chama `pnpm dev --watch`; Start abre o preview, que deve usar o build correspondente; Plugins
-gera os exemplos e Check executa os checks completos. Instale as dependências antes de usá-las.
-
-Cada tarefa usa terminal dedicado e permite uma instância por janela. Encerre Dev/Start em
-**Terminal > Terminate Task** antes de outro comando que escreva no mesmo `out/`. A porta Vite é
-fixa; os atalhos não encerram processos iniciados por fora das tarefas.
-
-## Dados identidade e método
-
-A migração da [issue #6](https://github.com/rabrunos/GeppIO/issues/6) usa `geppio://app`,
-`window.geppio` e `%APPDATA%\geppio`. Se o destino estiver ausente, copia dados elegíveis do perfil
-`%APPDATA%\semnome` sem alterar o original. Um destino existente não é mesclado ou sobrescrito.
-Feche a versão antiga, mantenha os backups e siga o [procedimento de recuperação](docs/development/renaming.md).
-Origens de desenvolvimento e produção podem manter estados de layout independentes.
-
-| Uso | Entrada |
-| --- | --- |
-| Conversar, planejar e implementar no Codex | [PROJECT_GUIDE.md](PROJECT_GUIDE.md) e [fluxo de trabalho](docs/.ai/orchestration.md) |
-| Regras de implementação e integração | [AGENTS.md](AGENTS.md) e [política de tarefas](docs/.ai/TASK_POLICY.md) |
-| Produto e limites | [Requisitos](docs/product/requirements.md) e [arquitetura](docs/architecture/overview.md) |
-| Checks e aceites | [Validação](docs/development/testing.md) e a issue relevante |
-
-O repositório é **rabrunos/GeppIO**, ID `1409287329`. Para retomar um contrato, consulte a
-issue, confira o checkout e identifique as entregas e os critérios de aceite pendentes.
-
-`package.json` é a fonte canônica da versão; `CHANGELOG.md` registra o histórico integrado.
-**Issues mantêm tarefas, decisões, evidências e aceites.** Não há banco paralelo de status/roadmap.
-O Codex pode planejar e implementar na mesma conversa. O ChatGPT continua como apoio opcional;
-um prompt de transferência só é necessário quando solicitado ou quando o trabalho realmente muda de sessão.
-Commit e push são automáticos para entregas concluídas e validadas no escopo autorizado, salvo
-orientação explícita em contrário. A [política de tarefas](docs/.ai/TASK_POLICY.md) mantém as
-verificações de identidade, versão e dados; publicação e fechamento exigem autoridade própria. Adoção deliberada de nova biblioteca ou código
-externo requer aprovação individual conforme a [issue #19](https://github.com/rabrunos/GeppIO/issues/19);
-o gate não exige aprovação de cada nó transitivo nem invalida a stack já escolhida.
-Configuração do projeto expressa defaults solicitados; verifique os valores efetivos do cliente
-separadamente. Integração, CI e documentação não concedem aceite global do aplicativo.
+**Licença em definição.** O projeto está marcado como `UNLICENSED`; a escolha da licença
+é acompanhada na [Issue #60](https://github.com/rabrunos/GeppIO/issues/60).

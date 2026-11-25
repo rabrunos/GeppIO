@@ -2,6 +2,11 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.95] — 2026-11-25
+
+- Replace the long public README with an original illustrated header, concise pt-BR product introduction, supported quick start and links to the six modules and canonical guides.
+- Correct obsolete presentation claims, preserve the local-widget walkthrough in a focused usage guide, and make alpha/Windows and pending-license scope visible. No application behavior or dependency changes.
+
 ## [0.1.0-alpha.94] — 2026-11-25
 
 - Make direct Codex investigation, planning, implementation and validation the normal workflow, with optional ChatGPT support and requested handoffs. Keep automatic commit/push for validated in-scope work unless the owner explicitly opts out.
