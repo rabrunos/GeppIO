@@ -43,6 +43,9 @@ jobs:
       # No competing mouse/focus journeys within one interactive Windows desktop.
       - name: Sequential Electron suites with individual timings and failure status
         run: pnpm test:ci:${{ matrix.group }}
+      - name: Audit the complete locked dependency graph
+        if: ${{ !cancelled() && matrix.group == 'core' }}
+        run: pnpm audit
   # Preserve the previous required-check identity; success requires every shard AND Secrets.
   windows:
     needs: [windows-tests, secrets]

@@ -111,8 +111,8 @@ owner; alpha.49 jobs, triggers, Secrets and legacy aggregate status are unchange
 Windows x64, the normal interactive session, installed .NET compiler and permission to create a
 desktop/job are required. A locked/secure desktop, restricted execution token, Defender/EDR or
 application-control policy may block execution; report the actual refusal, never bypass policy.
-The Codex restricted token/desktop can require a bounded technical execution approval; do not
-change global Codex access or Windows settings. Repository paths containing `%` or `!` are refused
+A restricted execution token or desktop can require a bounded technical execution approval; do not
+change global client access or Windows settings. Repository paths containing `%` or `!` are refused
 because Playwright 1.56's existing Windows shell layer could expand them.
 
 Diagnostics are retained under ignored `.local/isolation/run-*`: compiler output, execution log,
@@ -139,7 +139,7 @@ checks and CI. Linux application support remains unverified.
 3. **Final integration:** run `pnpm check`, the complete required GitHub CI and the full local gates
    mandated by the contract/risk. In particular, an explicitly required uninterrupted
    `pnpm test:desktop` remains required even though CI distributes its suites across runners.
-   This advice does not waive TASK_POLICY, native/security gates or physical owner acceptance.
+   This advice does not waive project authority, native/security gates or physical owner acceptance.
 
 Classify a failure before repairing it: product regression, superseded test expectation,
 environment/runner failure, or flaky interaction/timing. Check approved behavior and historical
@@ -695,7 +695,7 @@ physical scale; assess legibility, controls, motion and pointer reachability.
 
 | Layer | Command | What it does not prove |
 | --- | --- | --- |
-| Project structure | `pnpm check:repo` or direct Node invocation of `tools/check-repo.ts` | Effective Codex config, installed graph or runtime security |
+| Project structure | `pnpm check:repo` or direct Node invocation of `tools/check-repo.ts` | Effective client permissions, installed graph or runtime security |
 | Core behavior/negative paths | `pnpm test` | React rendering, Electron launch or Windows graphics |
 | Full type analysis/lint | `pnpm typecheck`, `pnpm lint` | Correct product behavior on their own |
 | Bundling | `pnpm build` | A signed/installed product or successful GUI launch |

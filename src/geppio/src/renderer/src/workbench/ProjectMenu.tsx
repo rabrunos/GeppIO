@@ -9,7 +9,7 @@ import { OPEN_GIT_WINDOW } from '../shared-views/GitView.ts'
 import { OPEN_SEARCH_WINDOW } from '../shared-views/SearchView.ts'
 import type { SharedViewId } from '../shared-views/definition.ts'
 import { OPEN_TOOLS_WINDOW, TOOLS_SHARED_VIEW } from '../shared-views/definition.ts'
-import { BarIcon } from './Sidebar.tsx'
+import { BarIcon } from './bars/BarIcon.tsx'
 
 const NAME_KEY = 'geppio:project-name:v1'
 export function useProjectName() {

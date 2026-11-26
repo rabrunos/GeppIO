@@ -8,7 +8,7 @@ import { EditHistory } from '../src/geppio/src/shared/workbench/history.ts'
 import { fillReservation } from '../src/geppio/src/shared/workbench/slots.ts'
 import { importPortableComposition, parsePortableLayout, portableDependencies, resolvePortableWidgets } from '../src/geppio/src/shared/workbench/portable.ts'
 import type { InstalledPlugin } from '../src/geppio/src/shared/plugins.ts'
-import { compositionTemplates, currentCompositionTemplate } from '../src/geppio/src/renderer/src/workbench/plugin-templates.ts'
+import { compositionTemplates, currentCompositionTemplate } from '../src/geppio/src/renderer/src/workbench/compositions/plugin-templates.ts'
 
 const registry = widgetRegistry()
 test('only accepted templates are discoverable and saved copies keep their own identity after the provider changes or disappears', () => {

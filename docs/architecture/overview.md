@@ -1,5 +1,7 @@
 # Architecture
 
+The six workspaces below implement the Electron reference. The [native design brief](native-reference.md) records the selected successor and its behavioral oracles.
+
 ## Workspace ownership
 
 The root package owns the application version, lockfile and verification commands. Each product composes its own capabilities and data identity. Importing the Runtime catalog constructs no services. Window and product teardown release capabilities in reverse dependency order.
@@ -93,14 +95,15 @@ native identity recovery still uses its v1 contract. `src/geppio/src/shared/iden
 | --- | --- |
 | Native window, production assets, session restrictions | `src/geppio/src/main/index.ts`, `src/geppio/src/main/security.ts` |
 | Metadata, fixed plugin management and owner-authorized window controls | `src/geppio/src/preload/index.ts`, `src/geppio/src/shared/window-controls.ts` |
+| Git snapshot and mutation service, bounded Git subprocess, status decoding | `git.ts`, `git-process.ts`, `git-status.ts` under `src/geppio/src/main/` |
 | Managed package snapshots and installation preferences | `src/geppio/src/main/plugins.ts` |
-| Plugin lifecycle, Worker adapter and Settings/widgets | `plugin-runtime.ts`, `plugin-worker.ts`, `Plugins.tsx` in `src/geppio/src/renderer/src/` |
+| Plugin lifecycle, Worker adapter and widget content | `plugin-runtime.ts`, `plugin-worker.ts`, `usePlugins.ts`, `PluginWidgetBody.tsx` in `src/geppio/src/renderer/src/` |
 | Versioned plugin contract and validators | `src/geppio/src/shared/plugins.ts`, `src/plugin-sdk/src/plugin.d.ts` |
 | Renderer shell, experience-independent document, Workspace/Explorer, Git and Terminal sessions | `App.tsx`, `core/useCoreSessions.ts` in `src/geppio/src/renderer/src/` |
 | Official App identity, experience selection and GeppIO Code presentation | `src/geppio/src/renderer/src/apps/` |
-| Workbench composition, header/sidebar and pixel region splitters | `src/geppio/src/renderer/src/workbench/`, `App.tsx` |
+| Workbench composition, header/sidebar and pixel region splitters | `src/geppio/src/renderer/src/workbench/`, including `bars/` and `compositions/`; shared windows in `shared-views/SharedWindows.tsx` |
 | Freeform rendering, stable fixture frames, pointer/keyboard capture and edit transaction | `src/geppio/src/renderer/src/freeform/` |
-| Modal and Development controls, independently composed plugin settings | `src/geppio/src/renderer/src/settings/`, `Plugins.tsx` |
+| Modal and Development controls, independently composed plugin settings | `src/geppio/src/renderer/src/settings/`, including `PluginSettings.tsx` |
 | Synthetic content, host types/models/views and current initial composition | `src/geppio/src/renderer/src/WidgetContent.tsx`, `src/geppio/src/shared/workbench/model.ts`; legacy fixtures in `src/geppio/src/renderer/src/fixtures.ts` |
 | Visual tokens, fixtures and domain styles | `styles.css`, `fixtures.css`, `freeform/freeform.css`, `workbench/design/`, `workbench/host.css`, `settings/settings.css` |
 | Pure continuous geometry, alignment, collision and reflow | `src/geppio-runtime/src/layout/` |

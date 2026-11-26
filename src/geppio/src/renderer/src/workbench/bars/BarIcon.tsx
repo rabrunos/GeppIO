@@ -1,0 +1,5 @@
+import { HomeIcon, FolderIcon, StarIcon, CodeBracketIcon, ChartBarIcon, RectangleStackIcon, Squares2X2Icon, CalendarDaysIcon, ChatBubbleLeftRightIcon, CommandLineIcon, QueueListIcon, ClockIcon, SwatchIcon, LinkIcon, ClipboardDocumentListIcon } from '@heroicons/react/24/outline'
+
+const ICONS = { home: HomeIcon, folder: FolderIcon, star: StarIcon, code: CodeBracketIcon, notes: ClipboardDocumentListIcon, chart: ChartBarIcon, library: RectangleStackIcon, widgets: Squares2X2Icon, calendar: CalendarDaysIcon, chat: ChatBubbleLeftRightIcon, terminal: CommandLineIcon, queue: QueueListIcon, clock: ClockIcon, swatch: SwatchIcon, link: LinkIcon }
+
+export function BarIcon({ icon }: { icon: string }) { const Icon = ICONS[icon as keyof typeof ICONS] ?? FolderIcon; return icon === 'git' ? <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M15 6a9 9 0 0 0-9 9V3" /><circle cx="18" cy="6" r="3" /><circle cx="6" cy="18" r="3" /></svg> : <Icon className="icon" /> }

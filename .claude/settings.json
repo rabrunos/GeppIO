@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "blockReadsOutsideWorkingDirectories": true,
+    "deny": [
+      "Read(/.git/**)",
+      "Read(/.local/**)",
+      "Read(//**/.env)",
+      "Read(//**/.env.*)",
+      "Read(//**/*.key)",
+      "Read(//**/*.pem)",
+      "Read(//**/*.p12)",
+      "Read(//**/*.pfx)",
+      "Read(//**/*.keystore)"
+    ]
+  }
+}

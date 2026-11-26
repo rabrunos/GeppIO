@@ -19,6 +19,5 @@ for (const dependency of ['electron', 'react', 'typescript', 'electron-vite']) {
 }
 console.log(`INFO  Lockfile: ${existsSync('pnpm-lock.yaml') ? 'present; verify frozen install' : 'missing from checkout; inspect repository state before installing or generating a replacement'}`)
 console.log(`INFO  Platform: ${process.platform}. Windows is the product target; Linux core tests are not Windows GUI validation.`)
-console.log('INFO  Codex: TOML files express requested settings. Verify effective model, effort and sandbox in the installed client.')
 console.log('INFO  No accounts, services, paid APIs, Git operations or remote metadata were changed.')
 if (failed) process.exitCode = 1

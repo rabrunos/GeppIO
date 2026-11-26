@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import { Squares2X2Icon, MagnifyingGlassIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
-import type { usePlugins } from '../Plugins.tsx'
+import type { usePlugins } from '../usePlugins.ts'
 import { Dialog, Popover } from './Primitives.tsx'
 import { useScrollState } from '@geppio/ui'
-import { useLocale } from './Locale.tsx'
+import { normalizeSearch, useLocale } from './Locale.tsx'
 
-export const normalizeSearch = (value: string) => value.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLocaleLowerCase()
 const statuses = { active: 'Ativo', disabled: 'Desativado', starting: 'Ativando', stopping: 'Desativando', error: 'Falha' }
 export function PluginManager({ plugins, open, close, anchor, edit }: { plugins: ReturnType<typeof usePlugins>; open: boolean; close(): void; anchor: RefObject<HTMLElement | null>; edit(): void }) {
   const { t, locale } = useLocale(), [search, setSearch] = useState(''), [filter, setFilter] = useState('all'), [sort, setSort] = useState('original')

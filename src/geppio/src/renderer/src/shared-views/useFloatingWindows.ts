@@ -1,12 +1,7 @@
+import { focusAvailable } from '@geppio/ui'
 import { createRef, useLayoutEffect, useRef, useState } from 'react'
 import { closeFloatingPresentation, openFloatingPresentation, raiseFloatingPresentation } from './definition.ts'
 import type { FloatingPresentation, SharedViewId } from './definition.ts'
-
-export function focusAvailable(button: HTMLButtonElement | null) {
-  if (!button?.isConnected || button.disabled || button.closest('[inert],[hidden]') || !button.checkVisibility({ visibilityProperty: true })) return false
-  button.focus({ preventScroll: true })
-  return document.activeElement === button
-}
 
 /** A transient stack. Functional sessions and saved layout belong to Core. */
 export function useFloatingWindows(fallback: (id: SharedViewId) => HTMLButtonElement | null) {

@@ -62,10 +62,9 @@ test('CI preserves all 38 distinct alpha.48 Electron invocations and public comm
   assert.equal(scripts['check:repo'], 'node --experimental-strip-types tools/check-repo.ts && node --experimental-strip-types tools/check-modules.ts')
 })
 
-test('all 44 retained alpha.48 Node suite files still run through the full discovery gate', () => {
-  // Issue #27 retires the one-time repository-binding bootstrap and its github-plan suite.
-  // The remaining original suites and all subsequently added suites use normal discovery.
-  const baseline = `demo-retirement documents execution-policy explorer freeform-alignment freeform-geometry
+test('retained Node suites and the replacement repository checks use normal discovery', () => {
+  // Issue #27 retired the bootstrap fixture. The reference preparation replaced execution-policy with repository.
+  const baseline = `demo-retirement documents repository explorer freeform-alignment freeform-geometry
     freeform-projection freeform-storage git-compatibility git grid-coverage grid-geometry
     grid-horizontal grid-projection-continuity grid-projection grid-reflow grid-storage identity-migration
     layout-correction layout monaco plugin-data plugin-dev plugin-package plugin-runtime plugins
@@ -83,14 +82,15 @@ test('all 44 retained alpha.48 Node suite files still run through the full disco
 
 function validateWorkflow(source: string) {
   assert.deepEqual([...source.matchAll(/^ {2}([\w-]+):$/gm)].map(match => match[1]), ['push', 'pull_request', 'workflow_dispatch', 'windows-tests', 'windows', 'secrets'])
-  assert.match(source, /permissions:\s+contents: read/)
+  assert.deepEqual(source.match(/^ *permissions:.*\n(?:[ ]+(?:[\w-]+): [\w-]+\n)*/gm), ['permissions:\n  contents: read\n'])
   assert.match(source, /group: geppio-checks-\$\{\{ github.ref \}\}\s+cancel-in-progress: true/)
   assert.match(source, /fail-fast: false\s+matrix:\s+group: \[core, ide, workbench\]/)
   assert.doesNotMatch(source, /continue-on-error|\|\|\s*true|paths-ignore|paths:|exclude:|include:|pull_request_target/)
-  assert.deepEqual([...source.matchAll(/^\s+if: (.+)$/gm)].map(match => match[1]), ["matrix.group == 'core'", "matrix.group != 'core'", '${{ always() }}'])
+  assert.deepEqual([...source.matchAll(/^\s+if: (.+)$/gm)].map(match => match[1]), ["matrix.group == 'core'", "matrix.group != 'core'", "${{ !cancelled() && matrix.group == 'core' }}", '${{ always() }}'])
   assert.match(source, /if: matrix.group == 'core'\s+run: pnpm check/)
   assert.match(source, /if: matrix.group != 'core'\s+run: pnpm plugins:build && pnpm build/)
   assert.match(source, /run: pnpm test:ci:\$\{\{ matrix.group \}\}/)
+  assert.match(source, /if: \$\{\{ !cancelled\(\) && matrix.group == 'core' \}\}\s+run: pnpm audit\s*$/m)
   assert.match(source, /windows:\s+needs: \[windows-tests, secrets\]\s+if: \$\{\{ always\(\) \}\}/)
   assert.match(source, /WINDOWS_RESULT: \$\{\{ needs.windows-tests.result \}\}/)
   assert.match(source, /SECRETS_RESULT: \$\{\{ needs.secrets.result \}\}/)
@@ -100,7 +100,7 @@ function validateWorkflow(source: string) {
   assert.match(source, /npm install --global pnpm@11\.25\.0/)
   assert.match(source, /pnpm install --frozen-lockfile/)
   assert.equal([...source.matchAll(/persist-credentials: false/g)].length, 2)
-  for (const match of source.matchAll(/uses: ([^\s]+)/g)) assert.match(match[1]!, /@[a-f0-9]{40}$/)
+  for (const match of source.matchAll(/\buses:\s*([^\s#]+)/g)) assert.match(match[1]!, /@[a-f0-9]{40}$/)
   assert.match(source, /fetch-depth: 0/)
   assert.match(source, /git show --format= --check HEAD/)
   assert.match(source, /sha256sum --check --status/)
@@ -110,12 +110,15 @@ function validateWorkflow(source: string) {
 test('required matrix/aggregate status fails closed and preserves security/triggers', () => {
   const workflow = readFileSync('.github/workflows/checks.yml', 'utf8')
   validateWorkflow(workflow)
+  assert.throws(() => validateWorkflow(workflow.replace(/uses: actions\/checkout@[a-f0-9]{40}/, 'uses:  actions/checkout@main')))
   for (const [from, to] of [
     ['fail-fast: false', 'fail-fast: true'],
     ['needs: [windows-tests, secrets]', 'needs: [windows-tests]'],
     ['${{ always() }}', '${{ success() }}'],
     ['= success && test', '= success || test'],
     ['group: [core, ide, workbench]', 'group: [core, ide]'],
+    ['  contents: read', '  contents: read\n  actions: write'],
+    ['run: pnpm audit', 'run: pnpm audit --prod'],
     ['run: pnpm test:ci:', 'continue-on-error: true\n        run: pnpm test:ci:']
   ]) assert.throws(() => validateWorkflow(workflow.replace(from!, to!)), from)
 })

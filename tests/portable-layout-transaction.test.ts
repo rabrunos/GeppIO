@@ -11,8 +11,8 @@ import { addWidget } from '../src/geppio/src/shared/workbench/commands.ts'
 import { initialWorkbench, widgetRegistry, WORKBENCH_KEY } from '../src/geppio/src/shared/workbench/model.ts'
 import { importPortableComposition, parsePortableLayout } from '../src/geppio/src/shared/workbench/portable.ts'
 import type { useTransaction } from '../src/geppio/src/renderer/src/freeform/useTransaction.ts'
-import type { usePortableCompositions } from '../src/geppio/src/renderer/src/workbench/usePortableCompositions.tsx'
-import type { usePlugins } from '../src/geppio/src/renderer/src/Plugins.tsx'
+import type { usePortableCompositions } from '../src/geppio/src/renderer/src/workbench/compositions/usePortableCompositions.tsx'
+import type { usePlugins } from '../src/geppio/src/renderer/src/usePlugins.ts'
 import { disabledWidgetOwners } from '../src/geppio/src/renderer/src/plugin-runtime.ts'
 import type { InstalledPlugin } from '../src/geppio/src/shared/plugins.ts'
 
@@ -151,7 +151,7 @@ test('storage quota rejection preserves the edit, confirmed bytes and import eli
 })
 
 function portableFixture(p: ReturnType<typeof fixture>, inventory: InstalledPlugin[] = []) {
-  const module = new URL('../src/geppio/src/renderer/src/workbench/usePortableCompositions.tsx', import.meta.url)
+  const module = new URL('../src/geppio/src/renderer/src/workbench/compositions/usePortableCompositions.tsx', import.meta.url)
   const loadPortable = compileFunction(ts.transpileModule(readFileSync(module, 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2023 }
   }).outputText, ['require', 'exports', 'window'])
@@ -192,7 +192,7 @@ test('plugin management starting inside the preview confirmation cancels both ki
 })
 
 function lostRemovalReceipt(provider: InstalledPlugin) {
-  const module = new URL('../src/geppio/src/renderer/src/Plugins.tsx', import.meta.url), require = createRequire(module)
+  const module = new URL('../src/geppio/src/renderer/src/usePlugins.ts', import.meta.url), require = createRequire(module)
   // CommonJS fixture supplies the entry URL used by the dormant Worker factory.
   const source = ts.transpileModule(readFileSync(module, 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2023 }

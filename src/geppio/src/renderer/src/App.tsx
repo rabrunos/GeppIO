@@ -1,11 +1,9 @@
-import { WebWidget } from './web-surfaces.tsx'
+import { PluginWidgetBody } from './PluginWidgetBody.tsx'
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { CSSProperties } from 'react'
 import { PlusIcon, ArrowsPointingOutIcon, ArrowsPointingInIcon } from '@heroicons/react/24/outline'
-import { usePlugins } from './Plugins.tsx'
+import { usePlugins } from './usePlugins.ts'
 import { disabledWidgetOwners } from './plugin-runtime.ts'
-import { PluginSurface } from './PluginSurface.tsx'
-import { BottomPluginSurface } from './BottomPluginSurface.tsx'
 import { maximizableSurface } from '../../shared/workbench/maximize.ts'
 import { MaximizeBackdrop, useMaximizePresentation } from './workbench/MaximizePresentation.tsx'
 import { AlignmentGuides } from './freeform/AlignmentGuides.tsx'
@@ -17,7 +15,7 @@ import { constraintsForViews, widgetRegistry, activePlacements, groupFor } from 
 import { groupPlan, groupWidgets } from '../../shared/workbench/groups.ts'
 import { useGroupDrag } from './workbench/useGroupDrag.ts'
 import { GroupTabs, tabId, panelId } from './workbench/GroupTabs.tsx'
-import type { SessionSlot, UserBar, WorkbenchSnapshot, WidgetType } from '../../shared/workbench/model.ts'
+import type { SessionSlot, UserBar, WorkbenchSnapshot } from '../../shared/workbench/model.ts'
 import { projectSessionSlot } from '../../shared/workbench/compositions.ts'
 import { fillReservation } from '../../shared/workbench/slots.ts'
 import type { SlotIntention } from '../../shared/workbench/slots.ts'
@@ -51,13 +49,8 @@ import { FileEditor } from './files-editor/FileEditor.tsx'
 import { Explorer } from './files-editor/Explorer.tsx'
 import { WorkspaceControls } from './files-editor/WorkspaceControls.tsx'
 import { GitComparisonDialog } from './git/GitChanges.tsx'
-import { FloatingView } from './shared-views/FloatingView.tsx'
+import { useSharedWindows, SharedWindows } from './shared-views/SharedWindows.tsx'
 import { gitSharedView } from './shared-views/GitView.ts'
-import { searchSharedView } from './shared-views/SearchView.ts'
-import { WorkspaceTools } from './workspace-tools/WorkspaceTools.tsx'
-import { SHARED_VIEWS } from './shared-views/definition.ts'
-import type { SharedViewId } from './shared-views/definition.ts'
-import { focusAvailable, useFloatingWindows } from './shared-views/useFloatingWindows.ts'
 import { TERMINAL_TYPE } from '../../shared/terminal-widget.ts'
 import { TerminalView } from './terminal/TerminalView.tsx'
 import { DraftRecoveryNotice } from './files-editor/DraftRecoveryControls.tsx'
@@ -108,28 +101,7 @@ function GeppIOShell({ plugins }: { plugins: ReturnType<typeof usePlugins> }) {
   const gitState = useSyncExternalStore(git.subscribe, git.snapshot), projectGit = gitState.status?.root === projectRoot?.id ? gitState.status : null
   const appHost = useAppHost(tx.snapshot.organization.chrome), presentation = appHost.presentation
   const workbenchVisible = !presentation, concealed = presentation ? '' : undefined
-  function windowFallback(id: SharedViewId) {
-    return workbenchVisible ? projectAnchor.current : document.querySelector<HTMLButtonElement>(
-      id === gitSharedView.id ? '[data-git-window-trigger-fallback]' : id === searchSharedView.id ? '[data-search-window-trigger-fallback]' : '[data-tools-window-trigger-fallback]')
-  }
-  const windows = useFloatingWindows(windowFallback)
-  const comparisonTrigger = useRef<{ button: HTMLButtonElement; fromWindow: boolean } | null>(null)
-  function compareGit(id: string, trigger: HTMLButtonElement) {
-    comparisonTrigger.current = { button: trigger, fromWindow: !!trigger.closest('[data-floating-view]') }
-    void git.compare(id)
-  }
-  function closeGitComparison() {
-    const trigger = comparisonTrigger.current
-    comparisonTrigger.current = null
-    git.close()
-    // The result is asynchronous and disables its opener while pending. Restore
-    // that opener after the native modal has left the top layer.
-    requestAnimationFrame(() => {
-      if (document.querySelector('dialog:modal') || focusAvailable(trigger?.button ?? null)) return
-      if (trigger?.fromWindow && focusAvailable(windows.closeButtons[gitSharedView.id].current)) return
-      focusAvailable(windowFallback(gitSharedView.id))
-    })
-  }
+  const { windows, compareGit, closeGitComparison } = useSharedWindows(workbenchVisible, projectAnchor, git)
   const confirmedChrome = presentation?.chrome ?? tx.snapshot.organization.chrome
   const regions = useRegions(tx.editing, confirmedChrome, async chrome => {
     const current = tx.live.current
@@ -354,7 +326,7 @@ function GeppIOShell({ plugins }: { plugins: ReturnType<typeof usePlugins> }) {
           editing={isFrame && tx.editing && feasible[placement.region] && !panelFrame} inactive={(placement.region === 'sidebar' && (regions.sidebarMode === 'hidden')) || (placement.region === 'bottom' && (regions.collapsed.bottom))} ghosted={!!picture && (record.id === picture.viewId || !!group?.members.includes(picture.viewId ?? '')) && (!picture.catalog || picture.released) && (!picture.sourceBar || picture.released || picture.sourceBar === tx.snapshot.organization.activeBar)} withheld={!!group && !isFrame && group.active !== record.id || (tx.recovery && !tx.editing) || !current || (!isMaximized && !shown && !panelFrame && interaction.movingId !== record.id)} unavailable={placement.region === 'bottom' && !feasible.bottom}
           interaction={interaction} swapping={swapping} motionRevision={tx.motionRevision} motion={tx.motion} remove={() => setRemoving(group?.active ?? record.id)} swapSelected={selectedViews.includes(record.id)} swapAvailable={selectedViews.length >= 2} swap={() => { if (swapSelection && swapSelection !== record.id) { const next = swapViews(view, registry, swapSelection, record.id); if (next) tx.action(next); else tx.setMessage(t('Troca incompatível ou sem espaço.')); setSwapSelection(null) } else setSwapSelection(record.id) }}
           wheel={(dx, dy) => { const element = surfaces.scroller(placement.region); if (!element) return; if (placement.region === 'main' && expanded) element.scrollLeft += dx; if (placement.region === 'sidebar') element.scrollTop += dy }}>
-          {definition.id === FILE_EDITOR_TYPE ? workbenchVisible && <FileEditor session={fileSession} /> : definition.id === EXPLORER_TYPE ? workbenchVisible && <Explorer session={explorer} git={git} /> : definition.id === gitSharedView.widgetTypeId ? workbenchVisible && <gitSharedView.Content session={git} compare={compareGit} /> : definition.id === TERMINAL_TYPE ? workbenchVisible && <TerminalView session={terminal} theme={theme} /> : definition.widgetId ? <PluginBody definition={definition} plugins={plugins} region={placement.region} /> : undefined}
+          {definition.id === FILE_EDITOR_TYPE ? workbenchVisible && <FileEditor session={fileSession} /> : definition.id === EXPLORER_TYPE ? workbenchVisible && <Explorer session={explorer} git={git} /> : definition.id === gitSharedView.widgetTypeId ? workbenchVisible && <gitSharedView.Content session={git} compare={compareGit} /> : definition.id === TERMINAL_TYPE ? workbenchVisible && <TerminalView session={terminal} theme={theme} /> : definition.widgetId ? <PluginWidgetBody definition={definition} plugins={plugins} region={placement.region} /> : undefined}
         </WidgetFrame>
       })}{sessionSlots.map(item => { const m = surfaces.measures[item.region], left = m.left + item.x - m.scrollLeft, top = m.top + item.y - m.scrollTop; return <button key={item.id} className="ui-button host-format-slot layout-empty-slot" data-session-slot={item.id} data-slot-bar={item.sidebarBar} data-owner-region={item.region} data-catalog-slot-target={chosenSlot?.id === item.id ? '' : undefined} aria-pressed={chosenSlot?.id === item.id} style={{ left, top, width: item.width, height: item.height,
         clipPath: `inset(${Math.max(0, m.top - top)}px ${Math.max(0, left + item.width - m.left - (m.clipWidth ?? m.width))}px ${Math.max(0, top + item.height - m.top - (m.clipHeight ?? m.height))}px ${Math.max(0, m.left - left)}px round var(--card-radius))` }} onClick={() => { if (!editorOpen) { setEditorOpen(true); if (chosenSlot?.id !== item.id) setSlot(item) } else setSlot(chosenSlot?.id === item.id ? null : item) }} aria-label={t('Escolher widget')}><PlusIcon className="icon" /><strong>{t('Adicionar widget')}</strong><small>{t('Espaço {0}', sessionSlots.filter(slot => slot.region === item.region).findIndex(slot => slot.id === item.id) + 1)}</small></button> })}</div>
@@ -364,18 +336,10 @@ function GeppIOShell({ plugins }: { plugins: ReturnType<typeof usePlugins> }) {
       {swapping.preview && <div className="widget-swap-preview" style={{ left: swapping.preview.x, top: swapping.preview.y, zIndex: 152 }} aria-hidden="true"><WorkbenchMoveIcon />{registry.get(tx.snapshot.organization.views.find(v => v.id === swapping.preview!.id)!.typeId)?.title}</div>}
       {picture && !picture.catalog && !picture.released && (!picture.sourceBar || picture.sourceBar === tx.snapshot.organization.activeBar) && <div className="layout-drag-origin host-drag-origin" data-owner-region={picture.source?.dataset.ownerRegion} aria-hidden="true" inert style={{ left: picture.origin.left, top: picture.origin.top, width: picture.origin.width, height: picture.origin.height, clipPath: picture.originClip }} />}
       <EditorPanel portableEnvironment={{ inventory: plugins.inventory.plugins, managing: plugins.managing, inventoryUnconfirmed: plugins.inventoryUnconfirmed, gesture: () => pairGesture.current || interaction.active() || regions.changing() || panelUI.active() || swapping.active() }} moveRequest={moveRequest} move={interaction.transferTo} request={widgetsRequest} tx={tx} registry={registry} view={view} open={editorOpen} setOpen={setEditorOpen} slot={chosenSlot} chooseSlot={setSlot} add={add} remove={setRemoving} disabled={disabled} interaction={interaction} openPlugins={() => setHeaderMenu('plugins')} />
-      {picture && <DragLayer picture={picture} pointer={interaction.visual.pointer} controller={interaction.visual.controller} measure={interaction.visual.measure} complete={interaction.visual.complete} label={t(picture.catalog ? 'Adicionando widget' : picture.sourceBar ? 'Movendo da barra lateral' : (interaction.gestureLabel?.region ?? picture.source?.dataset.ownerRegion) === 'bottom' ? 'Movendo da barra inferior' : 'Movendo da área principal')}><section className="widget drag-picture-content"><header className="widget-heading"><strong>{registry.get(picture.typeId)?.owner === 'host' ? t(registry.get(picture.typeId)!.title) : registry.get(picture.typeId)?.title}</strong></header><div className="widget-content">{registry.get(picture.typeId)?.fixture ? <WidgetContent id={registry.get(picture.typeId)!.fixture!} /> : <PluginBody definition={registry.get(picture.typeId)!} plugins={plugins} preview />}</div></section></DragLayer>}
+      {picture && <DragLayer picture={picture} pointer={interaction.visual.pointer} controller={interaction.visual.controller} measure={interaction.visual.measure} complete={interaction.visual.complete} label={t(picture.catalog ? 'Adicionando widget' : picture.sourceBar ? 'Movendo da barra lateral' : (interaction.gestureLabel?.region ?? picture.source?.dataset.ownerRegion) === 'bottom' ? 'Movendo da barra inferior' : 'Movendo da área principal')}><section className="widget drag-picture-content"><header className="widget-heading"><strong>{registry.get(picture.typeId)?.owner === 'host' ? t(registry.get(picture.typeId)!.title) : registry.get(picture.typeId)?.title}</strong></header><div className="widget-content">{registry.get(picture.typeId)?.fixture ? <WidgetContent id={registry.get(picture.typeId)!.fixture!} /> : <PluginWidgetBody definition={registry.get(picture.typeId)!} plugins={plugins} preview />}</div></section></DragLayer>}
       {dropZones?.targets.map(region => { const m = surfaces.measures[region], width = m.width + 6, height = m.height + 6; return <div key={region} className="layout-edit-zone" data-over={dropZones.over === region ? '' : undefined} style={{ left: m.left - 3, top: m.top - 3, width, height }}><EditOutline width={width} height={height} /></div> })}
       </div>
-      {SHARED_VIEWS.map(view => {
-        const instance = windows.stack.find(item => item.viewId === view.id)
-        return instance && <FloatingView key={view.id} instance={instance} title={view.title} size={view.floatingSize}
-          active={windows.active === view.id} stackIndex={windows.stack.indexOf(instance)} raise={() => windows.raise(view.id)} close={() => windows.close(view.id)}
-          closeButton={windows.closeButtons[view.id]} canDismissWithEscape={() => !changingExperienceBlocked()}>
-          {view.id === gitSharedView.id ? <gitSharedView.Content session={git} compare={compareGit} /> :
-            view.id === searchSharedView.id ? <searchSharedView.Content session={sessions.search} /> : <WorkspaceTools session={sessions.tools} />}
-        </FloatingView>
-      })}
+      <SharedWindows sessions={sessions} windows={windows} compareGit={compareGit} changingExperienceBlocked={changingExperienceBlocked} />
     </div><StatusBar editor={fileSession} terminal={terminal} reveal={revealTerminal} locked={tx.editing || tx.saving} />
     <div className={'workspace-feedback ' + (showFeedback || workbenchVisible && (tx.recovery || geometryWarning || panelNotice) ? 'workspace-toast' : 'geppui-visually-hidden')} role="status" aria-live="polite">{[workbenchVisible && panelNotice ? t(panelNotice) : '', workbenchVisible && geometryWarning ? t('Espaço insuficiente para os mínimos. Composição preservada; amplie ou reabra a região.') : '', t(tx.message)].filter(Boolean).join(' ')}</div>
     <GitComparisonDialog session={git} close={closeGitComparison} />
@@ -390,16 +354,3 @@ function GeppIOShell({ plugins }: { plugins: ReturnType<typeof usePlugins> }) {
 }
 function WorkbenchMoveIcon() { return <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v18M3 12h18M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3" /></svg> }
 function WorkbenchEmptyIcon() { return <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="3.75" y="3.75" width="6" height="6" rx="1.5" /><rect x="14.25" y="3.75" width="6" height="6" rx="1.5" /><rect x="3.75" y="14.25" width="6" height="6" rx="1.5" /><rect x="14.25" y="14.25" width="6" height="6" rx="1.5" /></svg> }
-function PluginBody({ definition, plugins, preview = false, region = 'main' }: { definition: WidgetType; plugins: ReturnType<typeof usePlugins>; preview?: boolean; region?: Region }) {
-  const { t } = useLocale(), content = plugins.views.find(view => view.plugin.manifest.id === definition.pluginId)?.widgets[definition.widgetId!]
-  const runtime = plugins.views.find(view => view.plugin.manifest.id === definition.pluginId)
-  if (!preview && runtime?.status === 'active' && runtime.plugin.manifest.surface) {
-    return <WebWidget host={plugins.surfaces} plugin={runtime.plugin} active={plugins.views.filter(item => item.status === 'active').map(item => item.plugin)} />
-  }
-  const api2 = runtime?.plugin.manifest.apiVersion === 2
-  const compactTime = region !== 'main' && definition.pluginId === 'geppio.time-tracker'
-  const surface = compactTime && content ? { ...content, text: content.text.split('\n\n')[0]!, actions: content.actions?.filter(action => ['start', 'pause', 'retry'].includes(action.id)) } : content
-  const compact = region === 'bottom' && definition.pluginId === 'geppio.workspace-essentials'
-  const send = (event: Parameters<typeof plugins.widgetEvent>[2]) => plugins.widgetEvent(definition.pluginId!, definition.widgetId!, event)
-  return <div className="host-plugin-content" data-time-compact={compactTime || undefined} data-plugin-widget={!preview && content ? `${definition.pluginId}:${definition.widgetId}` : undefined}>{surface && api2 ? compact ? <BottomPluginSurface view={surface} paused={preview || plugins.busy || runtime?.status !== 'active'} send={send} /> : <PluginSurface view={surface} preview={preview} paused={plugins.busy || runtime?.status !== 'active'} send={send} pluginId={definition.pluginId} /> : <><p>{content?.text ?? t(definition.missing ? 'Widget ausente na geração atual. Referência e posição preservadas para recuperação.' : 'Plugin desativado ou aguardando publicação.')}</p>{content?.action && <button className="ui-button tool-button" disabled={plugins.busy} onClick={preview ? undefined : () => plugins.action(definition.pluginId!, definition.widgetId!, content.action!.id)}>{content.action.label}</button>}</>}</div>
-}

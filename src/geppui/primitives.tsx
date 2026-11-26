@@ -62,3 +62,9 @@ export function Popover({ title, closeLabel, description, open, close, anchor, p
     {!bare && <header className="workspace-popover-heading"><div><h2 id={id}>{title}</h2>{description && <p>{description}</p>}</div><IconButton className="workspace-popover-close" label={closeLabel} onClick={close}><XMarkIcon className="icon" /></IconButton></header>}{children}
   </div>
 }
+
+export function focusAvailable(button: HTMLButtonElement | null) {
+  if (!button?.isConnected || button.disabled || button.closest('[inert],[hidden]') || !button.checkVisibility({ visibilityProperty: true })) return false
+  button.focus({ preventScroll: true })
+  return document.activeElement === button
+}

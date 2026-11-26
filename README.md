@@ -67,9 +67,11 @@ package contents and publisher identity against the application's authorized key
 GeppUI and Editor can be packaged for use in other projects. Their guides cover setup and boundaries;
 the [architecture overview](docs/architecture/overview.md) explains how the modules connect.
 
+The Electron application is the runnable reference for the planned Rust and GPUI host. The native GeppUI library will remain usable independently. [Native direction](docs/architecture/native-reference.md)
+
 ## Explore the project
 
-- **Working on the code?** Start with the [project guide](PROJECT_GUIDE.md).
+- **Working on the code?** Start with the [domain map](docs/README.md).
 - **Following development?** Browse the [roadmap](https://github.com/rabrunos/GeppIO/issues/2),
   [Issues](https://github.com/rabrunos/GeppIO/issues), and [changelog](CHANGELOG.md).
 - **Understanding data and limits?** Read about [documents and recovery](docs/architecture/documents.md),

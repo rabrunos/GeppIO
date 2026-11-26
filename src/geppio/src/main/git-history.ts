@@ -1,7 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { GIT_HISTORY_LIMITS, GIT_LIMITS } from '../shared/git.ts'
 import type { GitHistoryCommit, GitHistorySummary, GitResult } from '../shared/git.ts'
-import { GitFailure, gitRelativeName } from './git.ts'
+import { GitFailure } from './git-failure.ts'
+import { gitRelativeName } from './git-status.ts'
 
 type Invoke = (args: string[], cap?: number, io?: { input: Buffer }) => Promise<Buffer>
 export type HistoryOperation = 'history' | 'historyPage' | 'historyCommit' | 'historyCompare'

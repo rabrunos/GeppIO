@@ -1,108 +1,22 @@
-import { spawn } from 'node:child_process'
-import { createHash, randomUUID } from 'node:crypto'
+import { createHash } from 'node:crypto'
 import { lstat, mkdir, mkdtemp, open, opendir, readlink, realpath, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { DirectoryStore, ExplorerFailure, inspectExplorerPath, safeExplorerName } from './explorer.ts'
 import { GIT_LIMITS } from '../shared/git.ts'
-import type { GitChange, GitError, GitOperation, GitResult, GitStatus } from '../shared/git.ts'
+import type { GitOperation, GitResult, GitStatus } from '../shared/git.ts'
 import { GitHistoryStore, historyOid } from './git-history.ts'
 import type { HistoryHead, HistoryOperation } from './git-history.ts'
+import { GitFailure } from './git-failure.ts'
+import type { GitFailureReason } from './git-failure.ts'
+import { decodeGitText as decode, gitRelativeName, parseGitStatus } from './git-status.ts'
+import { resolveGitExecutable, runGit } from './git-process.ts'
 
-const messages: Record<GitError, string> = {
-  'not-repository': 'A pasta selecionada não contém .git. Selecione a raiz exata do repositório; pastas internas não são descobertas automaticamente.',
-  version: 'Versão do Git não suportada. Este piloto requer Git para Windows 2.40 ou superior na instalação padrão.',
-  uncertain: 'O Git pode ter alterado o índice antes da interrupção. Atualize para conferir; a operação não será repetida nem desfeita automaticamente.',
-  invalid: 'Solicitação Git inválida.', stale: 'A pasta ou a consulta Git mudou. Atualize ou selecione a pasta novamente.',
-  busy: 'Aguarde a consulta Git em andamento.', unsupported: 'Operação Git não suportada para este formato ou arquivo. O status pode continuar disponível quando uma ação individual é recusada.',
-  limit: 'Limite Git excedido: 512 alterações, 256 KiB por texto, 64 MiB de metadados ou 20.000 entradas. Escolha um repositório menor.',
-  unavailable: 'Não foi possível consultar o Git. Atualize e tente novamente.', missing: 'Git para Windows não encontrado na instalação padrão em Arquivos de Programas.', timeout: 'A consulta Git excedeu 15 segundos. Tente um repositório menor.'
-}
-/** Main-only categories. Never contain filenames, configuration values or native paths. */
-export type GitFailureReason = 'layout' | 'metadata' | 'configuration' | 'index' | 'worktree-redirect' | 'worktree-special' | 'worktree-rules' | 'worktree-budget' | 'history-mode' | 'history-binary' | 'history-blob-size'
-const reasons: Partial<Record<GitFailureReason, string>> = {
-  'history-mode': 'Comparação histórica indisponível para links simbólicos e submódulos.',
-  'history-binary': 'Comparação histórica indisponível para conteúdo binário ou texto fora de UTF-8.',
-  'history-blob-size': 'Comparação histórica indisponível: um dos textos excede 256 KiB.',
-  layout: 'Formato de repositório não suportado: selecione uma raiz local com diretório .git próprio, sem worktree vinculado, repositório aninhado ou histórico raso.',
-  metadata: 'Metadados Git recusados: link, redirecionamento de objetos, arquivo especial ou estrutura incompatível. Nenhum reparo automático foi feito.',
-  configuration: 'Configuração Git não suportada: filtros, extensões ou redirecionamentos nativos exigem outro escopo seguro. Nenhum programa do projeto foi executado.',
-  index: 'Formato ou caminho do índice Git não suportado para esta consulta.',
-  'worktree-redirect': 'Um caminho visível redireciona a árvore de trabalho ou tem tipo de link que não pode ser confirmado com segurança. Dependências não rastreadas e ignoradas não são percorridas.',
-  'worktree-special': 'A árvore de trabalho visível contém um arquivo ou nome não suportado. Entradas ignoradas não são abertas.',
-  'worktree-rules': 'As regras locais de ignore/atributos não puderam ser confirmadas com segurança. Confira links, tamanho ou alterações simultâneas nesses arquivos.'
-}
-export class GitFailure extends Error {
-  readonly kind: GitError
-  readonly reason?: GitFailureReason
-  constructor(kind: GitError, reason?: GitFailureReason) { super(messages[kind]); this.kind = kind; this.reason = reason }
-}
-export function gitFailure(error: unknown): GitResult {
-  const code = error instanceof GitFailure || error instanceof ExplorerFailure ? error.kind : 'unavailable'
-  return { ok: false, code, error: error instanceof GitFailure && error.reason ? reasons[error.reason] ?? messages[code] : messages[code] }
-}
-const decode = (bytes: Buffer) => { try { return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes) } catch { throw new GitFailure('unsupported') } }
-export function gitRelativeName(name: string): boolean {
-  return name.length <= 2048 && name.split('/').length <= 32 && name.split('/').every(part => safeExplorerName(part) && part.toLowerCase() !== '.git')
-}
-/** NUL records preserve spaces/Unicode and rename ordering; unsupported names fail closed. */
-export function parseGitStatus(bytes: Buffer): GitChange[] {
-  const records = decode(bytes).split('\0'), changes: GitChange[] = []
-  if (records.pop() !== '') throw new GitFailure('unsupported')
-  for (let i = 0; i < records.length; i++) {
-    const row = records[i]!, index = row[0]!, working = row[1]!, name = row.slice(3)
-    if (!/^[ MADRCUT?!]{2} /.test(row) || !gitRelativeName(name)) throw new GitFailure('unsupported')
-    const previous = /[RC]/.test(index + working) ? records[++i] : undefined
-    if (previous !== undefined && !gitRelativeName(previous) || /[RC]/.test(index + working) && !previous) throw new GitFailure('unsupported')
-    changes.push({ id: randomUUID(), name, ...(previous ? { previous } : {}), index, working, conflict: index === 'U' || working === 'U' || ['AA', 'DD'].includes(index + working), untracked: index + working === '??' })
-    if (changes.length > GIT_LIMITS.entries) throw new GitFailure('limit')
-  }
-  return changes
-}
-export async function resolveGitExecutable(): Promise<string> {
-  if (process.platform !== 'win32') throw new GitFailure('missing')
-  // Fixed machine installation, never PATH, cwd, a renderer value or a repository executable.
-  const path = join(process.env.ProgramW6432 ?? process.env.ProgramFiles ?? 'C:\\Program Files', 'Git', 'cmd', 'git.exe')
-  try {
-    await inspectExplorerPath(dirname(path), 'directory')
-    const stat = await lstat(path)
-    // Git for Windows uses hardlinks between its installed launchers. This exception is
-    // solely for the fixed installed executable, never selected repository data.
-    if (!stat.isFile() || stat.isSymbolicLink() || (await realpath(path)).toLowerCase() !== path.toLowerCase()) throw new GitFailure('missing')
-    return path
-  } catch { throw new GitFailure('missing') }
-}
-export function gitEnvironment(home: string): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { HOME: home, USERPROFILE: home, XDG_CONFIG_HOME: home, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_SYSTEM: 'NUL', GIT_CONFIG_GLOBAL: 'NUL', GIT_ATTR_NOSYSTEM: '1', GIT_OPTIONAL_LOCKS: '0', GIT_NO_REPLACE_OBJECTS: '1', GIT_TERMINAL_PROMPT: '0', GIT_ALLOW_PROTOCOL: '', GIT_LITERAL_PATHSPECS: '1', LC_ALL: 'C', LANG: 'C' }
-  for (const key of ['SystemRoot', 'WINDIR', 'TEMP', 'TMP']) if (process.env[key]) env[key] = process.env[key]
-  return env
-}
-/** No shell, renderer-supplied stdin, inherited Git/Node/loader/config environment, stderr disclosure or generic bridge. */
-export function runGit(executable: string, args: readonly string[], home: string, signal: AbortSignal, cap: number = GIT_LIMITS.output, timeout: number = GIT_LIMITS.timeout, io?: { input: Buffer; index?: string; objects?: string; ignoreQuery?: true }): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    if (signal.aborted) { reject(new GitFailure('stale')); return }
-    const ignoreQuery = io?.ignoreQuery === true
-    if (ignoreQuery && (args.slice(-4).join('\0') !== 'check-ignore\0--no-index\0--stdin\0-z' || io.index || io.objects || io.input.length > GIT_LIMITS.output)) { reject(new GitFailure('invalid')); return }
-    const env = gitEnvironment(home)
-    // check-ignore consumes literal pathname records, not pathspecs. Git rejects
-    // GIT_LITERAL_PATHSPECS for this command. Other commands retain it unchanged.
-    if (ignoreQuery) delete env.GIT_LITERAL_PATHSPECS
-    // Main-only, validated destinations. Never an environment/argument IPC surface.
-    if (io?.index) env.GIT_INDEX_FILE = io.index
-    if (io?.objects) env.GIT_OBJECT_DIRECTORY = io.objects
-    const child = spawn(executable, ['--no-optional-locks', '--no-pager', ...args], { cwd: home, env, shell: false, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] })
-    const chunks: Buffer[] = []; let size = 0, failure: GitFailure | null = null
-    const stop = (kind: GitError) => { failure ??= new GitFailure(kind); child.kill() }
-    const abort = () => stop('stale'), timer = setTimeout(() => stop('timeout'), timeout)
-    signal.addEventListener('abort', abort, { once: true })
-    child.stdin.on('error', () => { /* Early native rejection can close stdin (EPIPE). Close owns the outcome. */ })
-    child.stdin.end(io?.input)
-    child.stdout.on('data', (data: Buffer) => { size += data.length; if (size > cap) stop('limit'); else chunks.push(data) })
-    child.stderr.on('data', (data: Buffer) => { size += data.length; if (size > cap) stop('limit') })
-    child.on('error', () => { failure ??= new GitFailure('unavailable') })
-    child.on('close', code => { clearTimeout(timer); signal.removeEventListener('abort', abort); if (failure || code !== 0 && !(ignoreQuery && code === 1)) reject(failure ?? new GitFailure('unavailable')); else resolve(Buffer.concat(chunks)) })
-  })
-}
+export { GitFailure, gitFailure } from './git-failure.ts'
+export type { GitFailureReason } from './git-failure.ts'
+export { gitRelativeName, parseGitStatus } from './git-status.ts'
+export { resolveGitExecutable, gitEnvironment, runGit } from './git-process.ts'
+
 async function boundedRead(path: string, cap: number): Promise<Buffer> {
   const evidence = await inspectExplorerPath(path, 'file'), before = await lstat(path, { bigint: true })
   if (before.size > BigInt(cap)) throw new GitFailure('limit')

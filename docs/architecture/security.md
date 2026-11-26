@@ -1,6 +1,6 @@
 # Security control map
 
-Read the active Issue for executed evidence. The Windows workbench handles local files, trusted API 1/2 Worker plugins and [API 3 web surfaces](plugin-surfaces.md). Assess each execution context against its own controls.
+See [native authority and residual risks](native-controls.md) for detailed enforcement and [candidate security review](../development/security-review.md) for delivery checks. Read the active Issue for executed evidence. The Windows workbench handles local files, trusted API 1/2 Worker plugins and [API 3 web surfaces](plugin-surfaces.md). Assess each execution context against its own controls.
 
 | Exposure | Control / implementation | Check and limitation |
 | --- | --- | --- |
@@ -24,7 +24,7 @@ Read the active Issue for executed evidence. The Windows workbench handles local
 | Local disk storage fails/corrupts | Error result and fallback copy; do not overwrite malformed state automatically | Storage tests; no guarantee against every OS/browser failure |
 | Identity/profile migration | Bounded non-link snapshots, unchanged original/backup, absent destination only; hidden inert recovery windows without preload, fixed Main scripts, legacy scheme only in a separate session | `tests/identity-migration.test.ts`, `tools/identity-smoke.ts` in production/dev; no arbitrary storage/IPC authority or hostile same-user disk isolation |
 | Test suite touches owner data | Desktop smoke creates a temp `geppio-smoke-*` profile; Main rejects other override roots | Restricted launcher path logic and actual owner-safe smoke; only the created temp root is cleaned |
-| Git integration or metadata targets the wrong repository | Verify canonical origin fetch/push URLs, repository ID and remote ancestry under the task authority | `tests/execution-policy.test.ts` protects policy identity; actual remote verification is required before writes |
+| Git integration or metadata targets the wrong repository | Verify canonical origin fetch/push URLs, repository ID and remote ancestry under the task authority | `tests/repository.test.ts` protects policy identity; actual remote verification is required before writes |
 | Dependency / source secret leakage | Exact pins, approved install-script list, ignored credentials/local output; read-only CI secret scan | First install/lock review and CI scanner; ignore rules are not access control |
 
 No arbitrary content injection, safe-storage credential service, unrestricted local file browser or unrestricted IPC handler exists. The bounded first-party PTY is scoped in #47. Advanced future controls described in [Plugin boundaries](plugins.md) are requirements, not implemented protections.

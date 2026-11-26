@@ -138,18 +138,3 @@ installer or synchronization service is configured.
 Keep disposable diagnostics/configuration under ignored `.local/` when needed. Never commit
 machine paths, credentials, personal files or production data. No tracked status/checkpoint/report
 file is required; active evidence belongs in the GitHub Issue.
-
-## Working directly in Codex
-
-Read [PROJECT_GUIDE](../../PROJECT_GUIDE.md), [AGENTS](../../AGENTS.md), the relevant Issue and
-[TASK_POLICY](../.ai/TASK_POLICY.md). Follow the [direct workflow](../.ai/orchestration.md) from
-investigation and optional planning through implementation and validation. No handoff template or
-foundation bootstrap is required. Verify branch/HEAD/status/diff and preserve unrelated work.
-Completed, validated changes receive commit and push automatically unless the owner opts out.
-
-Project TOML expresses requested settings; verify material trust, effort, sandbox, reviewer and
-network differences in the running client. Technical elevation stays bounded by its authority;
-do not switch to Full Access or edit global settings as a workaround.
-
-Original foundation provenance is preserved in Git history and Issue #1. On another machine,
-clone the current repository and install the committed graph; do not recreate the initial commit.

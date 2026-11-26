@@ -1,7 +1,7 @@
 import { useEffect, useReducer, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import { BellIcon, CheckIcon, XMarkIcon } from '@heroicons/react/24/outline'
-import type { usePlugins } from '../Plugins.tsx'
+import type { usePlugins } from '../usePlugins.ts'
 import { reduceNotifications } from '../../../shared/workbench/notifications.ts'
 import type { WorkspaceNotification } from '../../../shared/workbench/notifications.ts'
 import { Popover, IconButton } from './Primitives.tsx'

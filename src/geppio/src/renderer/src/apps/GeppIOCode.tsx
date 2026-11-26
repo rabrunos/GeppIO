@@ -14,7 +14,7 @@ import { OPEN_TOOLS_WINDOW, TOOLS_SHARED_VIEW } from '../shared-views/definition
 import type { CompareGit } from '../git/GitChanges.tsx'
 import { TerminalView } from '../terminal/TerminalView.tsx'
 import { QuickOpenControl } from '../quick-open/QuickOpenControl.tsx'
-import { BarIcon } from '../workbench/Sidebar.tsx'
+import { BarIcon } from '../workbench/bars/BarIcon.tsx'
 import { IconButton } from '../workbench/Primitives.tsx'
 import type { useRegions } from '../workbench/useRegions.ts'
 

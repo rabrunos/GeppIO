@@ -2,6 +2,12 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.98] — 2026-11-26
+
+- Separate widget catalog and composition views, plugin presentation and activation, Sidebar bar controls and host Git responsibilities while preserving the Electron reference.
+- Replace client-specific workflow policy and its fixtures with shared project guidance, repository integrity checks and project-local Claude Code discovery. Retire the Codex and `.agents` adapters.
+- Document observable behavior and unresolved trust boundaries for the future Rust/GPUI host and independent GeppUI library.
+
 ## [0.1.0-alpha.97] — 2026-11-25
 
 - Adopt Apache License 2.0 for GeppIO-owned repository material, with the canonical license at the root, consistent first-party package metadata and concise licensing guidance.

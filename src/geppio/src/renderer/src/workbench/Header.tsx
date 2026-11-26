@@ -1,7 +1,7 @@
 import { useRef } from 'react'
 import type { RefObject, ReactNode } from 'react'
 import { BellIcon, ChevronDownIcon, ChevronRightIcon, Squares2X2Icon, PencilSquareIcon, EllipsisHorizontalIcon, MinusIcon, XMarkIcon, StopIcon, FolderOpenIcon, Cog6ToothIcon, InformationCircleIcon, MoonIcon, SunIcon } from '@heroicons/react/24/outline'
-import type { usePlugins } from '../Plugins.tsx'
+import type { usePlugins } from '../usePlugins.ts'
 import type { Transaction } from '../freeform/useTransaction.ts'
 import { NotificationCenter, useNotifications } from './Notifications.tsx'
 import { PluginManager } from './PluginManager.tsx'

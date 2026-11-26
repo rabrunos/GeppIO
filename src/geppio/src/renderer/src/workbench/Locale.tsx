@@ -14,6 +14,8 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
   return <Locale value={{ locale, preference, setPreference(value) { setPreference(value); try { localStorage.setItem('geppio.locale', value) } catch { /* Session preference remains usable. */ } },
     t(key, ...params) { return (locale === 'en' ? messages[key] ?? appMessages[key] ?? key : key).replace(/\{(\d+)\}/g, (_, index: string) => String(params[Number(index)] ?? '')) } }}>{children}</Locale>
 }
+export const normalizeSearch = (value: string) => value.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLocaleLowerCase()
+
 export const useLocale = () => useContext(Locale)
 export function LanguageChoice() {
   const { preference, setPreference, t } = useLocale()
