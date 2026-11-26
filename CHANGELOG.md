@@ -2,6 +2,10 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.101] — 2026-11-26
+
+- **CI (native host):** install the checksum-verified cargo-deny release with relative paths. GNU `tar` on the hosted Windows runner read the absolute `D:\` archive path as a remote host, which failed the new `Windows native` job of alpha.100. No application change.
+
 ## [0.1.0-alpha.100] — 2026-11-26
 
 - **Native host (new, Rust + GPUI):** add the `native/` Cargo workspace approved in #73. It contains:

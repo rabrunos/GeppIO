@@ -99,7 +99,7 @@ function validateWorkflow(source: string) {
   // Native host (#74): pinned toolchain and cargo-deny, locked graph, policy gate before the build.
   assert.match(source, /CARGO_DENY_VERSION: '0\.20\.2'/)
   assert.match(source, /CARGO_DENY_SHA256: '975a22143262fd27476d19ee00c7af67978426e40e1dee94eed6bbade1cf87dc'/)
-  assert.match(source, /"\$CARGO_DENY_SHA256" "\$destination\/cargo-deny\.tar\.gz" \| sha256sum --check --status/)
+  assert.match(source, /"\$CARGO_DENY_SHA256" cargo-deny\.tar\.gz \| sha256sum --check --status\n\s+tar -xzf cargo-deny\.tar\.gz /)
   assert.doesNotMatch(source, /restore-keys|cargo install cargo-deny|bin\/cargo-deny/)
   assert.match(source, /working-directory: native\s+run: cargo deny --locked check -W unmaintained\n/)
   assert.match(source, /cargo clippy --locked --workspace --all-targets -- -D warnings/)
@@ -126,8 +126,8 @@ test('required matrix/aggregate status fails closed and preserves security/trigg
     ['fail-fast: false', 'fail-fast: true'],
     ['needs: [windows-tests, native, secrets]', 'needs: [windows-tests, secrets]'],
     ['run: cargo deny --locked check -W unmaintained', 'run: cargo deny check'],
+    ['"$CARGO_DENY_SHA256" cargo-deny.tar.gz | sha256sum --check --status', '"$CARGO_DENY_SHA256" cargo-deny.tar.gz'],
     ['cargo build --locked --release -p geppio', 'cargo build --release -p geppio'],
-    ['"$CARGO_DENY_SHA256" "$destination/cargo-deny.tar.gz" | sha256sum --check --status', '"$CARGO_DENY_SHA256" "$destination/cargo-deny.tar.gz"'],
     ['cargo deny --locked check -W unmaintained && cargo build --locked --target-dir', 'cargo build --locked --target-dir'],
     ['${{ always() }}', '${{ success() }}'],
     ['= success && test', '= success || test'],

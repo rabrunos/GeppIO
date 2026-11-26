@@ -6,7 +6,7 @@ members = ["crates/geppui", "crates/geppio-core", "crates/geppio"]
 exclude = ["examples/geppui-consumer"]
 
 [workspace.package]
-version = "0.1.0-alpha.100"
+version = "0.1.0-alpha.101"
 edition = "2024"
 license = "Apache-2.0"
 publish = false

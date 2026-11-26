@@ -78,12 +78,14 @@ jobs:
           set -euo pipefail
           destination="$RUNNER_TEMP/geppio-cargo-deny"
           mkdir -p "$destination"
+          # Relative names: GNU tar reads a Windows "D:\..." archive path as a remote host.
+          cd "$destination"
           name="cargo-deny-${CARGO_DENY_VERSION}-x86_64-pc-windows-msvc"
           curl --fail --location --proto '=https' --tlsv1.2 --max-time 120 \
             "https://github.com/EmbarkStudios/cargo-deny/releases/download/${CARGO_DENY_VERSION}/${name}.tar.gz" \
-            --output "$destination/cargo-deny.tar.gz"
-          printf '%s  %s\n' "$CARGO_DENY_SHA256" "$destination/cargo-deny.tar.gz" | sha256sum --check --status
-          tar -xzf "$destination/cargo-deny.tar.gz" -C "$destination" "${name}/cargo-deny.exe"
+            --output cargo-deny.tar.gz
+          printf '%s  %s\n' "$CARGO_DENY_SHA256" cargo-deny.tar.gz | sha256sum --check --status
+          tar -xzf cargo-deny.tar.gz "${name}/cargo-deny.exe"
           echo "$destination/${name}" >> "$GITHUB_PATH"
       - name: Format
         working-directory: native
