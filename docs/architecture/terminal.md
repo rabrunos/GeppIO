@@ -91,7 +91,7 @@ including its `lib`, workers, prebuilds and license files. `out/` alone is not a
 There is still no installer/packager/release workflow in this repository. A future packager must
 retain/unpack native binaries and helper files and test that artifact separately.
 
-The Windows x64 1.1.0 package includes Node-API prebuilds. With Electron 44.6.0 / Node 24.21.0 /
+The Windows x64 1.1.0 package includes Node-API prebuilds. With Electron 44.11.6 / Node 24.22.3 /
 ABI 149 / Node-API 10, the selected prebuild loads and spawns real ConPTY in the built production
 application without C++ compilation or an Electron-specific rebuild tool. `pnpm rebuild node-pty`
 runs the reviewed prebuild check and postinstall preparation; it does not claim source compilation.

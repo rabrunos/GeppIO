@@ -9,6 +9,6 @@
     "./styles.css": "./styles.css"
   },
   "dependencies": {
-    "monaco-editor": "0.57.0"
+    "monaco-editor": "0.58.0"
   }
 }

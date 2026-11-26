@@ -1,6 +1,6 @@
 # GeppIO Editor
 
-O pacote local inclui a API básica do Monaco 0.57.0, integração opcional de Workers com Vite e declarações TypeScript. Use a configuração de produção `worker: { format: 'es' }` do Vite. Disponibilize os assets produzidos pelo build na mesma origem do aplicativo. O Monaco traz os estilos da sua interface por seus módulos ESM.
+O pacote local inclui a API básica do Monaco 0.58.0, integração opcional de Workers com Vite e declarações TypeScript. Use a configuração de produção `worker: { format: 'es' }` do Vite. Disponibilize os assets produzidos pelo build na mesma origem do aplicativo. O Monaco traz os estilos da sua interface por seus módulos ESM.
 
 ```ts
 import { acquireWorkers, createBasicEditor, createModel, setTheme } from '@geppio/editor'

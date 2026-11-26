@@ -2,6 +2,12 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.99] — 2026-11-26
+
+- Update existing pins: Electron 44.11.6 and Vite 7.3.8 (patch releases), ESLint 10.15.0, typescript-eslint 8.73.0 and Monaco 0.58.0 (minor; bundles DOMPurify 3.4.17 and Microsoft's MIT `@vscode/diff` backend, whose notice is retained). Refresh transitive undici 7.30.2 and minimatch 11.0.9, which adds `@isaacs/nonrecursive-glob-match` to the lint chain. The complete locked graph audits clean, retiring the Monaco 0.57.0 advisory exception.
+- Pack the web libraries with the Windows system tar so the packaging smoke also runs from Git Bash.
+- Keep `.local/` development diagnostics readable for Claude Code and its reviewer; only `.local/private/` is denied.
+
 ## [0.1.0-alpha.98] — 2026-11-26
 
 - Separate widget catalog and composition views, plugin presentation and activation, Sidebar bar controls and host Git responsibilities while preserving the Electron reference.

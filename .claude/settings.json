@@ -3,7 +3,7 @@
     "blockReadsOutsideWorkingDirectories": true,
     "deny": [
       "Read(/.git/**)",
-      "Read(/.local/**)",
+      "Read(/.local/private/**)",
       "Read(//**/.env)",
       "Read(//**/.env.*)",
       "Read(//**/*.key)",

@@ -43,10 +43,10 @@ Monaco comparison models never replace the editable draft. Existing native TOCTO
 same-user limitations remain; no Worker capability or generalized executor is introduced.
 
 Issue #49 adds the app-owned [Monaco ESM/model/asset boundary](monaco.md),
-including the owner's explicit known-advisory exception for pinned Monaco 0.57.0/DOMPurify 3.4.15.
-Local bundled language Workers receive no native bridge or private filesystem URI. Production
-CSP remains unchanged; only local `.ttf` font MIME support is added. This is not a clean audit
-or an untrusted editor/plugin platform. Future patched stable upgrades require scoped validation.
+now pinned to Monaco 0.58.0 with bundled DOMPurify 3.4.17 (#72), which retired the earlier
+known-advisory exception. Local bundled language Workers receive no native bridge or private
+filesystem URI. Production CSP remains unchanged; only local `.ttf` font MIME support is added.
+A clean audit does not make this an untrusted editor/plugin platform. Each upgrade requires scoped validation.
 
 Issue #47 adds the first-party [Terminal/ConPTY boundary](terminal.md): five fixed
 window/main-frame-bound calls, generation IDs, bounded input/output/dimensions and native cleanup.

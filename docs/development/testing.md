@@ -203,8 +203,8 @@ before any future rename; matrix names are additional diagnostics, not replaceme
 `test:desktop:dev`, optional alignment/groups DPR variants, `--native-resize-only`, `--native-ui`
 and `--official-package` remain available; they were not required invocations in alpha.48 CI.
 Historical grid/layout/margin/composition helpers are retained. Security negative tests, historical
-layout recovery and plugin/native authority stay in their original suites. Monaco 0.57.0/DOMPurify
-audit remains explicitly **FAILED** under its existing exception when applicable. Windows CI is
+layout recovery and plugin/native authority stay in their original suites. The complete locked
+graph audit must pass; record any new advisory in the active Issue instead of ignoring it. Windows CI is
 not Linux application validation, physical owner acceptance or hidden-desktop isolation.
 
 Compare exact-run job timestamps, workflow elapsed time, slowest Windows group, aggregate Windows
@@ -331,8 +331,8 @@ Later prompt/output bytes are excluded from that interval; complete/contiguous r
 page size and the original 262,144-unit retained-history cap remain strict. A pure regression
 appends output between pages and also rejects unbounded history/oversized transport fixtures.
 
-Run all Issue #49 regression commands after `pnpm check`. Production audit must be reported with
-the [known accepted exception](../architecture/monaco.md), not called clean. Windows CI runs
+Run all Issue #49 regression commands after `pnpm check`. Report the production audit and the
+bundled DOMPurify version described in the [Monaco boundary](../architecture/monaco.md). Windows CI runs
 Monaco's three runtime variants in addition to existing native/workbench suites. The existing
 physical owner smoke remains separate: disposable JSON, edit unsaved, switch Editor/Widgets,
 undo/redo, change language, explicit Save/inspect bytes/status, Explorer and live Terminal.

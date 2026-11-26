@@ -2,7 +2,7 @@
 
 ## Terminal native runtime (alpha.40)
 
-Use the locked Windows x64 graph with Electron 44.6.0. `node-pty@1.1.0` includes Windows Node-API
+Use the locked Windows x64 graph with Electron 44.11.6. `node-pty@1.1.0` includes Windows Node-API
 prebuilds; its reviewed install/postinstall scripts are allowlisted. Run `pnpm.cmd install --frozen-lockfile`,
 then `pnpm.cmd rebuild node-pty` if installation previously skipped scripts. This selects/prepares
 the shipped binary; on the validated Windows x64/Electron ABI 149 runtime no C++ compilation or

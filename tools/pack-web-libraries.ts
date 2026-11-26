@@ -6,6 +6,8 @@ import ts from 'typescript'
 
 const root = fileURLToPath(new URL('../', import.meta.url))
 const libraries = ['geppui', 'geppio-editor'] as const
+// Git Bash puts GNU tar first on PATH, which reads "C:" as a remote host; use the system bsdtar.
+const tar = process.platform === 'win32' ? join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'tar.exe') : 'tar'
 
 /** Emit ordinary JS/types and only the declared browser package's styles and notices. */
 export async function packWebLibraries() {
@@ -48,7 +50,7 @@ export async function packWebLibraries() {
       }
     }
     const archive = join(directory, manifest.name.slice(1).replace('/', '-') + '-' + version + '.tgz')
-    const pack = spawnSync('tar', ['-czf', archive, '-C', dirname(staging), basename(staging)], { windowsHide: true, stdio: 'inherit' })
+    const pack = spawnSync(tar, ['-czf', archive, '-C', dirname(staging), basename(staging)], { windowsHide: true, stdio: 'inherit' })
     if (pack.error || pack.status !== 0) throw pack.error ?? new Error('Package archive creation failed for ' + library)
     archives.push(archive)
   }
