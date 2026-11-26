@@ -2,6 +2,8 @@ node_modules/
 out/
 dist/
 coverage/
+# Cargo build output of the native workspace and its examples.
+target/
 test-results/
 playwright-report/
 .local/

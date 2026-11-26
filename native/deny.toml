@@ -1,0 +1,50 @@
+# Transitive-dependency policy approved in #73 (8 points), enforced by cargo-deny 0.20.2 in CI.
+# Run: cargo deny --locked check -W unmaintained   (unmaintained advisories are recorded warnings)
+[graph]
+# Windows is the only validated target; Linux/macOS sources get their own review (policy 6).
+targets = ["x86_64-pc-windows-msvc"]
+all-features = false
+
+[advisories]
+# Vulnerabilities fail. An exception needs an owner, a deadline and a recorded reason here.
+db-urls = ["https://github.com/rustsec/advisory-db"]
+yanked = "deny"
+unmaintained = "all"
+ignore = []
+
+[licenses]
+# Policy 4: a crate whose expression has no allowlisted alternative blocks until reviewed.
+allow = [
+    "MIT",
+    "MIT-0",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+    "BSL-1.0",
+    "CC0-1.0",
+    "Unlicense",
+    "0BSD",
+]
+confidence-threshold = 0.93
+unused-allowed-license = "allow"
+
+[licenses.private]
+# First-party crates are Apache-2.0 and never published.
+ignore = true
+
+[bans]
+multiple-versions = "allow"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+# Policy 1: crates.io plus the single approved GPUI repository (pinned by full SHA in
+# Cargo.toml and checked by tools/check-modules.ts). No other git source, no [patch].
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = ["https://github.com/zed-industries/zed"]

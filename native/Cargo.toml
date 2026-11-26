@@ -1,0 +1,36 @@
+# GeppIO native host (Rust + upstream GPUI). Owner decisions: Issue #73; delivery: Issue #74.
+# The version mirrors the root package.json (one 0.1.0-alpha.N line, checked by tools/check-repo.ts).
+[workspace]
+resolver = "3"
+members = ["crates/geppui", "crates/geppio-core", "crates/geppio"]
+exclude = ["examples/geppui-consumer"]
+
+[workspace.package]
+version = "0.1.0-alpha.100"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+rust-version = "1.98"
+repository = "https://github.com/rabrunos/GeppIO"
+
+# Every direct dependency is individually approved under #19 (see docs/legal and #73).
+# GPUI is one adoption unit: Zed v1.30.2, full SHA, no branch/tag refs, no [patch], no forks.
+[workspace.dependencies]
+gpui = { git = "https://github.com/zed-industries/zed", rev = "610ea4b8de1c6e887f03563f067278002f41256e" }
+gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "610ea4b8de1c6e887f03563f067278002f41256e" }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.154"
+geppui = { path = "crates/geppui" }
+geppio-core = { path = "crates/geppio-core" }
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+dbg_macro = "deny"
+
+[profile.dev]
+debug = 0
+
+[profile.release]
+debug = 0

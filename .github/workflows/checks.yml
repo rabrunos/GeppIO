@@ -46,18 +46,76 @@ jobs:
       - name: Audit the complete locked dependency graph
         if: ${{ !cancelled() && matrix.group == 'core' }}
         run: pnpm audit
-  # Preserve the previous required-check identity; success requires every shard AND Secrets.
+  # Native host (#74): Rust + upstream GPUI, separate from the Electron shards.
+  native:
+    name: Windows native
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      CARGO_TERM_COLOR: never
+      CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
+      CARGO_DENY_VERSION: '0.20.2'
+      CARGO_DENY_SHA256: '975a22143262fd27476d19ee00c7af67978426e40e1dee94eed6bbade1cf87dc'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0, approved in #73
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            native/target
+          key: native-${{ runner.os }}-${{ hashFiles('native/rust-toolchain.toml', 'native/Cargo.lock', 'native/examples/geppui-consumer/Cargo.lock') }}
+      - name: Install the pinned toolchain from rust-toolchain.toml
+        working-directory: native
+        run: rustup toolchain install && rustc --version
+      # The gate binary is downloaded and checksum-verified on every run, never restored from a cache.
+      - name: Install the checksum-verified cargo-deny release
+        shell: bash
+        run: |
+          set -euo pipefail
+          destination="$RUNNER_TEMP/geppio-cargo-deny"
+          mkdir -p "$destination"
+          name="cargo-deny-${CARGO_DENY_VERSION}-x86_64-pc-windows-msvc"
+          curl --fail --location --proto '=https' --tlsv1.2 --max-time 120 \
+            "https://github.com/EmbarkStudios/cargo-deny/releases/download/${CARGO_DENY_VERSION}/${name}.tar.gz" \
+            --output "$destination/cargo-deny.tar.gz"
+          printf '%s  %s\n' "$CARGO_DENY_SHA256" "$destination/cargo-deny.tar.gz" | sha256sum --check --status
+          tar -xzf "$destination/cargo-deny.tar.gz" -C "$destination" "${name}/cargo-deny.exe"
+          echo "$destination/${name}" >> "$GITHUB_PATH"
+      - name: Format
+        working-directory: native
+        run: cargo fmt --all --check
+      - name: Dependency, license, advisory and source policy
+        working-directory: native
+        run: cargo deny --locked check -W unmaintained
+      - name: Lint
+        working-directory: native
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
+      - name: Tests (geppio-core headless, then the workspace)
+        working-directory: native
+        run: cargo test --locked -p geppio-core && cargo test --locked --workspace
+      - name: Release build
+        working-directory: native
+        run: cargo build --locked --release -p geppio
+      - name: External GeppUI consumer policy and build
+        working-directory: native/examples/geppui-consumer
+        run: cargo deny --locked check -W unmaintained && cargo build --locked --target-dir ../../target
+  # Preserve the previous required-check identity; success requires every shard, native AND Secrets.
   windows:
-    needs: [windows-tests, secrets]
+    needs: [windows-tests, native, secrets]
     if: ${{ always() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
-      - name: Require all Windows groups and Secrets
+      - name: Require all Windows groups, native and Secrets
         env:
           WINDOWS_RESULT: ${{ needs.windows-tests.result }}
+          NATIVE_RESULT: ${{ needs.native.result }}
           SECRETS_RESULT: ${{ needs.secrets.result }}
-        run: test "$WINDOWS_RESULT" = success && test "$SECRETS_RESULT" = success
+        run: test "$WINDOWS_RESULT" = success && test "$NATIVE_RESULT" = success && test "$SECRETS_RESULT" = success
   secrets:
     runs-on: ubuntu-24.04
     timeout-minutes: 8

@@ -6,4 +6,4 @@ tools: Read, Glob, Grep
 
 Inspect only the assigned first-party source, tests, and sanitized diff or receipts supplied by the executor. Exclude personal data, credential locations, environment files, Git internals and `.local/private/`. Other `.local/` diagnostics are ordinary development evidence. Request a redacted excerpt when evidence lies outside the assignment. Never implement findings or delegate work.
 
-Trace caller identity, validated inputs, target, grant lifetime, failure handling and relevant regression tests. Return concrete findings with path and symbol, preconditions, impact, and evidence. Identify missing evidence separately. The primary executor handles fixes and commands.
+Trace caller identity, validated inputs, target, grant lifetime, generation, disposal, failure handling and relevant regression tests. Return concrete findings with path and symbol, preconditions, impact, and evidence. Identify missing evidence separately. The primary executor handles fixes and commands. In native code, also inspect `unsafe` and FFI blocks, panics crossing those boundaries and any crate reaching a capability outside its direction.

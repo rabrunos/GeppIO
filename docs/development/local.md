@@ -59,6 +59,10 @@ for the reviewed esbuild versions and exact node-pty 1.1.0, retaining strict eng
 Do not regenerate the lockfile, weaken those controls or change dependency pins to make setup pass.
 An actual mismatch needs a scoped task, observed evidence and the external-adoption gate where applicable.
 
+## Native host
+
+The Rust workspace in `native/` needs Visual Studio Build Tools (C++ and the Windows SDK) and rustup; `native/rust-toolchain.toml` selects the toolchain. See the [native README](../../native/README.md) for commands, its separate data profile and the test hooks. Native checks do not run inside `pnpm check`.
+
 ## Commands and their scope
 
 The canonical command definitions are in [package.json](../../package.json).

@@ -81,7 +81,7 @@ test('retained Node suites and the replacement repository checks use normal disc
 })
 
 function validateWorkflow(source: string) {
-  assert.deepEqual([...source.matchAll(/^ {2}([\w-]+):$/gm)].map(match => match[1]), ['push', 'pull_request', 'workflow_dispatch', 'windows-tests', 'windows', 'secrets'])
+  assert.deepEqual([...source.matchAll(/^ {2}([\w-]+):$/gm)].map(match => match[1]), ['push', 'pull_request', 'workflow_dispatch', 'windows-tests', 'native', 'windows', 'secrets'])
   assert.deepEqual(source.match(/^ *permissions:.*\n(?:[ ]+(?:[\w-]+): [\w-]+\n)*/gm), ['permissions:\n  contents: read\n'])
   assert.match(source, /group: geppio-checks-\$\{\{ github.ref \}\}\s+cancel-in-progress: true/)
   assert.match(source, /fail-fast: false\s+matrix:\s+group: \[core, ide, workbench\]/)
@@ -91,15 +91,26 @@ function validateWorkflow(source: string) {
   assert.match(source, /if: matrix.group != 'core'\s+run: pnpm plugins:build && pnpm build/)
   assert.match(source, /run: pnpm test:ci:\$\{\{ matrix.group \}\}/)
   assert.match(source, /if: \$\{\{ !cancelled\(\) && matrix.group == 'core' \}\}\s+run: pnpm audit\s*$/m)
-  assert.match(source, /windows:\s+needs: \[windows-tests, secrets\]\s+if: \$\{\{ always\(\) \}\}/)
+  assert.match(source, /windows:\s+needs: \[windows-tests, native, secrets\]\s+if: \$\{\{ always\(\) \}\}/)
   assert.match(source, /WINDOWS_RESULT: \$\{\{ needs.windows-tests.result \}\}/)
+  assert.match(source, /NATIVE_RESULT: \$\{\{ needs.native.result \}\}/)
   assert.match(source, /SECRETS_RESULT: \$\{\{ needs.secrets.result \}\}/)
-  assert.match(source, /run: test "\$WINDOWS_RESULT" = success && test "\$SECRETS_RESULT" = success/)
+  assert.match(source, /run: test "\$WINDOWS_RESULT" = success && test "\$NATIVE_RESULT" = success && test "\$SECRETS_RESULT" = success/)
+  // Native host (#74): pinned toolchain and cargo-deny, locked graph, policy gate before the build.
+  assert.match(source, /CARGO_DENY_VERSION: '0\.20\.2'/)
+  assert.match(source, /CARGO_DENY_SHA256: '975a22143262fd27476d19ee00c7af67978426e40e1dee94eed6bbade1cf87dc'/)
+  assert.match(source, /"\$CARGO_DENY_SHA256" "\$destination\/cargo-deny\.tar\.gz" \| sha256sum --check --status/)
+  assert.doesNotMatch(source, /restore-keys|cargo install cargo-deny|bin\/cargo-deny/)
+  assert.match(source, /working-directory: native\s+run: cargo deny --locked check -W unmaintained\n/)
+  assert.match(source, /cargo clippy --locked --workspace --all-targets -- -D warnings/)
+  assert.match(source, /cargo test --locked -p geppio-core && cargo test --locked --workspace/)
+  assert.match(source, /cargo build --locked --release -p geppio/)
+  assert.match(source, /working-directory: native\/examples\/geppui-consumer\s+run: cargo deny --locked check -W unmaintained && cargo build --locked/)
   assert.match(source, /node-version: '24'/)
   assert.match(source, /package-manager-cache: false/)
   assert.match(source, /npm install --global pnpm@11\.25\.0/)
   assert.match(source, /pnpm install --frozen-lockfile/)
-  assert.equal([...source.matchAll(/persist-credentials: false/g)].length, 2)
+  assert.equal([...source.matchAll(/persist-credentials: false/g)].length, 3)
   for (const match of source.matchAll(/\buses:\s*([^\s#]+)/g)) assert.match(match[1]!, /@[a-f0-9]{40}$/)
   assert.match(source, /fetch-depth: 0/)
   assert.match(source, /git show --format= --check HEAD/)
@@ -113,7 +124,11 @@ test('required matrix/aggregate status fails closed and preserves security/trigg
   assert.throws(() => validateWorkflow(workflow.replace(/uses: actions\/checkout@[a-f0-9]{40}/, 'uses:  actions/checkout@main')))
   for (const [from, to] of [
     ['fail-fast: false', 'fail-fast: true'],
-    ['needs: [windows-tests, secrets]', 'needs: [windows-tests]'],
+    ['needs: [windows-tests, native, secrets]', 'needs: [windows-tests, secrets]'],
+    ['run: cargo deny --locked check -W unmaintained', 'run: cargo deny check'],
+    ['cargo build --locked --release -p geppio', 'cargo build --release -p geppio'],
+    ['"$CARGO_DENY_SHA256" "$destination/cargo-deny.tar.gz" | sha256sum --check --status', '"$CARGO_DENY_SHA256" "$destination/cargo-deny.tar.gz"'],
+    ['cargo deny --locked check -W unmaintained && cargo build --locked --target-dir', 'cargo build --locked --target-dir'],
     ['${{ always() }}', '${{ success() }}'],
     ['= success && test', '= success || test'],
     ['group: [core, ide, workbench]', 'group: [core, ide]'],

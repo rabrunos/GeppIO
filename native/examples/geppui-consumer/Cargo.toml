@@ -1,0 +1,17 @@
+# Minimal external GeppUI consumer (#73): its own workspace and lockfile, public API only.
+[package]
+name = "geppui-consumer"
+version = "0.0.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+[workspace]
+
+[dependencies]
+geppui = { path = "../../crates/geppui" }
+gpui = { git = "https://github.com/zed-industries/zed", rev = "610ea4b8de1c6e887f03563f067278002f41256e" }
+gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "610ea4b8de1c6e887f03563f067278002f41256e" }
+
+[profile.dev]
+debug = 0

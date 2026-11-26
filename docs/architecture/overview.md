@@ -1,6 +1,6 @@
 # Architecture
 
-The six workspaces below implement the Electron reference. The [native design brief](native-reference.md) records the selected successor and its behavioral oracles.
+The six workspaces below implement the Electron reference. The [native design brief](native-reference.md) records the selected successor and its behavioral oracles. The successor lives in the separate Cargo workspace [native/](../../native/README.md): independent GeppUI, a pure Rust core and the app that composes them.
 
 ## Workspace ownership
 

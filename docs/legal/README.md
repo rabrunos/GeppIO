@@ -3,13 +3,16 @@
 GeppIO's original source code, documentation, examples and repository-owned assets are
 licensed under the [Apache License 2.0](../../LICENSE), unless a file states different terms.
 The root `LICENSE` contains the unmodified official text. The root and six workspace
-package manifests use the SPDX identifier `Apache-2.0`.
+package manifests, and the native Cargo workspace, use the SPDX identifier `Apache-2.0`.
 
 ## Third-party material
 
 Dependencies and incorporated third-party material retain their own licenses, copyrights
 and notices. The existing files in this directory preserve the Monaco, DOMPurify, marked,
-trusted-types and Terminal dependency notices. They are not relicensed by GeppIO.
+trusted-types and Terminal dependency notices. `heroicons-LICENSE.txt` covers the Heroicons
+24/outline SVG copies embedded by the native GeppUI (`native/crates/geppui/assets/icons`,
+regenerated from the approved `@heroicons/react` 2.2.0 by `tools/native-icons.ts`). They are
+not relicensed by GeppIO.
 Other dependencies carry their notices in their upstream packages; this directory is not
 a complete dependency inventory. Distribution must preserve the notices for the actual
 components included, including transitive and bundled components.

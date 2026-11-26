@@ -12,6 +12,12 @@
 
 The results of individual runs and owner acceptance belong in the active Issue.
 
+## Native host (alpha.100 / Issue #74)
+
+From `native/`, `cargo test --locked --workspace` runs the pure `geppio-core` geometry, GeppUI token, snapping, motion and asset tests and the app's region, option and preference tests without a window. `cargo deny --locked check -W unmaintained` (cargo-deny 0.20.2) enforces the approved license, advisory and source policy; unmaintained advisories are recorded warnings. `cargo clippy --locked --workspace --all-targets -- -D warnings`, `cargo fmt --all --check`, the release build and the external `examples/geppui-consumer` build complete the hosted `Windows native` job, which the aggregate `windows` check requires. `pnpm.cmd check:repo` covers the crate directions without a Rust toolchain.
+
+Visual and motion comparison against the Electron reference uses disposable `geppio-native-test-*` profiles and the `GEPPIO_NATIVE_TEST_*` hooks listed in the [native README](../../native/README.md). Run captures on a private Win32 desktop so no window reaches the owner's screen. Physical drag, Snap Layouts, real per-monitor DPI and pointer feel remain owner observations.
+
 ## Isolated local Windows smokes (alpha.50 / Issue #57)
 
 Build current application/plugin assets first with `pnpm check`, or use

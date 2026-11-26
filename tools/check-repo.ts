@@ -15,10 +15,10 @@ interface Manifest {
 }
 
 const versionPattern = /^\d+\.\d+\.\d+(?:-[\da-z.-]+)?$/
-const notices = ['dompurify-LICENSE-MPL.txt', 'dompurify-LICENSE.txt', 'marked-LICENSE.txt',
+const notices = ['dompurify-LICENSE-MPL.txt', 'dompurify-LICENSE.txt', 'heroicons-LICENSE.txt', 'marked-LICENSE.txt',
   'monaco-LICENSE.txt', 'monaco-ThirdPartyNotices.txt', 'terminal-dependencies.txt', 'trusted-types-LICENSE.txt']
-const generated = new Set(['node_modules', '.pnpm-store', 'out', 'dist', 'coverage', 'test-results', 'playwright-report'])
-const sourceRoots = new Set(['docs', 'src', 'tools', 'tests', 'examples', '.github', '.claude', '.vscode'])
+const generated = new Set(['node_modules', '.pnpm-store', 'out', 'dist', 'coverage', 'test-results', 'playwright-report', 'target'])
+const sourceRoots = new Set(['docs', 'src', 'tools', 'tests', 'examples', 'native', '.github', '.claude', '.vscode'])
 
 export function repositoryErrors(root: string): string[] {
   const errors: string[] = []
@@ -61,6 +61,12 @@ export function repositoryErrors(root: string): string[] {
   const releases = [...read('CHANGELOG.md').matchAll(/^## \[([^\]]+)\]/gm)].map(match => match[1])
   if (!versionPattern.test(pkg.version ?? '') || releases[0] !== pkg.version || releases.length !== new Set(releases).size)
     errors.push('Package version must head the changelog with unique releases')
+  if (files.has('native/Cargo.toml')) {
+    // One 0.1.0-alpha.N line (#73): the Cargo workspace mirrors package.json.
+    const workspaceVersion = /\[workspace\.package\][^[]*?\nversion\s*=\s*"([^"]+)"/.exec(read('native/Cargo.toml'))?.[1]
+    if (workspaceVersion !== pkg.version) errors.push('native/Cargo.toml [workspace.package] version must equal package.json')
+    if (!files.has('native/Cargo.lock')) errors.push('Missing native/Cargo.lock')
+  }
   for (const script of Object.values(pkg.scripts ?? {})) {
     for (const [target] of script.matchAll(/\btools\/[\w./-]+\.ts\b/g))
       if (!files.has(target)) errors.push('Missing script target: ' + target)

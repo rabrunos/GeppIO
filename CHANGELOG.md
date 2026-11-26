@@ -2,6 +2,22 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.100] — 2026-11-26
+
+- **Native host (new, Rust + GPUI):** add the `native/` Cargo workspace approved in #73. It contains:
+  - GeppUI, an independent component library: both theme token tables, device-pixel snapping, per-glyph letter spacing, Heroicons, interruptible CSS-style motion with the measured reversal rule, reduced motion, and a button, icon button, popover, menu item, dialog and scroll area.
+  - The pure `geppio-core` shell geometry.
+  - The first native screen: a frameless window with native Snap, the global and context headers, the concave header/Sidebar corner, the rail, a Sidebar with collapse, interrupted reversal and an animated floating peek (tint-only backdrop), Bottom, splitters, the status bar, the Main area, the theme switch, and the profile menu with the About dialog.
+  - Its own preferences profile (`%APPDATA%\geppio-native`); Electron data is never touched.
+  - An external GeppUI consumer.
+- **Repository and CI (both hosts):**
+  - Pin GPUI and `gpui_platform` at Zed v1.30.2 by full SHA, with `Cargo.lock` and `--locked`.
+  - Enforce the approved transitive policy with cargo-deny 0.20.2, and check crate directions, sources and pins in `check-modules`.
+  - Mirror the version in the Cargo workspace.
+  - Add a separate `Windows native` CI job required by the aggregate check, using `actions/cache` pinned by SHA.
+  - Add the Heroicons notice in `docs/legal`.
+- **Claude Code workflow:** adapt the project skills and the security reviewer to the native host, and add a read-only visual reviewer for side-by-side captures.
+
 ## [0.1.0-alpha.99] — 2026-11-26
 
 - Update existing pins: Electron 44.11.6 and Vite 7.3.8 (patch releases), ESLint 10.15.0, typescript-eslint 8.73.0 and Monaco 0.58.0 (minor; bundles DOMPurify 3.4.17 and Microsoft's MIT `@vscode/diff` backend, whose notice is retained). Refresh transitive undici 7.30.2 and minimatch 11.0.9, which adds `@isaacs/nonrecursive-glob-match` to the lint chain. The complete locked graph audits clean, retiring the Monaco 0.57.0 advisory exception.

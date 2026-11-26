@@ -21,6 +21,212 @@ const directions: Record<string, string[]> = {
   '@geppio/ui': []
 }
 
+/** Native crate directions (#73): app → GeppUI and app → core; GeppUI and core stay independent. */
+const nativeDirections: Record<string, string[]> = {
+  geppui: ['gpui'],
+  'geppio-core': ['serde', 'serde_json'],
+  geppio: ['geppui', 'geppio-core', 'gpui', 'gpui_platform', 'serde', 'serde_json'],
+  'geppui-consumer': ['geppui', 'gpui', 'gpui_platform']
+}
+/** The single approved git source: GPUI at Zed v1.30.2, pinned by full SHA. */
+export const GPUI_SOURCE = { git: 'https://github.com/zed-industries/zed', rev: '610ea4b8de1c6e887f03563f067278002f41256e' }
+const gpuiCrates = new Set(['gpui', 'gpui_platform'])
+/** The only first-party file allowed to contain `unsafe` code or FFI declarations. */
+export const NATIVE_FFI_FILE = 'native/crates/geppio/src/platform.rs'
+/** Manifest tables the native workspace may use; anything else (table-form dependencies,
+ * `target.*`, `patch`, `replace`, quoted headers) fails closed. */
+const allowedTables = new Set(['', 'package', 'dependencies', 'dev-dependencies', 'build-dependencies', 'lints', 'bin', 'workspace',
+  'workspace.package', 'workspace.dependencies', 'workspace.lints.rust', 'workspace.lints.clippy', 'profile.dev', 'profile.release'])
+const dependencyTables = new Set(['dependencies', 'dev-dependencies', 'build-dependencies', 'workspace.dependencies'])
+const dependencyKeys = new Set(['workspace', 'git', 'rev', 'version', 'path', 'features', 'default-features'])
+
+interface TomlEntry { key: string; value: string; line: number }
+interface TomlTable { name: string; entries: TomlEntry[] }
+
+/** Removes a `#` comment that is outside a string. */
+function stripComment(line: string): string {
+  let quote = ''
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i]!
+    if (quote) { if (ch === '\\' && quote === '"') i++; else if (ch === quote) quote = '' }
+    else if (ch === '"' || ch === "'") quote = ch
+    else if (ch === '#') return line.slice(0, i)
+  }
+  return line
+}
+
+/** Reads the strict TOML subset of the native manifests: `[table]` headers with bare dotted
+ * names, `[[bin]]`, and `bare.key = value` pairs (multi-line arrays allowed). */
+export function readToml(source: string, errors: Set<string>, path: string): TomlTable[] {
+  const tables: TomlTable[] = [{ name: '', entries: [] }]
+  const lines = source.split(/\r?\n/)
+  for (let i = 0; i < lines.length; i++) {
+    const line = stripComment(lines[i]!).trim()
+    if (!line) continue
+    const header = /^\[(\[)?([A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*)\](\])?$/.exec(line)
+    if (header) {
+      if (Boolean(header[1]) !== Boolean(header[3])) { errors.add(`Unrecognized native manifest line ${path}:${i + 1}`); continue }
+      tables.push({ name: header[2]!, entries: [] }); continue
+    }
+    const pair = /^([A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*)\s*=\s*(.+)$/.exec(line)
+    if (!pair) { errors.add(`Unrecognized native manifest line ${path}:${i + 1}`); continue }
+    let value = pair[2]!
+    // Multi-line arrays (workspace members, features) continue until the bracket closes.
+    while (value.startsWith('[') && (value.match(/\[/g)?.length ?? 0) > (value.match(/]/g)?.length ?? 0) && i + 1 < lines.length)
+      value += ' ' + stripComment(lines[++i]!).trim()
+    tables.at(-1)!.entries.push({ key: pair[1]!, value: value.trim(), line: i + 1 })
+  }
+  return tables
+}
+
+/** Parses `{ a = "x", b = true, c = ["y"] }` into raw values; unknown syntax returns null. */
+export function inlineTable(value: string): Map<string, string> | null {
+  const body = /^\{(.*)\}$/.exec(value.trim())?.[1]
+  if (body === undefined) return null
+  const fields = new Map<string, string>()
+  let depth = 0, quote = '', start = 0
+  const parts: string[] = []
+  for (let i = 0; i <= body.length; i++) {
+    const ch = body[i]
+    if (i === body.length || (!quote && depth === 0 && ch === ',')) { parts.push(body.slice(start, i)); start = i + 1; continue }
+    if (quote) { if (ch === '\\' && quote === '"') i++; else if (ch === quote) quote = '' }
+    else if (ch === '"' || ch === "'") quote = ch
+    else if (ch === '[') depth++
+    else if (ch === ']') depth--
+  }
+  for (const part of parts.map(p => p.trim()).filter(Boolean)) {
+    const field = /^([A-Za-z0-9_-]+)\s*=\s*(.+)$/.exec(part)
+    if (!field || fields.has(field[1]!)) return null
+    fields.set(field[1]!, field[2]!.trim())
+  }
+  return fields
+}
+
+const stringValue = (value: string | undefined) => value === undefined ? undefined : /^"([^"\\]*)"$/.exec(value)?.[1]
+
+function walkNative(dir: string, base: string, out: { manifests: string[]; sources: string[]; config: string[] }): void {
+  if (!existsSync(dir)) return
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.name === 'target') continue
+    const path = join(dir, entry.name), rel = relative(base, path).split(sep).join('/')
+    if (entry.name === '.cargo') { out.config.push(rel); continue }
+    if (entry.isDirectory()) walkNative(path, base, out)
+    else if (entry.name === 'Cargo.toml') out.manifests.push(rel)
+    else if (entry.name.endsWith('.rs')) out.sources.push(rel)
+  }
+}
+
+/** Dependency directions, sources, pins, lockfiles and `unsafe` placement of the native
+ * Cargo workspace. Needs no Rust toolchain, so it runs in `check:repo` and the core CI shard. */
+export function checkNative(root: string): string[] {
+  const nativeRoot = join(root, 'native')
+  if (!existsSync(nativeRoot)) return []
+  const errors = new Set<string>()
+  const found = { manifests: [] as string[], sources: [] as string[], config: [] as string[] }
+  walkNative(nativeRoot, root, found)
+  for (const config of found.config) errors.add('Native Cargo configuration directories are not allowed: ' + config)
+  if (!existsSync(join(root, 'native/Cargo.lock'))) errors.add('Missing native/Cargo.lock')
+  else checkLock('native/Cargo.lock', readFileSync(join(root, 'native/Cargo.lock'), 'utf8'), errors)
+  const graph = new Map<string, string[]>()
+  for (const path of found.manifests) {
+    const tables = readToml(readFileSync(join(root, path), 'utf8'), errors, path)
+    for (const table of tables) {
+      if (!allowedTables.has(table.name)) errors.add(`Native manifest table [${table.name}] is not allowed: ${path}`)
+      if (table.name === '' && table.entries.length) errors.add('Native manifest keys before the first table: ' + path)
+    }
+    if (path === 'native/Cargo.toml') {
+      for (const table of tables.filter(t => t.name === 'workspace.dependencies'))
+        for (const entry of table.entries) checkDependency(root, path, entry, false, errors)
+      continue
+    }
+    const pkg = stringValue(tables.find(t => t.name === 'package')?.entries.find(e => e.key === 'name')?.value)
+    if (!pkg) { errors.add('Native manifest without a package name: ' + path); continue }
+    if (!Object.hasOwn(nativeDirections, pkg)) { errors.add('Unknown native crate: ' + pkg + ' (' + path + ')'); continue }
+    const external = pkg === 'geppui-consumer'
+    if (external) {
+      if (!tables.some(t => t.name === 'workspace')) errors.add('The external consumer must be its own workspace: ' + path)
+      const lock = dirname(path) + '/Cargo.lock'
+      if (!existsSync(join(root, lock))) errors.add('Missing lockfile for the external consumer: ' + path)
+      else checkLock(lock, readFileSync(join(root, lock), 'utf8'), errors)
+    } else if (!tables.find(t => t.name === 'lints')?.entries.some(e => e.key === 'workspace' && e.value === 'true'))
+      errors.add('Native crate must inherit workspace lints: ' + path)
+    const edges: string[] = []
+    for (const table of tables.filter(t => dependencyTables.has(t.name) && t.name !== 'workspace.dependencies')) {
+      for (const entry of table.entries) {
+        const name = entry.key.split('.')[0]!
+        if (!nativeDirections[pkg]!.includes(name)) errors.add(`Disallowed native dependency: ${pkg} -> ${name}`)
+        checkDependency(root, path, entry, !external, errors)
+        edges.push(name)
+      }
+    }
+    graph.set(pkg, edges)
+  }
+  // geppio-core stays pure Rust: neither it nor anything it reaches may pull GPUI.
+  const reaches = (from: string, seen = new Set<string>()): Set<string> => {
+    for (const next of graph.get(from) ?? []) if (!seen.has(next)) { seen.add(next); reaches(next, seen) }
+    return seen
+  }
+  for (const target of reaches('geppio-core')) if (gpuiCrates.has(target)) errors.add('geppio-core reaches GPUI through ' + target)
+  for (const target of reaches('geppui')) if (target === 'geppio-core' || target === 'geppio') errors.add('geppui depends on GeppIO crate ' + target)
+  if (reaches('geppio-core').has('geppui')) errors.add('geppio-core depends on geppui')
+  for (const source of found.sources) {
+    if (source === NATIVE_FFI_FILE) continue
+    const text = readFileSync(join(root, source), 'utf8').replace(/forbid\(unsafe_code\)/g, '')
+    if (/\bunsafe\b|unsafe_code|#\s*\[\s*link\b|no_mangle|export_name|extern\s+"/.test(text))
+      errors.add('unsafe code or FFI outside ' + NATIVE_FFI_FILE + ': ' + source)
+  }
+  return [...errors]
+}
+
+/** Git sources that the pinned GPUI unit resolves only for other platforms (Linux, macOS,
+ * web, screen capture). They are locked by revision and never built on Windows; cargo-deny's
+ * Windows target filter excludes them. They get their own review when those platforms start
+ * (policy point 6 in #73). Any other git source fails. */
+export const OTHER_PLATFORM_SOURCES = [
+  'https://github.com/gfx-rs/wgpu?rev=cddb2f5d80dc0009b2ef6767635140cacf90a007',
+  'https://github.com/zed-industries/oo7?rev=731c1215edb6905876c6137ab300428c7b8d7c13',
+  'https://github.com/zed-industries/wasm_thread?rev=0cf96c7708dfb97ccf3da50347e25edcf75d6937',
+  'https://github.com/zed-industries/font-kit?rev=94b0f28166665e8fd2f53ff6d268a14955c82269',
+  'https://github.com/zed-industries/scap?rev=b5c86ec58dd4b6b7732bf6ac8be03d6b1f190a82'
+]
+
+function checkLock(path: string, lock: string, errors: Set<string>): void {
+  const allowed = new Set([GPUI_SOURCE.git + '?rev=' + GPUI_SOURCE.rev, ...OTHER_PLATFORM_SOURCES]
+    .map(source => 'git+' + source + '#' + source.slice(source.indexOf('?rev=') + 5)))
+  for (const [, source] of lock.matchAll(/^source = "([^"]+)"$/gm)) {
+    if (source === 'registry+https://github.com/rust-lang/crates.io-index' || allowed.has(source!)) continue
+    errors.add(`Unexpected source in ${path}: ${source}`)
+  }
+}
+
+/** One dependency entry: `name = "=x.y.z"`, `name = { ... }` or `name.workspace = true`. */
+function checkDependency(root: string, path: string, entry: TomlEntry, member: boolean, errors: Set<string>): void {
+  const dot = entry.key.indexOf('.')
+  const name = dot < 0 ? entry.key : entry.key.slice(0, dot)
+  const fields = dot < 0 ? (entry.value.startsWith('{') ? inlineTable(entry.value) : new Map([['version', entry.value]]))
+    : entry.key.slice(dot + 1).includes('.') ? null : new Map([[entry.key.slice(dot + 1), entry.value]])
+  if (!fields) { errors.add(`Unrecognized native dependency syntax: ${path}:${entry.line}`); return }
+  for (const key of fields.keys()) if (!dependencyKeys.has(key)) errors.add(`Native dependency key "${key}" is not allowed: ${path} -> ${name}`)
+  if (fields.has('workspace')) {
+    if (fields.get('workspace') !== 'true' || [...fields.keys()].some(k => k !== 'workspace' && k !== 'features')) errors.add(`Workspace dependency must only add features: ${path} -> ${name}`)
+    return
+  }
+  if (member) errors.add(`Native dependency must come from [workspace.dependencies]: ${path} -> ${name}`)
+  const git = stringValue(fields.get('git')), rev = stringValue(fields.get('rev')), local = stringValue(fields.get('path')), version = stringValue(fields.get('version'))
+  if (fields.has('git')) {
+    if (git !== GPUI_SOURCE.git || rev !== GPUI_SOURCE.rev || !gpuiCrates.has(name) || fields.has('version') || fields.has('path'))
+      errors.add(`Native git source must be ${GPUI_SOURCE.git}@${GPUI_SOURCE.rev} for gpui crates: ${path} -> ${name}`)
+    return
+  }
+  if (fields.has('path')) {
+    const target = local === undefined ? undefined : relative(join(root, 'native'), resolve(root, dirname(path), local))
+    if (target === undefined || target.startsWith('..') || isAbsolute(target) || !existsSync(join(root, 'native', target, 'Cargo.toml')))
+      errors.add(`Native path dependency must stay inside native/: ${path} -> ${name}`)
+    return
+  }
+  if (!version || !/^=\d+\.\d+\.\d+$/.test(version)) errors.add(`Native registry dependency must be pinned with =x.y.z: ${path} -> ${name}`)
+}
+
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
     if (entry.name === 'node_modules' || entry.name === 'dist') return []
@@ -156,8 +362,8 @@ export function checkModules(root: string): string[] {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  const errors = checkModules(process.cwd())
+  const errors = [...checkModules(process.cwd()), ...checkNative(process.cwd())]
   for (const message of errors) console.error(message)
   if (errors.length) process.exitCode = 1
-  else console.log('PASS  Workspace dependencies, public imports, platform boundaries and pure Runtime/SDK compilation')
+  else console.log('PASS  Workspace dependencies, public imports, platform boundaries, pure Runtime/SDK compilation and native crate directions')
 }
