@@ -877,6 +877,126 @@ impl EditSession {
         conclude: bool,
         store: &mut dyn WorkbenchStore,
     ) -> Result<(), SessionError> {
+        self.commit_with(next, conclude, store, None)
+    }
+
+    /// Opens Edit on a previewed scene without touching the stored document (`preview`):
+    /// Save adopts it and leaves recovery; Cancel keeps the previous data (and recovery).
+    pub fn preview_scene(&mut self, next: WorkbenchSnapshot, message: &str) {
+        self.gesture = None;
+        self.history.clear();
+        self.checkpoint = SessionDraft::new(self.committed.clone());
+        self.baseline = format_signature(&self.committed, &[]);
+        let next =
+            super::retirement::retire_demo_views(next.clone(), &self.registry).unwrap_or(next);
+        let _ = self.put(settle_snapshot(&next));
+        self.editing = true;
+        self.message = message.to_owned();
+    }
+
+    /// Settings "Importar layout" (`importFile`): a workbench envelope or a freeform layout
+    /// opens in the preview; Save adopts it without touching the original file. Returns
+    /// whether the preview opened.
+    pub fn import_preview(&mut self, text: &str) -> bool {
+        if self.editing {
+            self.message = String::from("Conclua ou cancele a edição antes de importar.");
+            return false;
+        }
+        if text.len() > crate::layout::policy::MAX_BYTES {
+            self.message = String::from("A composição deve ter até 64 KiB.");
+            return false;
+        }
+        let next = match parse_workbench(text, &self.registry) {
+            Ok(snapshot) => snapshot,
+            Err(_) => match crate::freeform::schema::parse_freeform(text) {
+                Ok(layout) => super::model::adopt_layout(&layout),
+                Err(_) => {
+                    self.message =
+                        String::from("Arquivo incompatível. Dados anteriores preservados.");
+                    return false;
+                }
+            },
+        };
+        self.preview_scene(
+            next,
+            "Composição importada na prévia. Salvar adota sem alterar originais.",
+        );
+        true
+    }
+
+    /// The initial-composition preview of Settings (`resetPreview`).
+    pub fn reset_preview(&mut self, demo_fixtures: bool) {
+        let next = super::retirement::reset_workbench(&self.draft.snapshot, demo_fixtures);
+        self.preview_scene(
+            next,
+            "Composição inicial na prévia. Salvar confirma; Cancelar preserva os dados anteriores.",
+        );
+    }
+
+    /// Creates or edits a bar from the bar form (`saveBar`). Only outside Edit, on a clean
+    /// committed document; the bar's members are placed in the Sidebar `surface`.
+    pub fn save_bar(
+        &mut self,
+        bar: &super::model::UserBar,
+        surface: &crate::layout::Surface,
+        disabled: &[String],
+        store: &mut dyn WorkbenchStore,
+    ) -> Result<(), SessionError> {
+        if self.normalization_pending {
+            self.message = String::from(
+                "Confirme a composição em Editar antes de alterar as barras. Os dados anteriores foram preservados.",
+            );
+            return Err(SessionError::Rejected);
+        }
+        if self.editing || self.recovery || self.draft.snapshot != self.committed {
+            return Err(SessionError::Rejected);
+        }
+        let Some(next) =
+            super::commands::configure_bar(&self.committed, &self.registry, bar, surface, disabled)
+        else {
+            self.message = String::from(
+                "Barra incompatível ou sem espaço. Os dados anteriores foram preservados.",
+            );
+            return Err(SessionError::Rejected);
+        };
+        self.commit_with(next, false, store, Some("Barra salva."))
+    }
+
+    /// Commits an organization change (bars). Inside Edit it is one more whole intention;
+    /// outside it is saved at once unless recovery or a pending normalization holds the
+    /// document, and only when the placements are unchanged (`commitOrganization`).
+    pub fn commit_organization(
+        &mut self,
+        next: WorkbenchSnapshot,
+        store: &mut dyn WorkbenchStore,
+    ) -> Result<(), SessionError> {
+        if self.editing {
+            return self.action(next);
+        }
+        if self.normalization_pending {
+            self.message = String::from(
+                "Confirme a composição em Editar antes de alterar as barras. Os dados anteriores foram preservados.",
+            );
+            return Err(SessionError::Rejected);
+        }
+        if self.recovery {
+            self.message =
+                String::from("Escolha e confirme uma prévia explícita antes de alterar as barras.");
+            return Err(SessionError::Recovery);
+        }
+        if next.placements != self.committed.placements {
+            return Err(SessionError::Rejected);
+        }
+        self.commit_with(next, false, store, Some("Preferência salva."))
+    }
+
+    fn commit_with(
+        &mut self,
+        next: WorkbenchSnapshot,
+        conclude: bool,
+        store: &mut dyn WorkbenchStore,
+        success: Option<&str>,
+    ) -> Result<(), SessionError> {
         if self.history.active() || self.gesture.is_some() {
             return Err(SessionError::GestureActive);
         }
@@ -928,11 +1048,11 @@ impl EditSession {
             self.editing = false;
             self.history.clear();
         }
-        self.message = String::from(if conclude {
+        self.message = String::from(success.unwrap_or(if conclude {
             "Composição salva. Edição concluída."
         } else {
             "Edição salva. O checkpoint de Cancelar foi atualizado."
-        });
+        }));
         Ok(())
     }
 

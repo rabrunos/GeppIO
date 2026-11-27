@@ -62,7 +62,16 @@ impl Ink {
             .line_height(self.m.px(line))
             .font_weight(css_weight(weight))
             .text_color(color)
-            .child(value.into())
+            .child(crate::i18n::t(&value.into()))
+    }
+    /// Text that is already composed from translated parts.
+    fn raw(&self, size: f32, line: f32, weight: f32, color: Hsla, value: String) -> Div {
+        div()
+            .text_size(self.m.px(size))
+            .line_height(self.m.px(line))
+            .font_weight(css_weight(weight))
+            .text_color(color)
+            .child(SharedString::from(value))
     }
     fn caption(&self, value: &'static str, line: f32) -> Div {
         self.text(9.0, line, 400.0, self.t.text_muted, value)
@@ -76,7 +85,7 @@ impl Ink {
         color: Hsla,
         value: &'static str,
     ) -> AnyElement {
-        spaced_text(value, self.m)
+        spaced_text(crate::i18n::t(value), self.m)
             .size(size, line)
             .weight(css_weight(weight))
             .color(color)
@@ -123,7 +132,7 @@ pub fn frame(
                 .line_height(m.px(title_line))
                 .font_weight(css_weight(650.0))
                 .text_color(t.text)
-                .child(title(id)),
+                .child(crate::i18n::t(title(id))),
         )
         .child(if compact {
             // Bottom content clips instead of scrolling (`[data-owner-region="bottom"] .widget-content`).
@@ -200,7 +209,7 @@ pub fn content(
                     .line_height(m.px(26.6))
                     .font_weight(css_weight(500.0))
                     .text_color(t.text)
-                    .child("Uma base, antes das ferramentas."),
+                    .child(crate::i18n::t("Uma base, antes das ferramentas.")),
             )
             .child(div().my(m.px(12.0)).child(k.text(11.0, 19.8, 400.0, t.text_muted, "O objetivo aqui é experimentar a organização, a densidade e o comportamento dos widgets.")))
             .child(
@@ -232,7 +241,7 @@ pub fn content(
                             .flex_col()
                             // An inline strong inside a 13px block: the line box is 17px tall.
                             .child(k.text(10.0, 17.0, 500.0, t.text, title))
-                            .child(div().mt(m.px(4.0)).child(k.text(9.0, 14.4, 400.0, t.text_muted, format!("Registro de exemplo {:02} · atividade simulada.", i + 1)))),
+                            .child(div().mt(m.px(4.0)).child(k.raw(9.0, 14.4, 400.0, t.text_muted, format!("{} {:02} {}", crate::i18n::t("Registro de exemplo"), i + 1, crate::i18n::t("· atividade simulada."))))),
                     )
             }))
             .into_any_element(),
@@ -252,7 +261,7 @@ fn queue(k: &Ink) -> Div {
             .px(m.px(13.0))
             .py(m.px(12.0))
     };
-    let header = ["EXPERIMENTO", "TIPO", "ESTADO"];
+    let header = ["Experimento", "Tipo", "Estado"];
     let rows = [
         ("Organizar uma composição", "Layout", "Explorar"),
         ("Experimentar o painel", "Surface", "Disponível"),
@@ -279,7 +288,13 @@ fn queue(k: &Ink) -> Div {
                 .border_b(m.border(1.0))
                 .border_color(t.border)
                 .children(header.iter().zip(widths).map(|(label, w)| {
-                    cell(w).child(k.tight(8.0, 11.0, 500.0, 0.8, t.text_muted, label))
+                    cell(w).child(
+                        spaced_text(crate::i18n::t(label).to_uppercase(), m)
+                            .size(8.0, 11.0)
+                            .weight(css_weight(500.0))
+                            .color(t.text_muted)
+                            .letter_spacing_em(0.8 / 8.0),
+                    )
                 })),
         )
         .children(rows.map(|(name, kind, status)| {
@@ -397,14 +412,11 @@ fn properties(
                 .cursor_pointer()
                 .on_click(toggle_density)
                 .child(
-                    boxed(
-                        if props.comfortable {
-                            "Confortável"
-                        } else {
-                            "Compacta"
-                        }
-                        .into(),
-                    )
+                    boxed(crate::i18n::t(if props.comfortable {
+                        "Confortável"
+                    } else {
+                        "Compacta"
+                    }))
                     .child(icon("chevron-down", m).size(14.0).color(t.text)),
                 )
                 .into_any_element(),

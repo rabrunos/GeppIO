@@ -5,13 +5,13 @@ use std::{collections::HashMap, path::PathBuf, time::Duration};
 
 use geppio_core::shell::{self, Responsive, ShellLayout, Tracks};
 use geppui::{
-    AnchorHandle, Appearance, Metrics, Rect, ThemeName, Transition, anchor_probe, button,
-    css_weight, dialog, icon, icon_button, menu_item,
+    AnchorHandle, Appearance, Metrics, Rect, TextField, Transition, anchor_probe, button,
+    css_weight, icon, icon_button,
     motion::{self, duration},
-    popover, spaced_text,
+    spaced_text,
 };
 use gpui::{
-    AnyElement, App, Context, Div, FocusHandle, Hsla, InteractiveElement, IntoElement,
+    AnyElement, App, Context, Div, Entity, FocusHandle, Hsla, InteractiveElement, IntoElement,
     KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement, Render,
     SharedString, StatefulInteractiveElement, Styled, Task, Window, WindowControlArea, div, img,
     prelude::FluentBuilder,
@@ -23,21 +23,17 @@ use gpui::ScrollHandle;
 
 use crate::{
     automation::Automation,
+    bars::BarsUi,
     edit::{EditUi, FileStore},
     edit_view::Ports,
     options::{Options, Start},
+    panels::{Menu, Panels},
     prefs::Prefs,
     regions::{Axis, Regions, SidebarMode},
     widgets::Properties,
 };
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Menu {
-    Profile,
-    About,
-}
 
 #[derive(Clone, Copy, Debug)]
 struct SplitterDrag {
@@ -49,17 +45,23 @@ struct SplitterDrag {
 
 pub struct Workbench {
     focus: FocusHandle,
-    profile: Option<PathBuf>,
-    prefs: Prefs,
+    pub(crate) profile: Option<PathBuf>,
+    pub(crate) prefs: Prefs,
     pub(crate) regions: Regions,
-    menu: Option<Menu>,
-    profile_anchor: AnchorHandle,
-    chevron: Transition,
+    pub(crate) menu: Option<Menu>,
+    pub(crate) profile_anchor: AnchorHandle,
+    pub(crate) chevron: Transition,
+    pub(crate) panels: Panels,
+    pub(crate) bars: BarsUi,
+    /// Header triggers, which regain focus when their panel closes.
+    pub(crate) triggers: Triggers,
+    /// A text field to focus at the next render.
+    pub(crate) pending_text_focus: Option<Entity<TextField>>,
     peek_timer: Option<Task<()>>,
     splitter: Option<SplitterDrag>,
     splitter_hover: [Transition; 2],
     splitter_hovered: [bool; 2],
-    viewport: (f64, f64),
+    pub(crate) viewport: (f64, f64),
     pub(crate) automation: Automation,
     pub(crate) session: EditSession,
     pub(crate) store: FileStore,
@@ -78,6 +80,14 @@ pub struct Workbench {
     pub(crate) removing: Option<String>,
 }
 
+/// Focus handles of the header and context triggers.
+pub struct Triggers {
+    pub plugins: FocusHandle,
+    pub bell: FocusHandle,
+    pub profile: FocusHandle,
+    pub more: FocusHandle,
+}
+
 fn regions_width(_s: &ShellLayout) -> f64 {
     geppio_core::shell::SIDEBAR_LIMITS.initial
 }
@@ -87,7 +97,7 @@ fn normal_line(size: f32) -> f32 {
     (size * 1.33).round()
 }
 
-fn abs(m: Metrics, r: shell_rect::R) -> Div {
+pub(crate) fn abs(m: Metrics, r: shell_rect::R) -> Div {
     let p = m.place(r.into());
     div()
         .absolute()
@@ -98,7 +108,7 @@ fn abs(m: Metrics, r: shell_rect::R) -> Div {
 }
 
 /// `geppio_core` rectangles (f64) as GeppUI rectangles (f32).
-mod shell_rect {
+pub(crate) mod shell_rect {
     #[derive(Clone, Copy)]
     pub struct R(pub geppui::Rect);
     impl From<geppio_core::Rect> for R {
@@ -127,6 +137,13 @@ fn rect(x: f64, y: f64, w: f64, h: f64) -> shell_rect::R {
 impl Workbench {
     pub fn new(options: &Options, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let prefs = Prefs::load(options.profile.as_deref());
+        crate::i18n::install(
+            cx,
+            crate::i18n::I18n {
+                preference: prefs.locale(),
+                system: crate::i18n::system_locale(),
+            },
+        );
         let mut regions = Regions::new(
             prefs.sidebar_width,
             prefs.bottom_height,
@@ -176,6 +193,15 @@ impl Workbench {
             menu: None,
             profile_anchor: AnchorHandle::default(),
             chevron: Transition::new(0.0),
+            panels: Panels::new(cx),
+            bars: BarsUi::new(cx),
+            triggers: Triggers {
+                plugins: cx.focus_handle(),
+                bell: cx.focus_handle(),
+                profile: cx.focus_handle(),
+                more: cx.focus_handle(),
+            },
+            pending_text_focus: None,
             peek_timer: None,
             splitter: None,
             splitter_hover: [Transition::new(0.0), Transition::new(0.0)],
@@ -242,7 +268,7 @@ impl Workbench {
         }));
     }
 
-    fn peek_hover(&mut self, hovered: bool, cx: &mut Context<Self>) {
+    pub(crate) fn peek_hover(&mut self, hovered: bool, cx: &mut Context<Self>) {
         if hovered {
             self.peek_timer = None;
             if self.regions.can_peek() {
@@ -256,21 +282,6 @@ impl Workbench {
                 self.peek_timer = None;
             }
         }
-    }
-
-    fn set_menu(&mut self, menu: Option<Menu>, cx: &mut Context<Self>) {
-        self.menu = menu;
-        let d = geppui::appearance(cx).duration(duration::ICON_HOVER);
-        self.chevron.request(
-            if menu == Some(Menu::Profile) {
-                1.0
-            } else {
-                0.0
-            },
-            d,
-            motion::EASE,
-        );
-        cx.notify();
     }
 
     fn splitter_hover(&mut self, index: usize, hovered: bool, cx: &mut Context<Self>) {
@@ -328,16 +339,19 @@ impl Workbench {
         cx.notify();
     }
 
-    fn on_key(&mut self, event: &KeyDownEvent, cx: &mut Context<Self>) {
+    fn on_key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         if self.menu.is_none() && self.edit_key(event, cx) {
             return;
         }
         if event.keystroke.key == "escape" {
+            if self.menu.is_none() && self.bars_escape(cx) {
+                return;
+            }
             if self.menu.is_none() && self.edit_escape(cx) {
                 return;
             }
             if self.menu.is_some() {
-                self.set_menu(None, cx);
+                self.set_menu(None, None, Some(window), cx);
             } else if self.regions.peek {
                 self.regions.close_peek();
                 cx.notify();
@@ -367,7 +381,7 @@ impl Workbench {
         };
         let window_button = |id: &'static str,
                              glyph: &'static str,
-                             label: &'static str,
+                             label: SharedString,
                              area: WindowControlArea| {
             let b = icon_button(id, glyph)
                 .label(label)
@@ -415,7 +429,11 @@ impl Workbench {
                             .size(14.0)
                             .color(t.breadcrumb_muted),
                     )
-                    .child(div().mt(m.half_pixel_nudge(14.5)).child("Projetos"))
+                    .child(
+                        div()
+                            .mt(m.half_pixel_nudge(14.5))
+                            .child(crate::i18n::t("Projetos")),
+                    )
                     .child(
                         icon("chevron-right", m)
                             .size(14.0)
@@ -429,20 +447,48 @@ impl Workbench {
                             .items_center()
                             .gap(m.px(11.0))
                             .font_weight(css_weight(700.0))
-                            .child(div().mt(m.half_pixel_nudge(14.5)).child("Laboratório"))
+                            .cursor_pointer()
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                let trigger = this.triggers.more.clone();
+                                this.set_menu(Some(Menu::Project), Some(trigger), None, cx)
+                            }))
+                            .child(
+                                div()
+                                    .mt(m.half_pixel_nudge(14.5))
+                                    .child(self.project_name()),
+                            )
                             .child(icon("chevron-down", m).size(18.0).color(t.text)),
                     )
                     .child(
-                        div().occlude().ml(m.px(11.0)).child(
-                            button("plugins")
-                                .label("Plugins")
-                                .icon("squares-2x2", 16.0)
-                                .height(30.0, 8.0)
-                                .accent()
-                                .padding_x(8.0)
-                                .text(13.0, 650.0)
-                                .tooltip("Plugins (fora do escopo desta etapa)"),
-                        ),
+                        div()
+                            .occlude()
+                            .relative()
+                            .ml(m.px(11.0))
+                            .child(anchor_probe(&self.panels.plugins_anchor))
+                            .child(
+                                button("plugins")
+                                    .label(crate::i18n::t("Plugins"))
+                                    .icon("squares-2x2", 16.0)
+                                    .height(30.0, 8.0)
+                                    .accent()
+                                    .pressed(self.menu == Some(Menu::Plugins))
+                                    .padding_x(8.0)
+                                    .text(13.0, 650.0)
+                                    .focus(&self.triggers.plugins)
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        if this.menu == Some(Menu::Plugins) {
+                                            this.set_menu(None, None, Some(window), cx)
+                                        } else {
+                                            let trigger = this.triggers.plugins.clone();
+                                            this.set_menu(
+                                                Some(Menu::Plugins),
+                                                Some(trigger),
+                                                None,
+                                                cx,
+                                            )
+                                        }
+                                    })),
+                            ),
                     ),
             )
             .child(
@@ -452,15 +498,56 @@ impl Workbench {
                     .h_full()
                     .gap(m.px(11.0))
                     .pr(m.px(11.0))
-                    .child(
-                        div().occlude().child(
-                            icon_button("bell", "bell")
-                                .label("Notificações")
-                                .size(32.0, 24.0)
-                                .color(t.text)
-                                .hover_bg(t.chrome_hover),
-                        ),
-                    )
+                    .child({
+                        let unread = self.unread_notifications();
+                        let tr = crate::i18n::tr(cx);
+                        div()
+                            .occlude()
+                            .relative()
+                            .child(anchor_probe(&self.panels.bell_anchor))
+                            .child(
+                                icon_button("bell", "bell")
+                                    .label(if unread > 0 {
+                                        tr.f("Notificações, {0} não lidas", &[&unread.to_string()])
+                                    } else {
+                                        tr.t("Notificações")
+                                    })
+                                    .size(32.0, 24.0)
+                                    .color(t.text)
+                                    .hover_bg(t.chrome_hover)
+                                    .focus(&self.triggers.bell)
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        if this.menu == Some(Menu::Notifications) {
+                                            this.set_menu(None, None, Some(window), cx)
+                                        } else {
+                                            let trigger = this.triggers.bell.clone();
+                                            this.set_menu(
+                                                Some(Menu::Notifications),
+                                                Some(trigger),
+                                                None,
+                                                cx,
+                                            )
+                                        }
+                                    })),
+                            )
+                            .when(unread > 0, |el| {
+                                el.child(
+                                    div()
+                                        .absolute()
+                                        .top(m.px(3.0))
+                                        .right(m.px(3.0))
+                                        .size(m.px(13.0))
+                                        .rounded_full()
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .bg(t.notification)
+                                        .text_color(t.primary_foreground)
+                                        .text_size(m.px(8.0))
+                                        .child(unread.to_string()),
+                                )
+                            })
+                    })
                     .child(separator())
                     .child(
                         div()
@@ -477,15 +564,16 @@ impl Workbench {
                             .text_size(m.px(12.0))
                             .text_color(t.text)
                             .cursor_pointer()
+                            .track_focus(&self.triggers.profile)
                             .when(profile_open, |el| el.bg(t.chrome_hover))
                             .hover(move |s| s.bg(t.chrome_hover))
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                let next = if this.menu == Some(Menu::Profile) {
-                                    None
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                if this.menu == Some(Menu::Profile) {
+                                    this.set_menu(None, None, Some(window), cx)
                                 } else {
-                                    Some(Menu::Profile)
-                                };
-                                this.set_menu(next, cx);
+                                    let trigger = this.triggers.profile.clone();
+                                    this.set_menu(Some(Menu::Profile), Some(trigger), None, cx)
+                                }
                             }))
                             .child(anchor_probe(&self.profile_anchor))
                             .child(
@@ -495,7 +583,9 @@ impl Workbench {
                                     .rounded_full()
                                     .flex_none(),
                             )
-                            .when(!c.r.compact_header, |el| el.child("Olá, Dev!"))
+                            .when(!c.r.compact_header, |el| {
+                                el.child(crate::i18n::tr(cx).t("Olá, Dev!"))
+                            })
                             .child(
                                 icon("chevron-down", m)
                                     .size(15.0)
@@ -514,19 +604,19 @@ impl Workbench {
                             .child(window_button(
                                 "window-min",
                                 "minus",
-                                "Minimizar",
+                                crate::i18n::t("Minimizar"),
                                 WindowControlArea::Min,
                             ))
                             .child(window_button(
                                 "window-max",
                                 "stop",
-                                "Maximizar",
+                                crate::i18n::t("Maximizar"),
                                 WindowControlArea::Max,
                             ))
                             .child(window_button(
                                 "window-close",
                                 "x-mark",
-                                "Fechar",
+                                crate::i18n::t("Fechar"),
                                 WindowControlArea::Close,
                             )),
                     ),
@@ -540,11 +630,11 @@ impl Workbench {
             button("explorer")
                 .icon("folder-open", 24.0)
                 .width(36.0)
-                .tooltip("Ver arquivos")
+                .tooltip(crate::i18n::t("Ver arquivos"))
         } else {
             button("explorer")
                 .icon("folder-open", 24.0)
-                .label("Ver arquivos")
+                .label(crate::i18n::t("Ver arquivos"))
                 .width(152.0)
         };
         abs(m, s.project.into())
@@ -562,7 +652,7 @@ impl Workbench {
                     .min_w_0()
                     .mt(m.half_pixel_nudge(56.5))
                     .child(
-                        spaced_text("Laboratório", m)
+                        spaced_text(self.project_name(), m)
                             .size(18.0, 22.0)
                             .weight(css_weight(700.0))
                             .color(t.text)
@@ -574,7 +664,7 @@ impl Workbench {
                             .line_height(m.px(16.0))
                             .text_color(t.text_muted)
                             .whitespace_nowrap()
-                            .child("Nenhuma pasta de projeto aberta"),
+                            .child(crate::i18n::t("Nenhuma pasta de projeto aberta")),
                     ),
             )
             .child(
@@ -584,26 +674,26 @@ impl Workbench {
                     .mx(m.px(14.0))
                     .child(
                         button("experience-workbench")
-                            .label("Bancada de Trabalho")
+                            .label(crate::i18n::t("Bancada de Trabalho"))
                             .pressed(true)
                             .disabled(editing),
                     )
                     .child(
                         button("experience-code")
-                            .label("GeppIO Code")
-                            .tooltip("GeppIO Code (fora do escopo desta etapa)")
+                            .label(crate::i18n::t("GeppIO Code"))
+                            .tooltip(crate::i18n::t("GeppIO Code (fora do escopo desta etapa)"))
                             .disabled(editing),
                     ),
             )
             .child(
                 button("project-local")
-                    .label("Projeto / arquivo avulso")
+                    .label(crate::i18n::t("Projeto / arquivo avulso"))
                     .text(12.0, 400.0)
-                    .tooltip("Projeto local"),
+                    .tooltip(crate::i18n::t("Projeto local")),
             )
             .child(
                 button("terminal")
-                    .label("Mostrar Terminal")
+                    .label(crate::i18n::t("Mostrar Terminal"))
                     .disabled(editing),
             )
             .child(
@@ -616,19 +706,38 @@ impl Workbench {
                             button("edit-layout")
                                 .icon("pencil-square", 24.0)
                                 .width(36.0)
-                                .tooltip("Editar layout")
+                                .tooltip(crate::i18n::t("Editar layout"))
                                 .when(editing, |b| b.accent())
+                                .disabled(self.session.recovery() && !editing)
                                 .focus(&self.edit_focus)
                                 .on_click(cx.listener(|this, _, _, cx| this.begin_edit(cx))),
                         ),
                     )
                     .child(
-                        div().ml(m.px(6.0)).child(
-                            button("project-more")
-                                .icon("ellipsis-horizontal", 24.0)
-                                .width(36.0)
-                                .tooltip("Mais opções do projeto"),
-                        ),
+                        div()
+                            .relative()
+                            .ml(m.px(6.0))
+                            .child(anchor_probe(&self.panels.project_anchor))
+                            .child(
+                                button("project-more")
+                                    .icon("ellipsis-horizontal", 24.0)
+                                    .width(36.0)
+                                    .tooltip(crate::i18n::t("Mais opções do projeto"))
+                                    .focus(&self.triggers.more)
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        if this.menu == Some(Menu::Project) {
+                                            this.set_menu(None, None, Some(window), cx)
+                                        } else {
+                                            let trigger = this.triggers.more.clone();
+                                            this.set_menu(
+                                                Some(Menu::Project),
+                                                Some(trigger),
+                                                None,
+                                                cx,
+                                            )
+                                        }
+                                    })),
+                            ),
                     ),
             )
     }
@@ -654,7 +763,7 @@ impl Workbench {
                 div()
                     .line_height(m.px(16.0))
                     .font_weight(css_weight(500.0))
-                    .child("Nenhum widget nesta área"),
+                    .child(crate::i18n::t("Nenhum widget nesta área")),
             )
             .child(
                 div()
@@ -669,7 +778,7 @@ impl Workbench {
                     .line_height(m.px(18.0))
                     .cursor_pointer()
                     .hover(move |s| s.bg(t.control_hover).text_color(t.text))
-                    .child("Escolher widgets"),
+                    .child(crate::i18n::t("Escolher widgets")),
             )
     }
 
@@ -685,13 +794,24 @@ impl Workbench {
         cx: &mut Context<Self>,
     ) -> Div {
         let (m, t) = (c.m, c.t);
+        let heading = {
+            let tr = crate::i18n::tr(cx);
+            let snapshot = self.session.draft();
+            snapshot
+                .organization
+                .bars
+                .iter()
+                .find(|b| b.id == snapshot.organization.active_bar)
+                .map(|b| self.bar_label(b, tr))
+                .unwrap_or_default()
+        };
         // Docked header: 50px with 9px top padding. Floating: 40px with 4.5px.
         let header_h = if floating { 40.0 } else { 50.0 };
         let (pin_top, heading_top) = if floating { (3.5, 4.5) } else { (13.5, 9.0) };
         let label = if floating {
-            "Fixar barra lateral"
+            crate::i18n::t("Fixar barra lateral")
         } else {
-            "Recolher barra lateral"
+            crate::i18n::t("Recolher barra lateral")
         };
         div()
             .relative()
@@ -706,7 +826,7 @@ impl Workbench {
                     .flex()
                     .items_center()
                     .child(
-                        spaced_text("FERRAMENTAS", m)
+                        spaced_text(heading.to_uppercase(), m)
                             .size(14.0, 22.0)
                             .weight(css_weight(500.0))
                             .color(t.text_muted)
@@ -769,57 +889,6 @@ impl Workbench {
                     )
                 }
             })
-    }
-
-    fn rail(&self, c: &Ctx, s: &ShellLayout, cx: &mut Context<Self>) -> Div {
-        let (m, t) = (c.m, c.t);
-        let theme_icon = if t.name == ThemeName::Dark {
-            "moon"
-        } else {
-            "sun"
-        };
-        let footer_button = |id: &'static str, glyph: &'static str, label: &'static str| {
-            icon_button(id, glyph).label(label).color(t.text)
-        };
-        abs(m, s.rail.into())
-            .bg(t.region)
-            .child(
-                div()
-                    .id("rail-primary")
-                    .absolute()
-                    .left_0()
-                    .top_0()
-                    .w(m.px(shell::RAIL as f32))
-                    .h(m.px((s.rail.h * 2.0 / 3.0) as f32))
-                    .on_hover(
-                        cx.listener(|this, hovered: &bool, _, cx| this.peek_hover(*hovered, cx)),
-                    )
-                    .child(
-                        div().absolute().left(m.px(7.0)).top(m.px(13.5)).child(
-                            icon_button("bar-home", "home")
-                                .label("Ferramentas")
-                                .size(34.0, 23.0)
-                                .color(t.text_muted)
-                                .selected(true)
-                                .on_click(cx.listener(|this, _, _, cx| this.toggle_sidebar(cx))),
-                        ),
-                    ),
-            )
-            .child(
-                div()
-                    .absolute()
-                    .left(m.px(8.0))
-                    .bottom(m.px(9.0))
-                    .flex()
-                    .flex_col()
-                    .gap(m.px(9.0))
-                    .child(footer_button("saved-bars", "folder", "Barras salvas"))
-                    .child(footer_button("new-bar", "plus", "Nova barra"))
-                    .child(
-                        footer_button("toggle-theme", theme_icon, "Alternar tema")
-                            .on_click(cx.listener(|this, _, _, cx| this.toggle_theme(cx))),
-                    ),
-            )
     }
 
     fn rail_separator(&self, c: &Ctx, s: &ShellLayout, track: f64) -> Option<AnyElement> {
@@ -964,155 +1033,14 @@ impl Workbench {
                     .flex()
                     .items_center()
                     .gap(m.px(gap))
-                    .child("Nenhum documento")
-                    .child(div().px(m.px(3.0)).child("Terminal: sem sessão")),
+                    .child(crate::i18n::t("Nenhum documento"))
+                    .child(
+                        div()
+                            .px(m.px(3.0))
+                            .child(crate::i18n::t("Terminal: sem sessão")),
+                    ),
             )
             .when(!c.r.narrow, |el| el.child(div().child(VERSION)))
-    }
-
-    fn overlays(&self, c: &Ctx, cx: &mut Context<Self>) -> Vec<AnyElement> {
-        let (m, t) = (c.m, c.t);
-        let mut out = Vec::new();
-        match self.menu {
-            Some(Menu::Profile) => {
-                let dark = t.name == ThemeName::Dark;
-                out.push(
-                    popover("profile-menu", &self.profile_anchor)
-                        .width(248.0)
-                        .padding(9.0, 11.0)
-                        .on_dismiss({
-                            let view = cx.entity().downgrade();
-                            move |_, cx| {
-                                let _ = view.update(cx, |this, cx| this.set_menu(None, cx));
-                            }
-                        })
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .gap(m.px(3.0))
-                                .px(m.px(11.0))
-                                .py(m.px(9.0))
-                                .mb(m.px(9.0))
-                                .border_b(m.border(1.0))
-                                .border_color(t.border)
-                                .child(
-                                    div()
-                                        .text_size(m.px(14.0))
-                                        .line_height(m.px(normal_line(14.0)))
-                                        .font_weight(css_weight(600.0))
-                                        .child("Dev"),
-                                )
-                                .child(
-                                    div()
-                                        .text_size(m.px(12.0))
-                                        .line_height(m.px(normal_line(12.0)))
-                                        .text_color(t.text_muted)
-                                        .child("Seu espaço no GeppIO"),
-                                ),
-                        )
-                        .child(
-                            menu_item(
-                                "menu-theme",
-                                if dark { "Tema claro" } else { "Tema escuro" },
-                            )
-                            .icon(if dark { "sun" } else { "moon" })
-                            .on_click(cx.listener(|this, _, _, cx| this.toggle_theme(cx))),
-                        )
-                        .child(
-                            div()
-                                .h(m.border(1.0))
-                                .mx(m.px(11.0))
-                                .my(m.px(9.0))
-                                .bg(t.border),
-                        )
-                        .child(
-                            menu_item("menu-about", "Sobre o GeppIO")
-                                .icon("information-circle")
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.set_menu(Some(Menu::About), cx)
-                                })),
-                        )
-                        .into_any_element(),
-                );
-            }
-            Some(Menu::About) => {
-                let done = div()
-                    .id("about-done")
-                    .mt(m.px(27.0))
-                    .w_full()
-                    .min_h(m.px(36.0))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .px(m.px(11.0))
-                    .py(m.px(9.0))
-                    .rounded(m.px(8.0))
-                    .border(m.border(1.0))
-                    .border_color(t.border)
-                    .bg(t.control_hover)
-                    .hover(move |s| s.bg(t.chrome_hover))
-                    .font_weight(css_weight(500.0))
-                    .cursor_pointer()
-                    .on_click(cx.listener(|this, _, _, cx| this.set_menu(None, cx)))
-                    .child("Voltar ao trabalho");
-                out.push(
-                    dialog("about", "Sobre o GeppIO")
-                        .on_dismiss({
-                            let view = cx.entity().downgrade();
-                            move |_, cx| {
-                                let _ = view.update(cx, |this, cx| this.set_menu(None, cx));
-                            }
-                        })
-                        .child(
-                            div()
-                                .mt(m.px(9.0))
-                                .text_color(t.text_muted)
-                                .line_height(m.px(13.0 * 1.6))
-                                .child("Seu espaço para criar, organizar e desenvolver."),
-                        )
-                        .child(
-                            div()
-                                .mt(m.px(27.0))
-                                .pt(m.px(18.0))
-                                .border_t(m.border(1.0))
-                                .border_color(t.border)
-                                .flex()
-                                .items_center()
-                                .justify_between()
-                                .gap(m.px(11.0))
-                                .child(
-                                    div()
-                                        .text_size(m.px(18.0))
-                                        .line_height(m.px(normal_line(18.0)))
-                                        .font_weight(css_weight(600.0))
-                                        .child("GeppIO"),
-                                )
-                                .child(
-                                    div()
-                                        .px(m.px(8.0))
-                                        .py(m.px(4.0))
-                                        .rounded(m.px(6.0))
-                                        .bg(t.accent_soft)
-                                        .text_size(m.px(12.0))
-                                        .line_height(m.px(normal_line(12.0)))
-                                        .child(VERSION),
-                                ),
-                        )
-                        .child(
-                            div()
-                                .mt(m.px(9.0))
-                                .text_color(t.text_muted)
-                                .line_height(m.px(13.0 * 1.6))
-                                .child("Projetos, ferramentas e widgets em um só lugar."),
-                        )
-                        .child(done)
-                        .into_any_element(),
-                );
-            }
-            None => {}
-        }
-        out
     }
 }
 
@@ -1125,6 +1053,10 @@ impl Render for Workbench {
         self.viewport = (m.css(vp.width) as f64, m.css(vp.height) as f64);
         self.regions.reduced = geppui::appearance(cx).reduced_motion;
         self.metrics = m;
+        if let Some(field) = self.pending_text_focus.take() {
+            let handle = gpui::Focusable::focus_handle(&field, cx);
+            window.focus(&handle, cx);
+        }
         if let Some(save) = self.pending_focus.take() {
             let handle = if save {
                 self.save_focus.clone()
@@ -1160,6 +1092,7 @@ impl Render for Workbench {
         };
         let s = ShellLayout::compute(w, h, tracks);
         self.ports = Ports::of(&s, self.regions.sidebar_width);
+        self.ports.surfaces.expanded = self.prefs.horizontal_expansion;
         let editing = self.editing();
         let main_frames = self.region_frames(Region::Main, m, t, now, editing, cx);
         let bottom_frames = self.region_frames(Region::Bottom, m, t, now, editing, cx);
@@ -1318,7 +1251,7 @@ impl Render for Workbench {
                     .into_any_element(),
             );
         }
-        layers.push(self.rail(&c, &s, cx).into_any_element());
+        layers.push(self.rail(m, t, s.rail, cx).into_any_element());
         if let Some(separator) = self.rail_separator(&c, &s, frame.track) {
             layers.push(separator);
         }
@@ -1328,7 +1261,8 @@ impl Render for Workbench {
         }
         layers.push(self.status_bar(&c, &s).into_any_element());
         layers.push(self.header(&c, cx).into_any_element());
-        layers.extend(self.overlays(&c, cx));
+        layers.extend(self.overlays(m, t, window, cx));
+        layers.extend(self.bar_overlays(m, t, window, cx));
         layers.extend(edit_top);
 
         let floating = s.floating;
@@ -1353,12 +1287,12 @@ impl Render for Workbench {
                     }
                     return;
                 }
-                this.on_key(e, cx)
+                this.on_key(e, window, cx)
             }))
             .on_mouse_move(cx.listener(move |this, e: &MouseMoveEvent, _, cx| {
                 if !geppui::appearance(cx).clock.frozen() {
                     let pos = (m.css(e.position.x), m.css(e.position.y));
-                    if !this.edit_move(pos, cx) {
+                    if !this.bars_move(pos, cx) && !this.edit_move(pos, cx) {
                         this.on_mouse_move(e, m, cx)
                     }
                 }
@@ -1366,7 +1300,7 @@ impl Render for Workbench {
             .on_mouse_up(
                 MouseButton::Left,
                 cx.listener(|this, _: &MouseUpEvent, _, cx| {
-                    if !this.edit_up(cx) {
+                    if !this.bars_up(cx) && !this.edit_up(cx) {
                         this.on_mouse_up(cx)
                     }
                 }),

@@ -71,7 +71,7 @@ pub fn window_frame(t: &Theme, m: Metrics) -> Div {
 fn history_button(
     id: &'static str,
     glyph: &'static str,
-    label: &'static str,
+    label: SharedString,
     enabled: bool,
     b: &Banner,
     m: Metrics,
@@ -114,7 +114,7 @@ fn history_button(
                 .on_click(move |e, w, cx| handler(e, w, cx))
         })
         .on_hover(geppui::button::hover_listener(state))
-        .tooltip(move |_, cx| geppui::button::tooltip_view(label, cx))
+        .tooltip(move |_, cx| geppui::button::tooltip_view(label.clone(), cx))
         .child(icon(glyph, m).size(16.0).color(fg))
         .into_any_element()
 }
@@ -122,7 +122,7 @@ fn history_button(
 #[allow(clippy::too_many_arguments)]
 fn action(
     id: &'static str,
-    label: &'static str,
+    label: SharedString,
     colors: (Hsla, Hsla, Hsla, Hsla),
     outline: Hsla,
     focus: Option<FocusHandle>,
@@ -235,7 +235,7 @@ pub fn edit_banner(
                         .overflow_hidden()
                         .text_ellipsis()
                         .font_weight(css_weight(650.0))
-                        .child("Modo de edição ativo"),
+                        .child(crate::i18n::t("Modo de edição ativo")),
                 ),
         )
         .when(!compact, |el| {
@@ -246,7 +246,7 @@ pub fn edit_banner(
                     .border_color(b.control)
                     .text_size(m.px(11.0))
                     .text_color(b.hint)
-                    .child("Barra lateral fixada"),
+                    .child(crate::i18n::t("Barra lateral fixada")),
             )
         })
         .child(
@@ -256,7 +256,7 @@ pub fn edit_banner(
                 .child(history_button(
                     "edit-undo",
                     "undo",
-                    "Desfazer (Ctrl+Z)",
+                    crate::i18n::t("Desfazer (Ctrl+Z)"),
                     a.can_undo,
                     &b,
                     m,
@@ -267,7 +267,7 @@ pub fn edit_banner(
                 .child(history_button(
                     "edit-redo",
                     "redo",
-                    "Refazer (Ctrl+Y ou Ctrl+Shift+Z)",
+                    crate::i18n::t("Refazer (Ctrl+Y ou Ctrl+Shift+Z)"),
                     a.can_redo,
                     &b,
                     m,
@@ -278,7 +278,7 @@ pub fn edit_banner(
         )
         .child(action(
             "edit-cancel",
-            "Cancelar",
+            crate::i18n::t("Cancelar"),
             (b.foreground, b.control, b.hover, b.hover),
             t.accent,
             None,
@@ -289,7 +289,7 @@ pub fn edit_banner(
         ))
         .child(action(
             "edit-save",
-            "Salvar edição",
+            crate::i18n::t("Salvar edição"),
             (rgb(0x172538).into(), t.accent, t.accent, t.primary_hover),
             t.accent,
             Some(a.save_focus.clone()),
@@ -300,7 +300,7 @@ pub fn edit_banner(
         ))
         .child(action(
             "edit-conclude",
-            "Concluir",
+            crate::i18n::t("Concluir"),
             (
                 rgb(0x132b4e).into(),
                 rgb(0xf8f8f2).into(),

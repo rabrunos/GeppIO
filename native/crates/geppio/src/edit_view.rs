@@ -201,7 +201,7 @@ impl Workbench {
         } else if self.session.recovery() {
             // The reference points to an explicit preview in Settings, which the native host
             // does not have yet.
-            self.edit.toast("Composição salva incompatível ou ilegível. O arquivo foi preservado e a edição fica bloqueada até a recuperação pelas Configurações, ainda indisponíveis no app nativo.", now);
+            self.edit.toast("Composição salva incompatível ou ilegível. O arquivo foi preservado e a edição fica bloqueada até a recuperação pelas Configurações.", now);
         } else {
             let message = self.session.message().to_owned();
             self.edit.toast(&message, now);
@@ -1064,7 +1064,9 @@ impl Workbench {
                         .mt(m.px(9.0))
                         .text_color(t.text_muted)
                         .line_height(m.px(13.0 * 1.6))
-                        .child("Remover esta presença? Os dados e plugins continuam disponíveis."),
+                        .child(crate::i18n::t(
+                            "Remover esta presença? Os dados e plugins continuam disponíveis.",
+                        )),
                 )
                 .child(
                     div()
@@ -1074,14 +1076,14 @@ impl Workbench {
                         .gap(m.px(9.0))
                         .child(
                             geppui::button("remove-cancel")
-                                .label("Cancelar")
+                                .label(crate::i18n::t("Cancelar"))
                                 .height(36.0, 8.0)
                                 .text(12.0, 600.0)
                                 .on_click(move |_, w, cx| cancel(w, cx)),
                         )
                         .child(
                             geppui::button("remove-confirm")
-                                .label("Remover")
+                                .label(crate::i18n::t("Remover"))
                                 .height(36.0, 8.0)
                                 .text(12.0, 600.0)
                                 .primary()
@@ -1304,7 +1306,7 @@ impl Workbench {
                     &t,
                     g.pointer,
                     (s.viewport.w as f32, s.viewport.h as f32),
-                    g.label(),
+                    &crate::i18n::t(g.label()),
                 )
                 .into_any_element(),
             );
@@ -1324,10 +1326,14 @@ impl Workbench {
         }
         // The geometry warning stays while a region is infeasible; a transaction message joins it.
         let warning = self.geometry_warning().then_some("Espaço insuficiente para os mínimos. Composição preservada; amplie ou reabra a região.");
-        let text = match (warning, self.edit.toast_text(now)) {
+        // Toast texts are catalogue keys; they are translated as they are shown.
+        let text = match (
+            warning.map(crate::i18n::t),
+            self.edit.toast_text(now).map(crate::i18n::t),
+        ) {
             (Some(w), Some(m)) => Some(format!("{w} {m}")),
-            (Some(w), None) => Some(w.to_owned()),
-            (None, Some(m)) => Some(m.to_owned()),
+            (Some(w), None) => Some(w.to_string()),
+            (None, Some(m)) => Some(m.to_string()),
             (None, None) => None,
         };
         if let Some(text) = text {

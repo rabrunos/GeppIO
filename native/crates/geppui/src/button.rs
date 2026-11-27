@@ -12,20 +12,34 @@ use crate::{appearance, css_weight, icon, metrics, motion, motion::Transition};
 
 type ClickHandler = Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
 
+/// Focus handles kept per control id for the whole app. Keyed element state depends on the
+/// element path, and a menu that moves focus between its items renders outside them, so the
+/// handles live in one registry keyed by id alone.
+#[derive(Default)]
+struct FocusRegistry(std::collections::HashMap<SharedString, FocusHandle>);
+
+impl gpui::Global for FocusRegistry {}
+
 /// The control's focus handle: the host's, or one kept per element id. Keyboard activation
 /// (Enter/Space on the focused control) comes from GPUI's click listeners.
 pub fn focus_handle(
     id: &SharedString,
     external: Option<FocusHandle>,
-    window: &mut Window,
+    _window: &mut Window,
     cx: &mut App,
 ) -> FocusHandle {
     let handle = external.unwrap_or_else(|| {
-        let key = ElementId::Name(SharedString::from(format!("{id}::focus")));
-        window
-            .use_keyed_state(key, cx, |_, cx| cx.focus_handle())
-            .read(cx)
-            .clone()
+        if let Some(handle) = cx
+            .try_global::<FocusRegistry>()
+            .and_then(|r| r.0.get(id).cloned())
+        {
+            return handle;
+        }
+        let handle = cx.focus_handle();
+        cx.default_global::<FocusRegistry>()
+            .0
+            .insert(id.clone(), handle.clone());
+        handle
     });
     handle.tab_stop(true)
 }

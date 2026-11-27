@@ -5,9 +5,11 @@
 //! compose the primitives. Labels and open/close decisions always come from the caller.
 #![forbid(unsafe_code)]
 
+pub mod actions;
 pub mod anchor;
 pub mod assets;
 pub mod button;
+pub mod controls;
 pub mod dialog;
 pub mod icon;
 pub mod metrics;
@@ -16,6 +18,7 @@ pub mod outline;
 pub mod popover;
 pub mod scroll;
 pub mod text;
+pub mod text_field;
 pub mod theme;
 pub mod toast;
 
@@ -23,17 +26,20 @@ use std::time::Instant;
 
 use gpui::{App, Global, Window};
 
+pub use actions::{DialogButton, DialogButtonKind, TextAction, dialog_button, text_action};
 pub use anchor::{AnchorHandle, anchor_probe};
 pub use assets::GeppuiAssets;
 pub use button::{Button, IconButton, button, icon_button};
+pub use controls::{Checkbox, Select, Switch, checkbox, select, switch};
 pub use dialog::{Dialog, dialog};
 pub use icon::{Icon, icon};
 pub use metrics::{Metrics, Placed, Rect, UI_FONT, css_weight};
 pub use motion::{CubicBezier, Transition, Tween};
 pub use outline::{dashed_outline, outline_geometry};
-pub use popover::{Popover, menu_item, popover};
+pub use popover::{Placement, Popover, menu_item, popover, popover_heading};
 pub use scroll::{ScrollArea, bars_needed, scroll_area};
 pub use text::{SpacedText, spaced_text};
+pub use text_field::{TextField, TextFieldEvent};
 pub use theme::{Shadow, Theme, ThemeName};
 pub use toast::{Toast, toast};
 

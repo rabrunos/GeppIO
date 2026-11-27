@@ -2,6 +2,41 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.103] — 2026-11-27
+
+- **Native host (Rust + GPUI): header panels, Settings, languages and custom bars (Stage C1, #75).** This is the first step toward full parity with the Electron reference.
+  - **Profile menu:** Configurações, theme, the Idioma group (browser language, Português (Brasil), English) and Sobre.
+  - **Settings dialog:**
+    - Aparência, the "Guia e encaixe no centro" switch, and Idioma;
+    - the "Desenvolvimento e recuperação" page: horizontal expansion, "Prévia da composição inicial" (the explicit recovery exit) and "Importar layout" (OS file dialog, then a preview that Save adopts).
+  - **Languages:** pt-BR keys with an English dictionary generated from the reference catalogues (`tools/native-i18n.ts`, with a drift test). "Idioma do navegador" follows the Windows display language.
+  - **Notification center:** filters, read, dismiss and clear. Entries arrive with plugins in a later stage.
+  - **Project menu** (also from the project name):
+    - rename with validation, and the information dialog;
+    - "Copiar caminho" and "Exportar configuração…" are demonstration actions, as in the reference.
+  - **Plugins popover:** search, sort, Developer Mode and filters. The inventory is empty until the plugin runtime.
+  - **Rail and custom bars:**
+    - select, or peek when the Sidebar is hidden;
+    - the "Opções da barra" menu;
+    - the "Nova barra" / "Editar barra" form (name, 13 icons, Sidebar widgets);
+    - the "Barras salvas" library with search, sort, filters, card menu, archive, restore and delete with confirmation;
+    - reorder in Edit by pointer (150 ms FLIP) or Alt+↑/↓, and restore by dragging from the library;
+    - the 14/100 limits.
+    - The Sidebar heading shows the active bar.
+  - **Core:** `geppio-core` gains `commit_organization`, `save_bar`, the initial-composition preview, layout import, `reset_workbench` and the notification model, each with tests.
+  - **GeppUI** gains:
+    - a text field (caret, selection, clipboard, IME);
+    - switch, checkbox and select;
+    - text actions and dialog buttons;
+    - popover placements (below, rail, at a point) with arrow-key menus;
+    - a fixed popover height.
+  - **Edit button:** disabled during recovery, as in the reference.
+  - **Hardening after an independent review:**
+    - text-field offsets are clamped to character boundaries, and IME ranges are normalized;
+    - layout import reads off the UI thread after checking the file size;
+    - layout and bar names refuse hidden characters (controls, bidi overrides, zero-width);
+    - an unrecognized `preferences.json` is moved aside instead of copied.
+
 ## [0.1.0-alpha.102] — 2026-11-26
 
 - **Native host (Rust + GPUI): widget engine, edit mode and catalog (Stage B2, #74).**

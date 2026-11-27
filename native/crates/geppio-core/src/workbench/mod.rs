@@ -7,6 +7,7 @@ pub mod commands;
 pub mod groups;
 pub mod history;
 pub mod model;
+pub mod notifications;
 pub mod portable;
 pub mod presentations;
 pub mod retirement;

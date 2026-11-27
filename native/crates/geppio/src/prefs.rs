@@ -28,6 +28,14 @@ pub struct Prefs {
     pub bottom_collapsed: bool,
     pub sidebar_width: f64,
     pub bottom_height: f64,
+    /// "auto", "pt-BR" or "en" (the reference's `geppio.locale`).
+    pub locale: String,
+    /// "Guia e encaixe no centro" (`geppio:snap-center:v1`, on by default).
+    pub snap_center: bool,
+    /// "Ativar expansão horizontal" (`geppio:layout:expansion:v1`, off by default).
+    pub horizontal_expansion: bool,
+    /// Display name of the layout (`geppio:project-name:v1`); empty shows "Laboratório".
+    pub project_name: String,
     /// The file on disk was not a readable v1 document; keep its bytes before replacing it.
     #[serde(skip)]
     pub unrecognized: bool,
@@ -42,9 +50,35 @@ impl Default for Prefs {
             bottom_collapsed: false,
             sidebar_width: SIDEBAR_LIMITS.initial,
             bottom_height: BOTTOM_LIMITS.initial,
+            locale: "auto".into(),
+            snap_center: true,
+            horizontal_expansion: false,
+            project_name: String::new(),
             unrecognized: false,
         }
     }
+}
+
+/// Characters a displayed name never carries: controls, bidi embeddings/overrides/isolates,
+/// zero-width and invisible format characters, and line/paragraph separators (they would
+/// let a name spoof the text around it).
+pub fn hidden_char(c: char) -> bool {
+    c.is_control()
+        || matches!(
+            c,
+            '\u{200B}'..='\u{200F}'
+                | '\u{2028}'..='\u{202E}'
+                | '\u{2060}'..='\u{206F}'
+                | '\u{FEFF}'
+        )
+}
+
+/// A layout name as the reference accepts it: trimmed, non-empty, at most 60 UTF-16 units
+/// (`ProjectMenu.tsx` `rename`), without hidden characters.
+pub fn valid_name(value: &str) -> Option<String> {
+    let name = value.trim();
+    (!name.is_empty() && name.encode_utf16().count() <= 60 && !name.chars().any(hidden_char))
+        .then(|| name.to_owned())
 }
 
 fn within(value: f64, min: f64, max: f64, initial: f64) -> f64 {
@@ -73,7 +107,14 @@ impl Prefs {
             BOTTOM_LIMITS.initial,
         );
         self.theme = self.theme().as_str().into();
+        if crate::i18n::Preference::parse(&self.locale).is_none() {
+            self.locale = "auto".into();
+        }
+        self.project_name = valid_name(&self.project_name).unwrap_or_default();
         self
+    }
+    pub fn locale(&self) -> crate::i18n::Preference {
+        crate::i18n::Preference::parse(&self.locale).unwrap_or_default()
     }
     pub fn parse(bytes: &[u8]) -> Self {
         match serde_json::from_slice::<Prefs>(bytes) {
@@ -111,7 +152,9 @@ impl Prefs {
             .unwrap_or(0);
         let target = dir.join(FILE);
         if self.unrecognized && target.exists() {
-            std::fs::copy(
+            // Moved aside, not copied: the whole file is kept without being read, whatever its
+            // size, and a link is moved rather than followed.
+            std::fs::rename(
                 &target,
                 dir.join(format!("preferences.unrecognized-{stamp}.json")),
             )?;
@@ -157,6 +200,22 @@ mod tests {
             Prefs::parse(br#"{"version":2,"theme":"light"}"#).theme(),
             ThemeName::Dark
         );
+        let named = Prefs::parse(
+            r#"{"version":1,"locale":"fr","projectName":"  Estúdio  ","snapCenter":false}"#
+                .as_bytes(),
+        );
+        assert_eq!(
+            (
+                named.locale.as_str(),
+                named.project_name.as_str(),
+                named.snap_center
+            ),
+            ("auto", "Estúdio", false)
+        );
+        assert_eq!(valid_name("a\u{202E}b"), None);
+        assert_eq!(valid_name(" Estúdio "), Some("Estúdio".into()));
+        let long = format!(r#"{{"version":1,"projectName":"{}"}}"#, "x".repeat(61));
+        assert_eq!(Prefs::parse(long.as_bytes()).project_name, "");
         let p = Prefs::parse(br#"{"version":1,"theme":"neon","sidebarWidth":9999,"bottomHeight":200,"sidebarCollapsed":true}"#);
         assert_eq!(
             (

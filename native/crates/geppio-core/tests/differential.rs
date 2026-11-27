@@ -1190,3 +1190,170 @@ fn more_placements_than_widgets_are_rejected_before_seed_parsing() {
     let hostile = Json::Object(root.clone().with("layout", Json::Object(layout))).stringify();
     assert!(parse_workbench(&hostile, &registry).is_err());
 }
+
+fn test_surfaces() -> geppio_core::workbench::SessionSurfaces {
+    use geppio_core::layout::{PerRegion, Size};
+    geppio_core::workbench::SessionSurfaces {
+        sizes: PerRegion {
+            main: Size::new(927.0, 494.0),
+            sidebar: Size::new(253.0, 661.0),
+            bottom: Size::new(903.0, 147.0),
+        },
+        expanded: false,
+    }
+}
+
+#[test]
+fn bars_commit_outside_edit_and_record_inside_it() {
+    use geppio_core::layout::Region;
+    use geppio_core::workbench::{EditSession, HOME, UserBar, update_bar, widget_registry};
+    let mut store = MemoryStore::default();
+    let mut session = EditSession::open(widget_registry(&[], true), None, true);
+    let surfaces = test_surfaces();
+    // Create a bar from the form: saved at once, active, persisted.
+    let bar = UserBar {
+        id: "bar:test".into(),
+        name: "Foco".into(),
+        user_named: true,
+        icon: "widgets".into(),
+        archived: false,
+        members: Vec::new(),
+        positions: Default::default(),
+    };
+    session
+        .save_bar(&bar, &surfaces.surface(Region::Sidebar), &[], &mut store)
+        .unwrap();
+    assert_eq!(session.message(), "Barra salva.");
+    assert!(session.stored().is_some_and(|raw| raw.contains("bar:test")));
+    // Activate Home again outside Edit: a committed organization change.
+    let mut next = session.draft().clone();
+    next.organization.active_bar = HOME.into();
+    session.commit_organization(next, &mut store).unwrap();
+    assert_eq!(session.message(), "Preferência salva.");
+    assert_eq!(session.committed().organization.active_bar, HOME);
+    // Inside Edit the form is refused and an archive is one undoable intention.
+    session.begin(&surfaces).unwrap();
+    assert!(
+        session
+            .save_bar(&bar, &surfaces.surface(Region::Sidebar), &[], &mut store)
+            .is_err()
+    );
+    let archived = update_bar(
+        session.draft(),
+        &UserBar {
+            archived: true,
+            ..bar.clone()
+        },
+    )
+    .unwrap();
+    session.commit_organization(archived, &mut store).unwrap();
+    assert!(session.can_undo());
+    assert!(session.undo());
+    assert!(
+        !session
+            .draft()
+            .organization
+            .bars
+            .iter()
+            .any(|b| b.id == "bar:test" && b.archived)
+    );
+}
+
+#[test]
+fn recovery_blocks_bars_until_a_settings_preview_is_saved() {
+    use geppio_core::workbench::{EditSession, SessionError, WorkbenchStore, widget_registry};
+    let mut store = MemoryStore::default();
+    let mut session = EditSession::open(widget_registry(&[], true), Some("{not json"), true);
+    assert!(session.recovery());
+    let mut next = session.draft().clone();
+    next.organization.active_bar = "missing".into();
+    assert!(matches!(
+        session.commit_organization(next, &mut store),
+        Err(SessionError::Recovery)
+    ));
+    // "Prévia da composição inicial" opens Edit without touching the stored bytes…
+    session.reset_preview(true);
+    assert!(session.editing() && session.recovery());
+    assert_eq!(session.stored(), Some("{not json"));
+    // …Cancel keeps recovery, and Save adopts the preview and leaves it.
+    session.cancel();
+    assert!(session.recovery());
+    session.reset_preview(true);
+    let surfaces = test_surfaces();
+    // The stored bytes are the corrupt ones the session observed, so the save goes through.
+    store.set("{not json").unwrap();
+    session.conclude(&surfaces, &mut store).unwrap();
+    assert!(!session.recovery() && !session.editing());
+}
+
+#[test]
+fn layout_import_previews_envelopes_and_refuses_other_files() {
+    use geppio_core::workbench::{
+        EditSession, initial_workbench, serialize_workbench, widget_registry,
+    };
+    let registry = widget_registry(&[], true);
+    let raw = serialize_workbench(&initial_workbench(true), &registry).unwrap();
+    let mut session = EditSession::open(registry, None, true);
+    assert!(!session.import_preview("plain text"));
+    assert_eq!(
+        session.message(),
+        "Arquivo incompatível. Dados anteriores preservados."
+    );
+    assert!(!session.import_preview(&" ".repeat(64 * 1024 + 1)));
+    assert_eq!(session.message(), "A composição deve ter até 64 KiB.");
+    assert!(session.import_preview(&raw));
+    assert!(session.editing());
+    assert_eq!(
+        session.message(),
+        "Composição importada na prévia. Salvar adota sem alterar originais."
+    );
+    // A second import is refused while the preview is open.
+    assert!(!session.import_preview(&raw));
+}
+
+#[test]
+fn bar_and_organization_guards_hold() {
+    use geppio_core::layout::Region;
+    use geppio_core::workbench::{EditSession, SessionError, UserBar, widget_registry};
+    let surfaces = test_surfaces();
+    let bar = UserBar {
+        id: "bar:guard".into(),
+        name: "Guarda".into(),
+        user_named: true,
+        icon: "widgets".into(),
+        archived: false,
+        members: Vec::new(),
+        positions: Default::default(),
+    };
+    // In recovery the form is refused and nothing is written.
+    let mut store = MemoryStore {
+        raw: Some("{broken".into()),
+    };
+    let mut recovering = EditSession::open(widget_registry(&[], true), Some("{broken"), true);
+    assert!(
+        recovering
+            .save_bar(&bar, &surfaces.surface(Region::Sidebar), &[], &mut store)
+            .is_err()
+    );
+    assert_eq!(store.raw.as_deref(), Some("{broken"));
+    // An import preview in recovery is cancelled without touching the stored bytes.
+    let raw = geppio_core::workbench::serialize_workbench(
+        &geppio_core::workbench::initial_workbench(true),
+        recovering.registry(),
+    )
+    .unwrap();
+    assert!(recovering.import_preview(&raw));
+    recovering.cancel();
+    assert!(recovering.recovery());
+    assert_eq!(store.raw.as_deref(), Some("{broken"));
+    // Outside Edit an organization change that moves placements is refused.
+    let mut store = MemoryStore::default();
+    let mut session = EditSession::open(widget_registry(&[], true), None, true);
+    let mut moved = session.draft().clone();
+    moved.placements[0].x += 10.0;
+    assert!(matches!(
+        session.commit_organization(moved, &mut store),
+        Err(SessionError::Rejected)
+    ));
+    assert!(store.raw.is_none());
+}

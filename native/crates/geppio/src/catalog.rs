@@ -71,22 +71,26 @@ pub struct CatalogState {
     pub destination: Option<&'static str>,
 }
 
+/// Accent- and case-insensitive search key (`normalizeSearch`: NFD without diacritics,
+/// lower case), for the Latin letters the catalogue uses.
+pub fn normalize(s: &str) -> String {
+    s.chars()
+        .map(|c| match c {
+            'á' | 'à' | 'â' | 'ã' | 'ä' | 'Á' | 'À' | 'Â' | 'Ã' | 'Ä' => 'a',
+            'é' | 'è' | 'ê' | 'ë' | 'É' | 'È' | 'Ê' | 'Ë' => 'e',
+            'í' | 'ì' | 'î' | 'ï' | 'Í' | 'Ì' | 'Î' | 'Ï' => 'i',
+            'ó' | 'ò' | 'ô' | 'õ' | 'ö' | 'Ó' | 'Ò' | 'Ô' | 'Õ' | 'Ö' => 'o',
+            'ú' | 'ù' | 'û' | 'ü' | 'Ú' | 'Ù' | 'Û' | 'Ü' => 'u',
+            'ç' | 'Ç' => 'c',
+            'ñ' | 'Ñ' => 'n',
+            other => other.to_lowercase().next().unwrap_or(other),
+        })
+        .collect()
+}
+
 impl CatalogState {
     /// Accent/case-normalized substring match over the title.
     pub fn matches(&self, tile: &Tile) -> bool {
-        let normalize = |s: &str| {
-            s.chars()
-                .map(|c| match c {
-                    'á' | 'à' | 'â' | 'ã' | 'Á' | 'À' | 'Â' | 'Ã' => 'a',
-                    'é' | 'ê' | 'É' | 'Ê' => 'e',
-                    'í' | 'Í' => 'i',
-                    'ó' | 'ô' | 'õ' | 'Ó' | 'Ô' | 'Õ' => 'o',
-                    'ú' | 'Ú' => 'u',
-                    'ç' | 'Ç' => 'c',
-                    other => other.to_ascii_lowercase(),
-                })
-                .collect::<String>()
-        };
         let text = normalize(&self.search);
         (text.is_empty() || normalize(tile.title).contains(text.trim()))
             && (self.areas.is_empty()
@@ -215,14 +219,16 @@ pub fn render(
                         14.0,
                         500.0,
                         if current { t.accent } else { t.text },
-                        label.into(),
+                        crate::i18n::t(label),
                     ))
                     .child(text(
                         9.0,
                         12.0,
                         400.0,
                         t.text_muted,
-                        format!("{count} widgets").into(),
+                        crate::i18n::t("{0} widgets")
+                            .replace("{0}", &count.to_string())
+                            .into(),
                     )),
             )
     };
@@ -267,7 +273,7 @@ pub fn render(
                     .flex_col()
                     .justify_center()
                     .child(
-                        text(10.5, 12.0, 500.0, t.text, tile.title.into())
+                        text(10.5, 12.0, 500.0, t.text, crate::i18n::t(tile.title))
                             .w_full()
                             .text_center()
                             .line_clamp(2),
@@ -359,7 +365,7 @@ pub fn render(
                         .text_color(t.accent)
                         .font_weight(css_weight(600.0))
                         .child(icon("squares-2x2", m).size(16.0).color(t.accent))
-                        .child("Widgets"),
+                        .child(crate::i18n::t("Widgets")),
                 ),
         )
         .child(
@@ -391,7 +397,7 @@ pub fn render(
                         })
                         .child(icon("magnifying-glass", m).size(16.0).color(t.text_muted))
                         .child(if state.search.is_empty() {
-                            text(12.0, 16.0, 400.0, t.text_muted, "Buscar widgets…".into())
+                            text(12.0, 16.0, 400.0, t.text_muted, crate::i18n::t("Buscar widgets…"))
                         } else {
                             text(12.0, 16.0, 400.0, t.text, state.search.clone().into())
                         }),
@@ -457,7 +463,7 @@ pub fn render(
                                 16.0,
                                 400.0,
                                 t.text_muted,
-                                "Nenhum widget com esses filtros.".into(),
+                                crate::i18n::t("Nenhum widget com esses filtros."),
                             ))
                         }),
                 ),
@@ -474,8 +480,8 @@ pub fn render(
                     600.0,
                     t.text,
                     destination
-                        .map_or("Todas as áreas".into(), |tile| {
-                            format!("Onde colocar {}?", tile.title)
+                        .map_or(crate::i18n::t("Todas as áreas").to_string(), |tile| {
+                            crate::i18n::t("Onde colocar {0}?").replace("{0}", &crate::i18n::t(tile.title))
                         })
                         .into(),
                 ))
@@ -512,7 +518,7 @@ pub fn render(
                                             .on_click(move |_, w, cx| place(id, area, w, cx))
                                     })
                                     .child(region_icon(Some(area), m, t.text_muted))
-                                    .child(area.label())
+                                    .child(crate::i18n::t(area.label()))
                             })),
                     )
                 })
@@ -522,8 +528,7 @@ pub fn render(
                         15.0,
                         400.0,
                         t.text_muted,
-                        "Arraste um widget para a área desejada ou clique para escolher o destino."
-                            .into(),
+                        crate::i18n::t("Arraste um widget para a área desejada ou clique para escolher o destino."),
                     ))
                 }),
         )

@@ -2,7 +2,7 @@
 //! and the drag/drop CSS at alpha.99): drag picture and label, origin placeholder, drop
 //! zones and alignment/spacing guides. Geometry arrives in window CSS pixels.
 use geppui::{Metrics, Rect, Theme, css_weight, dashed_outline};
-use gpui::{AnyElement, Div, ParentElement, Styled, div, prelude::FluentBuilder};
+use gpui::{AnyElement, Div, ParentElement, SharedString, Styled, div, prelude::FluentBuilder};
 
 fn placed(m: Metrics, r: Rect) -> Div {
     let p = m.place(r);
@@ -27,13 +27,7 @@ pub fn picture(m: Metrics, t: &Theme, r: Rect, content: AnyElement, flying: bool
 }
 
 /// `.layout-drag-label` beside the pointer (clamped to the window, above the picture).
-pub fn label(
-    m: Metrics,
-    t: &Theme,
-    pointer: (f32, f32),
-    viewport: (f32, f32),
-    text: &'static str,
-) -> Div {
+pub fn label(m: Metrics, t: &Theme, pointer: (f32, f32), viewport: (f32, f32), text: &str) -> Div {
     let width = 11.0 * 0.55 * text.chars().count() as f32 + 20.0;
     let left = (pointer.0 + 12.0).clamp(8.0, (viewport.0 - width - 8.0).max(8.0));
     let top = (pointer.1 - 28.0 - 12.0).max(8.0);
@@ -53,7 +47,7 @@ pub fn label(
         .font_weight(css_weight(600.0))
         .text_color(t.text)
         .whitespace_nowrap()
-        .child(text)
+        .child(SharedString::from(text.to_owned()))
 }
 
 /// Dashed placeholder left at the origin of a frame drag.

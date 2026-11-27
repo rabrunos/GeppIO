@@ -5,6 +5,37 @@ use super::presentations::Presentations;
 use crate::freeform::CodecError;
 use crate::freeform::schema::reject;
 
+/// The initial composition for a reset preview (`resetWorkbench`): with demo fixtures it is
+/// the demo scene; otherwise it keeps the Sidebar, the bars, their groups and the archive.
+pub fn reset_workbench(source: &WorkbenchSnapshot, demo_fixtures: bool) -> WorkbenchSnapshot {
+    let initial = super::model::initial_workbench(demo_fixtures);
+    if demo_fixtures {
+        return initial;
+    }
+    let mut organization = source.organization.clone();
+    if let Some(groups) = &mut organization.groups {
+        groups.entries.retain(|g| {
+            source
+                .placements
+                .iter()
+                .any(|p| p.id == g.frame_id && p.region == crate::layout::Region::Sidebar)
+        });
+    }
+    organization.chrome = initial.organization.chrome;
+    organization.presentations = initial.organization.presentations.clone();
+    WorkbenchSnapshot {
+        retired_demos: source.retired_demos.clone(),
+        organization,
+        placements: source
+            .placements
+            .iter()
+            .filter(|p| p.region == crate::layout::Region::Sidebar)
+            .cloned()
+            .collect(),
+        ..initial
+    }
+}
+
 /// Moves views of retired types (and their placements, bar memberships and presentations)
 /// into the `retiredDemos` archive (`retireDemoViews`).
 pub fn retire_demo_views(
