@@ -2,6 +2,32 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.105] — 2026-11-27
+
+- **Native host (Rust + GPUI): regions, rail and bars behave like the reference (Stage P1, #75).**
+  - **Fix — regions in the workbench document:** Sidebar and Bottom sizes and visibility move from `preferences.json` to `organization.chrome`, as in the reference.
+    - Outside Edit a change is saved at once ("Preferência salva."), skipped when nothing changed and refused in recovery.
+    - Inside Edit it is an undoable part of the draft, so applying a composition now resizes the regions (for example "Equilibrado": 238/200) and Cancel restores them.
+    - Region values written by alpha.104 and earlier move into the document once, at the first launch that can save it, when it still shows the default regions. They stay in `preferences.json` until then (a document in recovery waits), and are dropped when the document already has its own regions.
+  - **Edit forces the regions:** the Sidebar stays docked and the Bottom visible while editing, the pin is disabled, the splitters still resize without collapsing, and leaving Edit restores the previous state.
+  - **Splitters:**
+    - focus, ←/→ or ↑/↓ by 10px (40px with Shift), Home/End, Enter/Space, Esc reverts and leaving saves; a pending keyboard resize is saved before a widget gesture starts, so the gesture's Esc or undo never takes it along;
+    - Esc, window blur and window resize cancel a drag; the resize cursor covers the whole window while dragging; the accent line marks keyboard focus only, as `:focus-visible` does;
+    - the Sidebar re-expands only at its 180px minimum after a drag collapsed it;
+    - the Bottom is revealed from 0, settles at 125px or more, reopens at 125px on click or Enter, and its maximum follows the work area.
+  - **Peek:**
+    - picking another bar with the Sidebar hidden opens the peek after 100 ms and respects the collapse block;
+    - restoring an archived bar opens the peek instead of docking the Sidebar;
+    - the peek stays open while focus is inside it;
+    - clicks on the context and status bars no longer close it.
+  - **Rail:** the bar column scrolls (up to 14 active bars) with the reference's 5px scrollbar and end arrows, and scrolls by itself near its edges while a bar is dragged; window blur or resize cancels a bar drag; Home has the bar menu ("Editar") by right-click and Shift+F10; "Barras salvas" keeps its search, filter and order between openings.
+  - **Empty regions:** "Escolher widgets" opens Edit with the catalog (disabled in recovery). When Bottom cannot fit its widgets, "Ampliar Bottom" expands it to the maximum.
+  - **Local state in Edit:** the theme, center guide, layout name and demo properties changed inside Edit belong to the draft; undo, redo and Cancel restore them.
+  - **Context bar:** the project title and subtitle shrink with an ellipsis and "Projeto / arquivo avulso" is capped at 230px, so narrow work areas no longer overlap the experience switch.
+  - **GeppUI:**
+    - a button's tooltip stays hidden after a press, or while a drag passes over it, until the pointer leaves, like a native `title`;
+    - `SpacedText::truncate` and `Button::max_width` cut labels with an ellipsis.
+
 ## [0.1.0-alpha.104] — 2026-11-27
 
 - **Native host (Rust + GPUI): compositions, format slots, import/export and catalog extras (Stage C2a, #75).**

@@ -47,6 +47,9 @@ pub fn focus_handle(
 /// Hover progress of one element, animated like the reference's icon `scale` transition.
 pub struct HoverState {
     pub hovered: bool,
+    /// A press happened since the pointer entered: like a native `title`, the tooltip stays
+    /// hidden until the pointer leaves.
+    pub pressed: bool,
     progress: Transition,
 }
 
@@ -59,6 +62,7 @@ pub fn hover_state(
     let key = ElementId::Name(SharedString::from(format!("{id}::hover")));
     let state = window.use_keyed_state(key, cx, |_, _| HoverState {
         hovered: false,
+        pressed: false,
         progress: Transition::new(0.0),
     });
     let now = appearance(cx).clock.now();
@@ -81,6 +85,9 @@ pub fn hover_listener(
         let reduced = appearance(cx).reduced_motion;
         state.update(cx, |s, cx| {
             s.hovered = *hovered;
+            if !*hovered {
+                s.pressed = false;
+            }
             // Icon scale has `transition: none` under reduced motion.
             s.progress.request(
                 if *hovered { 1.0 } else { 0.0 },
@@ -89,6 +96,37 @@ pub fn hover_listener(
             );
             cx.notify();
         });
+    }
+}
+
+/// Mouse-down listener that hides the element's tooltip until the pointer leaves.
+pub fn press_listener(
+    state: Entity<HoverState>,
+) -> impl Fn(&gpui::MouseDownEvent, &mut Window, &mut App) + 'static {
+    move |_, _, cx| {
+        state.update(cx, |s, cx| {
+            if !s.pressed {
+                s.pressed = true;
+                cx.notify();
+            }
+        });
+    }
+}
+
+/// Mouse-move listener: a pointer arriving with a button held (a drag passing over) hides
+/// the tooltip too, as browsers show no `title` while a button is down.
+pub fn drag_over_listener(
+    state: Entity<HoverState>,
+) -> impl Fn(&gpui::MouseMoveEvent, &mut Window, &mut App) + 'static {
+    move |e, _, cx| {
+        if e.pressed_button.is_some() {
+            state.update(cx, |s, cx| {
+                if !s.pressed {
+                    s.pressed = true;
+                    cx.notify();
+                }
+            });
+        }
     }
 }
 
@@ -225,6 +263,7 @@ impl RenderOnce for IconButton {
         let m = metrics(window, cx);
         let (state, hovered, progress) = hover_state(&self.id, window, cx);
         let hovered = hovered && !self.disabled;
+        let quiet = state.read(cx).pressed;
         let rest = self.color.unwrap_or(t.text);
         let (bg, fg) = match (hovered, self.selected, self.destructive) {
             (true, _, true) => (Some(t.destructive), gpui::white()),
@@ -269,8 +308,12 @@ impl RenderOnce for IconButton {
             })
             .when(self.disabled, |el| el.opacity(0.5))
             .when(!self.disabled, |el| el.cursor_pointer())
-            .on_hover(hover_listener(state))
-            .when_some(self.label.clone(), |el, label| el.tooltip(tooltip(label)))
+            .on_hover(hover_listener(state.clone()))
+            .on_any_mouse_down(press_listener(state.clone()))
+            .on_mouse_move(drag_over_listener(state.clone()))
+            .when_some(self.label.clone().filter(|_| !quiet), |el, label| {
+                el.tooltip(tooltip(label))
+            })
             .when_some(on_click.filter(|_| !self.disabled), |el, handler| {
                 el.on_click(move |event, window, cx| handler(event, window, cx))
             })
@@ -300,6 +343,8 @@ pub struct Button {
     padding_x: f32,
     disabled: bool,
     tooltip: Option<SharedString>,
+    /// `max-width` with `min-width: 0`: shrinks in a flex row, the label ends with "…".
+    max_width: Option<f32>,
     on_click: Option<ClickHandler>,
     focus: Option<FocusHandle>,
 }
@@ -320,6 +365,7 @@ pub fn button(id: impl Into<SharedString>) -> Button {
         padding_x: 11.0,
         disabled: false,
         tooltip: None,
+        max_width: None,
         on_click: None,
         focus: None,
     }
@@ -338,6 +384,11 @@ impl Button {
     /// Fixed width in CSS pixels (square buttons pass the height).
     pub fn width(mut self, width: f32) -> Self {
         self.width = Some(width);
+        self
+    }
+    /// Caps the width and lets the button shrink, truncating its label with an ellipsis.
+    pub fn max_width(mut self, width: f32) -> Self {
+        self.max_width = Some(width);
         self
     }
     pub fn height(mut self, height: f32, radius: f32) -> Self {
@@ -398,6 +449,7 @@ impl RenderOnce for Button {
         let m = metrics(window, cx);
         let (state, hovered, progress) = hover_state(&self.id, window, cx);
         let hovered = hovered && !self.disabled;
+        let quiet = state.read(cx).pressed;
         let mut icon_color = None;
         let (bg, border, fg) = if self.primary {
             (
@@ -459,8 +511,12 @@ impl RenderOnce for Button {
             .whitespace_nowrap()
             .when(self.disabled, |el| el.opacity(0.5))
             .when(!self.disabled, |el| el.cursor_pointer())
-            .on_hover(hover_listener(state))
-            .when_some(self.tooltip.clone(), |el, text| el.tooltip(tooltip(text)))
+            .on_hover(hover_listener(state.clone()))
+            .on_any_mouse_down(press_listener(state.clone()))
+            .on_mouse_move(drag_over_listener(state.clone()))
+            .when_some(self.tooltip.clone().filter(|_| !quiet), |el, text| {
+                el.tooltip(tooltip(text))
+            })
             .when_some(on_click.filter(|_| !self.disabled), |el, handler| {
                 el.on_click(move |event, window, cx| handler(event, window, cx))
             })
@@ -472,6 +528,21 @@ impl RenderOnce for Button {
                         .scale(scale),
                 )
             })
-            .when_some(self.label.clone(), |el, label| el.child(label))
+            .when_some(self.max_width, |el, w| {
+                el.max_w(m.px(w)).flex_shrink(1.0).min_w_0()
+            })
+            .when_some(self.label.clone(), |el, label| {
+                if self.max_width.is_some() {
+                    el.child(
+                        div()
+                            .min_w_0()
+                            .overflow_hidden()
+                            .text_ellipsis()
+                            .child(label),
+                    )
+                } else {
+                    el.child(label)
+                }
+            })
     }
 }

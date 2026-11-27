@@ -59,6 +59,26 @@ pub type GestureKind = Gesture;
 /// Regions a picked-up frame may be dropped into (`movementTargets`).
 pub type DropZones = Vec<Region>;
 
+/// What became of region chrome an older host kept outside the document.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ChromeAdoption {
+    /// The document took the values and was saved with them.
+    Adopted,
+    /// The document already has its own regions (or the values are the defaults): the old
+    /// values are stale.
+    Kept,
+    /// Not now: recovery, a pending normalization, Edit or a refused write. Ask again later.
+    Deferred,
+}
+
+/// Whether two chromes show the same regions (visibility and size; key order aside).
+fn same_regions(a: &super::chrome::WorkbenchChrome, b: &super::chrome::WorkbenchChrome) -> bool {
+    let same = |x: &super::chrome::RegionChrome, y: &super::chrome::RegionChrome| {
+        x.visible == y.visible && x.size == y.size
+    };
+    same(&a.sidebar, &b.sidebar) && same(&a.bottom, &b.bottom)
+}
+
 /// Why a session operation was refused. The draft is unchanged in every case.
 #[derive(Clone, Debug, PartialEq)]
 pub enum SessionError {
@@ -368,6 +388,9 @@ impl EditSession {
         self.draft.format_id = draft.format_id;
         self.draft.format_mode = draft.format_mode;
         self.draft.format_source = draft.format_source;
+        if draft.local.is_some() {
+            self.draft.local = draft.local;
+        }
     }
 
     /// One whole intention outside a gesture (`action`).
@@ -1197,6 +1220,7 @@ impl EditSession {
             format_id: None,
             format_mode: self.checkpoint.format_mode,
             format_source: None,
+            local: self.checkpoint.local.clone(),
         };
         self.apply(restored);
         self.editing = false;
@@ -1207,6 +1231,61 @@ impl EditSession {
     /// Whether the opened document still needs an explicit confirmation of normalized sizes.
     pub fn normalization_pending(&self) -> bool {
         self.normalization_pending
+    }
+
+    /// The host's session-local state as it serialized it (`localState`).
+    pub fn local(&self) -> Option<&str> {
+        self.draft.local.as_deref()
+    }
+
+    /// A change of the host's local state (`changeLocal`): one intention inside Edit (undo,
+    /// redo and Cancel restore it), applied as is outside. The host applies what
+    /// [`Self::local`] returns after undo, redo and Cancel.
+    pub fn change_local(&mut self, local: String) {
+        let before = self.draft.clone();
+        let after = SessionDraft {
+            local: Some(local),
+            ..self.draft.clone()
+        };
+        if self.editing && !self.history.active() {
+            self.history.record(&before, &after);
+        }
+        self.apply(after);
+    }
+
+    /// Adopts region chrome kept by an older host outside the document (native
+    /// `preferences.json` up to alpha.104) when the document still shows the default
+    /// regions, and saves it at once so the old values can be dropped. The session message
+    /// is left as it was.
+    pub fn adopt_initial_chrome(
+        &mut self,
+        chrome: super::chrome::WorkbenchChrome,
+        store: &mut dyn WorkbenchStore,
+    ) -> ChromeAdoption {
+        if self.editing || self.recovery || self.normalization_pending {
+            return ChromeAdoption::Deferred;
+        }
+        let default = super::chrome::default_chrome();
+        if !same_regions(&self.committed.organization.chrome, &default)
+            || same_regions(&chrome, &default)
+        {
+            return ChromeAdoption::Kept;
+        }
+        let mut next = self.committed.clone();
+        for (to, from) in [
+            (&mut next.organization.chrome.sidebar, chrome.sidebar),
+            (&mut next.organization.chrome.bottom, chrome.bottom),
+        ] {
+            to.visible = from.visible;
+            to.size = from.size;
+        }
+        let message = self.message.clone();
+        let result = self.commit_with(next, false, store, None);
+        self.message = message;
+        match result {
+            Ok(()) => ChromeAdoption::Adopted,
+            Err(_) => ChromeAdoption::Deferred,
+        }
     }
 
     /// Whether the demo fixtures (and their presets) are enabled.
@@ -1366,6 +1445,7 @@ impl EditSession {
                 o.composition_order.clone(),
                 o.favorites.clone(),
                 o.default_composition.clone(),
+                d.local.clone(),
             )
         };
         self.normalization_pending

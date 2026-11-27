@@ -79,6 +79,9 @@ pub fn draft_json(draft: &SessionDraft) -> String {
             w.null("formatSource");
         }
     }
+    if let Some(local) = &draft.local {
+        w.string("localState", local);
+    }
     w.end();
     out
 }

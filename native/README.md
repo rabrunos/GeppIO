@@ -39,8 +39,8 @@ The app keeps its own profile in `%APPDATA%\geppio-native`. It never reads or wr
 
 | File | Content | On a corrupt or unknown file |
 | --- | --- | --- |
-| `preferences.json` | Theme, region visibility and sizes, language (`auto`, `pt-BR`, `en`), center guide, horizontal expansion and the layout name (at most 60 characters) | Defaults |
-| `workbench.json` | The `geppio:workbench:v1` composition: written by Save edition, Conclude and bar changes (temporary file, flush, rename; 512 KiB cap). A save first re-reads the file and stops if it changed since it was opened | Recovery, also for an oversized, non-UTF-8 or unreadable file: the file is kept untouched and edit mode stays closed until Settings → "Desenvolvimento e recuperação" opens a preview and Save adopts it |
+| `preferences.json` | Theme, language (`auto`, `pt-BR`, `en`), center guide, horizontal expansion and the layout name (at most 60 characters). Region sizes and visibility written by 0.1.0-alpha.104 and earlier move once into a workbench document that still shows the default regions, and stay here until that document is saved with them (a document in recovery waits) | Defaults |
+| `workbench.json` | The `geppio:workbench:v1` composition, including region sizes and visibility (`organization.chrome`): written by Save edition, Conclude, bar changes and region changes outside Edit (temporary file, flush, rename; 512 KiB cap). A save first re-reads the file and stops if it changed since it was opened | Recovery, also for an oversized, non-UTF-8 or unreadable file: the file is kept untouched and edit mode stays closed until Settings → "Desenvolvimento e recuperação" opens a preview and Save adopts it |
 
 If `geppio-native` exists as a link or junction, or resolves inside the Electron folder, the app runs without persistence.
 
@@ -48,9 +48,13 @@ If `geppio-native` exists as a link or junction, or resolves inside the Electron
 
 pt-BR strings are the keys. `assets/i18n/en.json` holds the English catalogue that `tools/native-i18n.ts` generates from the Electron reference (`messages.ts`, `app-messages.ts`); `tests/native-i18n.test.ts` fails when it drifts. "Idioma do navegador" follows the Windows display language. Text without a reference translation stays in Portuguese, as in Electron.
 
+## Regions
+
+Sidebar and Bottom sizes and visibility live in the workbench document, as in the reference. Outside Edit a splitter, the pin or the active rail bar saves them at once ("Preferência salva."), and recovery refuses the change. Inside Edit they belong to the draft: Edit keeps the Sidebar docked and the Bottom visible, the splitters still resize without collapsing, compositions resize the regions and Cancel restores them. The splitters take focus: ←/→ (Sidebar) or ↑/↓ (Bottom) move 10px, 40px with Shift, Home/End go to the limits, Enter/Space collapse or reopen, Esc reverts and leaving the splitter saves. Esc, losing the window focus and resizing the window cancel a drag. The theme, the center guide, the layout name and the demo properties changed inside Edit are part of the draft too.
+
 ## Bars
 
-The rail lists the active custom bars under Home. Bar changes outside Edit are saved at once; inside Edit they are undoable intentions (`EditSession::commit_organization`). The bar form goes through `EditSession::save_bar`: saved at once outside Edit, one undoable intention on the draft inside it. The library ("Barras salvas") archives, restores and deletes; in Edit, bars reorder by pointer or Alt+↑/↓ and archived bars can be dragged back to the rail. Limits are 14 active custom bars and 100 saved.
+The rail lists the active custom bars under Home. Bar changes outside Edit are saved at once; inside Edit they are undoable intentions (`EditSession::commit_organization`). The bar form goes through `EditSession::save_bar`: saved at once outside Edit, one undoable intention on the draft inside it. The bar column scrolls, and scrolls by itself at its edges while a bar is dragged. Home has the bar menu with "Editar" only. The library ("Barras salvas") keeps its search, filter and order between openings, archives, restores (a hidden Sidebar opens as a peek) and deletes; in Edit, bars reorder by pointer or Alt+↑/↓ and archived bars can be dragged back to the rail. Limits are 14 active custom bars and 100 saved.
 
 ## Compositions
 

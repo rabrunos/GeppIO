@@ -24,10 +24,17 @@ const MAX_BYTES: u64 = 64 * 1024;
 pub struct Prefs {
     pub version: u32,
     pub theme: String,
-    pub sidebar_collapsed: bool,
-    pub bottom_collapsed: bool,
-    pub sidebar_width: f64,
-    pub bottom_height: f64,
+    /// Region state kept here up to alpha.104. It now lives in the layout document's
+    /// `organization.chrome`: these fields are kept (and written back) only until the
+    /// document has taken them or shown it has its own regions, then cleared for good.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sidebar_collapsed: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bottom_collapsed: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sidebar_width: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bottom_height: Option<f64>,
     /// "auto", "pt-BR" or "en" (the reference's `geppio.locale`).
     pub locale: String,
     /// "Guia e encaixe no centro" (`geppio:snap-center:v1`, on by default).
@@ -46,10 +53,10 @@ impl Default for Prefs {
         Self {
             version: 1,
             theme: "dark".into(),
-            sidebar_collapsed: false,
-            bottom_collapsed: false,
-            sidebar_width: SIDEBAR_LIMITS.initial,
-            bottom_height: BOTTOM_LIMITS.initial,
+            sidebar_collapsed: None,
+            bottom_collapsed: None,
+            sidebar_width: None,
+            bottom_height: None,
             locale: "auto".into(),
             snap_center: true,
             horizontal_expansion: false,
@@ -94,18 +101,22 @@ impl Prefs {
         ThemeName::parse(&self.theme).unwrap_or_default()
     }
     fn sanitized(mut self) -> Self {
-        self.sidebar_width = within(
-            self.sidebar_width,
-            SIDEBAR_LIMITS.min,
-            SIDEBAR_LIMITS.max,
-            SIDEBAR_LIMITS.initial,
-        );
-        self.bottom_height = within(
-            self.bottom_height,
-            BOTTOM_LIMITS.min,
-            BOTTOM_LIMITS.max,
-            BOTTOM_LIMITS.initial,
-        );
+        self.sidebar_width = self.sidebar_width.map(|w| {
+            within(
+                w,
+                SIDEBAR_LIMITS.min,
+                SIDEBAR_LIMITS.max,
+                SIDEBAR_LIMITS.initial,
+            )
+        });
+        self.bottom_height = self.bottom_height.map(|h| {
+            within(
+                h,
+                BOTTOM_LIMITS.min,
+                BOTTOM_LIMITS.max,
+                BOTTOM_LIMITS.initial,
+            )
+        });
         self.theme = self.theme().as_str().into();
         if crate::i18n::Preference::parse(&self.locale).is_none() {
             self.locale = "auto".into();
@@ -125,6 +136,32 @@ impl Prefs {
             },
         }
     }
+    /// The region chrome an older host kept here (alpha.100–104).
+    /// The region state an older host left here, if any field remains.
+    pub fn legacy_chrome(&self) -> Option<geppio_core::workbench::WorkbenchChrome> {
+        if self.sidebar_collapsed.is_none()
+            && self.bottom_collapsed.is_none()
+            && self.sidebar_width.is_none()
+            && self.bottom_height.is_none()
+        {
+            return None;
+        }
+        let mut chrome = geppio_core::workbench::default_chrome();
+        chrome.sidebar.visible = !self.sidebar_collapsed.unwrap_or(false);
+        chrome.sidebar.size = self.sidebar_width.unwrap_or(SIDEBAR_LIMITS.initial);
+        chrome.bottom.visible = !self.bottom_collapsed.unwrap_or(false);
+        chrome.bottom.size = self.bottom_height.unwrap_or(BOTTOM_LIMITS.initial);
+        Some(chrome)
+    }
+
+    /// Drops the old region fields once the layout document settled them.
+    pub fn clear_legacy(&mut self) {
+        self.sidebar_collapsed = None;
+        self.bottom_collapsed = None;
+        self.sidebar_width = None;
+        self.bottom_height = None;
+    }
+
     pub fn load(profile: Option<&Path>) -> Self {
         let Some(path) = profile.map(|p| p.join(FILE)) else {
             return Self::default();
@@ -225,8 +262,18 @@ mod tests {
                 p.sidebar_collapsed,
                 p.unrecognized
             ),
-            (ThemeName::Dark, 283.0, 200.0, true, false)
+            (ThemeName::Dark, Some(283.0), Some(200.0), Some(true), false)
         );
+        let chrome = p.legacy_chrome().unwrap();
+        assert_eq!(
+            (
+                chrome.sidebar.visible,
+                chrome.sidebar.size,
+                chrome.bottom.size
+            ),
+            (false, 283.0, 200.0)
+        );
+        assert_eq!(Prefs::parse(br#"{"version":1}"#).legacy_chrome(), None);
     }
 
     #[test]
@@ -234,11 +281,23 @@ mod tests {
         let dir = temp_profile("round");
         let mut prefs = Prefs {
             theme: "light".into(),
-            bottom_collapsed: true,
+            bottom_collapsed: Some(true),
             ..Prefs::default()
         };
         prefs.save(Some(&dir)).unwrap();
-        assert_eq!(Prefs::load(Some(&dir)), prefs);
+        let mut loaded = Prefs::load(Some(&dir));
+        assert_eq!(loaded.theme, "light");
+        // Old region state survives other writes until the layout document settles it...
+        assert_eq!(loaded.bottom_collapsed, Some(true));
+        // ...then it is cleared for good.
+        loaded.clear_legacy();
+        loaded.save(Some(&dir)).unwrap();
+        assert_eq!(Prefs::load(Some(&dir)).legacy_chrome(), None);
+        assert!(
+            !std::fs::read_to_string(dir.join(FILE))
+                .unwrap()
+                .contains("bottomCollapsed")
+        );
         let leftovers: Vec<_> = std::fs::read_dir(&dir)
             .unwrap()
             .filter_map(|e| e.ok())
@@ -256,13 +315,13 @@ mod tests {
         std::fs::write(dir.join(FILE), br#"{"version":7,"future":true}"#).unwrap();
         let mut prefs = Prefs::load(Some(&dir));
         assert!(prefs.unrecognized);
-        prefs.sidebar_width = f64::NAN;
-        prefs.bottom_height = f64::INFINITY;
+        prefs.sidebar_width = Some(f64::NAN);
+        prefs.bottom_height = Some(f64::INFINITY);
         prefs.save(Some(&dir)).unwrap();
         let saved = Prefs::load(Some(&dir));
         assert_eq!(
             (saved.sidebar_width, saved.bottom_height, saved.unrecognized),
-            (283.0, 167.0, false)
+            (Some(283.0), Some(167.0), false)
         );
         let kept: Vec<_> = std::fs::read_dir(&dir)
             .unwrap()

@@ -31,6 +31,6 @@ pub use model::{
 };
 pub use presentations::{Edge, Presentation, Presentations, WidgetPresentation};
 pub use session::{
-    DropZones, EditSession, GestureKind, MemoryStore, PointerFrame, Preview, SessionError,
-    SessionSurfaces, WorkbenchStore, project_view, settle_snapshot,
+    ChromeAdoption, DropZones, EditSession, GestureKind, MemoryStore, PointerFrame, Preview,
+    SessionError, SessionSurfaces, WorkbenchStore, project_view, settle_snapshot,
 };

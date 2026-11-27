@@ -370,12 +370,18 @@ impl Workbench {
             return;
         }
         match command {
-            "undo" => self.with_flip(now, reduced, None, |w| {
-                w.session.undo().then_some("Ação desfeita.")
-            }),
-            "redo" => self.with_flip(now, reduced, None, |w| {
-                w.session.redo().then_some("Ação refeita.")
-            }),
+            "undo" => {
+                self.with_flip(now, reduced, None, |w| {
+                    w.session.undo().then_some("Ação desfeita.")
+                });
+                self.apply_local_state(cx);
+            }
+            "redo" => {
+                self.with_flip(now, reduced, None, |w| {
+                    w.session.redo().then_some("Ação refeita.")
+                });
+                self.apply_local_state(cx);
+            }
             "save" => {
                 let surfaces = self.ports.surfaces;
                 let _ = self.session.save(&surfaces, &mut self.store);
@@ -392,6 +398,7 @@ impl Workbench {
             }
             "cancel" => {
                 self.session.cancel();
+                self.apply_local_state(cx);
                 self.leave_edit(now, reduced);
                 let message = self.session.message().to_owned();
                 self.edit.toast(&message, now);
@@ -414,6 +421,7 @@ impl Workbench {
         if !self.editing() || self.edit.gesture.is_some() || self.edit.flight.is_some() {
             return;
         }
+        self.settle_splitter_keyboard(cx);
         let (_, frames, _) = scene(&self.session, &self.ports.surfaces);
         let Some(frame) = frames.iter().find(|f| f.id == id) else {
             return;
@@ -457,6 +465,7 @@ impl Workbench {
         if !self.editing() || self.edit.gesture.is_some() || self.edit.flight.is_some() {
             return;
         }
+        self.settle_splitter_keyboard(cx);
         let fixture = self
             .session
             .registry()
@@ -1047,6 +1056,7 @@ impl Workbench {
             }
             let _ = view.update(cx, |this, cx| {
                 this.properties = p;
+                this.record_local(cx);
                 cx.notify();
             });
         }

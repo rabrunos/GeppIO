@@ -258,6 +258,8 @@ impl Workbench {
             Some(name) => {
                 self.prefs.project_name = name;
                 if self.prefs.save(self.profile.as_ref()).is_ok() {
+                    // Inside Edit the name is part of the draft (`changeLocal`).
+                    self.record_local(cx);
                     self.menu = None;
                 } else {
                     self.panels.rename_error = true;
@@ -1389,7 +1391,13 @@ impl Workbench {
 
     pub(crate) fn set_snap(&mut self, on: bool, cx: &mut Context<Self>) {
         self.prefs.snap_center = on;
-        let _ = self.prefs.save(self.profile.as_ref());
+        if self.prefs.save(self.profile.as_ref()).is_err() {
+            self.edit.toast(
+                "Preferência alterada somente nesta sessão.",
+                geppui::now(cx),
+            );
+        }
+        self.record_local(cx);
         cx.notify();
     }
 

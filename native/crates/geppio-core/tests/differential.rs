@@ -1375,6 +1375,162 @@ fn bar_and_organization_guards_hold() {
     assert!(store.raw.is_none());
 }
 
+#[test]
+fn region_chrome_follows_the_document() {
+    use geppio_core::workbench::chrome::default_chrome;
+    use geppio_core::workbench::{EditSession, SessionError, widget_registry};
+    let surfaces = test_surfaces();
+    // Outside Edit a chrome change is committed to the stored document.
+    let mut store = MemoryStore::default();
+    let mut session = EditSession::open(widget_registry(&[], true), None, true);
+    let mut next = session.draft().clone();
+    next.organization.chrome.sidebar.size = 238.0;
+    next.organization.chrome.bottom.visible = false;
+    session.commit_organization(next, &mut store).unwrap();
+    assert_eq!(session.message(), "Preferência salva.");
+    assert_eq!(session.committed().organization.chrome.sidebar.size, 238.0);
+    let stored = store.raw.clone().expect("written");
+    assert!(stored.contains("238"), "{stored}");
+    // Reopening the stored bytes keeps the regions.
+    let reopened = EditSession::open(widget_registry(&[], true), Some(&stored), true);
+    assert_eq!(reopened.committed().organization.chrome.sidebar.size, 238.0);
+    assert!(!reopened.committed().organization.chrome.bottom.visible);
+    // Inside Edit it is one more undoable intention and Cancel restores the checkpoint.
+    session.begin(&surfaces).unwrap();
+    let mut wider = session.draft().clone();
+    wider.organization.chrome.sidebar.size = 300.0;
+    session.commit_organization(wider, &mut store).unwrap();
+    assert_eq!(session.draft().organization.chrome.sidebar.size, 300.0);
+    assert_eq!(
+        store.raw.as_deref(),
+        Some(stored.as_str()),
+        "not written in Edit"
+    );
+    assert!(session.undo());
+    assert_eq!(session.draft().organization.chrome.sidebar.size, 238.0);
+    assert!(session.redo());
+    session.cancel();
+    assert_eq!(session.draft().organization.chrome.sidebar.size, 238.0);
+    // In recovery the change is refused and the stored bytes stay.
+    let mut broken = MemoryStore {
+        raw: Some("{broken".into()),
+    };
+    let mut recovering = EditSession::open(widget_registry(&[], true), Some("{broken"), true);
+    let mut next = recovering.draft().clone();
+    next.organization.chrome.sidebar.size = 238.0;
+    assert!(matches!(
+        recovering.commit_organization(next, &mut broken),
+        Err(SessionError::Recovery)
+    ));
+    assert_eq!(broken.raw.as_deref(), Some("{broken"));
+    assert_eq!(recovering.draft().organization.chrome, default_chrome());
+}
+
+#[test]
+fn legacy_region_preferences_are_adopted_once() {
+    use geppio_core::workbench::chrome::default_chrome;
+    use geppio_core::workbench::{
+        ChromeAdoption, EditSession, initial_workbench, serialize_workbench, widget_registry,
+    };
+    let mut legacy = default_chrome();
+    legacy.sidebar.size = 250.0;
+    legacy.sidebar.visible = false;
+    let shows_legacy = |s: &EditSession| {
+        [s.committed(), s.draft(), s.checkpoint()].iter().all(|d| {
+            let c = d.organization.chrome;
+            !c.sidebar.visible && c.sidebar.size == 250.0 && c.bottom.size == 167.0
+        })
+    };
+    // No document yet: the old values are adopted and written at once, quietly.
+    let mut store = MemoryStore::default();
+    let mut fresh = EditSession::open(widget_registry(&[], true), None, true);
+    let message = fresh.message().to_owned();
+    assert_eq!(
+        fresh.adopt_initial_chrome(legacy, &mut store),
+        ChromeAdoption::Adopted
+    );
+    assert!(shows_legacy(&fresh));
+    assert_eq!(fresh.message(), message);
+    let written = store.raw.clone().expect("written");
+    let reopened = EditSession::open(widget_registry(&[], true), Some(&written), true);
+    assert!(shows_legacy(&reopened));
+    // A stored document that still shows the default regions adopts them too (its chrome
+    // differs from `default_chrome` only in key order).
+    let registry = widget_registry(&[], true);
+    let stored = serialize_workbench(&initial_workbench(true), &registry).unwrap();
+    let mut store = MemoryStore {
+        raw: Some(stored.clone()),
+    };
+    let mut older = EditSession::open(registry, Some(&stored), true);
+    assert_eq!(
+        older.adopt_initial_chrome(legacy, &mut store),
+        ChromeAdoption::Adopted
+    );
+    assert!(shows_legacy(&older));
+    assert_ne!(store.raw.as_deref(), Some(stored.as_str()));
+    // A document with its own regions keeps them; nothing is written.
+    let mut store = MemoryStore::default();
+    let mut owned = EditSession::open(widget_registry(&[], true), None, true);
+    let mut next = owned.draft().clone();
+    next.organization.chrome.bottom.size = 200.0;
+    owned.commit_organization(next, &mut store).unwrap();
+    let raw = store.raw.clone().unwrap();
+    let mut reopened = EditSession::open(widget_registry(&[], true), Some(&raw), true);
+    assert_eq!(
+        reopened.adopt_initial_chrome(legacy, &mut store),
+        ChromeAdoption::Kept
+    );
+    assert_eq!(reopened.committed().organization.chrome.bottom.size, 200.0);
+    assert_eq!(store.raw.as_deref(), Some(raw.as_str()));
+    // Default values have nothing to adopt.
+    let mut plain = EditSession::open(widget_registry(&[], true), None, true);
+    let mut empty = MemoryStore::default();
+    assert_eq!(
+        plain.adopt_initial_chrome(default_chrome(), &mut empty),
+        ChromeAdoption::Kept
+    );
+    assert!(empty.raw.is_none());
+    // Recovery defers and keeps the stored bytes.
+    let mut broken = MemoryStore {
+        raw: Some("{broken".into()),
+    };
+    let mut recovering = EditSession::open(widget_registry(&[], true), Some("{broken"), true);
+    assert_eq!(
+        recovering.adopt_initial_chrome(legacy, &mut broken),
+        ChromeAdoption::Deferred
+    );
+    assert_eq!(broken.raw.as_deref(), Some("{broken"));
+}
+
+#[test]
+fn local_state_is_part_of_the_edit_draft() {
+    use geppio_core::workbench::{EditSession, widget_registry};
+    let surfaces = test_surfaces();
+    let mut session = EditSession::open(widget_registry(&[], true), None, true);
+    assert_eq!(session.local(), None);
+    // Outside Edit it is applied as is, with no history.
+    session.change_local("{\"theme\":\"dark\"}".into());
+    assert_eq!(session.local(), Some("{\"theme\":\"dark\"}"));
+    assert!(!session.can_undo());
+    // Inside Edit each change is an intention; undo, redo and Cancel restore it.
+    session.begin(&surfaces).unwrap();
+    session.change_local("{\"theme\":\"light\"}".into());
+    assert!(session.can_undo());
+    assert!(session.undo());
+    assert_eq!(session.local(), Some("{\"theme\":\"dark\"}"));
+    assert!(session.redo());
+    assert_eq!(session.local(), Some("{\"theme\":\"light\"}"));
+    session.cancel();
+    assert_eq!(session.local(), Some("{\"theme\":\"dark\"}"));
+    // A saved checkpoint keeps the local state it confirmed.
+    let mut store = MemoryStore::default();
+    session.begin(&surfaces).unwrap();
+    session.change_local("{\"theme\":\"light\"}".into());
+    session.save(&surfaces, &mut store).unwrap();
+    session.cancel();
+    assert_eq!(session.local(), Some("{\"theme\":\"light\"}"));
+}
+
 mod compositions {
     use super::*;
     use geppio_core::workbench::chrome::ChromePatchEntry;

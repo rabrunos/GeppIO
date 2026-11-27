@@ -668,6 +668,9 @@ pub struct SessionDraft {
     pub format_mode: Option<ApplyMode>,
     /// Widgets the emptied format holds aside.
     pub format_source: Option<FormatSource>,
+    /// The host's session-local state (`localState`: theme, centre snap, layout name, demo
+    /// properties) as the host serializes it. Edit history and Cancel restore it.
+    pub local: Option<String>,
 }
 
 impl SessionDraft {
@@ -679,6 +682,7 @@ impl SessionDraft {
             format_id: None,
             format_mode: None,
             format_source: None,
+            local: None,
         }
     }
 }

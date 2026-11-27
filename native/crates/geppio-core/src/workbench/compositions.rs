@@ -644,6 +644,7 @@ pub fn apply_to_draft(
                 placements,
                 reference,
             }),
+            local: draft.local.clone(),
         });
     }
     let base = match (&draft.format_source, requested) {
@@ -675,6 +676,7 @@ pub fn apply_to_draft(
         format_id: Some(item.id.clone()),
         format_mode: Some(requested),
         format_source: retained,
+        local: draft.local.clone(),
     })
 }
 

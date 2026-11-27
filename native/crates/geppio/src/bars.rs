@@ -90,6 +90,7 @@ pub struct BarDraft {
 pub struct RailDrag {
     pub id: String,
     pub origin_y: f32,
+    pub pointer_x: f32,
     pub pointer_y: f32,
     pub started: bool,
     /// Custom bars in their provisional order.
@@ -124,6 +125,8 @@ pub struct BarsUi {
     pub flips: HashMap<String, Transition>,
     pub form_scroll: gpui::ScrollHandle,
     pub library_scroll: gpui::ScrollHandle,
+    /// The rail's custom bar column (`.sidebar-rail-tools`), which scrolls.
+    pub rail_scroll: gpui::ScrollHandle,
 }
 
 impl BarsUi {
@@ -158,6 +161,7 @@ impl BarsUi {
             flips: HashMap::new(),
             form_scroll: gpui::ScrollHandle::new(),
             library_scroll: gpui::ScrollHandle::new(),
+            rail_scroll: gpui::ScrollHandle::new(),
         }
     }
 }
@@ -224,15 +228,16 @@ impl Workbench {
         let mut next = self.bars_now().clone();
         next.organization.active_bar = id.to_owned();
         self.change_bars(Some(next), cx);
-        if self.regions.sidebar_collapsed {
-            self.regions.open_peek();
+        // `regions.hover(true)`: the peek opens after 100 ms unless a collapse blocks it.
+        if self.regions.mode() == crate::regions::SidebarMode::Hidden {
+            self.peek_hover(true, cx);
         }
     }
 
+    /// `revealSidebar`: a hidden Sidebar opens as a peek at once.
     fn reveal_sidebar(&mut self) {
-        if self.regions.sidebar_collapsed && !self.regions.floating {
-            self.regions.toggle_sidebar();
-        } else if self.regions.floating {
+        if self.regions.sidebar_hidden() {
+            self.regions.block_peek = false;
             self.regions.open_peek();
         }
     }
@@ -482,6 +487,7 @@ impl Workbench {
         self.bars.reorder = Some(RailDrag {
             id: id.to_owned(),
             origin_y: y,
+            pointer_x: 0.0,
             pointer_y: y,
             started: false,
             order,
@@ -491,7 +497,9 @@ impl Workbench {
     /// Pointer moves for bar gestures (window CSS px). Returns whether a gesture used it.
     pub(crate) fn bars_move(&mut self, pos: (f32, f32), cx: &mut Context<Self>) -> bool {
         let rail_top = self.rail_top();
+        let scrolled = self.rail_scrolled();
         if let Some(drag) = self.bars.reorder.as_mut() {
+            drag.pointer_x = pos.0;
             drag.pointer_y = pos.1;
             if !drag.started && (pos.1 - drag.origin_y).abs() >= 4.0 {
                 drag.started = true;
@@ -499,7 +507,7 @@ impl Workbench {
             if drag.started {
                 // Provisional order: the dragged bar goes before the first sibling whose
                 // midpoint is below the pointer.
-                let first = rail_top + TOOLS_TOP + 9.0;
+                let first = rail_top + TOOLS_TOP + 9.0 - scrolled;
                 let index = drag.order.iter().position(|b| *b == drag.id).unwrap_or(0);
                 let others: Vec<String> = drag
                     .order
@@ -551,7 +559,8 @@ impl Workbench {
         let rail_top = self.rail_top();
         if let Some(drag) = self.bars.reorder.take() {
             if drag.started {
-                let inside = self.rail_tools_contains(drag.pointer_y, rail_top);
+                let inside = drag.pointer_x <= geppio_core::shell::RAIL as f32
+                    && self.rail_tools_contains(drag.pointer_y, rail_top);
                 if inside {
                     let at = drag.order.iter().position(|b| *b == drag.id).unwrap_or(0);
                     let before = drag.order.get(at + 1).cloned();
@@ -567,7 +576,7 @@ impl Workbench {
         if let Some(drag) = self.bars.restore.take() {
             if drag.started && drag.pos.0 <= geppio_core::shell::RAIL as f32 {
                 let customs: Vec<UserBar> = self.custom_bars();
-                let first = rail_top + TOOLS_TOP + 9.0;
+                let first = rail_top + TOOLS_TOP + 9.0 - self.rail_scrolled();
                 let slot = ((drag.pos.1 - first) / BAR_PITCH).floor().max(0.0) as usize;
                 let before = customs.get(slot).map(|b| b.id.clone());
                 self.drop_bar(&drag.id, before.as_deref(), cx);
@@ -576,6 +585,57 @@ impl Workbench {
             return true;
         }
         false
+    }
+
+    /// How far the custom bar column is scrolled (CSS px).
+    fn rail_scrolled(&self) -> f32 {
+        -self.metrics.css(self.bars.rail_scroll.offset().y)
+    }
+
+    /// While a rail gesture (reorder or restore) is held within 24px of the bar column's
+    /// edges, scroll it 8px per frame and re-run the provisional order (`tick`). Returns
+    /// whether it scrolled, so the host keeps requesting frames.
+    pub(crate) fn rail_autoscroll(&mut self, cx: &mut Context<Self>) -> bool {
+        let pointer = if let Some(d) = self.bars.reorder.as_ref().filter(|d| d.started) {
+            (d.pointer_x, d.pointer_y)
+        } else if let Some(d) = self.bars.restore.as_ref().filter(|d| d.started) {
+            d.pos
+        } else {
+            return false;
+        };
+        let m = self.metrics;
+        let bounds = self.bars.rail_scroll.bounds();
+        let (left, top) = (m.css(bounds.origin.x), m.css(bounds.origin.y));
+        let (right, bottom) = (
+            left + m.css(bounds.size.width),
+            top + m.css(bounds.size.height),
+        );
+        if bounds.size.height <= gpui::px(0.0)
+            || pointer.0 < left
+            || pointer.0 > right
+            || pointer.1 < top
+            || pointer.1 > bottom
+        {
+            return false;
+        }
+        let speed = if pointer.1 < top + 24.0 {
+            -8.0
+        } else if pointer.1 > bottom - 24.0 {
+            8.0
+        } else {
+            return false;
+        };
+        let max = m.css(self.bars.rail_scroll.max_offset().y).max(0.0);
+        let current = self.rail_scrolled();
+        let next = (current + speed).clamp(0.0, max);
+        if (next - current).abs() < 0.01 {
+            return false;
+        }
+        self.bars
+            .rail_scroll
+            .set_offset(point(gpui::px(0.0), -m.px(next)));
+        self.bars_move(pointer, cx);
+        true
     }
 
     fn rail_top(&self) -> f32 {
@@ -636,6 +696,9 @@ impl Workbench {
             .filter(|d| d.started)
             .map(|d| (d.id.clone(), d.pointer_y));
         let rail_top = self.rail_top();
+        let scrolled = self.rail_scrolled();
+        // `.sidebar-rail-tools` padding (9px top and bottom) around 32px buttons with 9px gaps.
+        let column_h = 18.0 + (customs.len() as f32 * BAR_PITCH - (BAR_PITCH - 32.0)).max(0.0);
         let bar_button = |this: &Self, bar: &UserBar, size: f32, glyph_size: f32| {
             let id = bar.id.clone();
             let current = bar.id == active;
@@ -662,9 +725,12 @@ impl Workbench {
                 let id = bar.id.clone();
                 let context_id = bar.id.clone();
                 let key_id = bar.id.clone();
-                let natural = TOOLS_TOP + 9.0 + i as f32 * BAR_PITCH;
+                // Position inside the scrolling column; on screen it is offset by the scroll.
+                let natural = 9.0 + i as f32 * BAR_PITCH;
                 let (dy, dragged) = match &dragging {
-                    Some((d, py)) if *d == bar.id => (*py - rail_top - natural - 16.0, true),
+                    Some((d, py)) if *d == bar.id => {
+                        (*py - rail_top - TOOLS_TOP + scrolled - natural - 16.0, true)
+                    }
                     _ => (flip.get(&bar.id).copied().unwrap_or(0.0), false),
                 };
                 div()
@@ -701,7 +767,7 @@ impl Workbench {
                     .on_key_down(cx.listener(move |this, e: &KeyDownEvent, _, cx| {
                         let k = &e.keystroke;
                         if k.key == "f10" && k.modifiers.shift {
-                            let y = rail_top + natural;
+                            let y = rail_top + TOOLS_TOP + natural - this.rail_scrolled();
                             let p = point(this.metrics.px(48.0 - 8.0), this.metrics.px(y));
                             this.bars.context = Some((key_id.clone(), p));
                             cx.stop_propagation();
@@ -774,17 +840,54 @@ impl Workbench {
                         cx.listener(|this, hovered: &bool, _, cx| this.peek_hover(*hovered, cx)),
                     )
                     .when_some(home_button, |el, b| {
-                        el.child(div().absolute().left(m.px(7.0)).top(m.px(13.5)).child(b))
+                        // Home has the same "Opções da barra" (Editar only) as custom bars.
+                        el.child(
+                            div()
+                                .id("rail-home")
+                                .absolute()
+                                .left(m.px(7.0))
+                                .top(m.px(13.5))
+                                .on_mouse_down(
+                                    MouseButton::Right,
+                                    cx.listener(|this, e: &MouseDownEvent, _, cx| {
+                                        this.bars.context = Some((HOME.to_owned(), e.position));
+                                        cx.notify();
+                                    }),
+                                )
+                                .on_key_down(cx.listener(move |this, e: &KeyDownEvent, _, cx| {
+                                    let k = &e.keystroke;
+                                    if k.key == "f10" && k.modifiers.shift {
+                                        let y = rail_top + 13.5;
+                                        let p =
+                                            point(this.metrics.px(48.0 - 8.0), this.metrics.px(y));
+                                        this.bars.context = Some((HOME.to_owned(), p));
+                                        cx.stop_propagation();
+                                        cx.notify();
+                                    }
+                                }))
+                                .child(b),
+                        )
                     })
                     .child(
                         div()
                             .id("rail-tools")
                             .absolute()
                             .left_0()
-                            .top_0()
-                            .size_full()
-                            .overflow_hidden()
-                            .children(custom_buttons),
+                            .top(m.px(TOOLS_TOP))
+                            .w(m.px(geppio_core::shell::RAIL as f32))
+                            .h(m.px(((rail.h * 2.0 / 3.0) as f32 - TOOLS_TOP).max(0.0)))
+                            // `--scrollbar-size: 5px; --scrollbar-inset: 0`, with the end arrows.
+                            .child(
+                                geppui::scroll_area("rail-tools-viewport", &self.bars.rail_scroll)
+                                    .gutter(5.0, 5.0)
+                                    .child(
+                                        div()
+                                            .relative()
+                                            .w_full()
+                                            .h(m.px(column_h))
+                                            .children(custom_buttons),
+                                    ),
+                            ),
                     )
                     .children(reorder_zone)
                     .children(restore_zone),
@@ -809,9 +912,6 @@ impl Workbench {
                                         this.bars.library = !this.bars.library;
                                         this.bars.library_menu = None;
                                         if this.bars.library {
-                                            this.bars
-                                                .library_search
-                                                .update(cx, |f, cx| f.set_text("", cx));
                                             this.pending_text_focus =
                                                 Some(this.bars.library_search.clone());
                                         }

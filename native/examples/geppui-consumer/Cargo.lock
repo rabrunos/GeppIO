@@ -1416,7 +1416,7 @@ dependencies = [
 
 [[package]]
 name = "geppui"
-version = "0.1.0-alpha.104"
+version = "0.1.0-alpha.105"
 dependencies = [
  "gpui",
 ]

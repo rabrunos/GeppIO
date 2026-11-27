@@ -58,7 +58,7 @@ impl Automation {
             regions.sample(0.0);
             let span = match state {
                 Freeze::Collapse => {
-                    regions.toggle_sidebar();
+                    let _ = regions.toggle_sidebar();
                     duration::REGION
                 }
                 Freeze::Expand => {
@@ -69,7 +69,7 @@ impl Automation {
                         regions.bottom_collapsed,
                     );
                     regions.sample(0.0);
-                    regions.toggle_sidebar();
+                    let _ = regions.toggle_sidebar();
                     duration::REGION
                 }
                 Freeze::Peek => {
@@ -84,7 +84,7 @@ impl Automation {
                     duration::REGION
                 }
                 Freeze::Bottom => {
-                    regions.toggle_bottom();
+                    let _ = regions.toggle_bottom();
                     duration::REGION
                 }
             };
@@ -136,7 +136,11 @@ impl Automation {
                         }
                         "open" => this.regions.open_peek(),
                         "close" => this.regions.close_peek(),
-                        "bottom" => this.regions.toggle_bottom(),
+                        "bottom" => {
+                            if let Some(p) = this.regions.toggle_bottom() {
+                                this.publish(p, cx);
+                            }
+                        }
                         "theme" => this.toggle_theme(cx),
                         _ => {}
                     }
