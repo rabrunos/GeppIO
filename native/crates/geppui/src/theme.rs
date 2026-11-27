@@ -80,6 +80,11 @@ pub struct Theme {
     pub scroll_arrow: Hsla,
     pub scroll_arrow_hover: Hsla,
     pub scroll_arrow_disabled: Hsla,
+    /// Chromium's Windows `scrollbar-width: thin` (widget contents): track and thumb.
+    pub thin_track: Hsla,
+    pub thin_thumb: Hsla,
+    /// `color-mix(in srgb, accent 55%, input)` (demo chart bars).
+    pub accent_muted: Hsla,
     pub peek_backdrop: Hsla,
     pub dialog_backdrop: Hsla,
     pub shadow_side: Shadow,
@@ -154,6 +159,9 @@ impl Theme {
             scroll_arrow: text_alpha(text, 0.14),
             scroll_arrow_hover: text_alpha(text, 0.36),
             scroll_arrow_disabled: text_alpha(text, 0.08),
+            thin_track: hex(0xfcfcfc),
+            thin_thumb: hex(0x8b8b8b),
+            accent_muted: mix(0xf58a30, 0xf5f7fa, 0.55),
             peek_backdrop: hexa(0x0000000a),
             dialog_backdrop: hexa(0x00000024),
             shadow_side: Shadow {
@@ -230,6 +238,9 @@ impl Theme {
             scroll_arrow: text_alpha(text, 0.14),
             scroll_arrow_hover: text_alpha(text, 0.36),
             scroll_arrow_disabled: text_alpha(text, 0.08),
+            thin_track: hex(0x2c2c2c),
+            thin_thumb: hex(0x9f9f9f),
+            accent_muted: mix(0xf49a56, 0x1a202b, 0.55),
             peek_backdrop: hexa(0x0000000a),
             dialog_backdrop: hexa(0x06090f7a),
             shadow_side: Shadow {

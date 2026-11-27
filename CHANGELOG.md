@@ -2,6 +2,18 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.102] — 2026-11-26
+
+- **Native host (Rust + GPUI): widget engine, edit mode and catalog (Stage B2, #74).**
+  - Port the workbench model to the pure `geppio-core` crate: layout reflow, alignment guides and settlement, freeform projection, the model and commands, whole-intention undo/redo (256), `EditSession`, and the `geppio:workbench:v1` codec. The codec uses a project-owned JSON reader and writer that reproduce `JSON.parse`/`JSON.stringify` numbers; unpaired surrogates are rejected. No new dependency.
+  - Add differential tests: `tools/native-fixtures.ts` computes fixtures with the TypeScript reference, the Rust port must reproduce them, and a Node test fails when the committed fixtures drift.
+  - Edit mode: the edit button, the 480 px catalog (search, areas, categories, destination choice), adding by click or drag, moving, reordering and resizing with live reflow, spacing guides, drop zones, the cancel flight, remove with confirmation, Save edition, Conclude, Cancel, undo/redo buttons and shortcuts, `Esc` steps, Tab navigation with focus rings, and focus return to the edit button.
+  - Seven demonstration widgets without plugins, with the Bottom compact variants.
+  - The composition persists in the native profile (`workbench.json`, atomic replace, re-read before save). Electron data is never read or written.
+  - Persistence hardening from the independent review: the reader keeps object keys indexed (a crafted file can no longer stall startup), nesting stops at 128 levels (`JSON.parse` accepts more; this keeps the UI-thread stack safe), oversized, non-UTF-8 or unreadable files open in recovery and are kept, saving without a profile is refused, and a `geppio-native` folder that is a link or resolves into Electron's folder disables persistence.
+  - An infeasible Main scrolls on both axes with thin scrollbars, shown only for real overflow.
+  - GeppUI gains keyboard focus for buttons and menu items, thin and two-axis scroll areas, the dashed outline and the toast.
+
 ## [0.1.0-alpha.101] — 2026-11-26
 
 - **CI (native host):** install the checksum-verified cargo-deny release with relative paths. GNU `tar` on the hosted Windows runner read the absolute `D:\` archive path as a remote host, which failed the new `Windows native` job of alpha.100. No application change.

@@ -1,7 +1,7 @@
 //! The main screen: global header, context row, concave workspace corner, rail, Sidebar
 //! (docked, collapse, floating peek), Bottom, splitters, status bar and the Main area.
 //! Geometry comes from `geppio_core::shell`; the animated tracks from [`Regions`].
-use std::{path::PathBuf, time::Duration};
+use std::{collections::HashMap, path::PathBuf, time::Duration};
 
 use geppio_core::shell::{self, Responsive, ShellLayout, Tracks};
 use geppui::{
@@ -17,11 +17,18 @@ use gpui::{
     prelude::FluentBuilder,
 };
 
+use geppio_core::layout::Region;
+use geppio_core::workbench::{EditSession, WorkbenchStore, widget_registry};
+use gpui::ScrollHandle;
+
 use crate::{
     automation::Automation,
+    edit::{EditUi, FileStore},
+    edit_view::Ports,
     options::{Options, Start},
     prefs::Prefs,
     regions::{Axis, Regions, SidebarMode},
+    widgets::Properties,
 };
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -54,6 +61,25 @@ pub struct Workbench {
     splitter_hovered: [bool; 2],
     viewport: (f64, f64),
     pub(crate) automation: Automation,
+    pub(crate) session: EditSession,
+    pub(crate) store: FileStore,
+    pub(crate) edit: EditUi,
+    pub(crate) ports: Ports,
+    pub(crate) metrics: Metrics,
+    pub(crate) scrolls: HashMap<String, ScrollHandle>,
+    pub(crate) sidebar_scroll: ScrollHandle,
+    pub(crate) main_scroll: ScrollHandle,
+    pub(crate) properties: Properties,
+    pub(crate) edit_focus: FocusHandle,
+    pub(crate) save_focus: FocusHandle,
+    /// Focus to apply at the next render: true = Salvar edição, false = Editar layout.
+    pub(crate) pending_focus: Option<bool>,
+    /// View awaiting the remove confirmation.
+    pub(crate) removing: Option<String>,
+}
+
+fn regions_width(_s: &ShellLayout) -> f64 {
+    geppio_core::shell::SIDEBAR_LIMITS.initial
 }
 
 /// Chromium `line-height: normal` for Segoe UI.
@@ -132,6 +158,16 @@ impl Workbench {
             }
         })
         .detach();
+        // The layout envelope lives in the native profile; demonstration widgets are on.
+        let store = FileStore {
+            dir: options.profile.clone(),
+        };
+        // An unreadable file is kept and opens in recovery; only a missing one starts fresh.
+        let session = match store.get() {
+            Ok(stored) => EditSession::open(widget_registry(&[], true), stored.as_deref(), true),
+            Err(_) => EditSession::open_unreadable(widget_registry(&[], true)),
+        };
+        let initial = ShellLayout::compute(1280.0, 800.0, Tracks::default());
         let mut this = Self {
             focus,
             profile: options.profile.clone(),
@@ -146,6 +182,19 @@ impl Workbench {
             splitter_hovered: [false, false],
             viewport: (1280.0, 800.0),
             automation: Automation::new(options),
+            session,
+            store,
+            edit: EditUi::default(),
+            ports: Ports::of(&initial, regions_width(&initial)),
+            metrics: Metrics::default(),
+            scrolls: HashMap::new(),
+            sidebar_scroll: ScrollHandle::new(),
+            main_scroll: ScrollHandle::new(),
+            properties: Properties::default(),
+            edit_focus: cx.focus_handle(),
+            save_focus: cx.focus_handle(),
+            pending_focus: None,
+            removing: None,
         };
         this.automation.start(&mut this.regions, cx);
         this
@@ -172,6 +221,7 @@ impl Workbench {
         self.peek_timer = None;
         self.regions.toggle_sidebar();
         self.save_prefs(cx);
+        self.edit.toast("Preferência salva.", geppui::now(cx));
         cx.notify();
     }
 
@@ -274,11 +324,18 @@ impl Workbench {
         let hovered = self.splitter_hovered[index];
         self.splitter_hover(index, hovered, cx);
         self.save_prefs(cx);
+        self.edit.toast("Preferência salva.", geppui::now(cx));
         cx.notify();
     }
 
     fn on_key(&mut self, event: &KeyDownEvent, cx: &mut Context<Self>) {
+        if self.menu.is_none() && self.edit_key(event, cx) {
+            return;
+        }
         if event.keystroke.key == "escape" {
+            if self.menu.is_none() && self.edit_escape(cx) {
+                return;
+            }
             if self.menu.is_some() {
                 self.set_menu(None, cx);
             } else if self.regions.peek {
@@ -476,8 +533,9 @@ impl Workbench {
             )
     }
 
-    fn context(&self, c: &Ctx, s: &ShellLayout) -> Div {
+    fn context(&self, c: &Ctx, s: &ShellLayout, cx: &mut Context<Self>) -> Div {
         let (m, t) = (c.m, c.t);
+        let editing = self.editing();
         let explorer = if c.r.compact_header {
             button("explorer")
                 .icon("folder-open", 24.0)
@@ -527,12 +585,14 @@ impl Workbench {
                     .child(
                         button("experience-workbench")
                             .label("Bancada de Trabalho")
-                            .pressed(true),
+                            .pressed(true)
+                            .disabled(editing),
                     )
                     .child(
                         button("experience-code")
                             .label("GeppIO Code")
-                            .tooltip("GeppIO Code (fora do escopo desta etapa)"),
+                            .tooltip("GeppIO Code (fora do escopo desta etapa)")
+                            .disabled(editing),
                     ),
             )
             .child(
@@ -541,7 +601,11 @@ impl Workbench {
                     .text(12.0, 400.0)
                     .tooltip("Projeto local"),
             )
-            .child(button("terminal").label("Mostrar Terminal"))
+            .child(
+                button("terminal")
+                    .label("Mostrar Terminal")
+                    .disabled(editing),
+            )
             .child(
                 div()
                     .flex()
@@ -552,7 +616,10 @@ impl Workbench {
                             button("edit-layout")
                                 .icon("pencil-square", 24.0)
                                 .width(36.0)
-                                .tooltip("Editar layout"),
+                                .tooltip("Editar layout")
+                                .when(editing, |b| b.accent())
+                                .focus(&self.edit_focus)
+                                .on_click(cx.listener(|this, _, _, cx| this.begin_edit(cx))),
                         ),
                     )
                     .child(
@@ -606,12 +673,15 @@ impl Workbench {
             )
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn sidebar_contents(
         &self,
         c: &Ctx,
         width: f32,
         floating: bool,
         height: f32,
+        frames: Vec<AnyElement>,
+        world: f32,
         cx: &mut Context<Self>,
     ) -> Div {
         let (m, t) = (c.m, c.t);
@@ -664,22 +734,41 @@ impl Workbench {
                         .on_click(cx.listener(|this, _, _, cx| this.toggle_sidebar(cx))),
                     ),
             )
-            .child(
-                div()
-                    .absolute()
-                    .left(m.px(15.0))
-                    .top(m.px(header_h + 9.0))
-                    .w(m.px(width - 30.0))
-                    .h(m.px((height - header_h - 18.0).max(0.0)))
-                    .child(self.empty_region(
-                        c,
-                        if floating {
-                            "sidebar-floating"
-                        } else {
-                            "sidebar"
-                        },
-                    )),
-            )
+            .child({
+                let port_h = (height - header_h - 18.0).max(0.0);
+                let area = div().absolute().left(m.px(15.0)).top(m.px(header_h + 9.0));
+                if frames.is_empty() {
+                    area.w(m.px(width - 30.0))
+                        .h(m.px(port_h))
+                        .child(self.empty_region(
+                            c,
+                            if floating {
+                                "sidebar-floating"
+                            } else {
+                                "sidebar"
+                            },
+                        ))
+                } else {
+                    // The 15px stable gutter sits right of the widget column (reference scrollbar).
+                    area.w(m.px(width - 15.0)).h(m.px(port_h)).child(
+                        geppui::scroll_area(
+                            if floating {
+                                "sidebar-floating-scroll"
+                            } else {
+                                "sidebar-scroll"
+                            },
+                            &self.sidebar_scroll,
+                        )
+                        .child(
+                            div()
+                                .relative()
+                                .w(m.px(width - 30.0))
+                                .h(m.px(world.max(port_h)))
+                                .children(frames),
+                        ),
+                    )
+                }
+            })
     }
 
     fn rail(&self, c: &Ctx, s: &ShellLayout, cx: &mut Context<Self>) -> Div {
@@ -1035,14 +1124,26 @@ impl Render for Workbench {
         let vp = window.viewport_size();
         self.viewport = (m.css(vp.width) as f64, m.css(vp.height) as f64);
         self.regions.reduced = geppui::appearance(cx).reduced_motion;
+        self.metrics = m;
+        if let Some(save) = self.pending_focus.take() {
+            let handle = if save {
+                self.save_focus.clone()
+            } else {
+                self.edit_focus.clone()
+            };
+            window.focus(&handle, cx);
+        }
         let frame = self.regions.sample(now);
+        let catalog_track = self.edit.catalog_track.sample(now);
+        self.edit.settle(now);
         self.chevron.sample(now);
         for i in 0..2 {
             self.splitter_hover[i].sample(now);
         }
         let animating = self.regions.animating(now)
             || self.chevron.animating(now)
-            || self.splitter_hover.iter().any(|h| h.animating(now));
+            || self.splitter_hover.iter().any(|h| h.animating(now))
+            || self.edit.animating(now);
         if animating && !geppui::appearance(cx).clock.frozen() {
             window.request_animation_frame();
         }
@@ -1055,8 +1156,25 @@ impl Render for Workbench {
             bottom: frame.bottom,
             sidebar_width: self.regions.sidebar_width,
             bottom_height: self.regions.bottom_height,
+            catalog: catalog_track,
         };
         let s = ShellLayout::compute(w, h, tracks);
+        self.ports = Ports::of(&s, self.regions.sidebar_width);
+        let editing = self.editing();
+        let main_frames = self.region_frames(Region::Main, m, t, now, editing, cx);
+        let bottom_frames = self.region_frames(Region::Bottom, m, t, now, editing, cx);
+        let sidebar_frames = self.region_frames(Region::Sidebar, m, t, now, editing, cx);
+        let sidebar_world = self.sidebar_world();
+        let (edit_below, edit_top) = self.edit_layers(&s, m, t, now, cx);
+        let floating_port = (
+            (s.floating.w - 2.0 - 30.0) as f32,
+            (s.floating.h - 2.0 - 40.0 - 18.0) as f32,
+        );
+        let (floating_frames, floating_world) = if self.regions.floating {
+            self.floating_frames(floating_port.0, floating_port.1, m, t, cx)
+        } else {
+            (Vec::new(), 0.0)
+        };
         let c = Ctx {
             m,
             t,
@@ -1071,13 +1189,33 @@ impl Render for Workbench {
                 .rounded_tl(m.px(shell::WORKSPACE_RADIUS as f32))
                 .into_any_element(),
         );
-        layers.push(self.context(&c, &s).into_any_element());
+        layers.push(self.context(&c, &s, cx).into_any_element());
         // Main region.
-        layers.push(
+        layers.push(if main_frames.is_empty() {
             abs(m, s.main_port.into())
                 .child(self.empty_region(&c, "main"))
-                .into_any_element(),
-        );
+                .into_any_element()
+        } else {
+            // An infeasible projection keeps reference geometry: Main scrolls on both axes with
+            // the thin platform bars of `.placement-port`.
+            let (world_w, world_h) = self.main_world();
+            abs(m, s.main_port.into())
+                .child(
+                    geppui::scroll_area("main-port", &self.main_scroll)
+                        .both_axes(
+                            (world_w, world_h),
+                            (s.main_port.w as f32, s.main_port.h as f32),
+                        )
+                        .child(
+                            div()
+                                .relative()
+                                .w(m.px(world_w))
+                                .h(m.px(world_h))
+                                .children(main_frames),
+                        ),
+                )
+                .into_any_element()
+        });
         // Bottom: fixed-height tray anchored to the top of a shrinking clip (it slides down).
         if s.bottom_clip.h > 0.0 {
             let tray = s.bottom_surface;
@@ -1100,7 +1238,15 @@ impl Render for Workbench {
                             .pt(m.px(9.0))
                             .px(m.px(11.0))
                             .pb(m.px(10.0))
-                            .child(self.empty_region(&c, "bottom")),
+                            .child(if bottom_frames.is_empty() {
+                                self.empty_region(&c, "bottom").into_any_element()
+                            } else {
+                                div()
+                                    .relative()
+                                    .size_full()
+                                    .children(bottom_frames)
+                                    .into_any_element()
+                            }),
                     )
                     .into_any_element(),
             );
@@ -1135,6 +1281,8 @@ impl Render for Workbench {
                         self.regions.sidebar_width as f32,
                         false,
                         height,
+                        sidebar_frames,
+                        sidebar_world,
                         cx,
                     ))
                     .into_any_element(),
@@ -1158,7 +1306,15 @@ impl Render for Workbench {
                     .on_hover(
                         cx.listener(|this, hovered: &bool, _, cx| this.peek_hover(*hovered, cx)),
                     )
-                    .child(self.sidebar_contents(&c, (f.w - 2.0) as f32, true, inner_h, cx))
+                    .child(self.sidebar_contents(
+                        &c,
+                        (f.w - 2.0) as f32,
+                        true,
+                        inner_h,
+                        floating_frames,
+                        floating_world,
+                        cx,
+                    ))
                     .into_any_element(),
             );
         }
@@ -1166,10 +1322,14 @@ impl Render for Workbench {
         if let Some(separator) = self.rail_separator(&c, &s, frame.track) {
             layers.push(separator);
         }
-        layers.extend(splitters);
+        layers.extend(edit_below);
+        if !editing {
+            layers.extend(splitters);
+        }
         layers.push(self.status_bar(&c, &s).into_any_element());
         layers.push(self.header(&c, cx).into_any_element());
         layers.extend(self.overlays(&c, cx));
+        layers.extend(edit_top);
 
         let floating = s.floating;
         let peek_open = self.regions.peek;
@@ -1184,15 +1344,32 @@ impl Render for Workbench {
             .line_height(m.px(normal_line(13.0)))
             .text_color(t.text)
             .track_focus(&self.focus)
-            .on_key_down(cx.listener(|this, e: &KeyDownEvent, _, cx| this.on_key(e, cx)))
+            .on_key_down(cx.listener(|this, e: &KeyDownEvent, window, cx| {
+                if e.keystroke.key == "tab" && !e.keystroke.modifiers.control {
+                    if e.keystroke.modifiers.shift {
+                        window.focus_prev(cx);
+                    } else {
+                        window.focus_next(cx);
+                    }
+                    return;
+                }
+                this.on_key(e, cx)
+            }))
             .on_mouse_move(cx.listener(move |this, e: &MouseMoveEvent, _, cx| {
                 if !geppui::appearance(cx).clock.frozen() {
-                    this.on_mouse_move(e, m, cx)
+                    let pos = (m.css(e.position.x), m.css(e.position.y));
+                    if !this.edit_move(pos, cx) {
+                        this.on_mouse_move(e, m, cx)
+                    }
                 }
             }))
             .on_mouse_up(
                 MouseButton::Left,
-                cx.listener(|this, _: &MouseUpEvent, _, cx| this.on_mouse_up(cx)),
+                cx.listener(|this, _: &MouseUpEvent, _, cx| {
+                    if !this.edit_up(cx) {
+                        this.on_mouse_up(cx)
+                    }
+                }),
             )
             .on_mouse_down(
                 MouseButton::Left,

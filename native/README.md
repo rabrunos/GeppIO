@@ -6,9 +6,9 @@ The Rust + upstream GPUI host that replaces the Electron application screen by s
 
 | Crate | Responsibility | May depend on |
 | --- | --- | --- |
-| `crates/geppui` | Independent component library: both theme token tables, device-pixel snapping, CSS→GPUI conversions, per-glyph letter spacing, icons, interruptible CSS-style motion, reduced motion, button, icon button, popover, menu item, dialog and scroll area. Knows nothing about GeppIO. | `gpui` |
-| `crates/geppio-core` | Pure Rust model, testable headless: shell geometry and region limits today; placement, transactions and the `geppio:workbench:v1` envelope in B2. No GPUI, no window. | `std`, `serde`, `serde_json` |
-| `crates/geppio` | The desktop app: frameless window, main screen composition, region state, preferences and the single read-only OS query (reduced motion). | `geppui`, `geppio-core`, `gpui`, `gpui_platform`, `serde`, `serde_json` |
+| `crates/geppui` | Independent component library: both theme token tables, device-pixel snapping, CSS→GPUI conversions, per-glyph letter spacing, icons, interruptible CSS-style motion, reduced motion, button and icon button with keyboard focus rings, popover, menu item, dialog, scroll area (with thin and two-axis variants), dashed outline and toast. Knows nothing about GeppIO. | `gpui` |
+| `crates/geppio-core` | Pure Rust model, testable headless: shell geometry and region limits; layout reflow, alignment guides and settlement; freeform projection; the workbench model, commands, undo history (256 intentions) and `EditSession`; the `geppio:workbench:v1` codec. No GPUI, no window. | `std` (`serde`, `serde_json` allowed) |
+| `crates/geppio` | The desktop app: frameless window, main screen composition, region state, preferences, edit mode with the widget catalog and demo widgets, and the single read-only OS query (reduced motion). | `geppui`, `geppio-core`, `gpui`, `gpui_platform`, `serde`, `serde_json` |
 | `examples/geppui-consumer` | External consumer with its own lockfile, using only GeppUI's public API. | `geppui` (path), `gpui`, `gpui_platform` |
 
 `tools/check-modules.ts` enforces these directions, a single git source (`zed-industries/zed` at `610ea4b8de1c6e887f03563f067278002f41256e`, Zed v1.30.2), exact registry pins, no `[patch]` and committed lockfiles. `tools/check-repo.ts` checks that `[workspace.package].version` equals `package.json`.
@@ -29,9 +29,24 @@ cargo run --locked -p geppio
 
 The external consumer builds from `examples/geppui-consumer` with `cargo build --locked --target-dir ../../target`.
 
+## Differential tests
+
+`geppio-core` is a port of the TypeScript reference model. `tests/differential.rs` replays fixtures that `tools/native-fixtures.ts` computes with the TypeScript modules (`node --experimental-strip-types tools/native-fixtures.ts` regenerates them; `tests/native-fixtures.test.ts` fails when the committed fixtures drift). The codec uses a project-owned JSON reader and writer so that numbers round-trip and print exactly as `JSON.parse`/`JSON.stringify`. Two native limits differ from JavaScript: unpaired UTF-16 surrogates are rejected and nesting stops at 128 levels.
+
 ## Data
 
-The app keeps its own profile in `%APPDATA%\geppio-native\preferences.json` (theme, region visibility and sizes). It never reads or writes the Electron profile (`%APPDATA%\geppio`). Corrupt or unknown preferences fall back to defaults.
+The app keeps its own profile in `%APPDATA%\geppio-native`. It never reads or writes the Electron profile (`%APPDATA%\geppio`).
+
+| File | Content | On a corrupt or unknown file |
+| --- | --- | --- |
+| `preferences.json` | Theme, region visibility and sizes | Defaults |
+| `workbench.json` | The `geppio:workbench:v1` composition, written only by Save edition and Conclude (temporary file, flush, rename; 512 KiB cap). A save first re-reads the file and stops if it changed since it was opened | Recovery, also for an oversized, non-UTF-8 or unreadable file: the file is kept untouched and edit mode stays closed until Settings exist natively |
+
+If `geppio-native` exists as a link or junction, or resolves inside the Electron folder, the app runs without persistence.
+
+## Edit mode
+
+The edit button opens the session and the 480 px catalog. Widgets move by their heading and resize from edges and corners, with live reflow, spacing guides, drop zones and a flight back on cancel. Undo/redo (buttons, `Ctrl+Z`, `Ctrl+Y`, `Ctrl+Shift+Z`) restores whole intentions. Save edition confirms a checkpoint, Conclude saves and leaves, Cancel discards and `Esc` steps back one level (gesture, dialog, catalog search, catalog, session). Focus returns to the edit button on leave. The widgets are demo fixtures; plugins are out of scope.
 
 ## Automated comparison hooks
 

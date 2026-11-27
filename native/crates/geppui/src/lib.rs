@@ -12,10 +12,12 @@ pub mod dialog;
 pub mod icon;
 pub mod metrics;
 pub mod motion;
+pub mod outline;
 pub mod popover;
 pub mod scroll;
 pub mod text;
 pub mod theme;
+pub mod toast;
 
 use std::time::Instant;
 
@@ -28,10 +30,12 @@ pub use dialog::{Dialog, dialog};
 pub use icon::{Icon, icon};
 pub use metrics::{Metrics, Placed, Rect, UI_FONT, css_weight};
 pub use motion::{CubicBezier, Transition, Tween};
+pub use outline::{dashed_outline, outline_geometry};
 pub use popover::{Popover, menu_item, popover};
-pub use scroll::{ScrollArea, scroll_area};
+pub use scroll::{ScrollArea, bars_needed, scroll_area};
 pub use text::{SpacedText, spaced_text};
 pub use theme::{Shadow, Theme, ThemeName};
+pub use toast::{Toast, toast};
 
 /// Milliseconds since the host started, or a frozen instant for deterministic captures.
 #[derive(Clone, Copy, Debug)]

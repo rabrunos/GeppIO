@@ -2,10 +2,16 @@
 #![cfg_attr(not(test), windows_subsystem = "windows")]
 
 mod automation;
+mod catalog;
+mod drag_layer;
+mod edit;
+mod edit_chrome;
+mod edit_view;
 mod options;
 mod platform;
 mod prefs;
 mod regions;
+mod widgets;
 mod workbench;
 
 use std::borrow::Cow;
@@ -28,6 +34,9 @@ impl Assets {
             "icons/workspace.svg" => Some(include_bytes!("../assets/icons/workspace.svg")),
             "icons/sidebar.svg" => Some(include_bytes!("../assets/icons/sidebar.svg")),
             "icons/empty-region.svg" => Some(include_bytes!("../assets/icons/empty-region.svg")),
+            "icons/undo.svg" => Some(include_bytes!("../assets/icons/undo.svg")),
+            "icons/redo.svg" => Some(include_bytes!("../assets/icons/redo.svg")),
+            "icons/move.svg" => Some(include_bytes!("../assets/icons/move.svg")),
             _ => GeppuiAssets::get(path),
         }
     }

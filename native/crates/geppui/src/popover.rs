@@ -191,6 +191,13 @@ impl RenderOnce for MenuItem {
         let hover = crate::button::hover_listener(state);
         div()
             .id(ElementId::Name(self.id.clone()))
+            .track_focus(&crate::button::focus_handle(&self.id, None, window, cx))
+            .focus_visible(move |s| {
+                s.bg(t.control_hover).shadow(vec![
+                    gpui::BoxShadow::new(gpui::px(0.0), gpui::px(0.0), t.accent_border)
+                        .spread_radius(gpui::px(1.0)),
+                ])
+            })
             .flex()
             .items_center()
             .gap(m.px(11.0))

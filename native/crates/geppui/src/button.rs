@@ -3,14 +3,32 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyView, App, AppContext, ClickEvent, Context, ElementId, Entity, Hsla, InteractiveElement,
-    IntoElement, ParentElement, Render, RenderOnce, SharedString, StatefulInteractiveElement,
-    Styled, Window, div, prelude::FluentBuilder,
+    AnyView, App, AppContext, ClickEvent, Context, ElementId, Entity, FocusHandle, Hsla,
+    InteractiveElement, IntoElement, ParentElement, Render, RenderOnce, SharedString,
+    StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder,
 };
 
 use crate::{appearance, css_weight, icon, metrics, motion, motion::Transition};
 
 type ClickHandler = Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
+
+/// The control's focus handle: the host's, or one kept per element id. Keyboard activation
+/// (Enter/Space on the focused control) comes from GPUI's click listeners.
+pub fn focus_handle(
+    id: &SharedString,
+    external: Option<FocusHandle>,
+    window: &mut Window,
+    cx: &mut App,
+) -> FocusHandle {
+    let handle = external.unwrap_or_else(|| {
+        let key = ElementId::Name(SharedString::from(format!("{id}::focus")));
+        window
+            .use_keyed_state(key, cx, |_, cx| cx.focus_handle())
+            .read(cx)
+            .clone()
+    });
+    handle.tab_stop(true)
+}
 
 /// Hover progress of one element, animated like the reference's icon `scale` transition.
 pub struct HoverState {
@@ -40,7 +58,8 @@ pub fn hover_state(
     (state, hovered, progress)
 }
 
-pub(crate) fn hover_listener(
+/// Hover listener that animates a [`HoverState`] like the reference icon scale.
+pub fn hover_listener(
     state: Entity<HoverState>,
 ) -> impl Fn(&bool, &mut Window, &mut App) + 'static {
     move |hovered, _window, cx| {
@@ -83,6 +102,12 @@ impl Render for TooltipView {
     }
 }
 
+/// The GeppUI tooltip view, for hosts that attach tooltips to their own elements.
+pub fn tooltip_view(text: impl Into<SharedString>, cx: &mut App) -> AnyView {
+    let text = text.into();
+    cx.new(|_| TooltipView { text }).into()
+}
+
 fn tooltip(text: SharedString) -> impl Fn(&mut Window, &mut App) -> AnyView + 'static {
     move |_, cx| cx.new(|_| TooltipView { text: text.clone() }).into()
 }
@@ -103,6 +128,7 @@ pub struct IconButton {
     destructive: bool,
     disabled: bool,
     on_click: Option<ClickHandler>,
+    focus: Option<FocusHandle>,
 }
 
 pub fn icon_button(id: impl Into<SharedString>, icon: impl Into<SharedString>) -> IconButton {
@@ -120,6 +146,7 @@ pub fn icon_button(id: impl Into<SharedString>, icon: impl Into<SharedString>) -
         destructive: false,
         disabled: false,
         on_click: None,
+        focus: None,
     }
 }
 
@@ -171,6 +198,11 @@ impl IconButton {
         self.on_click = Some(Rc::new(handler));
         self
     }
+    /// Uses a host-owned focus handle (to move focus to this control programmatically).
+    pub fn focus(mut self, handle: &FocusHandle) -> Self {
+        self.focus = Some(handle.clone());
+        self
+    }
 }
 
 impl RenderOnce for IconButton {
@@ -197,8 +229,17 @@ impl RenderOnce for IconButton {
             1.0 + 0.1 * progress
         };
         let on_click = self.on_click.clone();
+        let focus = focus_handle(&self.id, self.focus.clone(), window, cx);
+        let ring = t.ring;
         div()
             .id(ElementId::Name(self.id.clone()))
+            .when(!self.disabled, |el| el.track_focus(&focus))
+            .focus_visible(move |s| {
+                s.shadow(vec![
+                    gpui::BoxShadow::new(gpui::px(0.0), gpui::px(0.0), ring)
+                        .spread_radius(gpui::px(2.0)),
+                ])
+            })
             .flex()
             .flex_none()
             .items_center()
@@ -246,6 +287,7 @@ pub struct Button {
     disabled: bool,
     tooltip: Option<SharedString>,
     on_click: Option<ClickHandler>,
+    focus: Option<FocusHandle>,
 }
 
 pub fn button(id: impl Into<SharedString>) -> Button {
@@ -265,6 +307,7 @@ pub fn button(id: impl Into<SharedString>) -> Button {
         disabled: false,
         tooltip: None,
         on_click: None,
+        focus: None,
     }
 }
 
@@ -328,6 +371,11 @@ impl Button {
         self.on_click = Some(Rc::new(handler));
         self
     }
+    /// Uses a host-owned focus handle (to move focus to this control programmatically).
+    pub fn focus(mut self, handle: &FocusHandle) -> Self {
+        self.focus = Some(handle.clone());
+        self
+    }
 }
 
 impl RenderOnce for Button {
@@ -367,8 +415,17 @@ impl RenderOnce for Button {
         };
         let scale = 1.0 + 0.1 * progress;
         let on_click = self.on_click.clone();
+        let focus = focus_handle(&self.id, self.focus.clone(), window, cx);
+        let ring = t.ring;
         div()
             .id(ElementId::Name(self.id.clone()))
+            .when(!self.disabled, |el| el.track_focus(&focus))
+            .focus_visible(move |s| {
+                s.shadow(vec![
+                    gpui::BoxShadow::new(gpui::px(0.0), gpui::px(0.0), ring)
+                        .spread_radius(gpui::px(2.0)),
+                ])
+            })
             .flex()
             .flex_none()
             .items_center()

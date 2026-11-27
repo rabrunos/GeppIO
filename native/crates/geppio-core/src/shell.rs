@@ -53,6 +53,8 @@ pub struct Tracks {
     pub sidebar_width: f64,
     /// Requested Bottom height (`--bottom-height`).
     pub bottom_height: f64,
+    /// Widget catalog column (`--catalog-track`, 0↔480 while editing).
+    pub catalog: f64,
 }
 
 impl Default for Tracks {
@@ -62,6 +64,7 @@ impl Default for Tracks {
             bottom: BOTTOM_LIMITS.initial,
             sidebar_width: SIDEBAR_LIMITS.initial,
             bottom_height: BOTTOM_LIMITS.initial,
+            catalog: 0.0,
         }
     }
 }
@@ -93,6 +96,8 @@ pub struct ShellLayout {
     /// Floating Sidebar panel and the peek backdrop (1px inside the outline).
     pub floating: Rect,
     pub backdrop: Rect,
+    /// The catalog column at the right of Main and Bottom (width = catalog track).
+    pub catalog: Rect,
 }
 
 impl ShellLayout {
@@ -101,16 +106,17 @@ impl ShellLayout {
         let work_top = HEADER + CONTEXT;
         let work_bottom = height - STATUS;
         let bottom_track = tracks.bottom.max(0.0);
+        let catalog = tracks.catalog.clamp(0.0, width);
         let main = Rect::new(
             track,
             work_top,
-            (width - track).max(0.0),
+            (width - track - catalog).max(0.0),
             (work_bottom - bottom_track - work_top).max(0.0),
         );
         let bottom_clip = Rect::new(
             track + SPACE_X,
             work_bottom - bottom_track,
-            (width - track - 2.0 * SPACE_X).max(0.0),
+            (width - track - catalog - 2.0 * SPACE_X).max(0.0),
             bottom_track,
         );
         let floating_top = HEADER + SPACE_Y;
@@ -161,6 +167,12 @@ impl ShellLayout {
                 HEADER + 1.0,
                 (width - track - 1.0).max(0.0),
                 (work_bottom - HEADER - 1.0).max(0.0),
+            ),
+            catalog: Rect::new(
+                width - catalog,
+                work_top,
+                catalog,
+                (work_bottom - work_top).max(0.0),
             ),
         }
     }
@@ -213,6 +225,18 @@ mod tests {
         assert_eq!(s.bottom_surface.h, 167.0);
         assert_eq!(s.floating, Rect::new(59.0, 55.0, 238.0, 711.0));
         assert_eq!(s.backdrop.x, 49.0);
+    }
+
+    #[test]
+    fn catalog_track_narrows_main_and_bottom() {
+        let tracks = Tracks {
+            catalog: 480.0,
+            ..Tracks::default()
+        };
+        let s = ShellLayout::compute(1280.0, 800.0, tracks);
+        assert_eq!(s.main, Rect::new(331.0, 96.0, 469.0, 512.0));
+        assert_eq!(s.bottom_clip.w, 469.0 - 22.0);
+        assert_eq!(s.catalog, Rect::new(800.0, 96.0, 480.0, 679.0));
     }
 
     #[test]

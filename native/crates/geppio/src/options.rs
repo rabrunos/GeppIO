@@ -89,11 +89,39 @@ pub fn default_profile(app_data: Option<&Path>) -> Option<PathBuf> {
         .map(|base| base.join("geppio-native"))
 }
 
+/// The owner profile, refused when an existing `geppio-native` is not a plain directory
+/// (`canonical` rejects links and junctions) or resolves inside Electron's
+/// `%APPDATA%\geppio`, so the native host can never write the Electron folder. A missing
+/// folder is created later as a plain directory.
+pub fn owner_profile(
+    app_data: Option<&Path>,
+    exists: impl Fn(&Path) -> bool,
+    canonical: impl Fn(&Path) -> Option<PathBuf>,
+) -> Option<PathBuf> {
+    let profile = default_profile(app_data)?;
+    if !exists(&profile) {
+        return Some(profile);
+    }
+    let resolved = canonical(&profile)?;
+    let electron = app_data.and_then(|base| canonical(&base.join("geppio")));
+    (!electron.is_some_and(|electron| within(&resolved, &electron))).then_some(profile)
+}
+
 fn same_component(a: &std::ffi::OsStr, b: &std::ffi::OsStr) -> bool {
     match (a.to_str(), b.to_str()) {
         (Some(a), Some(b)) => a.eq_ignore_ascii_case(b),
         _ => a == b,
     }
+}
+
+/// `path` equals `base` or lies under it, per component and without regard to ASCII case.
+fn within(path: &Path, base: &Path) -> bool {
+    let (path, base): (Vec<_>, Vec<_>) = (path.components().collect(), base.components().collect());
+    path.len() >= base.len()
+        && path
+            .iter()
+            .zip(&base)
+            .all(|(a, b)| same_component(a.as_os_str(), b.as_os_str()))
 }
 
 /// `value` is exactly `<temp>\geppio-native-test-<[A-Za-z0-9_-]+>`, compared per component
@@ -178,7 +206,11 @@ impl Options {
         temp: &Path,
         canonical: impl Fn(&Path) -> Option<PathBuf>,
     ) -> Self {
-        let owner = default_profile(get("APPDATA").as_deref().map(Path::new));
+        let owner = owner_profile(
+            get("APPDATA").as_deref().map(Path::new),
+            |p| std::fs::symlink_metadata(p).is_ok(),
+            &canonical,
+        );
         let Some(requested) = get("GEPPIO_NATIVE_TEST_PROFILE") else {
             return Self {
                 profile: owner,
@@ -189,16 +221,7 @@ impl Options {
         // A redirected TMP/TEMP must not place a test profile inside the roaming profiles
         // (Electron's `geppio` or the owner's `geppio-native`).
         let app_data = get("APPDATA").and_then(|a| canonical(Path::new(&a)));
-        let inside_app_data = |p: &Path| {
-            app_data.as_ref().is_some_and(|app| {
-                let (p, app): (Vec<_>, Vec<_>) =
-                    (p.components().collect(), app.components().collect());
-                p.len() >= app.len()
-                    && p.iter()
-                        .zip(&app)
-                        .all(|(a, b)| same_component(a.as_os_str(), b.as_os_str()))
-            })
-        };
+        let inside_app_data = |p: &Path| app_data.as_ref().is_some_and(|app| within(p, app));
         let checked = validated_test_profile(Path::new(&requested), temp, &canonical)
             .filter(|p| canonical(p).is_some_and(|resolved| !inside_app_data(&resolved)));
         let Some(test_profile) = checked else {
@@ -378,6 +401,27 @@ mod tests {
             identity,
         );
         assert_eq!(redirected.profile, None);
+    }
+
+    #[test]
+    fn owner_profile_never_resolves_into_electron_data() {
+        let app = Path::new(r"C:\Users\x\AppData\Roaming");
+        let native = app.join("geppio-native");
+        let missing = owner_profile(Some(app), |_| false, |_| None);
+        assert_eq!(missing.as_deref(), Some(native.as_path()));
+        let plain = owner_profile(Some(app), |_| true, identity);
+        assert_eq!(plain.as_deref(), Some(native.as_path()));
+        // A junction at geppio-native into Electron's folder (resolved by the canonicaliser).
+        let into_electron = |p: &Path| {
+            Some(if p.ends_with("geppio-native") {
+                app.join("GEPPIO").join("sub")
+            } else {
+                p.to_path_buf()
+            })
+        };
+        assert_eq!(owner_profile(Some(app), |_| true, into_electron), None);
+        // A link the canonicaliser refuses to follow.
+        assert_eq!(owner_profile(Some(app), |_| true, |_| None), None);
     }
 
     #[test]

@@ -1416,7 +1416,7 @@ dependencies = [
 
 [[package]]
 name = "geppio"
-version = "0.1.0-alpha.101"
+version = "0.1.0-alpha.102"
 dependencies = [
  "geppio-core",
  "geppui",
@@ -1428,11 +1428,11 @@ dependencies = [
 
 [[package]]
 name = "geppio-core"
-version = "0.1.0-alpha.101"
+version = "0.1.0-alpha.102"
 
 [[package]]
 name = "geppui"
-version = "0.1.0-alpha.101"
+version = "0.1.0-alpha.102"
 dependencies = [
  "gpui",
 ]
