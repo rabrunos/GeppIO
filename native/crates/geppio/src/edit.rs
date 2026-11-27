@@ -180,6 +180,8 @@ pub struct EditUi {
     pub toast: Option<(String, f64)>,
     pub over: Option<Region>,
     pub zone_over: [Transition; 3],
+    /// The catalog's plugin filter button.
+    pub filter_anchor: geppui::AnchorHandle,
 }
 
 impl Default for EditUi {
@@ -195,6 +197,7 @@ impl Default for EditUi {
             selected: None,
             toast: None,
             over: None,
+            filter_anchor: geppui::AnchorHandle::default(),
             zone_over: [
                 Transition::new(0.0),
                 Transition::new(0.0),

@@ -15,7 +15,7 @@ import { CONSTRAINTS, DEFAULT_FREEFORM, constraintsFor } from '../src/geppio/src
 import { projectRegion } from '../src/geppio/src/shared/freeform/projection.ts'
 import { REGION_LABELS } from '../src/geppio/src/shared/freeform/transfer.ts'
 import { activePlacements, adoptLayout, constraintsForViews, initialWorkbench, widgetRegistry, WORKBENCH_KEY } from '../src/geppio/src/shared/workbench/model.ts'
-import type { Registry, SessionDraft, UserBar, WorkbenchSnapshot } from '../src/geppio/src/shared/workbench/model.ts'
+import type { Composition, Registry, SessionDraft, SessionSlot, UserBar, WorkbenchSnapshot } from '../src/geppio/src/shared/workbench/model.ts'
 import type { InstalledPlugin } from '../src/geppio/src/shared/plugins.ts'
 import { parseWorkbench, serializeWorkbench } from '../src/geppio/src/shared/workbench/codec.ts'
 import { addWidget, configureBar, deleteBar, fitTargets, moveView, reconcileBarHeights, removePresence, reorderBar, resizePair, swapViews, updateBar } from '../src/geppio/src/shared/workbench/commands.ts'
@@ -23,8 +23,14 @@ import { groupTransferPlan, groupWidgets } from '../src/geppio/src/shared/workbe
 import { EditHistory, formatSignature } from '../src/geppio/src/shared/workbench/history.ts'
 import { changePresentation, panelIds, validatePresentationEdges } from '../src/geppio/src/shared/workbench/presentations.ts'
 import { writeWorkbench } from '../src/geppio/src/shared/workbench/storage.ts'
-import { parsePortableLayout, storedPortableComposition } from '../src/geppio/src/shared/workbench/portable.ts'
+import { exportPortableComposition, importPortableComposition, parsePortableLayout, parsePortableText, portableDependencies, resolvePortableWidgets, serializePortableLayout,
+  storedPortableComposition } from '../src/geppio/src/shared/workbench/portable.ts'
 import { captureComposition, systemCompositions } from '../tests/fixtures/compositions.ts'
+import { applyComposition, captureCurrentComposition, compositionChrome, compositionOrder, compositionScene, compositionSlots, favoriteComposition, projectSessionSlot, reorderComposition,
+  systemCompositions as presets } from '../src/geppio/src/shared/workbench/compositions.ts'
+import { fillReservation } from '../src/geppio/src/shared/workbench/slots.ts'
+import type { SlotIntention } from '../src/geppio/src/shared/workbench/slots.ts'
+import type { ChromePatch } from '../src/geppio/src/shared/workbench/chrome.ts'
 import { COMPOSITIONS } from '../tests/fixtures/grid-compositions.ts'
 
 export const FIXTURE_DIR = 'native/crates/geppio-core/tests/fixtures'
@@ -800,9 +806,309 @@ function sessionFixtures() {
   })
 }
 
+/** Session slots as plain records (`sidebarBar` explicit) for the Rust reader. */
+const slotRecords = (slots: readonly SessionSlot[]) => slots.map(slot => ({ id: slot.id, region: slot.region, x: slot.x, y: slot.y, width: slot.width, height: slot.height,
+  sidebarBar: slot.sidebarBar ?? null, reference: slot.reference }))
+/** Composition library, apply (format and widgets), capture and format-slot reservations. */
+function compositionFixtures() {
+  const { docs } = documents(), demo = registryOf('demo')
+  const parsed = (name: string) => { const item = docs.find(doc => doc.name === name)!; return parseWorkbench(item.raw, registryOf(item.registry)) }
+  const library = parsed('library'), full = structuredClone(library)
+  for (let i = 3; i < 9; i++) full.organization.compositions.push({ ...structuredClone(library.organization.compositions[0]!), id: `composition:preset-${i}`, name: `Preset ${i}` })
+  full.organization.favorites = ['system:default', 'system:focus', 'system:balanced', ...[0, 1, 2, 3, 4, 5].map(i => `composition:preset-${i}`)]
+  let emptied = parsed('initial-demo'), sidebarEmpty = parsed('initial-demo')
+  for (const p of emptied.placements.filter(p => p.region === 'main')) emptied = removePresence(emptied, p.id, demo)
+  for (const p of sidebarEmpty.placements.filter(p => p.region === 'sidebar')) sidebarEmpty = removePresence(sidebarEmpty, p.id, demo)
+  const all = [...docs.filter(doc => ['library', 'initial-demo', 'initial-production', 'adopted-default', 'group-composition', 'group-main', 'portable-v3'].includes(doc.name)),
+    { name: 'library-full', registry: 'demo' as const, raw: serializeWorkbench(full, demo) },
+    { name: 'main-empty', registry: 'demo' as const, raw: serializeWorkbench(emptied, demo) },
+    { name: 'sidebar-empty', registry: 'demo' as const, raw: serializeWorkbench(sidebarEmpty, demo) }]
+  const load = (name: string) => { const item = all.find(doc => doc.name === name)!, registry = registryOf(item.registry); return { registry, source: parseWorkbench(item.raw, registry) } }
+  const lookup = (source: WorkbenchSnapshot, id: string, demoFixtures: boolean) => [...presets(demoFixtures), ...source.organization.compositions].find(item => item.id === id)!
+  const json = (value: unknown) => value ? JSON.stringify(value) : null
+  const cases: Record<string, unknown>[] = [true, false].map(demoFixtures => ({ kind: 'system', name: `system-${demoFixtures ? 'demo' : 'production'}`, demo: demoFixtures, expected: JSON.stringify(presets(demoFixtures)) }))
+  const apply = (name: string, document: string, composition: string, mode: 'format' | 'widgets', demoFixtures = true) => {
+    const { registry, source } = load(document)
+    cases.push({ kind: 'apply', name, document, composition, mode, demo: demoFixtures, expected: json(applyComposition(source, registry, lookup(source, composition, demoFixtures), mode)) })
+  }
+  apply('library-default-format', 'library', 'system:default', 'format')
+  apply('library-focus-format', 'library', 'system:focus', 'format')
+  apply('library-balanced-widgets', 'library', 'system:balanced', 'widgets')
+  apply('library-preset-widgets', 'library', 'composition:preset-1', 'widgets')
+  apply('library-format-only', 'library', 'composition:format-only', 'format')
+  apply('library-format-only-widgets', 'library', 'composition:format-only', 'widgets')
+  apply('initial-default-widgets', 'initial-demo', 'system:default', 'widgets')
+  apply('initial-focus-format', 'initial-demo', 'system:focus', 'format')
+  apply('adopted-focus-format', 'adopted-default', 'system:focus', 'format')
+  apply('adopted-balanced-widgets', 'adopted-default', 'system:balanced', 'widgets')
+  apply('production-default-format', 'initial-production', 'system:default', 'format', false)
+  apply('production-balanced-widgets', 'initial-production', 'system:balanced', 'widgets', false)
+  apply('production-demo-widgets', 'initial-production', 'system:balanced', 'widgets', true)
+  apply('group-widgets', 'group-composition', 'composition:grouped', 'widgets')
+  apply('group-format', 'group-composition', 'composition:grouped', 'format')
+  apply('portable-widgets', 'portable-v3', 'composition:portable-1', 'widgets')
+  apply('portable-format', 'portable-v3', 'composition:portable-1', 'format')
+  apply('empty-focus-format', 'main-empty', 'system:focus', 'format')
+  const scene = (name: string, document: string, composition: string, mode: 'format' | 'widgets', scopes: Region[]) => {
+    const { registry, source } = load(document), displayed = applyComposition(source, registry, lookup(source, composition, true), mode)!
+    cases.push({ kind: 'scene', name, document, composition, mode, scopes, expected: JSON.stringify(compositionScene(source, displayed, scopes)) })
+  }
+  scene('scene-main', 'library', 'system:default', 'format', ['main'])
+  scene('scene-both', 'library', 'system:balanced', 'widgets', ['main', 'bottom'])
+  const favorite = (name: string, document: string, id: string, value: boolean, makeDefault = false, replace?: string) => {
+    const { source } = load(document)
+    cases.push({ kind: 'favorite', name, document, id, favorite: value, makeDefault, replace: replace ?? null, expected: json(favoriteComposition(source, id, value, makeDefault, replace)) })
+  }
+  favorite('favorite-add', 'library', 'system:focus', true)
+  favorite('favorite-again', 'library', 'system:default', true)
+  favorite('favorite-remove-default', 'library', 'composition:preset-1', false)
+  favorite('favorite-make-default', 'library', 'composition:preset-2', true, true)
+  favorite('favorite-default-unfavored', 'library', 'composition:preset-2', false, true)
+  favorite('favorite-unknown', 'library', 'composition:nowhere', true)
+  favorite('favorite-full', 'library-full', 'composition:format-only', true)
+  favorite('favorite-full-replace-default', 'library-full', 'composition:format-only', true, false, 'composition:preset-1')
+  favorite('favorite-full-replace-missing', 'library-full', 'composition:format-only', true, false, 'composition:nowhere')
+  favorite('favorite-full-default', 'library-full', 'composition:format-only', true, true, 'system:focus')
+  for (const document of ['library', 'library-full', 'initial-demo']) for (const favorites of [false, true]) {
+    cases.push({ kind: 'order', name: `order-${document}-${favorites ? 'favorites' : 'saved'}`, document, favorites, expected: compositionOrder(load(document).source, favorites) })
+  }
+  const reorder = (name: string, document: string, id: string, before: string | null, favorites = false) => {
+    cases.push({ kind: 'reorder', name, document, id, before, favorites, expected: json(reorderComposition(load(document).source, id, before, favorites)) })
+  }
+  reorder('reorder-before', 'library', 'system:default', 'composition:preset-2')
+  reorder('reorder-end', 'library', 'composition:preset-2', null)
+  reorder('reorder-same', 'library', 'composition:preset-2', 'system:focus')
+  reorder('reorder-self', 'library', 'system:focus', 'system:focus')
+  reorder('reorder-unknown', 'library', 'composition:nowhere', null)
+  reorder('reorder-unknown-before', 'library', 'system:focus', 'composition:nowhere')
+  reorder('reorder-favorites', 'library', 'composition:preset-1', 'system:default', true)
+  reorder('reorder-favorites-missing', 'library', 'system:focus', null, true)
+  reorder('reorder-initial', 'initial-demo', 'system:balanced', 'system:default')
+  const slotsOf = (document: string, composition: string) => { const { source } = load(document); return compositionSlots(lookup(source, composition, true), source) }
+  for (const [document, composition] of [['main-empty', 'system:focus'], ['main-empty', 'system:default'], ['initial-demo', 'system:focus'], ['library', 'composition:format-only']] as const) {
+    cases.push({ kind: 'slots', name: `slots-${document}-${composition}`, document, composition, expected: slotRecords(slotsOf(document, composition)) })
+  }
+  const capture = (name: string, document: string, mode: Composition['mode'], scopes: Region[], chrome: ChromePatch | null, slots: SessionSlot[] = [], current?: boolean) => {
+    const { source } = load(document)
+    const made = current === undefined ? captureComposition(source, 'Capturada', mode, scopes, chrome ?? undefined, slots) : captureCurrentComposition(source, 'Capturada', scopes, current, slots)
+    cases.push({ kind: 'capture', name, document, mode, scopes, chrome, slots: slotRecords(slots), current: current ?? null, expected: JSON.stringify({ ...made, id: 'composition:captured' }) })
+  }
+  // Saved compositions never scope the Sidebar; its slots are built directly to cover the bar guard.
+  const focusSlots = slotsOf('main-empty', 'system:focus'), sidebarSlots: SessionSlot[] = [0, 1].map(i => ({ id: `session:manual:${i}`, region: 'sidebar', x: 0, y: i * 310,
+    width: 253, height: 300, sidebarBar: 'home', reference: { width: 253, height: 950 } }))
+  capture('capture-main-chrome', 'library', 'format-widgets', ['main'], { bottom: { size: 180 } })
+  capture('capture-format-both', 'library', 'format', ['main', 'bottom'], null)
+  capture('capture-current-both', 'library', 'format-widgets', ['main', 'bottom'], null, [], true)
+  capture('capture-current-main', 'library', 'format-widgets', ['main'], null, [], false)
+  capture('capture-group', 'group-composition', 'format-widgets', ['main'], { sidebar: { size: 250, visible: false } })
+  capture('capture-with-slots', 'main-empty', 'format-widgets', ['main', 'bottom'], null, focusSlots)
+  capture('capture-projected-slots', 'main-empty', 'format', ['main'], null, focusSlots.map(slot => projectSessionSlot(slot, { width: 1000, height: 700 })))
+  capture('capture-sidebar-slots', 'sidebar-empty', 'format', ['sidebar'], null, [...sidebarSlots, ...sidebarSlots.map(slot => ({ ...slot, id: `${slot.id}:other`, sidebarBar: 'other' }))])
+  const fill = (name: string, document: string, slots: SessionSlot[], id: string, surface: Surface, intention: SlotIntention, disabled: string[] = []) => {
+    const { registry, source } = load(document), result = fillReservation(source, registry, slots, id, surface, intention, new Set(disabled))
+    cases.push({ kind: 'fill', name, document, slots: slotRecords(slots), id, surface, intention, disabled,
+      expected: result ? { snapshot: JSON.stringify(result.snapshot), slots: result.slots.map(slot => slot.id) } : null })
+  }
+  const emptyMain = load('main-empty').source, sidebarSurface: Surface = { region: 'sidebar', width: 253, height: 950, expanded: false }
+  fill('fill-catalog', 'main-empty', focusSlots, focusSlots[0]!.id, main(emptyMain), { kind: 'catalog', typeId: 'host:file-editor' })
+  fill('fill-catalog-projected', 'main-empty', focusSlots, focusSlots[1]!.id, { region: 'main', width: 1000, height: 700, expanded: false }, { kind: 'catalog', typeId: 'host:notes' })
+  fill('fill-move-bottom', 'main-empty', focusSlots, focusSlots[1]!.id, main(emptyMain), { kind: 'move', viewId: 'chart', sourceBar: 'home' })
+  fill('fill-move-sidebar', 'main-empty', focusSlots, focusSlots[0]!.id, main(emptyMain), { kind: 'move', viewId: 'notes', sourceBar: 'home' })
+  fill('fill-move-wrong-bar', 'main-empty', focusSlots, focusSlots[0]!.id, main(emptyMain), { kind: 'move', viewId: 'notes', sourceBar: 'other' })
+  fill('fill-move-missing', 'main-empty', focusSlots, focusSlots[0]!.id, main(emptyMain), { kind: 'move', viewId: 'nowhere', sourceBar: 'home' })
+  fill('fill-wrong-region', 'main-empty', focusSlots, focusSlots[0]!.id, { region: 'bottom', width: 1543, height: 147, expanded: false }, { kind: 'catalog', typeId: 'host:terminal' })
+  fill('fill-unknown-slot', 'main-empty', focusSlots, 'session:nowhere', main(emptyMain), { kind: 'catalog', typeId: 'host:file-editor' })
+  fill('fill-sidebar', 'sidebar-empty', sidebarSlots, sidebarSlots[0]!.id, sidebarSurface, { kind: 'catalog', typeId: 'host:file-explorer' })
+  fill('fill-sidebar-other-bar', 'sidebar-empty', sidebarSlots.map(slot => ({ ...slot, sidebarBar: 'other' })), sidebarSlots[0]!.id, sidebarSurface, { kind: 'catalog', typeId: 'host:file-explorer' })
+  portableCases(all, load, cases)
+  cases.push(...libraryScripts(load))
+  return document({ cases, documents: all })
+}
+
+type LibraryDraft = Pick<SessionDraft, 'snapshot' | 'slots' | 'formatId' | 'formatMode' | 'formatSource'>
+/** The displayed scene of `useTransaction`/`App.tsx` (projected regions, measured references). */
+function displayedView(live: WorkbenchSnapshot, registry: Registry, s: SessionSurfaces) {
+  const constraints = constraintsForViews(live, registry), panels = panelIds(live)
+  const visible = { ...live, placements: activePlacements(live).filter(p => constraints[p.id] && !panels.has(p.id)) }
+  const projected = Object.fromEntries((['main', 'sidebar', 'bottom'] as const).map(r => [r, projectRegion(visible, r, s.sizes[r], s.expanded && r === 'main', constraints)])) as Record<Region, ReturnType<typeof projectRegion>>
+  const view: WorkbenchSnapshot = { ...live, reference: { ...live.reference }, placements: live.placements.map(p => projected[p.region].placements.find(q => q.id === p.id) ?? p) }
+  for (const r of ['main', 'sidebar', 'bottom'] as const) {
+    const m = s.sizes[r]
+    if (projected[r].feasible && m.width > 0 && m.height > 0) view.reference[r] = { width: m.width, height: r === 'sidebar' ? Math.max(m.height, projected.sidebar.world.height) : m.height }
+  }
+  return view
+}
+/** `applyLocal` of CompositionLibrary.tsx over a draft, transcribed without React. */
+function applyLocalReference(draft: LibraryDraft, view: WorkbenchSnapshot, registry: Registry, item: Composition, requested: 'format' | 'widgets'): LibraryDraft | string {
+  const scene = compositionScene(draft.snapshot, view, item.scopes)
+  const remainingSource = draft.formatSource?.placements.filter(p => !item.scopes.includes(p.region)) ?? []
+  const retainedSource = remainingSource.length ? { placements: remainingSource, reference: structuredClone(draft.formatSource!.reference) } : null
+  const slots = (next: WorkbenchSnapshot) => [...draft.slots.filter(slot => !item.scopes.includes(slot.region)), ...compositionSlots(item, next)]
+  if (requested === 'format' && draft.formatMode === 'format' && draft.formatId === item.id && view.placements.some(p => item.scopes.includes(p.region))) {
+    if (view.organization.groups?.entries.some(group => view.placements.some(p => p.id === group.frameId && item.scopes.includes(p.region)))) return 'Separe as abas antes de converter grupos em espaços reservados.'
+    const next = { ...compositionChrome(scene, item), placements: scene.placements.filter(p => !item.scopes.includes(p.region)) }
+    return { snapshot: next, slots: slots(next), formatId: item.id, formatMode: 'format', formatSource: {
+      placements: [...remainingSource, ...view.placements.filter(p => item.scopes.includes(p.region))],
+      reference: { ...(retainedSource?.reference ?? view.reference), ...Object.fromEntries(item.scopes.map(region => [region, structuredClone(view.reference[region])])) } } }
+  }
+  const base = requested === 'format' && draft.formatSource ? { ...scene, placements: [...scene.placements, ...draft.formatSource.placements.filter(p => item.scopes.includes(p.region)
+    && !view.placements.some(q => q.id === p.id || q.region === p.region))] } : scene
+  const next = applyComposition(base, registry, item, requested)
+  if (!next) return 'Composição incompatível ou sem espaço. Amplie a região e tente novamente.'
+  return { snapshot: next, slots: slots(next), formatId: item.id, formatMode: requested, formatSource: retainedSource }
+}
+type LibraryStep = { op: 'apply'; composition: string; mode: 'format' | 'widgets' } | { op: 'fill'; slot: number; typeId: string }
+/** Library scripts: each step applies to the previous draft, as successive clicks do. */
+function libraryScripts(load: (name: string) => { registry: Registry; source: WorkbenchSnapshot }) {
+  const wide: SessionSurfaces = { sizes: { main: { width: 1567, height: 774 }, sidebar: { width: 253, height: 950 }, bottom: { width: 1543, height: 147 } }, expanded: false }
+  const narrow: SessionSurfaces = { sizes: { main: { width: 1100, height: 600 }, sidebar: { width: 253, height: 700 }, bottom: { width: 1100, height: 147 } }, expanded: false }
+  const a = (composition: string, mode: 'format' | 'widgets' = 'format'): LibraryStep => ({ op: 'apply', composition, mode })
+  const scripts: { name: string; document: string; demo: boolean; surfaces: SessionSurfaces; steps: LibraryStep[] }[] = [
+    { name: 'library-toggle', document: 'library', demo: true, surfaces: wide, steps: [a('system:focus'), a('system:focus'), a('system:default'), a('system:default'), a('system:default'),
+      a('system:balanced', 'widgets'), a('composition:format-only'), a('composition:format-only'), { op: 'fill', slot: 0, typeId: 'host:file-editor' }, { op: 'fill', slot: 0, typeId: 'host:queue' },
+      a('composition:format-only'), a('composition:preset-1', 'widgets')] },
+    { name: 'library-narrow', document: 'library', demo: true, surfaces: narrow, steps: [a('system:default'), a('system:default'), a('system:focus'), a('system:balanced'), a('system:balanced')] },
+    { name: 'production-empty', document: 'initial-production', demo: false, surfaces: wide, steps: [a('system:default'), { op: 'fill', slot: 0, typeId: 'host:file-editor' },
+      { op: 'fill', slot: 0, typeId: 'host:terminal' }, a('system:default'), a('system:default'), a('system:focus', 'widgets')] },
+    { name: 'group-tabs', document: 'group-main', demo: true, surfaces: wide, steps: [a('system:default'), a('system:default'), a('system:focus'), a('system:focus')] }
+  ]
+  return scripts.map(script => {
+    const { registry, source } = load(script.document)
+    let draft: LibraryDraft = { snapshot: source, slots: [], formatId: null, formatMode: null, formatSource: null }
+    const record = (value: LibraryDraft | string) => typeof value === 'string' ? { error: value } : { snapshot: JSON.stringify(value.snapshot), slots: slotRecords(value.slots),
+      formatId: value.formatId, formatMode: value.formatMode ?? null, formatSource: value.formatSource ? JSON.stringify(value.formatSource) : null }
+    const observations = script.steps.map(step => {
+      const view = displayedView(draft.snapshot, registry, script.surfaces)
+      let result: LibraryDraft | string
+      if (step.op === 'apply') {
+        const item = [...presets(script.demo), ...draft.snapshot.organization.compositions].find(entry => entry.id === step.composition)!
+        result = applyLocalReference(draft, view, registry, item, step.mode)
+      } else {
+        const slot = draft.slots[step.slot]
+        const filled = slot && fillReservation(view, registry, draft.slots, slot.id, { ...script.surfaces.sizes[slot.region], region: slot.region, expanded: script.surfaces.expanded && slot.region === 'main' },
+          { kind: 'catalog', typeId: step.typeId }, new Set())
+        result = filled ? { ...draft, snapshot: filled.snapshot, slots: filled.slots } : 'Espaço indisponível.'
+      }
+      if (typeof result !== 'string') draft = result
+      return { step, expected: record(result) }
+    })
+    return { kind: 'library', name: script.name, document: script.document, demo: script.demo, surfaces: script.surfaces, observations }
+  })
+}
+
+type FixtureDoc = { name: string; registry: RegistryName; raw: string }
+/** Portable recipes: file text, export, import naming, dependencies and widget resolution. */
+function portableCases(all: FixtureDoc[], load: (name: string) => { registry: Registry; source: WorkbenchSnapshot }, cases: Record<string, unknown>[]) {
+  const outcome = <T>(run: () => T, value: (result: T) => unknown) => { const result = attempt(run); return result.ok ? { ok: true, value: value(result.value) } : { ok: false, error: result.error } }
+  const plugins = registryOf('plugins-production'), recipeOf = (document: string, id: string) => load(document).source.organization.compositions.find(item => item.id === id)!.portable!
+  const recipe = recipeOf('portable-v3', 'composition:portable-1'), text = serializePortableLayout(recipe)
+  const fileText = (name: string, value: string) => cases.push({ kind: 'text', name, text: value, expected: outcome(() => parsePortableText(value), serializePortableLayout) })
+  fileText('text-canonical', text)
+  fileText('text-pretty', JSON.stringify(JSON.parse(text), null, 2))
+  fileText('text-duplicate-top', text.replace('"name":', '"name":"Outro","name":'))
+  fileText('text-duplicate-nested', text.replace('"key":"s1",', '"key":"s1","key":"s1",'))
+  fileText('text-sibling-keys', text)
+  fileText('text-key-in-string', text.replace('"name":"Receita portátil"', '"name":"{\\"a\\":1,\\"a\\":2}"'))
+  fileText('text-escaped-key', text.replace('"name":', '"na\\u006de":'))
+  fileText('text-escaped-duplicate', text.replace('"name":', '"name":"x","na\\u006de":'))
+  fileText('text-invalid-json', text.slice(0, -1))
+  fileText('text-oversized', text + ' '.repeat(64 * 1024))
+  fileText('text-bom', '﻿' + text)
+  fileText('text-not-object', '[]')
+  // A Main-only plugin scene without demo fixtures: host and plugin widgets can be exported.
+  let bound = parseWorkbench(serializeWorkbench(initialWorkbench(false), plugins), plugins)
+  const add = (typeId: string, region: Region) => { bound = addWidget(bound, plugins, typeId, { ...bound.reference[region], region, expanded: false }) ?? bound }
+  add('host:file-editor', 'main'); add('host:terminal', 'bottom'); add(essentials('notes'), 'main'); add(essentials('checklist'), 'main')
+  const viewOf = (name: string) => bound.organization.views.find(view => view.typeId === essentials(name))!.id
+  const grouped = groupWidgets(bound, plugins, viewOf('notes'), viewOf('checklist'))!
+  grouped.organization.groups!.entries[0]!.id = GROUP_ID
+  grouped.organization.compositions.push({ ...captureComposition(grouped, 'Com grupo', 'format-widgets', ['main'], { bottom: { size: 180 } }), id: 'composition:grouped' })
+  bound.organization.compositions.push({ ...captureComposition(bound, 'Com editor', 'format-widgets', ['main', 'bottom'], { sidebar: { size: 260 }, bottom: { size: 180 } }), id: 'composition:bound' })
+  let twice = bound
+  twice = addWidget(twice, plugins, essentials('notes'), { ...twice.reference.bottom, region: 'bottom', expanded: false })!
+  const names = structuredClone(load('library').source)
+  const long = 'A'.repeat(100), astral = 'A'.repeat(95) + '\u{1F600}' + 'BBB'
+  for (const [i, name] of [long, astral, 'Equilibrado (2)'].entries()) names.organization.compositions.push({ ...structuredClone(names.organization.compositions[3]!), id: `composition:named-${i}`, name })
+  const capacity = structuredClone(load('library').source)
+  while (capacity.organization.compositions.length < 100) capacity.organization.compositions.push({ ...structuredClone(capacity.organization.compositions[3]!), id: `composition:fill-${capacity.organization.compositions.length}` })
+  all.push({ name: 'portable-bound', registry: 'plugins-production', raw: serializeWorkbench(bound, plugins) },
+    { name: 'portable-grouped', registry: 'plugins-production', raw: serializeWorkbench(grouped, plugins) },
+    { name: 'portable-twice', registry: 'plugins-production', raw: serializeWorkbench(twice, plugins) },
+    { name: 'library-names', registry: 'demo', raw: serializeWorkbench(names, registryOf('demo')) },
+    { name: 'library-capacity', registry: 'demo', raw: serializeWorkbench(capacity, registryOf('demo')) })
+  const exported = (name: string, document: string, id: string) => {
+    const { registry, source } = load(document), saved = [...presets(true), ...source.organization.compositions].find(item => item.id === id)!
+    cases.push({ kind: 'export', name, document, composition: id, expected: outcome(() => exportPortableComposition(saved, registry), serializePortableLayout) })
+  }
+  exported('export-format-only', 'library', 'composition:format-only')
+  exported('export-fixture-views', 'library', 'composition:preset-1')
+  exported('export-system', 'library', 'system:default')
+  exported('export-portable', 'portable-v3', 'composition:portable-1')
+  exported('export-group', 'group-composition', 'composition:grouped')
+  exported('export-bound', 'portable-bound', 'composition:bound')
+  exported('export-grouped', 'portable-grouped', 'composition:grouped')
+  const boundText = serializePortableLayout(exportPortableComposition(load('portable-bound').source.organization.compositions.find(item => item.id === 'composition:bound')!, plugins))
+  const groupText = serializePortableLayout(exportPortableComposition(load('portable-grouped').source.organization.compositions.find(item => item.id === 'composition:grouped')!, plugins))
+  const formatText = serializePortableLayout(exportPortableComposition(load('library').source.organization.compositions.find(item => item.id === 'composition:format-only')!, registryOf('demo')))
+  const imported = (name: string, document: string, value: string, requested: string) => {
+    const { source } = load(document)
+    cases.push({ kind: 'import', name, document, text: value, requested, expected: outcome(() => importPortableComposition(source, parsePortableText(value), requested), item => JSON.stringify({ ...item, id: 'composition:imported' })) })
+  }
+  imported('import-plain', 'library', text, 'Receita portátil')
+  imported('import-system-name', 'library', text, 'Padrão')
+  imported('import-case-insensitive', 'library', text, '  padrão  ')
+  imported('import-saved-name', 'library', formatText, 'Só formato')
+  imported('import-third', 'library-names', formatText, 'Equilibrado')
+  imported('import-long', 'library-names', formatText, long)
+  imported('import-astral-cut', 'library-names', formatText, astral)
+  imported('import-blank', 'library', text, '   ')
+  imported('import-control', 'library', text, 'Nome\u0007')
+  imported('import-too-long', 'library', text, 'B'.repeat(101))
+  imported('import-capacity', 'library-capacity', text, 'Receita portátil')
+  imported('import-group', 'portable-grouped', groupText, 'Grupo importado')
+  const record = (document: string, value: string) => ({ ...importPortableComposition(load(document).source, parsePortableText(value), 'Importada'), id: 'composition:imported' })
+  const dependencies = (name: string, document: string, value: string, disabled: string[] = []) => {
+    const { registry, source } = load(document)
+    cases.push({ kind: 'dependencies', name, document, text: value, disabled, expected: portableDependencies(source, registry, record(document, value), new Set(disabled)) })
+  }
+  dependencies('deps-none-local', 'portable-v3', text)
+  dependencies('deps-bound', 'portable-bound', boundText)
+  dependencies('deps-disabled', 'portable-bound', boundText, ['plugin:geppio.workspace-essentials'])
+  dependencies('deps-twice', 'portable-twice', boundText)
+  dependencies('deps-group', 'portable-grouped', groupText)
+  dependencies('deps-group-ungrouped', 'portable-bound', groupText)
+  dependencies('deps-group-demo', 'group-main', groupText)
+  dependencies('deps-format', 'library', formatText)
+  dependencies('deps-foreign', 'portable-bound', text)
+  const uuid = crypto.randomUUID.bind(crypto)
+  let counter = 0
+  Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: () => `00000000-0000-4000-8000-${String(++counter).padStart(12, '0')}` })
+  try {
+    const resolve = (name: string, document: string, value: string, choices: Record<string, string> = {}, disabled: string[] = []) => {
+      const { registry, source } = load(document)
+      const item = record(document, value)
+      counter = 0
+      const resolved = resolvePortableWidgets(source, registry, item, new Set(disabled), choices)
+      cases.push({ kind: 'resolve', name, document, text: value, choices, disabled, expected: resolved ? JSON.stringify(resolved) : null })
+    }
+    resolve('resolve-bound', 'portable-bound', boundText)
+    resolve('resolve-disabled', 'portable-bound', boundText, {}, ['plugin:geppio.workspace-essentials'])
+    resolve('resolve-moved', 'portable-twice', boundText)
+    resolve('resolve-explicit-choice', 'portable-bound', boundText, { v1: 'host:file-editor:view:main' })
+    resolve('resolve-wrong-choice', 'portable-bound', boundText, { v1: 'host:terminal:view:bottom' })
+    resolve('resolve-empty-choice', 'portable-bound', boundText, { v1: '' })
+    resolve('resolve-unknown-key', 'portable-bound', boundText, { v9: 'nowhere' })
+    resolve('resolve-group', 'portable-grouped', groupText)
+    resolve('resolve-group-new', 'portable-bound', groupText)
+    resolve('resolve-group-demo', 'group-main', groupText)
+    resolve('resolve-format', 'library', formatText)
+    resolve('resolve-foreign', 'portable-bound', text)
+  } finally { Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: uuid }) }
+}
+
 export function buildFixtures(): Record<string, string> {
   return { 'layout.json': layoutFixtures(), 'projection.json': projectionFixtures(), 'registry.json': registryFixtures(), 'codec.json': codecFixtures(),
-    'commands.json': commandFixtures(), 'history.json': historyFixtures(), 'session.json': sessionFixtures() }
+    'commands.json': commandFixtures(), 'history.json': historyFixtures(), 'session.json': sessionFixtures(), 'compositions.json': compositionFixtures() }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {

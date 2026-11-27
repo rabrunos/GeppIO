@@ -1,14 +1,23 @@
 //! The widget catalog column (480px, docked right of Main/Bottom while editing):
-//! tabs, search, area filters, categories, the tile grid and the destination box
+//! the Widgets / Composições tabs, search, the plugin filter, area filters, the slot banner,
+//! categories with "Explore plugins", the tile grid, the destination box and the footer
 //! (`EditorPanel.tsx`, `widget-browser.css` at alpha.99). Availability comes from the core.
 use std::rc::Rc;
 
-use geppui::{Metrics, Theme, css_weight, icon};
+use geppui::{AnchorHandle, Metrics, Theme, anchor_probe, css_weight, icon};
 use gpui::{
     AnyElement, App, ClickEvent, Div, ElementId, InteractiveElement, IntoElement, MouseButton,
     MouseDownEvent, ParentElement, SharedString, StatefulInteractiveElement, Styled, Window, div,
     prelude::FluentBuilder,
 };
+
+/// The catalog tab.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum CatalogTab {
+    #[default]
+    Widgets,
+    Compositions,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Area {
@@ -34,6 +43,10 @@ pub struct Tile {
     pub id: &'static str,
     pub title: &'static str,
     pub category: &'static str,
+    /// Owner (`host` or a plugin) for the plugin filter.
+    pub owner: &'static str,
+    /// Why the chosen slot cannot take it (slot mode only).
+    pub reason: Option<SharedString>,
     /// Regions where adding it is currently feasible.
     pub available: Vec<Area>,
     /// Regions where it is already placed.
@@ -64,11 +77,28 @@ fn category_glyph(category: &str) -> &'static str {
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct CatalogState {
+    pub tab: CatalogTab,
     pub search: String,
     /// Empty means all areas.
     pub areas: Vec<Area>,
     pub category: Option<&'static str>,
     pub destination: Option<&'static str>,
+    /// Owner filter (`None` = all plugins).
+    pub plugin: Option<&'static str>,
+    pub plugin_menu: bool,
+    /// The chosen format slot (`chosenSlot`).
+    pub slot: Option<String>,
+    /// Filters to restore when the slot choice ends (`previous`).
+    pub saved: Option<Box<CatalogState>>,
+}
+
+/// The display name of an owner (`ownerName`).
+pub fn owner_name(owner: Option<&str>) -> SharedString {
+    match owner {
+        None => crate::i18n::t("Todos os plugins"),
+        Some("host") => "GeppIO".into(),
+        Some(other) => other.to_owned().into(),
+    }
 }
 
 /// Accent- and case-insensitive search key (`normalizeSearch`: NFD without diacritics,
@@ -92,7 +122,15 @@ impl CatalogState {
     /// Accent/case-normalized substring match over the title.
     pub fn matches(&self, tile: &Tile) -> bool {
         let text = normalize(&self.search);
-        (text.is_empty() || normalize(tile.title).contains(text.trim()))
+        (text.is_empty()
+            || normalize(&format!(
+                "{} {} {}",
+                crate::i18n::t(tile.title),
+                tile.title,
+                owner_name(Some(tile.owner))
+            ))
+            .contains(text.trim()))
+            && self.plugin.is_none_or(|p| p == tile.owner)
             && (self.areas.is_empty()
                 || self
                     .areas
@@ -104,12 +142,18 @@ impl CatalogState {
 pub type Click = Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
 
 pub type AreaAction = Rc<dyn Fn(Area, &mut Window, &mut App)>;
+pub type TabAction = Rc<dyn Fn(CatalogTab, &mut Window, &mut App)>;
 pub type CategoryAction = Rc<dyn Fn(Option<&'static str>, &mut Window, &mut App)>;
 pub type TileAction = Rc<dyn Fn(&'static str, &mut Window, &mut App)>;
 pub type PlaceAction = Rc<dyn Fn(&'static str, Area, &mut Window, &mut App)>;
 pub type PressAction = Rc<dyn Fn(&'static str, &MouseDownEvent, &mut Window, &mut App)>;
 
 pub struct CatalogActions {
+    pub select_tab: TabAction,
+    pub toggle_plugin_menu: Click,
+    pub explore: Click,
+    pub cancel_slot: Click,
+    pub clear_filters: Click,
     pub toggle_area: AreaAction,
     pub choose_category: CategoryAction,
     pub choose_tile: TileAction,
@@ -154,13 +198,87 @@ fn region_icon(area: Option<Area>, m: Metrics, color: gpui::Hsla) -> AnyElement 
         .into_any_element()
 }
 
+/// What the catalog column shows besides the widget tiles.
+pub struct CatalogExtra {
+    /// The composition library (Composições tab).
+    pub compositions: Option<AnyElement>,
+    /// "{área}, espaço N" of the chosen slot.
+    pub slot_label: Option<SharedString>,
+    /// Records the funnel button for the plugin filter popover.
+    pub filter_anchor: AnchorHandle,
+    /// The destination's widget has a single presence (`presence === 'single-view'`).
+    pub single_view: bool,
+}
+
 pub fn render(
     state: &CatalogState,
     tiles: &[Tile],
     m: Metrics,
     t: Theme,
     a: CatalogActions,
+    extra: CatalogExtra,
 ) -> Div {
+    let tab_button = |value: CatalogTab, label: &'static str| {
+        let selected = state.tab == value;
+        let select = a.select_tab.clone();
+        div()
+            .id(ElementId::Name(format!("catalog-tab-{value:?}").into()))
+            .flex_1()
+            .flex()
+            .items_center()
+            .justify_center()
+            .gap(m.px(7.0))
+            .min_h(m.px(34.0))
+            .px(m.px(11.0))
+            .py(m.px(7.0))
+            .rounded_t(m.px(7.0))
+            .border_b(m.border(2.0))
+            .border_color(if selected {
+                t.accent
+            } else {
+                gpui::transparent_black()
+            })
+            .when(selected, |el| el.bg(t.accent_soft))
+            .when(!selected, |el| el.hover(move |s| s.bg(t.control_hover)))
+            .text_color(if selected { t.accent } else { t.text_muted })
+            .font_weight(css_weight(600.0))
+            .cursor_pointer()
+            .on_click(move |_, w, cx| select(value, w, cx))
+            .child(icon("squares-2x2", m).size(16.0).color(if selected {
+                t.accent
+            } else {
+                t.text_muted
+            }))
+            .child(crate::i18n::t(label))
+    };
+    let root = div()
+        .size_full()
+        .flex()
+        .flex_col()
+        .rounded_tl(m.px(17.0))
+        .border_t(m.border(1.0))
+        .border_l(m.border(1.0))
+        .border_color(t.border)
+        .bg(t.elevated)
+        .text_size(m.px(12.0))
+        .line_height(m.px(16.0))
+        .text_color(t.text)
+        .child(
+            div()
+                .flex()
+                .flex_none()
+                .gap(m.px(7.0))
+                .pt(m.px(9.0))
+                .px(m.px(11.0))
+                .border_b(m.border(1.0))
+                .border_color(t.border)
+                .child(tab_button(CatalogTab::Widgets, "Widgets"))
+                .child(tab_button(CatalogTab::Compositions, "Composições")),
+        );
+    if state.tab == CatalogTab::Compositions {
+        return root.children(extra.compositions);
+    }
+    let choosing = state.slot.is_some();
     let visible: Vec<&Tile> = tiles
         .iter()
         .filter(|tile| state.matches(tile) && state.category.is_none_or(|c| tile.category == c))
@@ -234,7 +352,8 @@ pub fn render(
     };
     let tile_view = |tile: &Tile| {
         let id = tile.id;
-        let saturated = tile.available.is_empty();
+        let saturated = tile.available.is_empty() && !choosing;
+        let disabled = choosing && tile.reason.is_some();
         let (choose, press) = (a.choose_tile.clone(), a.press_tile.clone());
         div()
             .id(ElementId::Name(format!("catalog-tile-{id}").into()))
@@ -252,10 +371,16 @@ pub fn render(
             .border_color(t.border)
             .bg(if saturated { t.input } else { t.workspace })
             .when(saturated, |el| el.opacity(0.58))
-            .hover(move |s| s.border_color(t.accent_border).bg(t.accent_soft))
-            .cursor_grab()
-            .on_mouse_down(MouseButton::Left, move |e, w, cx| press(id, e, w, cx))
-            .on_click(move |_, w, cx| choose(id, w, cx))
+            .when(disabled, |el| el.opacity(0.5))
+            .when(!disabled, |el| {
+                el.hover(move |s| s.border_color(t.accent_border).bg(t.accent_soft))
+                    .on_click(move |_, w, cx| choose(id, w, cx))
+            })
+            .when(!choosing, |el| {
+                el.cursor_grab()
+                    .on_mouse_down(MouseButton::Left, move |e, w, cx| press(id, e, w, cx))
+            })
+            .when(choosing && !disabled, |el| el.cursor_pointer())
             .child(
                 div()
                     .size(m.px(34.0))
@@ -327,211 +452,375 @@ pub fn render(
     };
     let destination = state
         .destination
+        .filter(|_| !choosing)
         .and_then(|id| tiles.iter().find(|tile| tile.id == id));
-    div()
-        .size_full()
-        .flex()
-        .flex_col()
-        .rounded_tl(m.px(17.0))
-        .border_t(m.border(1.0))
-        .border_l(m.border(1.0))
-        .border_color(t.border)
-        .bg(t.elevated)
-        .text_size(m.px(12.0))
-        .line_height(m.px(16.0))
-        .text_color(t.text)
-        .child(
+    let filter_active = state.plugin.is_some();
+    let areas_label = if state.areas.is_empty() {
+        crate::i18n::t("Todas as áreas").to_string()
+    } else {
+        state
+            .areas
+            .iter()
+            .map(|a| crate::i18n::t(a.label()).to_string())
+            .collect::<Vec<_>>()
+            .join(" + ")
+    };
+    root.child(
+        div()
+            .flex()
+            .flex_none()
+            .items_center()
+            .gap(m.px(7.0))
+            .p(m.px(11.0))
+            .mb(m.px(11.0))
+            .border_b(m.border(1.0))
+            .border_color(t.border)
+            .child(
+                div()
+                    .id("catalog-search")
+                    .flex_1()
+                    .flex()
+                    .items_center()
+                    .gap(m.px(9.0))
+                    .h(m.px(36.0))
+                    .px(m.px(11.0))
+                    .rounded(m.px(8.0))
+                    .border(m.border(1.0))
+                    .border_color(t.input_border)
+                    .bg(t.input)
+                    .cursor_text()
+                    .on_click({
+                        let focus = a.focus_search.clone();
+                        move |e, w, cx| focus(e, w, cx)
+                    })
+                    .child(icon("magnifying-glass", m).size(16.0).color(t.text_muted))
+                    .child(if state.search.is_empty() {
+                        text(
+                            12.0,
+                            16.0,
+                            400.0,
+                            t.text_muted,
+                            crate::i18n::t("Buscar widgets…"),
+                        )
+                    } else {
+                        text(12.0, 16.0, 400.0, t.text, state.search.clone().into())
+                    }),
+            )
+            .child(
+                div()
+                    .id("catalog-plugin-filter")
+                    .relative()
+                    .size(m.px(32.0))
+                    .flex_none()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .rounded(m.px(8.0))
+                    .when(filter_active, |el| el.bg(t.accent_soft))
+                    .when(!filter_active, |el| {
+                        el.hover(move |s| s.bg(t.control_hover))
+                    })
+                    .cursor_pointer()
+                    .on_click({
+                        let toggle = a.toggle_plugin_menu.clone();
+                        move |e, w, cx| toggle(e, w, cx)
+                    })
+                    .child(anchor_probe(&extra.filter_anchor))
+                    .child(icon("funnel", m).size(17.0).color(if filter_active {
+                        t.accent
+                    } else {
+                        t.text
+                    }))
+                    .when(filter_active, |el| {
+                        el.child(
+                            div()
+                                .absolute()
+                                .top(m.px(3.0))
+                                .right(m.px(3.0))
+                                .size(m.px(5.0))
+                                .rounded_full()
+                                .bg(t.accent),
+                        )
+                    }),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_none()
+                    .gap(m.px(2.0))
+                    .p(m.px(2.0))
+                    .rounded(m.px(8.0))
+                    .border(m.border(1.0))
+                    .border_color(t.border)
+                    .bg(t.input)
+                    .child(area_button(None))
+                    .children(Area::ALL.map(|area| area_button(Some(area)))),
+            ),
+    )
+    .when_some(extra.slot_label.clone(), |el, label| {
+        let cancel = a.cancel_slot.clone();
+        el.child(
             div()
                 .flex()
-                .gap(m.px(7.0))
-                .pt(m.px(9.0))
-                .px(m.px(11.0))
-                .border_b(m.border(1.0))
-                .border_color(t.border)
+                .flex_none()
+                .items_center()
+                .gap(m.px(9.0))
+                .mx(m.px(11.0))
+                .mb(m.px(11.0))
+                .p(m.px(9.0))
+                .rounded(m.px(8.0))
+                .border(m.border(1.0))
+                .border_color(t.accent_border)
+                .bg(t.accent_soft)
                 .child(
                     div()
                         .flex_1()
+                        .min_w_0()
+                        .flex()
+                        .flex_col()
+                        .gap(m.px(4.0))
+                        .child(text(
+                            12.0,
+                            16.0,
+                            600.0,
+                            t.text,
+                            crate::i18n::t("Escolher widget"),
+                        ))
+                        .child(text(10.0, 13.0, 400.0, t.text_muted, label)),
+                )
+                .child(
+                    div()
+                        .id("catalog-slot-cancel")
+                        .size(m.px(28.0))
                         .flex()
                         .items_center()
                         .justify_center()
-                        .gap(m.px(7.0))
-                        .min_h(m.px(34.0))
-                        .px(m.px(11.0))
-                        .py(m.px(7.0))
-                        .rounded_t(m.px(7.0))
-                        .border_b(m.border(2.0))
-                        .border_color(t.accent)
-                        .bg(t.accent_soft)
-                        .text_color(t.accent)
-                        .font_weight(css_weight(600.0))
-                        .child(icon("squares-2x2", m).size(16.0).color(t.accent))
-                        .child(crate::i18n::t("Widgets")),
+                        .rounded(m.px(8.0))
+                        .cursor_pointer()
+                        .hover(move |s| s.bg(t.control_hover))
+                        .on_click(move |e, w, cx| cancel(e, w, cx))
+                        .child(icon("x-mark", m).size(16.0).color(t.text)),
                 ),
         )
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .gap(m.px(7.0))
-                .p(m.px(11.0))
-                .mb(m.px(11.0))
-                .border_b(m.border(1.0))
-                .border_color(t.border)
-                .child(
-                    div()
-                        .id("catalog-search")
-                        .flex_1()
-                        .flex()
-                        .items_center()
-                        .gap(m.px(9.0))
-                        .h(m.px(36.0))
-                        .px(m.px(11.0))
-                        .rounded(m.px(8.0))
-                        .border(m.border(1.0))
-                        .border_color(t.input_border)
-                        .bg(t.input)
-                        .cursor_text()
-                        .on_click({
-                            let focus = a.focus_search.clone();
-                            move |e, w, cx| focus(e, w, cx)
-                        })
-                        .child(icon("magnifying-glass", m).size(16.0).color(t.text_muted))
-                        .child(if state.search.is_empty() {
-                            text(12.0, 16.0, 400.0, t.text_muted, crate::i18n::t("Buscar widgets…"))
-                        } else {
-                            text(12.0, 16.0, 400.0, t.text, state.search.clone().into())
-                        }),
-                )
-                .child(
-                    div()
-                        .flex()
-                        .gap(m.px(2.0))
-                        .p(m.px(2.0))
-                        .rounded(m.px(8.0))
-                        .border(m.border(1.0))
-                        .border_color(t.border)
-                        .bg(t.input)
-                        .child(area_button(None))
-                        .children(Area::ALL.map(|area| area_button(Some(area)))),
-                ),
-        )
-        .child(
-            div()
-                .flex_1()
-                .min_h_0()
-                .flex()
-                .gap(m.px(11.0))
-                .px(m.px(11.0))
-                .pb(m.px(9.0))
-                .child(
-                    div()
-                        .w(m.px(144.0))
-                        .flex_none()
-                        .flex()
-                        .flex_col()
-                        .pr(m.px(7.0))
-                        .border_r(m.border(1.0))
-                        .border_color(t.border)
-                        .child(category_link(None, "Todos os widgets", total))
-                        .children(
-                            categories
-                                .iter()
-                                .map(|(c, n)| category_link(Some(*c), c, *n)),
-                        ),
-                )
-                .child(
-                    div()
-                        .flex_1()
-                        .flex()
-                        .flex_col()
-                        .gap(m.px(9.0))
-                        // Three equal columns (repeat(3, minmax(0, 1fr))); the last row is padded.
-                        .children(visible.chunks(3).map(|row| {
+    })
+    .child(
+        div()
+            .flex_1()
+            .min_h_0()
+            .flex()
+            .gap(m.px(11.0))
+            .px(m.px(11.0))
+            .pb(m.px(9.0))
+            .child(
+                div()
+                    .w(m.px(144.0))
+                    .flex_none()
+                    .flex()
+                    .flex_col()
+                    .gap(m.px(11.0))
+                    .pr(m.px(7.0))
+                    .border_r(m.border(1.0))
+                    .border_color(t.border)
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_h_0()
+                            .flex()
+                            .flex_col()
+                            .child(category_link(None, "Todos os widgets", total))
+                            .children(
+                                categories
+                                    .iter()
+                                    .map(|(c, n)| category_link(Some(*c), c, *n)),
+                            ),
+                    )
+                    .child({
+                        let explore = a.explore.clone();
+                        div()
+                            .id("catalog-explore")
+                            .flex()
+                            .items_center()
+                            .gap(m.px(5.0))
+                            .px(m.px(6.0))
+                            .py(m.px(9.0))
+                            .rounded(m.px(8.0))
+                            .border(m.border(1.0))
+                            .border_color(t.accent_border)
+                            .bg(t.accent_soft)
+                            .cursor_pointer()
+                            .on_click(move |e, w, cx| explore(e, w, cx))
+                            .child(icon("plus", m).size(14.0).color(t.accent))
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .flex()
+                                    .flex_col()
+                                    .gap(m.px(4.0))
+                                    .child(text(
+                                        9.0,
+                                        12.0,
+                                        700.0,
+                                        t.text,
+                                        crate::i18n::t("Explore plugins"),
+                                    ))
+                                    .child(text(
+                                        8.0,
+                                        12.0,
+                                        400.0,
+                                        t.text_muted,
+                                        crate::i18n::t("Mais recursos para seu projeto"),
+                                    )),
+                            )
+                            .child(icon("chevron-right", m).size(14.0).color(t.accent))
+                    }),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .flex()
+                    .flex_col()
+                    .gap(m.px(9.0))
+                    // Three equal columns (repeat(3, minmax(0, 1fr))); the last row is padded.
+                    .children(visible.chunks(3).map(|row| {
+                        div()
+                            .flex()
+                            .gap(m.px(9.0))
+                            .children(
+                                row.iter()
+                                    .map(|tile| div().flex_1().min_w_0().child(tile_view(tile))),
+                            )
+                            .children((row.len()..3).map(|_| div().flex_1()))
+                    }))
+                    .when(visible.is_empty(), |el| {
+                        let clear = a.clear_filters.clone();
+                        el.child(
                             div()
+                                .py(m.px(22.0))
                                 .flex()
-                                .gap(m.px(9.0))
-                                .children(
-                                    row.iter().map(|tile| {
-                                        div().flex_1().min_w_0().child(tile_view(tile))
-                                    }),
-                                )
-                                .children((row.len()..3).map(|_| div().flex_1()))
-                        }))
-                        .when(visible.is_empty(), |el| {
-                            el.child(text(
-                                12.0,
-                                16.0,
-                                400.0,
-                                t.text_muted,
-                                crate::i18n::t("Nenhum widget com esses filtros."),
-                            ))
-                        }),
-                ),
-        )
-        .child(
+                                .flex_col()
+                                .items_center()
+                                .child(text(
+                                    12.0,
+                                    16.0,
+                                    400.0,
+                                    t.text_muted,
+                                    crate::i18n::t("Nenhum widget com esses filtros."),
+                                ))
+                                .child(
+                                    geppui::text_action(
+                                        "catalog-clear-filters",
+                                        crate::i18n::t("Limpar filtros"),
+                                    )
+                                    .on_click(move |e, w, cx| clear(e, w, cx)),
+                                ),
+                        )
+                    }),
+            ),
+    )
+    .when_some(destination, |el, tile| {
+        let id = tile.id;
+        el.child(
             div()
+                .flex_none()
                 .border_t(m.border(1.0))
                 .border_color(t.border)
                 .p(m.px(11.0))
                 .bg(t.region)
-                .child(text(
-                    11.0,
-                    15.0,
-                    600.0,
-                    t.text,
-                    destination
-                        .map_or(crate::i18n::t("Todas as áreas").to_string(), |tile| {
-                            crate::i18n::t("Onde colocar {0}?").replace("{0}", &crate::i18n::t(tile.title))
-                        })
-                        .into(),
-                ))
-                .when_some(destination, |el, tile| {
-                    let id = tile.id;
-                    el.child(
-                        div()
-                            .mt(m.px(9.0))
-                            .flex()
-                            .gap(m.px(6.0))
-                            .children(Area::ALL.map(|area| {
-                                let enabled = tile.available.contains(&area);
-                                let place = a.place.clone();
-                                div()
-                                    .id(ElementId::Name(
-                                        format!("catalog-place-{id}-{area:?}").into(),
-                                    ))
-                                    .flex_1()
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .gap(m.px(6.0))
-                                    .px(m.px(5.0))
-                                    .py(m.px(8.0))
-                                    .rounded(m.px(7.0))
-                                    .border(m.border(1.0))
-                                    .border_color(t.border)
-                                    .bg(t.elevated)
-                                    .text_size(m.px(11.0))
-                                    .when(!enabled, |el| el.opacity(0.5))
-                                    .when(enabled, |el| {
-                                        el.cursor_pointer()
-                                            .hover(move |s| s.border_color(t.accent))
-                                            .on_click(move |_, w, cx| place(id, area, w, cx))
-                                    })
-                                    .child(region_icon(Some(area), m, t.text_muted))
-                                    .child(crate::i18n::t(area.label()))
-                            })),
-                    )
-                })
-                .when(destination.is_none(), |el| {
-                    el.child(text(
-                        10.0,
+                .child(
+                    text(
+                        11.0,
                         15.0,
+                        600.0,
+                        t.text,
+                        crate::i18n::t("Onde colocar {0}?")
+                            .replace("{0}", &crate::i18n::t(tile.title))
+                            .into(),
+                    )
+                    .mb(m.px(9.0)),
+                )
+                .child(
+                    text(
+                        11.0,
+                        16.0,
                         400.0,
                         t.text_muted,
-                        crate::i18n::t("Arraste um widget para a área desejada ou clique para escolher o destino."),
-                    ))
-                }),
+                        crate::i18n::t(if extra.single_view {
+                            "Este widget tem uma única presença. Escolha para onde mover."
+                        } else {
+                            "Este widget compartilha os dados entre presenças em áreas diferentes."
+                        }),
+                    )
+                    .mb(m.px(9.0)),
+                )
+                .child(div().flex().gap(m.px(6.0)).children(Area::ALL.map(|area| {
+                    let enabled = tile.available.contains(&area);
+                    let place = a.place.clone();
+                    div()
+                        .id(ElementId::Name(
+                            format!("catalog-place-{id}-{area:?}").into(),
+                        ))
+                        .flex_1()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .gap(m.px(6.0))
+                        .px(m.px(5.0))
+                        .py(m.px(8.0))
+                        .rounded(m.px(7.0))
+                        .border(m.border(1.0))
+                        .border_color(t.border)
+                        .bg(t.elevated)
+                        .text_size(m.px(11.0))
+                        .when(!enabled, |el| el.opacity(0.5))
+                        .when(enabled, |el| {
+                            el.cursor_pointer()
+                                .hover(move |s| s.border_color(t.accent))
+                                .on_click(move |_, w, cx| place(id, area, w, cx))
+                        })
+                        .child(region_icon(Some(area), m, t.text_muted))
+                        .child(crate::i18n::t(area.label()))
+                }))),
         )
+    })
+    .child(
+        div()
+            .flex_none()
+            .mx(m.px(11.0))
+            .mb(m.px(9.0))
+            .p(m.px(9.0))
+            .rounded(m.px(8.0))
+            .border(m.border(1.0))
+            .border_color(t.border)
+            .bg(t.input)
+            .flex()
+            .flex_col()
+            .gap(m.px(4.0))
+            .child(text(
+                10.0,
+                13.0,
+                600.0,
+                t.text,
+                format!(
+                    "{} · {} · {}",
+                    crate::i18n::t("{0} widgets").replace("{0}", &visible.len().to_string()),
+                    owner_name(state.plugin),
+                    areas_label
+                )
+                .into(),
+            ))
+            .child(text(
+                10.0,
+                15.0,
+                400.0,
+                t.text_muted,
+                crate::i18n::t(if choosing {
+                    "Clique em um widget para preencher o espaço selecionado."
+                } else {
+                    "Dica: arraste um widget até a área desejada ou clique para escolher o destino."
+                }),
+            )),
+    )
 }
 
 #[cfg(test)]
@@ -543,6 +832,8 @@ mod tests {
             id,
             title,
             category: "Organização",
+            owner: "host",
+            reason: None,
             available,
             placed: vec![],
         }

@@ -1,14 +1,14 @@
 # GeppIO native host
 
-The Rust + upstream GPUI host that replaces the Electron application screen by screen. The Electron application stays runnable as the behavioral reference. Decisions are in [Stage A](https://github.com/rabrunos/GeppIO/issues/73). Delivery is in [Stage B](https://github.com/rabrunos/GeppIO/issues/74) and, toward full parity, [Stage C1](https://github.com/rabrunos/GeppIO/issues/75).
+The Rust + upstream GPUI host that replaces the Electron application screen by screen. The Electron application stays runnable as the behavioral reference. Decisions are in [Stage A](https://github.com/rabrunos/GeppIO/issues/73). Delivery is in [Stage B](https://github.com/rabrunos/GeppIO/issues/74) and, toward full parity, [Stage C](https://github.com/rabrunos/GeppIO/issues/75).
 
 ## Crates
 
 | Crate | Responsibility | May depend on |
 | --- | --- | --- |
 | `crates/geppui` | Independent component library: both theme token tables, device-pixel snapping, CSS→GPUI conversions, per-glyph letter spacing, icons, interruptible CSS-style motion, reduced motion, button and icon button with keyboard focus rings, text action and dialog buttons, text field (caret, selection, clipboard, IME), switch, checkbox, select, popover (below, rail and point placements, arrow-key menus), menu item, dialog, scroll area (with thin and two-axis variants), dashed outline and toast. Knows nothing about GeppIO. | `gpui` |
-| `crates/geppio-core` | Pure Rust model, testable headless: shell geometry and region limits; layout reflow, alignment guides and settlement; freeform projection; the workbench model, commands, undo history (256 intentions) and `EditSession` (edit transactions, bar commits, previews and layout import); the `geppio:workbench:v1` codec; the session notification model. No GPUI, no window. | `std` (`serde`, `serde_json` allowed) |
-| `crates/geppio` | The desktop app: frameless window, main screen composition, region state, preferences, languages, header panels (profile, Settings, notifications, project, plugins), rail bars and their library, edit mode with the widget catalog and demo widgets, and two read-only OS queries (reduced motion, display language). | `geppui`, `geppio-core`, `gpui`, `gpui_platform`, `serde`, `serde_json` |
+| `crates/geppio-core` | Pure Rust model, testable headless: shell geometry and region limits; layout reflow, alignment guides and settlement; freeform projection; the workbench model, commands, undo history (256 intentions) and `EditSession` (edit transactions, bar commits, previews, layout import, compositions and format slots); compositions and portable recipes; the `geppio:workbench:v1` codec; the session notification model. No GPUI, no window. | `std` (`serde`, `serde_json` allowed) |
+| `crates/geppio` | The desktop app: frameless window, main screen composition, region state, preferences, languages, header panels (profile, Settings, notifications, project, plugins), rail bars and their library, edit mode with the widget catalog, the composition library and demo widgets, and two read-only OS queries (reduced motion, display language). | `geppui`, `geppio-core`, `gpui`, `gpui_platform`, `serde`, `serde_json` |
 | `examples/geppui-consumer` | External consumer with its own lockfile, using only GeppUI's public API. | `geppui` (path), `gpui`, `gpui_platform` |
 
 `tools/check-modules.ts` enforces these directions, a single git source (`zed-industries/zed` at `610ea4b8de1c6e887f03563f067278002f41256e`, Zed v1.30.2), exact registry pins, no `[patch]` and committed lockfiles. `tools/check-repo.ts` checks that `[workspace.package].version` equals `package.json`.
@@ -50,7 +50,11 @@ pt-BR strings are the keys. `assets/i18n/en.json` holds the English catalogue th
 
 ## Bars
 
-The rail lists the active custom bars under Home. Bar changes outside Edit are saved at once; inside Edit they are undoable intentions (`EditSession::commit_organization`). The bar form saves through `EditSession::save_bar` outside Edit only. The library ("Barras salvas") archives, restores and deletes; in Edit, bars reorder by pointer or Alt+↑/↓ and archived bars can be dragged back to the rail. Limits are 14 active custom bars and 100 saved.
+The rail lists the active custom bars under Home. Bar changes outside Edit are saved at once; inside Edit they are undoable intentions (`EditSession::commit_organization`). The bar form goes through `EditSession::save_bar`: saved at once outside Edit, one undoable intention on the draft inside it. The library ("Barras salvas") archives, restores and deletes; in Edit, bars reorder by pointer or Alt+↑/↓ and archived bars can be dragged back to the rail. Limits are 14 active custom bars and 100 saved.
+
+## Compositions
+
+The catalog's Composições tab lists the presets and saved compositions (Favoritas, Salvas). "Formato" deals the current widgets into a composition's cells; "Widgets" restores its saved widgets. Applying the current format again empties its regions into reserved slots, which the catalog fills by click or drop. Library changes (favorites, default, order, delete) are undoable intentions; "Salvar atual" and an import save at once. Export writes a `.geppio-layout.json` only to a new file the user picks, then reads it back; import reads at most 64 KiB from the file the user picks and opens a preview before anything is saved.
 
 ## Edit mode
 

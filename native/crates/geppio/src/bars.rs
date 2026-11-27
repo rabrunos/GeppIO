@@ -8,7 +8,7 @@
 //!   the library.
 //!
 //! Organization changes go through `EditSession::commit_organization`, the form through
-//! `EditSession::save_bar`, exactly like the reference transaction.
+//! `EditSession::save_bar`, exactly like the reference transaction (`App.saveBar`).
 use std::collections::HashMap;
 
 use geppio_core::layout::Region;
@@ -397,16 +397,20 @@ impl Workbench {
             members: draft.members.clone(),
             ..draft.bar.clone()
         };
-        let surface = self.ports.surfaces.surface(Region::Sidebar);
+        // Inside Edit the bar joins the draft as one more intention (no new message, as in
+        // the reference); outside it is saved at once and confirmed.
+        let editing = self.session.editing();
         let ok = self
             .session
-            .save_bar(&bar, &surface, &[], &mut self.store)
+            .save_bar(&bar, &self.ports.surfaces, &[], &mut self.store)
             .is_ok();
         let now = geppui::now(cx);
         if ok {
             self.bars.form = None;
-            let message = self.session.message().to_owned();
-            self.edit.toast(&message, now);
+            if !editing {
+                let message = self.session.message().to_owned();
+                self.edit.toast(&message, now);
+            }
         } else if let Some(form) = self.bars.form.as_mut() {
             form.failed = true;
         }

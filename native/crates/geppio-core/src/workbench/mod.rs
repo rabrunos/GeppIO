@@ -4,11 +4,13 @@
 pub mod chrome;
 pub mod codec;
 pub mod commands;
+pub mod compositions;
 pub mod groups;
 pub mod history;
 pub mod model;
 pub mod notifications;
 pub mod portable;
+pub mod portable_compositions;
 pub mod presentations;
 pub mod retirement;
 pub mod session;
@@ -21,10 +23,11 @@ pub use commands::{
 };
 pub use history::{EditHistory, draft_json, format_signature};
 pub use model::{
-    Composition, CompositionMode, DemoArchive, FormatSlot, HOME, InstalledPlugin, Organization,
-    PluginWidget, Positions, Presence, Registry, SessionDraft, SessionSlot, UserBar, View,
-    WORKBENCH_KEY, WidgetGroup, WidgetGroups, WidgetType, WorkbenchSnapshot, active_placements,
-    adopt_layout, demo_types, initial_workbench, snapshot_constraints, widget_registry,
+    ApplyMode, Composition, CompositionMode, DemoArchive, FormatSlot, FormatSource, HOME,
+    InstalledPlugin, Organization, PluginWidget, Positions, Presence, Registry, SessionDraft,
+    SessionSlot, UserBar, View, WORKBENCH_KEY, WidgetGroup, WidgetGroups, WidgetType,
+    WorkbenchSnapshot, active_placements, adopt_layout, demo_types, initial_workbench,
+    snapshot_constraints, widget_registry,
 };
 pub use presentations::{Edge, Presentation, Presentations, WidgetPresentation};
 pub use session::{

@@ -64,7 +64,21 @@ pub fn draft_json(draft: &SessionDraft) -> String {
     let mut w = ObjectWriter::new(&mut out);
     w.raw("snapshot", |o| write_snapshot(o, &draft.snapshot))
         .raw("slots", |o| write_slots(o, &draft.slots))
-        .nullable_string("formatId", draft.format_id.as_deref());
+        .nullable_string("formatId", draft.format_id.as_deref())
+        .nullable_string("formatMode", draft.format_mode.map(|m| m.as_str()));
+    match &draft.format_source {
+        Some(source) => {
+            w.raw("formatSource", |o| {
+                let mut w = ObjectWriter::new(o);
+                w.raw("placements", |o| write_placements(o, &source.placements))
+                    .raw("reference", |o| write_reference(o, &source.reference));
+                w.end();
+            });
+        }
+        None => {
+            w.null("formatSource");
+        }
+    }
     w.end();
     out
 }

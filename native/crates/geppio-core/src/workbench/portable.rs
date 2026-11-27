@@ -559,6 +559,71 @@ pub fn stored_portable_composition(
     })
 }
 
+/// Rejects an object that repeats a field (`assertUniqueJsonKeys`). Like the reference it
+/// scans string and brace tokens; a string followed by `:` is a key of the innermost object.
+/// `text` must already be valid JSON.
+pub fn assert_unique_json_keys(text: &str) -> Result<(), CodecError> {
+    let bytes = text.as_bytes();
+    let mut fields: Vec<std::collections::HashSet<String>> = Vec::new();
+    let mut at = 0;
+    while at < bytes.len() {
+        match bytes[at] {
+            b'{' => {
+                fields.push(std::collections::HashSet::new());
+                at += 1;
+            }
+            b'}' => {
+                fields.pop();
+                at += 1;
+            }
+            b'"' => {
+                let start = at;
+                at += 1;
+                while at < bytes.len() && bytes[at] != b'"' {
+                    at += if bytes[at] == b'\\' { 2 } else { 1 };
+                }
+                at = (at + 1).min(bytes.len());
+                let mut next = at;
+                while next < bytes.len() && matches!(bytes[next], b' ' | b'\t' | b'\n' | b'\r') {
+                    next += 1;
+                }
+                if bytes.get(next) == Some(&b':') {
+                    let Ok(Json::String(key)) = crate::json::parse(&text[start..at]) else {
+                        return invalid();
+                    };
+                    let Some(object) = fields.last_mut() else {
+                        return invalid();
+                    };
+                    if !object.insert(key) {
+                        return reject("Campo JSON duplicado.");
+                    }
+                }
+            }
+            _ => at += 1,
+        }
+    }
+    Ok(())
+}
+
+/// A recipe file's text (`parsePortableText`): at most 64 KiB, JSON without repeated fields.
+pub fn parse_portable_text(text: &str) -> Result<PortableLayout, CodecError> {
+    if text.len() > MAX_BYTES {
+        return invalid();
+    }
+    let Ok(value) = crate::json::parse(text) else {
+        return invalid();
+    };
+    assert_unique_json_keys(text)?;
+    parse_portable_layout(Some(&value))
+}
+
+/// The canonical file bytes of a recipe (`serializePortableLayout`).
+pub fn serialize_portable_layout(recipe: &PortableLayout) -> String {
+    let mut out = String::new();
+    write_portable(&mut out, recipe);
+    out
+}
+
 fn write_size(out: &mut String, size: Size) {
     let mut w = ObjectWriter::new(out);
     w.number("width", size.width).number("height", size.height);

@@ -13,11 +13,16 @@ use super::codec::{parse_workbench, serialize_workbench};
 use super::commands::{
     add_widget as add_command, move_view, reconcile_bar_heights, remove_presence,
 };
+use super::compositions::{
+    SlotIntention, apply_to_draft, available_composition, composition_scene, fill_reservation,
+    system_compositions,
+};
 use super::groups::group_transfer_plan;
 use super::history::{EditHistory, format_signature};
 use super::model::{
-    Registry, SessionDraft, WorkbenchSnapshot, active_placements, initial_workbench,
-    sidebar_insertion, snapshot_constraints,
+    ApplyMode, Composition, FormatSource, Registry, SessionDraft, SessionSlot, UserBar,
+    WorkbenchSnapshot, active_placements, initial_workbench, sidebar_insertion,
+    snapshot_constraints,
 };
 use super::presentations::{panel_ids, validate_presentation_edges};
 use crate::freeform::{CodecError, constraints_for, project_region, region_label};
@@ -236,6 +241,7 @@ pub struct EditSession {
     baseline: String,
     gesture: Option<ActiveGesture>,
     message: String,
+    demo_fixtures: bool,
 }
 
 impl EditSession {
@@ -278,6 +284,7 @@ impl EditSession {
             baseline,
             gesture: None,
             message: message.to_owned(),
+            demo_fixtures,
         }
     }
 
@@ -359,26 +366,44 @@ impl EditSession {
         let _ = self.put(draft.snapshot);
         self.draft.slots = draft.slots;
         self.draft.format_id = draft.format_id;
+        self.draft.format_mode = draft.format_mode;
+        self.draft.format_source = draft.format_source;
     }
 
     /// One whole intention outside a gesture (`action`).
     fn action(&mut self, next: WorkbenchSnapshot) -> Result<(), SessionError> {
-        if validate_presentation_edges(&next).is_err() {
+        let after = SessionDraft {
+            snapshot: next,
+            ..self.draft.clone()
+        };
+        self.action_draft(after)
+    }
+
+    /// One whole intention that may also change slots and the applied format.
+    fn action_draft(&mut self, after: SessionDraft) -> Result<(), SessionError> {
+        if validate_presentation_edges(&after.snapshot).is_err() {
             self.message = String::from(
                 "Borda de apresentação ocupada. Mova o outro painel antes de restaurar esta presença.",
             );
             return Err(SessionError::PresentationEdge);
         }
         let before = self.draft.clone();
-        let after = SessionDraft {
-            snapshot: next,
-            ..self.draft.clone()
-        };
         if self.editing && !self.history.active() {
             self.history.record(&before, &after);
         }
         self.apply(after);
         Ok(())
+    }
+
+    /// The Cancel checkpoint opened over the committed document (`begin`, `preview`): the
+    /// draft's format mode and held widgets carry over; slots and the format do not.
+    fn open_checkpoint(&mut self) {
+        self.checkpoint = SessionDraft {
+            snapshot: self.committed.clone(),
+            slots: Vec::new(),
+            format_id: None,
+            ..self.draft.clone()
+        };
     }
 
     /// Opens Edit from the visible scene (`begin`). The checkpoint is the committed
@@ -395,7 +420,7 @@ impl EditSession {
         };
         if !self.editing {
             self.history.clear();
-            self.checkpoint = SessionDraft::new(self.committed.clone());
+            self.open_checkpoint();
             self.baseline = format_signature(&settle_snapshot(&visible), &[]);
             self.editing = true;
         }
@@ -885,7 +910,7 @@ impl EditSession {
     pub fn preview_scene(&mut self, next: WorkbenchSnapshot, message: &str) {
         self.gesture = None;
         self.history.clear();
-        self.checkpoint = SessionDraft::new(self.committed.clone());
+        self.open_checkpoint();
         self.baseline = format_signature(&self.committed, &[]);
         let next =
             super::retirement::retire_demo_views(next.clone(), &self.registry).unwrap_or(next);
@@ -933,22 +958,38 @@ impl EditSession {
         );
     }
 
-    /// Creates or edits a bar from the bar form (`saveBar`). Only outside Edit, on a clean
-    /// committed document; the bar's members are placed in the Sidebar `surface`.
+    /// Creates or edits a bar from the bar form (`saveBar` in `App.tsx`). Inside Edit it is
+    /// one more intention on the displayed scene; outside it is saved at once, only on a
+    /// clean committed document. The bar's members are placed in the Sidebar surface.
     pub fn save_bar(
         &mut self,
-        bar: &super::model::UserBar,
-        surface: &crate::layout::Surface,
+        bar: &UserBar,
+        surfaces: &SessionSurfaces,
         disabled: &[String],
         store: &mut dyn WorkbenchStore,
     ) -> Result<(), SessionError> {
+        let surface = &surfaces.surface(Region::Sidebar);
+        if self.editing {
+            let base = if panel_ids(&self.draft.snapshot).is_empty() {
+                self.view(surfaces).0
+            } else {
+                self.draft.snapshot.clone()
+            };
+            let Some(next) =
+                super::commands::configure_bar(&base, &self.registry, bar, surface, disabled)
+            else {
+                self.message = String::from("Widget incompatível ou sem espaço nesta barra.");
+                return Err(SessionError::Rejected);
+            };
+            return self.action(next);
+        }
         if self.normalization_pending {
             self.message = String::from(
                 "Confirme a composição em Editar antes de alterar as barras. Os dados anteriores foram preservados.",
             );
             return Err(SessionError::Rejected);
         }
-        if self.editing || self.recovery || self.draft.snapshot != self.committed {
+        if self.recovery || self.draft.snapshot != self.committed {
             return Err(SessionError::Rejected);
         }
         let Some(next) =
@@ -997,6 +1038,43 @@ impl EditSession {
         store: &mut dyn WorkbenchStore,
         success: Option<&str>,
     ) -> Result<(), SessionError> {
+        let validated = self.persist(next, store)?;
+        self.normalization_pending = false;
+        let retain_slots = !conclude;
+        self.checkpoint = SessionDraft {
+            snapshot: validated.clone(),
+            ..self.draft.clone()
+        };
+        self.baseline = format_signature(
+            &validated,
+            if retain_slots { &self.draft.slots } else { &[] },
+        );
+        let _ = self.put(validated);
+        self.recovery = false;
+        if !retain_slots {
+            self.draft.slots.clear();
+            self.draft.format_id = None;
+            self.draft.format_mode = None;
+            self.draft.format_source = None;
+        }
+        if conclude {
+            self.editing = false;
+            self.history.clear();
+        }
+        self.message = String::from(success.unwrap_or(if conclude {
+            "Composição salva. Edição concluída."
+        } else {
+            "Edição salva. O checkpoint de Cancelar foi atualizado."
+        }));
+        Ok(())
+    }
+
+    /// Validates `next`, checks the stored bytes are the ones observed and writes it.
+    fn persist(
+        &mut self,
+        next: WorkbenchSnapshot,
+        store: &mut dyn WorkbenchStore,
+    ) -> Result<WorkbenchSnapshot, SessionError> {
         if self.history.active() || self.gesture.is_some() {
             return Err(SessionError::GestureActive);
         }
@@ -1028,32 +1106,7 @@ impl EditSession {
         })?;
         self.observed = Some(raw);
         self.committed = validated.clone();
-        self.normalization_pending = false;
-        let retain_slots = !conclude;
-        self.checkpoint = SessionDraft {
-            snapshot: validated.clone(),
-            ..self.draft.clone()
-        };
-        self.baseline = format_signature(
-            &validated,
-            if retain_slots { &self.draft.slots } else { &[] },
-        );
-        let _ = self.put(validated);
-        self.recovery = false;
-        if !retain_slots {
-            self.draft.slots.clear();
-            self.draft.format_id = None;
-        }
-        if conclude {
-            self.editing = false;
-            self.history.clear();
-        }
-        self.message = String::from(success.unwrap_or(if conclude {
-            "Composição salva. Edição concluída."
-        } else {
-            "Edição salva. O checkpoint de Cancelar foi atualizado."
-        }));
-        Ok(())
+        Ok(validated)
     }
 
     fn save_target(&self, surfaces: &SessionSurfaces) -> Result<WorkbenchSnapshot, SessionError> {
@@ -1075,7 +1128,23 @@ impl EditSession {
         }
         let mut next = view;
         next.organization = self.draft.snapshot.organization.clone();
-        Ok(next)
+        Ok(self.with_organization(next))
+    }
+
+    /// While a format is applied, saving adopts displayed geometry only in its regions
+    /// (`withOrganization`).
+    fn with_organization(&self, next: WorkbenchSnapshot) -> WorkbenchSnapshot {
+        let Some(item) = self
+            .draft
+            .format_id
+            .as_deref()
+            .and_then(|id| self.composition(id))
+        else {
+            return next;
+        };
+        let mut live = self.draft.snapshot.clone();
+        live.organization = next.organization.clone();
+        composition_scene(&live, &next, &item.scopes)
     }
 
     /// Saves the visible draft and advances Cancel's checkpoint without leaving Edit.
@@ -1126,6 +1195,8 @@ impl EditSession {
             snapshot: self.checkpoint.snapshot.clone(),
             slots: Vec::new(),
             format_id: None,
+            format_mode: self.checkpoint.format_mode,
+            format_source: None,
         };
         self.apply(restored);
         self.editing = false;
@@ -1136,5 +1207,228 @@ impl EditSession {
     /// Whether the opened document still needs an explicit confirmation of normalized sizes.
     pub fn normalization_pending(&self) -> bool {
         self.normalization_pending
+    }
+
+    /// Whether the demo fixtures (and their presets) are enabled.
+    pub fn demo_fixtures(&self) -> bool {
+        self.demo_fixtures
+    }
+    /// The reserved format slots of the draft.
+    pub fn slots(&self) -> &[SessionSlot] {
+        &self.draft.slots
+    }
+    /// The applied composition, if any.
+    pub fn format_id(&self) -> Option<&str> {
+        self.draft.format_id.as_deref()
+    }
+    /// How the applied composition was applied.
+    pub fn format_mode(&self) -> Option<ApplyMode> {
+        self.draft.format_mode
+    }
+    /// The widgets an emptied format holds aside.
+    pub fn format_source(&self) -> Option<&FormatSource> {
+        self.draft.format_source.as_ref()
+    }
+
+    /// The library: the presets, then the saved records with retired views removed.
+    pub fn compositions(&self) -> Vec<Composition> {
+        system_compositions(self.demo_fixtures)
+            .into_iter()
+            .chain(
+                self.draft
+                    .snapshot
+                    .organization
+                    .compositions
+                    .iter()
+                    .map(|c| available_composition(c, &self.registry)),
+            )
+            .collect()
+    }
+    /// A library entry by identity.
+    pub fn composition(&self, id: &str) -> Option<Composition> {
+        self.compositions().into_iter().find(|c| c.id == id)
+    }
+
+    /// The library's "Formato" / "Widgets" (`applyLocal`), one undoable intention. A
+    /// portable record's widgets are applied with the candidate `resolve_portable_widgets`
+    /// returns.
+    pub fn apply_composition(
+        &mut self,
+        item: &Composition,
+        mode: ApplyMode,
+        surfaces: &SessionSurfaces,
+    ) -> Result<(), SessionError> {
+        if !self.editing {
+            return Err(SessionError::NotEditing);
+        }
+        if self.history.active() || self.gesture.is_some() {
+            return Err(SessionError::GestureActive);
+        }
+        if item.portable.is_some() && (mode == ApplyMode::Widgets || !self.can_import_composition())
+        {
+            return Err(SessionError::Rejected);
+        }
+        let (view, _) = self.view(surfaces);
+        match apply_to_draft(&self.draft, &view, &self.registry, item, mode) {
+            Ok(after) => self.action_draft(after),
+            Err(message) => {
+                self.message = message.to_owned();
+                Err(SessionError::Rejected)
+            }
+        }
+    }
+
+    /// Library metadata (favorites, default, order, deletion) as one more intention.
+    pub fn edit_action(&mut self, next: WorkbenchSnapshot) -> Result<(), SessionError> {
+        if !self.editing {
+            return Err(SessionError::NotEditing);
+        }
+        self.action(next)
+    }
+
+    fn reservation(
+        &self,
+        id: &str,
+        intention: &SlotIntention,
+        baseline: Option<&WorkbenchSnapshot>,
+        surfaces: &SessionSurfaces,
+        disabled: &[String],
+    ) -> Option<(WorkbenchSnapshot, Vec<SessionSlot>)> {
+        let stored = self.draft.slots.iter().find(|s| s.id == id)?;
+        if !self.editing
+            || (!panel_ids(&self.draft.snapshot).is_empty() && stored.region == Region::Main)
+        {
+            return None;
+        }
+        let view;
+        let baseline = match baseline {
+            Some(b) => b,
+            None => {
+                view = self.view(surfaces).0;
+                &view
+            }
+        };
+        fill_reservation(
+            baseline,
+            &self.registry,
+            &self.draft.slots,
+            id,
+            &surfaces.surface(stored.region),
+            intention,
+            disabled,
+        )
+    }
+
+    /// Whether a reserved slot accepts the intention (`reserve` without commit).
+    pub fn slot_accepts(
+        &self,
+        id: &str,
+        intention: &SlotIntention,
+        surfaces: &SessionSurfaces,
+        disabled: &[String],
+    ) -> bool {
+        self.reservation(id, intention, None, surfaces, disabled)
+            .is_some()
+    }
+
+    /// Fills a reserved slot by click or drop (`reserve`): one intention. `baseline` is the
+    /// scene a gesture started from (the displayed scene otherwise).
+    pub fn fill_slot(
+        &mut self,
+        id: &str,
+        intention: &SlotIntention,
+        baseline: Option<&WorkbenchSnapshot>,
+        surfaces: &SessionSurfaces,
+        disabled: &[String],
+    ) -> Result<(), SessionError> {
+        if self.history.active() || self.gesture.is_some() {
+            return Err(SessionError::GestureActive);
+        }
+        let (snapshot, slots) = self
+            .reservation(id, intention, baseline, surfaces, disabled)
+            .ok_or(SessionError::Rejected)?;
+        self.action_draft(SessionDraft {
+            snapshot,
+            slots,
+            ..self.draft.clone()
+        })?;
+        self.message = String::from("Espaço preenchido. Salve ou cancele.");
+        Ok(())
+    }
+
+    /// Unsaved format or library changes that an import must save first
+    /// (`pendingImportCheckpoint`).
+    pub fn pending_import_checkpoint(&self) -> bool {
+        let library = |d: &SessionDraft| {
+            let o = &d.snapshot.organization;
+            (
+                o.compositions.clone(),
+                o.composition_order.clone(),
+                o.favorites.clone(),
+                o.default_composition.clone(),
+            )
+        };
+        self.normalization_pending
+            || self.has_pending()
+            || library(&self.draft) != library(&self.checkpoint)
+    }
+    /// A record as last saved (`savedComposition`).
+    pub fn saved_composition(&self, id: &str) -> Option<&Composition> {
+        self.committed
+            .organization
+            .compositions
+            .iter()
+            .find(|c| c.id == id)
+    }
+    /// Whether the library may import, export or apply a portable record now
+    /// (`canImportComposition`).
+    pub fn can_import_composition(&self) -> bool {
+        self.editing && !self.recovery && !self.history.active() && self.gesture.is_none()
+    }
+
+    /// "Salvar atual" (`saveComposition`): saves the draft with the new record and records
+    /// the save as one intention.
+    pub fn save_composition(
+        &mut self,
+        record: Composition,
+        store: &mut dyn WorkbenchStore,
+    ) -> Result<(), SessionError> {
+        if !self.editing {
+            return Err(SessionError::NotEditing);
+        }
+        let before = self.draft.clone();
+        let mut next = self.draft.snapshot.clone();
+        next.organization.compositions.push(record);
+        self.commit_with(next, false, store, Some("Composição salva."))?;
+        self.history.record(&before, &self.draft);
+        Ok(())
+    }
+
+    /// An imported record (`saveImportedComposition`): only the library of the stored
+    /// document, the checkpoint and the draft gain it; projections, slots and the rest of the
+    /// draft are preserved.
+    pub fn save_imported_composition(
+        &mut self,
+        record: Composition,
+        store: &mut dyn WorkbenchStore,
+    ) -> Result<(), SessionError> {
+        if !self.can_import_composition() || self.pending_import_checkpoint() {
+            return Err(SessionError::Rejected);
+        }
+        let before = self.draft.clone();
+        let mut next = self.committed.clone();
+        next.organization.compositions.push(record.clone());
+        self.persist(next, store)?;
+        self.checkpoint
+            .snapshot
+            .organization
+            .compositions
+            .push(record.clone());
+        let mut draft = self.draft.snapshot.clone();
+        draft.organization.compositions.push(record);
+        let _ = self.put(draft);
+        self.message = String::from("Composição importada.");
+        self.history.record(&before, &self.draft);
+        Ok(())
     }
 }

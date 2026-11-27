@@ -626,6 +626,35 @@ pub struct WorkbenchSnapshot {
     pub retired_demos: Option<DemoArchive>,
 }
 
+/// How a composition is applied: its format cells only, or its saved widgets.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ApplyMode {
+    /// Deal the current widgets into the format cells.
+    Format,
+    /// Restore the saved widget associations.
+    Widgets,
+}
+
+impl ApplyMode {
+    /// The reference spelling (`'format' | 'widgets'`).
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ApplyMode::Format => "format",
+            ApplyMode::Widgets => "widgets",
+        }
+    }
+}
+
+/// The widgets an emptied format took out of its regions, so applying a format again can
+/// deal them back (`SessionDraft.formatSource`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct FormatSource {
+    /// Displayed placements removed from the format's regions.
+    pub placements: Vec<Placement>,
+    /// Reference sizes they were displayed at.
+    pub reference: References,
+}
+
 /// An editable session state: snapshot plus session-only slots and the applied format.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SessionDraft {
@@ -635,6 +664,10 @@ pub struct SessionDraft {
     pub slots: Vec<SessionSlot>,
     /// Applied format composition.
     pub format_id: Option<String>,
+    /// How the applied composition was applied.
+    pub format_mode: Option<ApplyMode>,
+    /// Widgets the emptied format holds aside.
+    pub format_source: Option<FormatSource>,
 }
 
 impl SessionDraft {
@@ -644,6 +677,8 @@ impl SessionDraft {
             snapshot,
             slots: Vec::new(),
             format_id: None,
+            format_mode: None,
+            format_source: None,
         }
     }
 }

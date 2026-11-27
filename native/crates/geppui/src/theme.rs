@@ -87,6 +87,10 @@ pub struct Theme {
     pub accent_muted: Hsla,
     pub peek_backdrop: Hsla,
     pub dialog_backdrop: Hsla,
+    /// Composition thumbnails (`--composition-sidebar/bottom/main`).
+    pub composition_sidebar: Hsla,
+    pub composition_bottom: Hsla,
+    pub composition_main: Hsla,
     pub shadow_side: Shadow,
     pub shadow_popover: Shadow,
     pub shadow_dialog: Shadow,
@@ -164,6 +168,9 @@ impl Theme {
             accent_muted: mix(0xf58a30, 0xf5f7fa, 0.55),
             peek_backdrop: hexa(0x0000000a),
             dialog_backdrop: hexa(0x00000024),
+            composition_sidebar: hex(0x8d99a8),
+            composition_bottom: hex(0xbac3ce),
+            composition_main: hex(0xdfe5ed),
             shadow_side: Shadow {
                 x: 10.,
                 y: 0.,
@@ -243,6 +250,9 @@ impl Theme {
             accent_muted: mix(0xf49a56, 0x1a202b, 0.55),
             peek_backdrop: hexa(0x0000000a),
             dialog_backdrop: hexa(0x06090f7a),
+            composition_sidebar: hex(0x546173),
+            composition_bottom: hex(0x7e8b9e),
+            composition_main: hex(0xaab6c7),
             shadow_side: Shadow {
                 x: 10.,
                 y: 2.,

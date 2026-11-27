@@ -54,6 +54,10 @@ pub struct BannerActions {
     pub conclude: Handler,
     /// Receives focus when Edit starts (the reference focuses Salvar edição).
     pub save_focus: FocusHandle,
+    /// "Editando: {0}" while a composition is applied (`editingLabel`).
+    pub label: SharedString,
+    /// "Formato + widgets · Barra lateral fixada" and its variants (`editingHint`).
+    pub hint: SharedString,
 }
 
 /// The 2px accent frame around the window (z 90, no hit testing).
@@ -235,7 +239,7 @@ pub fn edit_banner(
                         .overflow_hidden()
                         .text_ellipsis()
                         .font_weight(css_weight(650.0))
-                        .child(crate::i18n::t("Modo de edição ativo")),
+                        .child(a.label.clone()),
                 ),
         )
         .when(!compact, |el| {
@@ -246,7 +250,7 @@ pub fn edit_banner(
                     .border_color(b.control)
                     .text_size(m.px(11.0))
                     .text_color(b.hint)
-                    .child(crate::i18n::t("Barra lateral fixada")),
+                    .child(a.hint.clone()),
             )
         })
         .child(

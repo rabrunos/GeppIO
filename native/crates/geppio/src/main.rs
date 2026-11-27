@@ -4,6 +4,7 @@
 mod automation;
 mod bars;
 mod catalog;
+mod compositions_view;
 mod drag_layer;
 mod edit;
 mod edit_chrome;
@@ -41,6 +42,8 @@ impl Assets {
             "icons/redo.svg" => Some(include_bytes!("../assets/icons/redo.svg")),
             "icons/move.svg" => Some(include_bytes!("../assets/icons/move.svg")),
             "icons/git.svg" => Some(include_bytes!("../assets/icons/git.svg")),
+            "icons/pin.svg" => Some(include_bytes!("../assets/icons/pin.svg")),
+            "icons/star-filled.svg" => Some(include_bytes!("../assets/icons/star-filled.svg")),
             _ => GeppuiAssets::get(path),
         }
     }

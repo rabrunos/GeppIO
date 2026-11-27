@@ -53,6 +53,7 @@ pub struct Workbench {
     pub(crate) chevron: Transition,
     pub(crate) panels: Panels,
     pub(crate) bars: BarsUi,
+    pub(crate) compositions: crate::compositions_view::CompositionsUi,
     /// Header triggers, which regain focus when their panel closes.
     pub(crate) triggers: Triggers,
     /// A text field to focus at the next render.
@@ -195,6 +196,7 @@ impl Workbench {
             chevron: Transition::new(0.0),
             panels: Panels::new(cx),
             bars: BarsUi::new(cx),
+            compositions: crate::compositions_view::CompositionsUi::new(cx),
             triggers: Triggers {
                 plugins: cx.focus_handle(),
                 bell: cx.focus_handle(),
@@ -344,6 +346,9 @@ impl Workbench {
             return;
         }
         if event.keystroke.key == "escape" {
+            if self.menu.is_none() && self.compositions_escape(cx) {
+                return;
+            }
             if self.menu.is_none() && self.bars_escape(cx) {
                 return;
             }
@@ -1075,7 +1080,8 @@ impl Render for Workbench {
         let animating = self.regions.animating(now)
             || self.chevron.animating(now)
             || self.splitter_hover.iter().any(|h| h.animating(now))
-            || self.edit.animating(now);
+            || self.edit.animating(now)
+            || self.compositions.animating(now);
         if animating && !geppui::appearance(cx).clock.frozen() {
             window.request_animation_frame();
         }
@@ -1098,7 +1104,7 @@ impl Render for Workbench {
         let bottom_frames = self.region_frames(Region::Bottom, m, t, now, editing, cx);
         let sidebar_frames = self.region_frames(Region::Sidebar, m, t, now, editing, cx);
         let sidebar_world = self.sidebar_world();
-        let (edit_below, edit_top) = self.edit_layers(&s, m, t, now, cx);
+        let (edit_below, edit_top) = self.edit_layers(&s, m, t, now, window, cx);
         let floating_port = (
             (s.floating.w - 2.0 - 30.0) as f32,
             (s.floating.h - 2.0 - 40.0 - 18.0) as f32,
@@ -1263,6 +1269,7 @@ impl Render for Workbench {
         layers.push(self.header(&c, cx).into_any_element());
         layers.extend(self.overlays(m, t, window, cx));
         layers.extend(self.bar_overlays(m, t, window, cx));
+        layers.extend(self.composition_overlays(m, t, window, cx));
         layers.extend(edit_top);
 
         let floating = s.floating;
@@ -1292,7 +1299,10 @@ impl Render for Workbench {
             .on_mouse_move(cx.listener(move |this, e: &MouseMoveEvent, _, cx| {
                 if !geppui::appearance(cx).clock.frozen() {
                     let pos = (m.css(e.position.x), m.css(e.position.y));
-                    if !this.bars_move(pos, cx) && !this.edit_move(pos, cx) {
+                    if !this.compositions_move(pos, e.pressed_button == Some(MouseButton::Left), cx)
+                        && !this.bars_move(pos, cx)
+                        && !this.edit_move(pos, cx)
+                    {
                         this.on_mouse_move(e, m, cx)
                     }
                 }
@@ -1300,7 +1310,7 @@ impl Render for Workbench {
             .on_mouse_up(
                 MouseButton::Left,
                 cx.listener(|this, _: &MouseUpEvent, _, cx| {
-                    if !this.bars_up(cx) && !this.edit_up(cx) {
+                    if !this.compositions_up(cx) && !this.bars_up(cx) && !this.edit_up(cx) {
                         this.on_mouse_up(cx)
                     }
                 }),

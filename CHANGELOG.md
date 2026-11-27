@@ -2,6 +2,39 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.104] — 2026-11-27
+
+- **Native host (Rust + GPUI): compositions, format slots, import/export and catalog extras (Stage C2a, #75).**
+  - **Fix — bars inside Edit:** the "Nova barra" / "Editar barra" form now applies the bar to the edit draft as one undoable intention, as the reference's `App.saveBar` does; Save or Conclude keeps it and Cancel discards it. It used to be refused with the session's last message.
+  - **Catalog:**
+    - the Widgets / Composições tabs;
+    - the "Filtrar por plugin" funnel with the active-filter dot;
+    - the "Explore plugins" card (opens the Plugins popover);
+    - the footer "{n} widgets · {plugin} · {áreas}" with its hint;
+    - the destination box only after a choice, with the presence policy;
+    - "Limpar filtros".
+  - **Composições tab:**
+    - search, Favoritas and Salvas, the 3-column grid with drawn thumbnails;
+    - "Formato" / "Widgets" on hover, the default pin and the favorite star, the options menu (Exportar, padrão, favoritos, Excluir);
+    - reorder by pointer (the card follows the pointer, 150 ms FLIP) or Alt+arrows;
+    - "Restaurar layout padrão" and "Salvar atual" with its dialog (name, included areas, live thumbnail);
+    - "Favoritos cheios", the remove/unmark/delete confirmations and "Salvar a edição primeiro?".
+  - **Format slots:**
+    - applying the current format again empties its regions into dashed "Adicionar widget · Espaço N" slots and holds the widgets aside;
+    - a slot opens the catalog filtered by its region with the "Escolher widget" banner and per-widget reasons;
+    - a click or a drop (catalog widget or moved frame) fills it, and `Esc` clears the choice.
+    - The edit banner reads "Editando: {composição}" with the format hint.
+  - **Import/export of `.geppio-layout.json`:**
+    - export through the OS save dialog: create-only, flushed and read back;
+    - import through the OS open dialog: bounded background read, unique-key check, a preview with dependencies, and a " (2)" name when taken;
+    - portable records restore their widgets through dependency resolution, with "Escolher apresentações" when a widget has several local presentations.
+  - **Core:** `geppio-core` ports the composition model (`compositions.rs`), the portable library operations (`portable_compositions.rs`), `parse_portable_text` and the library's `applyLocal`. `EditSession` gains apply, fill slot, save current, save imported, the import checkpoint, the format mode and held widgets in the history, and adopts displayed geometry only in the applied format's regions on save.
+  - **Differential fixtures:** `compositions.json` adds 121 cases and 4 library scripts that the Rust port reproduces.
+  - **GeppUI:**
+    - the composition thumbnail colours;
+    - the toast wraps at half the window, like the reference's fixed `left: 50%` box;
+    - while the geometry warning shows, the toast keeps the latest message.
+
 ## [0.1.0-alpha.103] — 2026-11-27
 
 - **Native host (Rust + GPUI): header panels, Settings, languages and custom bars (Stage C1, #75).** This is the first step toward full parity with the Electron reference.

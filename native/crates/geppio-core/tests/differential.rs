@@ -1205,7 +1205,6 @@ fn test_surfaces() -> geppio_core::workbench::SessionSurfaces {
 
 #[test]
 fn bars_commit_outside_edit_and_record_inside_it() {
-    use geppio_core::layout::Region;
     use geppio_core::workbench::{EditSession, HOME, UserBar, update_bar, widget_registry};
     let mut store = MemoryStore::default();
     let mut session = EditSession::open(widget_registry(&[], true), None, true);
@@ -1220,9 +1219,7 @@ fn bars_commit_outside_edit_and_record_inside_it() {
         members: Vec::new(),
         positions: Default::default(),
     };
-    session
-        .save_bar(&bar, &surfaces.surface(Region::Sidebar), &[], &mut store)
-        .unwrap();
+    session.save_bar(&bar, &surfaces, &[], &mut store).unwrap();
     assert_eq!(session.message(), "Barra salva.");
     assert!(session.stored().is_some_and(|raw| raw.contains("bar:test")));
     // Activate Home again outside Edit: a committed organization change.
@@ -1231,13 +1228,34 @@ fn bars_commit_outside_edit_and_record_inside_it() {
     session.commit_organization(next, &mut store).unwrap();
     assert_eq!(session.message(), "Preferência salva.");
     assert_eq!(session.committed().organization.active_bar, HOME);
-    // Inside Edit the form is refused and an archive is one undoable intention.
+    // Inside Edit the form applies to the draft as one undoable intention (`App.saveBar`):
+    // nothing is stored until Save, undo removes it and redo brings it back.
     session.begin(&surfaces).unwrap();
-    assert!(
-        session
-            .save_bar(&bar, &surfaces.surface(Region::Sidebar), &[], &mut store)
-            .is_err()
-    );
+    let stored = session.stored().map(str::to_owned);
+    let fresh = UserBar {
+        id: "bar:edit".into(),
+        name: "Em edição".into(),
+        ..bar.clone()
+    };
+    session
+        .save_bar(&fresh, &surfaces, &[], &mut store)
+        .unwrap();
+    let has = |s: &EditSession| {
+        s.draft()
+            .organization
+            .bars
+            .iter()
+            .any(|b| b.id == "bar:edit")
+    };
+    assert!(has(&session));
+    assert_eq!(session.draft().organization.active_bar, "bar:edit");
+    assert_eq!(session.stored().map(str::to_owned), stored);
+    assert!(session.undo());
+    assert!(!has(&session));
+    assert!(session.redo());
+    assert!(has(&session));
+    session.save(&surfaces, &mut store).unwrap();
+    assert!(session.stored().is_some_and(|raw| raw.contains("bar:edit")));
     let archived = update_bar(
         session.draft(),
         &UserBar {
@@ -1313,7 +1331,6 @@ fn layout_import_previews_envelopes_and_refuses_other_files() {
 
 #[test]
 fn bar_and_organization_guards_hold() {
-    use geppio_core::layout::Region;
     use geppio_core::workbench::{EditSession, SessionError, UserBar, widget_registry};
     let surfaces = test_surfaces();
     let bar = UserBar {
@@ -1332,7 +1349,7 @@ fn bar_and_organization_guards_hold() {
     let mut recovering = EditSession::open(widget_registry(&[], true), Some("{broken"), true);
     assert!(
         recovering
-            .save_bar(&bar, &surfaces.surface(Region::Sidebar), &[], &mut store)
+            .save_bar(&bar, &surfaces, &[], &mut store)
             .is_err()
     );
     assert_eq!(store.raw.as_deref(), Some("{broken"));
@@ -1356,4 +1373,635 @@ fn bar_and_organization_guards_hold() {
         Err(SessionError::Rejected)
     ));
     assert!(store.raw.is_none());
+}
+
+mod compositions {
+    use super::*;
+    use geppio_core::workbench::chrome::ChromePatchEntry;
+    use geppio_core::workbench::compositions::{
+        ApplyMode, SlotIntention, apply_composition, apply_to_draft, capture_composition,
+        capture_current_composition, composition_order, composition_scene, composition_slots,
+        favorite_composition, fill_reservation, reorder_composition, system_compositions,
+    };
+    use geppio_core::workbench::portable::{parse_portable_text, serialize_portable_layout};
+    use geppio_core::workbench::portable_compositions::{
+        export_portable_composition, import_portable_composition, portable_dependencies,
+        resolve_portable_widgets,
+    };
+    use geppio_core::workbench::session::project_view;
+    use geppio_core::workbench::{
+        ChromePatch, Composition, CompositionMode, SessionDraft, SessionSlot,
+    };
+
+    /// One `applyLocal` / `reserve` observation of a library script.
+    fn same_draft(context: &str, actual: &SessionDraft, expected: &Json) {
+        same_json(
+            context,
+            &snapshot_json(&actual.snapshot),
+            text(expected, "snapshot"),
+        );
+        same_slots(context, &actual.slots, get(expected, "slots"));
+        assert_eq!(
+            actual.format_id.as_deref(),
+            optional(expected, "formatId"),
+            "{context}: formatId"
+        );
+        assert_eq!(
+            actual.format_mode.map(|m| m.as_str()),
+            optional(expected, "formatMode"),
+            "{context}: formatMode"
+        );
+        match (&actual.format_source, get(expected, "formatSource")) {
+            (None, Json::Null) => {}
+            (Some(source), Json::String(raw)) => {
+                let e = json::parse(raw).unwrap();
+                same_placements(context, &source.placements, get(&e, "placements"));
+                let r = get(&e, "reference");
+                for region in Region::ALL {
+                    let want = size(get(r, region.as_str()));
+                    let have = source.reference.get(region);
+                    close(context, "formatSource.width", have.width, want.width);
+                    close(context, "formatSource.height", have.height, want.height);
+                }
+            }
+            (actual, _) => panic!("{context}: formatSource differs (rust {actual:?})"),
+        }
+    }
+
+    /// `{ ok, value }` / `{ ok: false, error }` outcomes of a throwing reference call.
+    fn same_outcome(
+        context: &str,
+        actual: Result<String, CodecError>,
+        expected: &Json,
+        value: impl Fn(&str, &str),
+    ) -> bool {
+        match (actual, flag(expected, "ok")) {
+            (Ok(actual), true) => {
+                value(&actual, text(expected, "value"));
+                true
+            }
+            (Err(error), false) => {
+                assert_eq!(error.message(), text(expected, "error"), "{context}: error");
+                false
+            }
+            (actual, _) => panic!("{context}: outcome differs (rust {actual:?})"),
+        }
+    }
+    fn strings_of(v: &Json) -> Vec<String> {
+        v.as_array()
+            .unwrap()
+            .iter()
+            .map(|s| s.as_str().unwrap().to_owned())
+            .collect()
+    }
+
+    /// `JSON.stringify` of compositions, read back through the snapshot writer.
+    fn compositions_json(list: Vec<Composition>) -> String {
+        let mut holder = initial_workbench(false);
+        holder.organization.compositions = list;
+        let parsed = json::parse(&snapshot_json(&holder)).unwrap();
+        canonical(get(get(&parsed, "organization"), "compositions"))
+    }
+    fn same_json(context: &str, actual: &str, expected: &str) {
+        let actual = canonical(&json::parse(actual).unwrap());
+        let expected = canonical(&json::parse(expected).unwrap());
+        assert_eq!(actual, expected, "{context}");
+    }
+    fn lookup(source: &WorkbenchSnapshot, id: &str, demo: bool) -> Composition {
+        system_compositions(demo)
+            .into_iter()
+            .chain(source.organization.compositions.iter().cloned())
+            .find(|c| c.id == id)
+            .unwrap_or_else(|| panic!("composition {id}"))
+    }
+    fn mode(v: &Json) -> ApplyMode {
+        match v.as_str().unwrap() {
+            "format" => ApplyMode::Format,
+            "widgets" => ApplyMode::Widgets,
+            other => panic!("mode {other}"),
+        }
+    }
+    fn scopes(v: &Json) -> Vec<Region> {
+        v.as_array().unwrap().iter().map(region).collect()
+    }
+    fn session_slot(v: &Json) -> SessionSlot {
+        SessionSlot {
+            id: text(v, "id").to_owned(),
+            region: region(get(v, "region")),
+            x: num(v, "x"),
+            y: num(v, "y"),
+            width: num(v, "width"),
+            height: num(v, "height"),
+            sidebar_bar: optional(v, "sidebarBar").map(str::to_owned),
+            reference: size(get(v, "reference")),
+        }
+    }
+    fn slots(v: &Json) -> Vec<SessionSlot> {
+        v.as_array().unwrap().iter().map(session_slot).collect()
+    }
+    fn entry(v: Option<&Json>) -> Option<ChromePatchEntry> {
+        v.map(|e| ChromePatchEntry {
+            size: e.get("size").and_then(Json::as_f64),
+            visible: e.get("visible").and_then(Json::as_bool),
+        })
+    }
+    fn chrome(v: &Json) -> Option<ChromePatch> {
+        (*v != Json::Null).then(|| ChromePatch {
+            sidebar: entry(v.get("sidebar")),
+            bottom: entry(v.get("bottom")),
+        })
+    }
+    fn same_slots(context: &str, actual: &[SessionSlot], expected: &Json) {
+        let expected = expected.as_array().unwrap();
+        assert_eq!(actual.len(), expected.len(), "{context}: slot count");
+        for (a, e) in actual.iter().zip(expected) {
+            assert_eq!(a.id, text(e, "id"), "{context}");
+            assert_eq!(a.region, region(get(e, "region")), "{context}: {}", a.id);
+            assert_eq!(
+                a.sidebar_bar.as_deref(),
+                optional(e, "sidebarBar"),
+                "{context}: {}",
+                a.id
+            );
+            same_bounds(
+                &format!("{context}: {}", a.id),
+                Bounds::new(a.x, a.y, a.width, a.height),
+                e,
+            );
+            let r = get(e, "reference");
+            close(
+                context,
+                "reference.width",
+                a.reference.width,
+                num(r, "width"),
+            );
+            close(
+                context,
+                "reference.height",
+                a.reference.height,
+                num(r, "height"),
+            );
+        }
+    }
+    fn outcome(context: &str, actual: Option<WorkbenchSnapshot>, expected: &Json) -> bool {
+        match (actual, expected) {
+            (Some(next), Json::String(expected)) => {
+                same_json(context, &snapshot_json(&next), expected);
+                true
+            }
+            (None, Json::Null) => false,
+            (actual, _) => panic!(
+                "{context}: outcome differs (rust {})",
+                actual.map_or("null".into(), |s| snapshot_json(&s))
+            ),
+        }
+    }
+
+    #[test]
+    fn compositions_match() {
+        let data = fixture("compositions.json");
+        let documents = array(&data, "documents");
+        let load = |name: &str| {
+            let document = documents
+                .iter()
+                .find(|d| text(d, "name") == name)
+                .unwrap_or_else(|| panic!("document {name}"));
+            let registry = registry(text(document, "registry"));
+            let source = parse_workbench(text(document, "raw"), &registry).unwrap();
+            (registry, source)
+        };
+        let cases = array(&data, "cases");
+        let mut results = 0;
+        for case in cases {
+            let name = text(case, "name");
+            let expected = case.get("expected").unwrap_or(&Json::Null);
+            match text(case, "kind") {
+                "system" => {
+                    let actual = compositions_json(system_compositions(flag(case, "demo")));
+                    let expected = canonical(&json::parse(expected.as_str().unwrap()).unwrap());
+                    assert_eq!(actual, expected, "{name}");
+                    results += 1;
+                }
+                "apply" => {
+                    let (registry, source) = load(text(case, "document"));
+                    let item = lookup(&source, text(case, "composition"), flag(case, "demo"));
+                    let before = snapshot_json(&source);
+                    let next =
+                        apply_composition(&source, &registry, &item, mode(get(case, "mode")));
+                    assert_eq!(snapshot_json(&source), before, "{name}: source mutated");
+                    results += usize::from(outcome(name, next, expected));
+                }
+                "scene" => {
+                    let (registry, source) = load(text(case, "document"));
+                    let item = lookup(&source, text(case, "composition"), true);
+                    let displayed =
+                        apply_composition(&source, &registry, &item, mode(get(case, "mode")))
+                            .unwrap();
+                    let next = composition_scene(&source, &displayed, &scopes(get(case, "scopes")));
+                    results += usize::from(outcome(name, Some(next), expected));
+                }
+                "favorite" => {
+                    let (_, source) = load(text(case, "document"));
+                    let next = favorite_composition(
+                        &source,
+                        text(case, "id"),
+                        flag(case, "favorite"),
+                        flag(case, "makeDefault"),
+                        optional(case, "replace"),
+                    );
+                    results += usize::from(outcome(name, next, expected));
+                }
+                "order" => {
+                    let (_, source) = load(text(case, "document"));
+                    let actual = composition_order(&source, flag(case, "favorites"));
+                    let expected: Vec<&str> = expected
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .map(|v| v.as_str().unwrap())
+                        .collect();
+                    assert_eq!(actual, expected, "{name}");
+                    results += 1;
+                }
+                "reorder" => {
+                    let (_, source) = load(text(case, "document"));
+                    let next = reorder_composition(
+                        &source,
+                        text(case, "id"),
+                        optional(case, "before"),
+                        flag(case, "favorites"),
+                    );
+                    results += usize::from(outcome(name, next, expected));
+                }
+                "slots" => {
+                    let (_, source) = load(text(case, "document"));
+                    let item = lookup(&source, text(case, "composition"), true);
+                    same_slots(name, &composition_slots(&item, &source), expected);
+                    results += 1;
+                }
+                "capture" => {
+                    let (_, source) = load(text(case, "document"));
+                    let regions = scopes(get(case, "scopes"));
+                    let session = slots(get(case, "slots"));
+                    let made = match get(case, "current") {
+                        Json::Bool(sidebar) => capture_current_composition(
+                            &source,
+                            "composition:captured",
+                            "Capturada",
+                            &regions,
+                            *sidebar,
+                            &session,
+                        ),
+                        _ => capture_composition(
+                            &source,
+                            "composition:captured",
+                            "Capturada",
+                            CompositionMode::parse(text(case, "mode")).unwrap(),
+                            &regions,
+                            chrome(get(case, "chrome")),
+                            &session,
+                        ),
+                    };
+                    let expected = format!("[{}]", expected.as_str().unwrap());
+                    assert_eq!(
+                        compositions_json(vec![made]),
+                        canonical(&json::parse(&expected).unwrap()),
+                        "{name}"
+                    );
+                    results += 1;
+                }
+                "fill" => {
+                    let (registry, source) = load(text(case, "document"));
+                    let intention = get(case, "intention");
+                    let intention = match text(intention, "kind") {
+                        "catalog" => SlotIntention::Catalog(text(intention, "typeId").to_owned()),
+                        _ => SlotIntention::Move {
+                            view_id: text(intention, "viewId").to_owned(),
+                            source_bar: text(intention, "sourceBar").to_owned(),
+                        },
+                    };
+                    let disabled: Vec<String> = array(case, "disabled")
+                        .iter()
+                        .map(|v| v.as_str().unwrap().to_owned())
+                        .collect();
+                    let result = fill_reservation(
+                        &source,
+                        &registry,
+                        &slots(get(case, "slots")),
+                        text(case, "id"),
+                        &surface(get(case, "surface")),
+                        &intention,
+                        &disabled,
+                    );
+                    match (result, expected) {
+                        (Some((next, remaining)), Json::Object(_)) => {
+                            same_json(name, &snapshot_json(&next), text(expected, "snapshot"));
+                            let ids: Vec<&str> = remaining.iter().map(|s| s.id.as_str()).collect();
+                            let want: Vec<&str> = array(expected, "slots")
+                                .iter()
+                                .map(|v| v.as_str().unwrap())
+                                .collect();
+                            assert_eq!(ids, want, "{name}: remaining slots");
+                            results += 1;
+                        }
+                        (None, Json::Null) => {}
+                        (actual, _) => panic!(
+                            "{name}: outcome differs (rust {})",
+                            actual.map_or("null".into(), |(s, _)| snapshot_json(&s))
+                        ),
+                    }
+                }
+                "text" => {
+                    let actual = parse_portable_text(text(case, "text"))
+                        .map(|r| serialize_portable_layout(&r));
+                    results += usize::from(same_outcome(name, actual, expected, |a, e| {
+                        assert_eq!(a, e, "{name}: serialized recipe");
+                    }));
+                }
+                "export" => {
+                    let (registry, source) = load(text(case, "document"));
+                    let saved = lookup(&source, text(case, "composition"), true);
+                    let actual = export_portable_composition(&saved, &registry)
+                        .map(|r| serialize_portable_layout(&r));
+                    results += usize::from(same_outcome(name, actual, expected, |a, e| {
+                        assert_eq!(a, e, "{name}: exported recipe");
+                    }));
+                }
+                "import" => {
+                    let (_, source) = load(text(case, "document"));
+                    let recipe = parse_portable_text(text(case, "text")).unwrap();
+                    let actual = import_portable_composition(
+                        &source,
+                        &recipe,
+                        text(case, "requested"),
+                        "composition:imported",
+                    )
+                    .map(|c| compositions_json(vec![c]));
+                    results += usize::from(same_outcome(name, actual, expected, |a, e| {
+                        let e = canonical(&json::parse(&format!("[{e}]")).unwrap());
+                        assert_eq!(a, e, "{name}: imported record");
+                    }));
+                }
+                "dependencies" | "resolve" => {
+                    let (registry, source) = load(text(case, "document"));
+                    let recipe = parse_portable_text(text(case, "text")).unwrap();
+                    let record = import_portable_composition(
+                        &source,
+                        &recipe,
+                        "Importada",
+                        "composition:imported",
+                    )
+                    .unwrap();
+                    let disabled = strings_of(get(case, "disabled"));
+                    if text(case, "kind") == "dependencies" {
+                        let actual = portable_dependencies(&source, &registry, &record, &disabled);
+                        let expected = expected.as_array().unwrap();
+                        assert_eq!(actual.len(), expected.len(), "{name}: dependency count");
+                        for (a, e) in actual.iter().zip(expected) {
+                            assert_eq!(a.key, text(e, "key"), "{name}");
+                            assert_eq!(a.label, text(e, "label"), "{name}: {}", a.key);
+                            assert_eq!(a.reason, optional(e, "reason"), "{name}: {}", a.key);
+                            let candidates: Vec<(&str, &str)> = array(e, "candidates")
+                                .iter()
+                                .map(|c| (text(c, "id"), text(c, "label")))
+                                .collect();
+                            let actual: Vec<(&str, &str)> = a
+                                .candidates
+                                .iter()
+                                .map(|c| (c.id.as_str(), c.label.as_str()))
+                                .collect();
+                            assert_eq!(actual, candidates, "{name}: {} candidates", a.key);
+                        }
+                        results += 1;
+                        continue;
+                    }
+                    let choices: Vec<(String, String)> = get(case, "choices")
+                        .as_object()
+                        .unwrap()
+                        .iter()
+                        .map(|(k, v)| (k.to_owned(), v.as_str().unwrap().to_owned()))
+                        .collect();
+                    let mut counter = 0;
+                    let mut group_id = || {
+                        counter += 1;
+                        format!("group:00000000-0000-4000-8000-{counter:012}")
+                    };
+                    let resolved = resolve_portable_widgets(
+                        &source,
+                        &registry,
+                        &record,
+                        &disabled,
+                        &choices,
+                        &mut group_id,
+                    );
+                    match (resolved, expected) {
+                        (Some(c), Json::String(e)) => {
+                            let e = canonical(&json::parse(&format!("[{e}]")).unwrap());
+                            assert_eq!(compositions_json(vec![c]), e, "{name}: resolved");
+                            results += 1;
+                        }
+                        (None, Json::Null) => {}
+                        (actual, _) => panic!("{name}: outcome differs (rust {actual:?})"),
+                    }
+                }
+                "library" => {
+                    let (registry, source) = load(text(case, "document"));
+                    let surfaces = session_surfaces(get(case, "surfaces"));
+                    let demo = flag(case, "demo");
+                    let mut draft = SessionDraft::new(source);
+                    for (i, observation) in array(case, "observations").iter().enumerate() {
+                        let context = format!("{name}#{i}");
+                        let step = get(observation, "step");
+                        let expected = get(observation, "expected");
+                        let (view, _) = project_view(&draft.snapshot, &registry, &surfaces);
+                        let result = if text(step, "op") == "apply" {
+                            let item = lookup(&draft.snapshot, text(step, "composition"), demo);
+                            apply_to_draft(&draft, &view, &registry, &item, mode(get(step, "mode")))
+                        } else {
+                            let index = num(step, "slot") as usize;
+                            draft
+                                .slots
+                                .get(index)
+                                .and_then(|slot| {
+                                    fill_reservation(
+                                        &view,
+                                        &registry,
+                                        &draft.slots,
+                                        &slot.id,
+                                        &surfaces.surface(slot.region),
+                                        &SlotIntention::Catalog(text(step, "typeId").to_owned()),
+                                        &[],
+                                    )
+                                })
+                                .map(|(snapshot, slots)| SessionDraft {
+                                    snapshot,
+                                    slots,
+                                    ..draft.clone()
+                                })
+                                .ok_or("Espaço indisponível.")
+                        };
+                        match (result, optional(expected, "error")) {
+                            (Ok(next), None) => {
+                                same_draft(&context, &next, expected);
+                                draft = next;
+                                results += 1;
+                            }
+                            (Err(error), Some(want)) => assert_eq!(error, want, "{context}"),
+                            (actual, _) => panic!("{context}: outcome differs (rust {actual:?})"),
+                        }
+                    }
+                }
+                other => panic!("unknown case kind {other}"),
+            }
+        }
+        assert!(
+            cases.len() >= 110 && results >= 100,
+            "{} cases, {results} results",
+            cases.len()
+        );
+    }
+}
+
+#[test]
+fn composition_library_runs_inside_the_edit_session() {
+    use geppio_core::layout::{PerRegion, Region, Size};
+    use geppio_core::workbench::compositions::{SlotIntention, capture_current_composition};
+    use geppio_core::workbench::portable::parse_portable_text;
+    use geppio_core::workbench::portable_compositions::import_portable_composition;
+    use geppio_core::workbench::{ApplyMode, EditSession, SessionSurfaces, widget_registry};
+    let surfaces = SessionSurfaces {
+        sizes: PerRegion {
+            main: Size::new(1567.0, 774.0),
+            sidebar: Size::new(253.0, 950.0),
+            bottom: Size::new(1543.0, 147.0),
+        },
+        expanded: false,
+    };
+    let mut store = MemoryStore::default();
+    let mut session = EditSession::open(widget_registry(&[], true), None, true);
+    let focus = session.composition("system:focus").unwrap();
+    assert!(
+        session
+            .apply_composition(&focus, ApplyMode::Format, &surfaces)
+            .is_err(),
+        "the library acts only inside Edit"
+    );
+    session.begin(&surfaces).unwrap();
+    session
+        .apply_composition(&focus, ApplyMode::Format, &surfaces)
+        .unwrap();
+    assert_eq!(session.format_id(), Some("system:focus"));
+    assert_eq!(session.format_mode(), Some(ApplyMode::Format));
+    assert!(session.has_pending() && session.can_undo());
+    // The same format again empties Main into two reserved slots and holds its widgets.
+    session
+        .apply_composition(&focus, ApplyMode::Format, &surfaces)
+        .unwrap();
+    assert_eq!(session.slots().len(), 2);
+    assert!(session.format_source().is_some());
+    assert!(
+        !session
+            .draft()
+            .placements
+            .iter()
+            .any(|p| p.region == Region::Main)
+    );
+    let slot = session.slots()[0].id.clone();
+    let editor = SlotIntention::Catalog("host:file-editor".into());
+    assert!(session.slot_accepts(&slot, &editor, &surfaces, &[]));
+    session
+        .fill_slot(&slot, &editor, None, &surfaces, &[])
+        .unwrap();
+    assert_eq!(session.message(), "Espaço preenchido. Salve ou cancele.");
+    assert_eq!(session.slots().len(), 1);
+    assert!(session.undo());
+    assert_eq!(session.slots().len(), 2);
+    assert!(session.redo());
+    assert_eq!(session.slots().len(), 1);
+    // Save keeps the slots and the applied format; nothing is pending afterwards.
+    session.save(&surfaces, &mut store).unwrap();
+    assert_eq!(session.slots().len(), 1);
+    assert_eq!(session.format_id(), Some("system:focus"));
+    assert!(!session.has_pending() && !session.pending_import_checkpoint());
+    // "Salvar atual" saves at once and is one undoable intention.
+    let (view, _) = session.view(&surfaces);
+    let record = capture_current_composition(
+        &view,
+        "composition:mine",
+        "Minha",
+        &[Region::Main, Region::Bottom],
+        true,
+        session.slots(),
+    );
+    session.save_composition(record, &mut store).unwrap();
+    assert_eq!(session.message(), "Composição salva.");
+    assert!(
+        session
+            .stored()
+            .is_some_and(|raw| raw.contains("composition:mine"))
+    );
+    assert!(session.saved_composition("composition:mine").is_some());
+    assert!(session.can_undo());
+    // A clean checkpoint can import; the record reaches the store, checkpoint and draft.
+    let recipe = parse_portable_text(
+        r#"{"kind":"geppio-layout","version":1,"name":"Receita","mode":"format","scopes":["main"],"reference":{"main":{"width":1200,"height":700}},"chrome":{},"format":[{"key":"s1","region":"main","x":0,"y":0,"width":590,"height":700}],"views":[],"placements":[],"groups":[]}"#,
+    )
+    .unwrap();
+    assert!(session.can_import_composition());
+    let imported =
+        import_portable_composition(session.draft(), &recipe, "Minha", "composition:imported")
+            .unwrap();
+    assert_eq!(imported.name, "Minha (2)");
+    let mut favored = session.draft().clone();
+    favored
+        .organization
+        .favorites
+        .push("composition:mine".into());
+    session.edit_action(favored).unwrap();
+    assert!(
+        session.pending_import_checkpoint(),
+        "library changes need a save first"
+    );
+    assert!(
+        session
+            .save_imported_composition(imported.clone(), &mut store)
+            .is_err()
+    );
+    assert!(session.undo());
+    assert!(!session.pending_import_checkpoint());
+    session
+        .save_imported_composition(imported, &mut store)
+        .unwrap();
+    assert_eq!(session.message(), "Composição importada.");
+    assert!(
+        session
+            .stored()
+            .is_some_and(|raw| raw.contains("Minha (2)"))
+    );
+    assert!(
+        session
+            .checkpoint()
+            .organization
+            .compositions
+            .iter()
+            .any(|c| c.id == "composition:imported")
+    );
+    // A portable record applies its format; its widgets need the resolved candidate.
+    let portable = session.composition("composition:imported").unwrap();
+    assert!(
+        session
+            .apply_composition(&portable, ApplyMode::Widgets, &surfaces)
+            .is_err()
+    );
+    // Conclude clears the slots and the applied format.
+    session.conclude(&surfaces, &mut store).unwrap();
+    assert!(session.slots().is_empty() && session.format_id().is_none());
+    assert!(session.format_mode().is_none() && session.format_source().is_none());
+    // Cancel restores the checkpoint without the format.
+    session.begin(&surfaces).unwrap();
+    session
+        .apply_composition(&focus, ApplyMode::Format, &surfaces)
+        .unwrap();
+    session.cancel();
+    assert!(session.format_id().is_none() && session.slots().is_empty());
 }
