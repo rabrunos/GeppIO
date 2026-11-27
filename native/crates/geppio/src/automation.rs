@@ -14,6 +14,7 @@ use crate::{
 
 pub struct Trace {
     file: File,
+    last_state: Option<String>,
 }
 
 impl Trace {
@@ -28,6 +29,14 @@ impl Trace {
     }
     pub fn event(&mut self, now: f64, event: &str) {
         let _ = writeln!(self.file, "{{\"t\":{now:.3},\"event\":\"{event}\"}}");
+    }
+    /// A state line, written only when it changed since the last one.
+    pub fn state(&mut self, now: f64, state: &serde_json::Value) {
+        let text = state.to_string();
+        if self.last_state.as_deref() != Some(text.as_str()) {
+            let _ = writeln!(self.file, "{{\"t\":{now:.3},\"state\":{text}}}");
+            self.last_state = Some(text);
+        }
     }
 }
 
@@ -46,7 +55,10 @@ impl Automation {
                 .trace
                 .as_ref()
                 .and_then(|p| File::options().write(true).create_new(true).open(p).ok())
-                .map(|file| Trace { file }),
+                .map(|file| Trace {
+                    file,
+                    last_state: None,
+                }),
             freeze: options.freeze,
             script: options.script,
         }

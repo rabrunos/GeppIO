@@ -11,10 +11,10 @@ use geppui::{
     spaced_text,
 };
 use gpui::{
-    AnyElement, App, Context, Div, Entity, FocusHandle, Hsla, InteractiveElement, IntoElement,
-    KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement, Render,
-    SharedString, StatefulInteractiveElement, Styled, Task, Window, WindowControlArea, div, img,
-    prelude::FluentBuilder,
+    AnyElement, App, AppContext, Context, Div, Entity, FocusHandle, Hsla, InteractiveElement,
+    IntoElement, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
+    ParentElement, Render, SharedString, StatefulInteractiveElement, Styled, Task, Window,
+    WindowControlArea, div, img, prelude::FluentBuilder,
 };
 
 use geppio_core::layout::Region;
@@ -106,6 +106,8 @@ pub struct Workbench {
     pub(crate) pending_focus: Option<bool>,
     /// View awaiting the remove confirmation.
     pub(crate) removing: Option<String>,
+    /// "Nome de exemplo" of the Propriedades demo widget.
+    pub(crate) name_field: Entity<TextField>,
 }
 
 /// Focus handles of the header and context triggers.
@@ -229,6 +231,32 @@ impl Workbench {
             })
             .detach();
         }
+        let search = cx.new(|cx| {
+            TextField::new(cx)
+                .font(12.0, 16.0)
+                .placeholder(crate::i18n::t("Buscar widgets…"))
+        });
+        cx.subscribe(&search, |this, field, event, cx| {
+            if *event == geppui::TextFieldEvent::Changed {
+                this.edit.catalog.search = field.read(cx).text().to_owned();
+                cx.notify();
+            }
+        })
+        .detach();
+        let properties = Properties::default();
+        let name_field = cx.new(|cx| {
+            let mut field = TextField::new(cx).font(10.0, 14.0);
+            field.set_text(&properties.name, cx);
+            field
+        });
+        cx.subscribe(&name_field, |this, field, event, cx| {
+            if *event == geppui::TextFieldEvent::Changed && !this.editing() {
+                this.properties.name = field.read(cx).text().to_owned();
+                this.record_local(cx);
+                cx.notify();
+            }
+        })
+        .detach();
         let initial = ShellLayout::compute(1280.0, 800.0, Tracks::default());
         let mut this = Self {
             focus,
@@ -261,17 +289,18 @@ impl Workbench {
             automation: Automation::new(options),
             session,
             store,
-            edit: EditUi::default(),
+            edit: EditUi::new(search),
             ports: Ports::of(&initial, regions_width(&initial)),
             metrics: Metrics::default(),
             scrolls: HashMap::new(),
             sidebar_scroll: ScrollHandle::new(),
             main_scroll: ScrollHandle::new(),
-            properties: Properties::default(),
+            properties,
             edit_focus: cx.focus_handle(),
             save_focus: cx.focus_handle(),
             pending_focus: None,
             removing: None,
+            name_field,
         };
         this.automation.start(&mut this.regions, cx);
         let local = this.local_json(cx);
@@ -326,6 +355,11 @@ impl Workbench {
         cx.global_mut::<Appearance>().set_theme(theme);
         self.prefs.snap_center = local.snap;
         self.prefs.project_name = local.project_name;
+        if self.properties.name != local.properties.name {
+            let name = local.properties.name.clone();
+            self.name_field
+                .update(cx, |field, cx| field.set_text(&name, cx));
+        }
         self.properties.name = local.properties.name;
         self.properties.comfortable = local.properties.comfortable;
         self.properties.details = local.properties.details;
@@ -416,7 +450,42 @@ impl Workbench {
         self.regions.revert_keyboard();
         self.bars.reorder = None;
         self.bars.restore = None;
+        self.edit_cancel_gesture(cx);
+        self.compositions_cancel_drag(cx);
         cx.notify();
+    }
+
+    /// Moves focus as the edit UI asked (the reference's `focus()` calls).
+    fn apply_edit_focus(
+        &mut self,
+        request: crate::edit::FocusRequest,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        use crate::edit::FocusRequest;
+        match request {
+            FocusRequest::Search => {
+                let handle = gpui::Focusable::focus_handle(&self.edit.search, cx);
+                window.focus(&handle, cx);
+            }
+            FocusRequest::Workbench => window.focus(&self.focus.clone(), cx),
+            FocusRequest::Destination => {
+                // The first enabled destination: refused areas take no focus.
+                let tiles = self.tiles();
+                if let Some(area) = self.first_destination(&tiles) {
+                    let handle = crate::catalog::control_focus(
+                        &format!("catalog-place-{}", area.key()),
+                        window,
+                        cx,
+                    );
+                    window.focus(&handle, cx);
+                }
+            }
+            FocusRequest::Control(id) => {
+                let handle = crate::catalog::control_focus(&id, window, cx);
+                window.focus(&handle, cx);
+            }
+        }
     }
 
     /// A pending splitter keyboard resize is its own intention: it is settled before a widget
@@ -576,6 +645,14 @@ impl Workbench {
     }
 
     fn on_key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        // Keys inside the open "Remover widget?" dialog stay there: Escape closes only it.
+        if self.removing.is_some() {
+            if event.keystroke.key == "escape" {
+                self.removing = None;
+                cx.notify();
+            }
+            return;
+        }
         if self.menu.is_none() && self.edit_key(event, cx) {
             return;
         }
@@ -1334,7 +1411,16 @@ impl Render for Workbench {
         self.viewport = (m.css(vp.width) as f64, m.css(vp.height) as f64);
         self.regions.reduced = geppui::appearance(cx).reduced_motion;
         self.metrics = m;
+        // A window resize changes every measured region: a running edit gesture ends.
+        if self.viewport != self.last_viewport {
+            self.edit_cancel_gesture(cx);
+            self.compositions_cancel_drag(cx);
+        }
         self.sync_regions();
+        if let Some(request) = self.edit.focus.take() {
+            self.apply_edit_focus(request, window, cx);
+        }
+        self.edit.search_focused = self.edit.search.read(cx).is_focused(window);
         self.peek_focused = self.peek_focus.contains_focused(window, cx);
         if let Some(field) = self.pending_text_focus.take() {
             let handle = gpui::Focusable::focus_handle(&field, cx);
@@ -1356,7 +1442,15 @@ impl Render for Workbench {
             self.splitter_hover[i].sample(now);
         }
         let rail_scrolling = self.rail_autoscroll(cx);
+        let edit_scrolling = self.edit_tick(cx) | self.compositions_autoscroll(cx);
+        // Undo/redo pressed during a drop flight run when it lands.
+        if self.edit.flight.is_none() && !self.edit.queued.is_empty() {
+            for command in std::mem::take(&mut self.edit.queued) {
+                self.edit_command(command, cx);
+            }
+        }
         let animating = rail_scrolling
+            || edit_scrolling
             || self.regions.animating(now)
             || self.chevron.animating(now)
             || self.splitter_hover.iter().any(|h| h.animating(now))
@@ -1380,9 +1474,9 @@ impl Render for Workbench {
         self.ports = Ports::of(&s, self.regions.shown_sidebar_width());
         self.ports.surfaces.expanded = self.prefs.horizontal_expansion;
         let editing = self.editing();
-        let main_frames = self.region_frames(Region::Main, m, t, now, editing, cx);
-        let bottom_frames = self.region_frames(Region::Bottom, m, t, now, editing, cx);
-        let sidebar_frames = self.region_frames(Region::Sidebar, m, t, now, editing, cx);
+        let main_frames = self.region_frames(Region::Main, m, t, now, editing, window, cx);
+        let bottom_frames = self.region_frames(Region::Bottom, m, t, now, editing, window, cx);
+        let sidebar_frames = self.region_frames(Region::Sidebar, m, t, now, editing, window, cx);
         let sidebar_world = self.sidebar_world();
         let (edit_below, edit_top) = self.edit_layers(&s, m, t, now, window, cx);
         let floating_port = (
@@ -1620,6 +1714,9 @@ impl Render for Workbench {
                 .into_any_element(),
             );
         }
+        if self.automation.trace.is_some() {
+            self.trace_edit_state(now, window, cx);
+        }
         let floating = s.floating;
         let (context_rect, status_rect) = (s.context, s.status);
         let peek_open = self.regions.peek;
@@ -1648,9 +1745,10 @@ impl Render for Workbench {
             .on_mouse_move(cx.listener(move |this, e: &MouseMoveEvent, _, cx| {
                 if !geppui::appearance(cx).clock.frozen() {
                     let pos = (m.css(e.position.x), m.css(e.position.y));
-                    if !this.compositions_move(pos, e.pressed_button == Some(MouseButton::Left), cx)
+                    let pressed = e.pressed_button == Some(MouseButton::Left);
+                    if !this.compositions_move(pos, pressed, cx)
                         && !this.bars_move(pos, cx)
-                        && !this.edit_move(pos, cx)
+                        && !this.edit_move(pos, pressed, cx)
                     {
                         this.on_mouse_move(e, m, cx)
                     }
@@ -1658,8 +1756,22 @@ impl Render for Workbench {
             }))
             .on_mouse_up(
                 MouseButton::Left,
-                cx.listener(|this, _: &MouseUpEvent, _, cx| {
-                    if !this.compositions_up(cx) && !this.bars_up(cx) && !this.edit_up(cx) {
+                cx.listener(|this, e: &MouseUpEvent, _, cx| {
+                    let m = this.metrics;
+                    let pos = (m.css(e.position.x), m.css(e.position.y));
+                    if !this.compositions_up(cx) && !this.bars_up(cx) && !this.edit_up(pos, cx) {
+                        this.on_mouse_up(cx)
+                    }
+                }),
+            )
+            // The window captures the mouse during a press: a release outside it ends the
+            // gesture as a release (pointer capture in the reference).
+            .on_mouse_up_out(
+                MouseButton::Left,
+                cx.listener(|this, e: &MouseUpEvent, _, cx| {
+                    let m = this.metrics;
+                    let pos = (m.css(e.position.x), m.css(e.position.y));
+                    if !this.compositions_up(cx) && !this.bars_up(cx) && !this.edit_up(pos, cx) {
                         this.on_mouse_up(cx)
                     }
                 }),

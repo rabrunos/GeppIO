@@ -24,6 +24,8 @@ pub struct ScrollArea {
     both: bool,
     /// Bars decided from known sizes (vertical, horizontal); otherwise from the last frame.
     bars: Option<(bool, bool)>,
+    /// Keeps the offset but takes no wheel or drag (inert content while editing).
+    locked: bool,
     children: Vec<AnyElement>,
 }
 
@@ -38,6 +40,7 @@ pub fn scroll_area(id: impl Into<SharedString>, handle: &ScrollHandle) -> Scroll
         thin: false,
         both: false,
         bars: None,
+        locked: false,
         children: Vec::new(),
     }
 }
@@ -58,6 +61,11 @@ impl ScrollArea {
         self.thin = true;
         self.gutter = 10.0;
         self.thumb = 6.0;
+        self
+    }
+    /// Keeps the current offset and bars but ignores the wheel (`inert` content).
+    pub fn locked(mut self, locked: bool) -> Self {
+        self.locked = locked;
         self
     }
     /// Thin bars on both axes for `content` inside a `viewport` (CSS pixels, width and
@@ -277,62 +285,58 @@ impl RenderOnce for ScrollArea {
                 t.scroll_arrow_disabled
             },
         };
-        let scroller = div()
+        let base = div()
             .id(ElementId::Name(self.id.clone()))
             .size_full()
-            .track_scroll(&self.handle)
             .pr(if reserve { m.px(self.gutter) } else { px(0.0) })
             .pb(if reserve_x {
                 m.px(self.gutter)
             } else {
                 px(0.0)
-            })
-            .children(self.children);
-        div()
-            .relative()
-            .size_full()
-            .child(if both {
-                scroller.overflow_scroll()
-            } else {
-                scroller.overflow_y_scroll()
-            })
-            .child(
-                canvas(
-                    |_, _, _| {},
-                    move |bounds, _, window, _| {
-                        let p = Paint { bounds, ..paint };
-                        let gutter = f32::from(p.m.px(p.gutter));
-                        let (vertical, horizontal) = bars.unwrap_or((
-                            f32::from(handle.max_offset().y) > 0.5,
-                            both && f32::from(handle.max_offset().x) > 0.5,
-                        ));
-                        let corner = |shown: bool| if shown { gutter } else { 0.0 };
-                        // Decided bars paint only where a gutter was reserved.
-                        if bars.is_none_or(|(v, _)| v) {
-                            paint_scrollbar(
-                                &p,
-                                &handle,
-                                Axis::Vertical,
-                                corner(horizontal),
-                                window,
-                            );
-                        }
-                        if both && horizontal {
-                            paint_scrollbar(
-                                &p,
-                                &handle,
-                                Axis::Horizontal,
-                                corner(vertical),
-                                window,
-                            );
-                        }
-                    },
-                )
-                .absolute()
-                .top_0()
-                .left_0()
-                .size_full(),
+            });
+        let scroller = if self.locked {
+            let offset = self.handle.offset();
+            base.overflow_hidden().child(
+                div()
+                    .relative()
+                    .left(offset.x)
+                    .top(offset.y)
+                    .children(self.children),
             )
+        } else if both {
+            base.track_scroll(&self.handle)
+                .children(self.children)
+                .overflow_scroll()
+        } else {
+            base.track_scroll(&self.handle)
+                .children(self.children)
+                .overflow_y_scroll()
+        };
+        div().relative().size_full().child(scroller).child(
+            canvas(
+                |_, _, _| {},
+                move |bounds, _, window, _| {
+                    let p = Paint { bounds, ..paint };
+                    let gutter = f32::from(p.m.px(p.gutter));
+                    let (vertical, horizontal) = bars.unwrap_or((
+                        f32::from(handle.max_offset().y) > 0.5,
+                        both && f32::from(handle.max_offset().x) > 0.5,
+                    ));
+                    let corner = |shown: bool| if shown { gutter } else { 0.0 };
+                    // Decided bars paint only where a gutter was reserved.
+                    if bars.is_none_or(|(v, _)| v) {
+                        paint_scrollbar(&p, &handle, Axis::Vertical, corner(horizontal), window);
+                    }
+                    if both && horizontal {
+                        paint_scrollbar(&p, &handle, Axis::Horizontal, corner(vertical), window);
+                    }
+                },
+            )
+            .absolute()
+            .top_0()
+            .left_0()
+            .size_full(),
+        )
     }
 }
 

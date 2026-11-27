@@ -480,7 +480,22 @@ impl EditSession {
                             None,
                             &[],
                         )
-                        .is_some())
+                        .is_some()
+                        || self.draft.slots.iter().any(|slot| {
+                            slot.region == region
+                                && self
+                                    .reservation(
+                                        &slot.id,
+                                        &SlotIntention::Move {
+                                            view_id: gesture.id.clone(),
+                                            source_bar: gesture.source_bar.clone(),
+                                        },
+                                        Some(&source),
+                                        surfaces,
+                                        &[],
+                                    )
+                                    .is_some()
+                        }))
             })
             .collect()
     }
@@ -745,6 +760,61 @@ impl EditSession {
         Ok(())
     }
 
+    /// Opens the history gesture of a catalog drag at its lift (`beginGesture`): a bar
+    /// switched by hovering and the drop are then one intention.
+    pub fn begin_catalog_drag(&mut self) {
+        if self.editing {
+            self.history.begin(&self.draft);
+        }
+    }
+
+    /// Closes a catalog drag: an accepted drop is recorded as one intention, a refused or
+    /// cancelled one restores the draft from its lift (`finishGesture` / `cancelGesture`).
+    pub fn finish_catalog_drag(&mut self, accepted: bool) {
+        if self.gesture.is_some() {
+            return;
+        }
+        if accepted {
+            self.history.finish(&self.draft);
+        } else if let Some(before) = self.history.abort() {
+            self.apply(before);
+        }
+    }
+
+    /// Hovering a rail bar for 250 ms during a drag makes it the active bar (`hoverBar`).
+    /// Returns whether the bar changed; the drag keeps its own source bar.
+    pub fn hover_bar(&mut self, bar: &str) -> bool {
+        if !self.editing || !self.history.active() {
+            return false;
+        }
+        let org = &self.draft.snapshot.organization;
+        if org.active_bar == bar || !org.bars.iter().any(|b| b.id == bar && !b.archived) {
+            return false;
+        }
+        let next = self.draft.snapshot.with_active_bar(bar);
+        let _ = self.put(next);
+        if let Some(g) = &mut self.gesture {
+            g.snapshot = g.snapshot.with_active_bar(bar);
+        }
+        true
+    }
+
+    /// The drop zones of the open move, recomputed for the current active bar.
+    pub fn move_zones(&mut self, surfaces: &SessionSurfaces) -> DropZones {
+        let Some(gesture) = self.gesture.clone() else {
+            return Vec::new();
+        };
+        if gesture.kind != Gesture::Move {
+            return Vec::new();
+        }
+        let (_, feasible) = self.view(surfaces);
+        let zones = self.movement_targets(&gesture, surfaces, &feasible);
+        if let Some(g) = &mut self.gesture {
+            g.drop_zones = zones.clone();
+        }
+        zones
+    }
+
     /// Cancels the gesture (Escape, lost capture, changed measurements): the gesture's
     /// source scene is restored and nothing enters history.
     pub fn cancel_gesture(&mut self) -> Result<(), SessionError> {
@@ -831,6 +901,68 @@ impl EditSession {
                             "Transferência incompatível ou sem espaço. A composição anterior foi restaurada."
                         }
                     },
+                );
+                Err(SessionError::Rejected)
+            }
+        }
+    }
+
+    /// Moves a placed view to `region` outside a gesture: the catalog's move mode
+    /// (`transferTo`). A refusal keeps the draft and names the reason.
+    pub fn transfer_view(
+        &mut self,
+        id: &str,
+        region: Region,
+        at: Option<(f64, f64)>,
+        surfaces: &SessionSurfaces,
+    ) -> Result<(), SessionError> {
+        let preserve = self
+            .draft
+            .snapshot
+            .type_of(id)
+            .and_then(|t| self.registry.get(t))
+            .is_some_and(|t| t.preserve_normal_geometry);
+        if preserve
+            && panel_ids(&self.draft.snapshot).iter().any(|p| p == id)
+            && self
+                .draft
+                .snapshot
+                .placement(id)
+                .is_some_and(|p| p.region != region)
+        {
+            self.message =
+                String::from("Volte a Normal antes de transferir este widget para outra região.");
+            return Err(SessionError::Rejected);
+        }
+        let (view, feasible) = self.view(surfaces);
+        if !self.editing || !*feasible.get(region) {
+            self.message = String::from(
+                "Região sem espaço disponível. Reabra ou amplie a região antes de transferir.",
+            );
+            return Err(SessionError::Rejected);
+        }
+        match move_view(
+            &settle_snapshot(&view),
+            &self.registry,
+            id,
+            &surfaces.surface(region),
+            at,
+            None,
+            None,
+            &[],
+        ) {
+            Some(next) => {
+                self.action(settle_snapshot(&next))?;
+                self.message = format!(
+                    "Widget transferido para {} na prévia. Salve ou cancele.",
+                    region_label(region)
+                );
+                Ok(())
+            }
+            None => {
+                self.message = format!(
+                    "Transferência para {} incompatível ou sem espaço para os mínimos. Composição preservada.",
+                    region_label(region)
                 );
                 Err(SessionError::Rejected)
             }
@@ -1420,7 +1552,8 @@ impl EditSession {
         surfaces: &SessionSurfaces,
         disabled: &[String],
     ) -> Result<(), SessionError> {
-        if self.history.active() || self.gesture.is_some() {
+        // A catalog drag keeps the history gesture open: the fill joins its intention.
+        if self.gesture.is_some() {
             return Err(SessionError::GestureActive);
         }
         let (snapshot, slots) = self

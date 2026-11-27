@@ -1402,8 +1402,15 @@ impl Workbench {
     }
 
     pub(crate) fn set_expansion(&mut self, on: bool, cx: &mut Context<Self>) {
+        // The expansion changes the measured Main: a running gesture ends (`interaction.end`).
+        self.edit_cancel_gesture(cx);
         self.prefs.horizontal_expansion = on;
-        let _ = self.prefs.save(self.profile.as_ref());
+        if self.prefs.save(self.profile.as_ref()).is_err() {
+            self.edit.toast(
+                "Preferência alterada somente nesta sessão.",
+                geppui::now(cx),
+            );
+        }
         cx.notify();
     }
 

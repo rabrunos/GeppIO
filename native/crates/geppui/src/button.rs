@@ -164,6 +164,49 @@ fn tooltip(text: SharedString) -> impl Fn(&mut Window, &mut App) -> AnyView + 's
     move |_, cx| cx.new(|_| TooltipView { text: text.clone() }).into()
 }
 
+/// A host element with a `title`-like tooltip: hidden after a press, or while a drag passes
+/// over it, until the pointer leaves (see [`IconButton`]). The element must not set its own
+/// hover listener.
+#[derive(IntoElement)]
+pub struct Titled {
+    element: gpui::Stateful<gpui::Div>,
+    key: SharedString,
+    text: Option<SharedString>,
+}
+
+/// Wraps `element` with the tooltip `text` (none: the element is returned unchanged).
+pub fn titled(
+    element: gpui::Stateful<gpui::Div>,
+    key: impl Into<SharedString>,
+    text: Option<SharedString>,
+) -> Titled {
+    Titled {
+        element,
+        key: key.into(),
+        text,
+    }
+}
+
+impl RenderOnce for Titled {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let Some(text) = self.text.filter(|t| !t.is_empty()) else {
+            return self.element;
+        };
+        let (state, _, _) = hover_state(&self.key, window, cx);
+        let quiet = state.read(cx).pressed;
+        let element = self
+            .element
+            .on_hover(hover_listener(state.clone()))
+            .on_any_mouse_down(press_listener(state.clone()))
+            .on_mouse_move(drag_over_listener(state));
+        if quiet {
+            element
+        } else {
+            element.tooltip(tooltip(text))
+        }
+    }
+}
+
 /// Square icon button (`.ui-icon-button`): 32px box, 8px radius, 20px icon by default.
 #[derive(IntoElement)]
 pub struct IconButton {

@@ -53,7 +53,16 @@ pub struct TextField {
     selecting: bool,
     blink_from: f64,
     focused: bool,
+    /// The field's own undo and redo (`<input>` history): Ctrl+Z inside a field never
+    /// reaches the host's shortcuts.
+    undo: Vec<(String, Range<usize>)>,
+    redo: Vec<(String, Range<usize>)>,
+    /// The last edit typed at the caret: the next one joins its undo step.
+    typing: bool,
 }
+
+/// Undo steps a field keeps (each typing run at the caret is one step).
+const UNDO_LIMIT: usize = 100;
 
 impl EventEmitter<TextFieldEvent> for TextField {}
 
@@ -211,6 +220,9 @@ impl TextField {
             selecting: false,
             blink_from: 0.0,
             focused: false,
+            undo: Vec::new(),
+            redo: Vec::new(),
+            typing: false,
         }
     }
     pub fn placeholder(mut self, text: impl Into<SharedString>) -> Self {
@@ -241,6 +253,9 @@ impl TextField {
         self.reversed = false;
         self.marked = None;
         self.line = None;
+        self.undo.clear();
+        self.redo.clear();
+        self.typing = false;
         cx.notify();
     }
     pub fn select_all(&mut self, cx: &mut Context<Self>) {
@@ -266,6 +281,7 @@ impl TextField {
     }
 
     fn move_to(&mut self, offset: usize, cx: &mut Context<Self>) {
+        self.typing = false;
         let offset = boundary(&self.text, offset);
         self.selection = offset..offset;
         self.reversed = false;
@@ -273,6 +289,7 @@ impl TextField {
     }
 
     fn select_to(&mut self, offset: usize, cx: &mut Context<Self>) {
+        self.typing = false;
         let offset = boundary(&self.text, offset);
         let anchor = boundary(
             &self.text,
@@ -297,6 +314,17 @@ impl TextField {
         let insert = one_line(insert);
         let rest = format!("{}{}", &self.text[..range.start], &self.text[range.end..]);
         let insert = clamp_insert(&rest, &insert, self.max_utf16);
+        let typed = range.is_empty() && !insert.is_empty();
+        if (!insert.is_empty() || !range.is_empty())
+            && !(typed && self.typing && range.start == self.head())
+        {
+            self.undo.push((self.text.clone(), self.selection.clone()));
+            if self.undo.len() > UNDO_LIMIT {
+                self.undo.remove(0);
+            }
+        }
+        self.redo.clear();
+        self.typing = typed;
         self.text = format!(
             "{}{insert}{}",
             &self.text[..range.start],
@@ -416,6 +444,18 @@ impl TextField {
                 }
                 true
             }
+            "z" if ctrl && !shift => {
+                self.step(true, cx);
+                true
+            }
+            "y" if ctrl => {
+                self.step(false, cx);
+                true
+            }
+            "z" if ctrl => {
+                self.step(false, cx);
+                true
+            }
             "enter" => {
                 cx.emit(TextFieldEvent::Submitted);
                 true
@@ -426,6 +466,29 @@ impl TextField {
             cx.stop_propagation();
         }
         let _ = window;
+    }
+
+    /// Undo (`back`) or redo one step of the field's own history.
+    fn step(&mut self, back: bool, cx: &mut Context<Self>) {
+        let (from, to) = if back {
+            (&mut self.undo, &mut self.redo)
+        } else {
+            (&mut self.redo, &mut self.undo)
+        };
+        let Some((text, selection)) = from.pop() else {
+            return;
+        };
+        to.push((
+            std::mem::replace(&mut self.text, text),
+            self.selection.clone(),
+        ));
+        self.selection = span(&self.text, selection.start, selection.end);
+        self.reversed = false;
+        self.marked = None;
+        self.line = None;
+        self.typing = false;
+        self.touch(cx);
+        cx.emit(TextFieldEvent::Changed);
     }
 
     fn index_at(&self, position: Point<Pixels>) -> usize {

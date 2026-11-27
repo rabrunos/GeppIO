@@ -4,11 +4,14 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use geppio_core::layout::{Axis, Direction, GuideKind, PerRegion, Region, Size};
+use geppio_core::layout::{Axis, Constraint, Direction, GuideKind, PerRegion, Region, Size};
 use geppio_core::shell::{self, ShellLayout};
 use geppio_core::workbench::compositions::{SlotIntention, project_session_slot};
+use geppio_core::workbench::model::{Operation, PlacementRefusal, evaluate_placement};
+use geppio_core::workbench::presentations::panel_ids;
 use geppio_core::workbench::{
-    EditSession, PointerFrame, SessionSlot, SessionSurfaces, WorkbenchSnapshot, active_placements,
+    EditSession, PointerFrame, Presence, SessionSlot, SessionSurfaces, WorkbenchSnapshot,
+    active_placements,
 };
 use geppui::{Metrics, Rect, Theme, motion};
 use gpui::{
@@ -17,9 +20,14 @@ use gpui::{
     Window, div, prelude::FluentBuilder,
 };
 
-use crate::catalog::{self, Area, CatalogActions, CatalogExtra, CatalogState, CatalogTab, Tile};
+use crate::catalog::{
+    self, Area, CatalogActions, CatalogExtra, CatalogMotion, CatalogState, CatalogTab, Destination,
+    Tile,
+};
 use crate::drag_layer::{self, Guide};
-use crate::edit::{Flight, GestureKind, UiGesture, area, flips_between, region, zone_index};
+use crate::edit::{
+    Flight, FocusRequest, GestureKind, UiGesture, area, flips_between, region, zone_index,
+};
 use crate::edit_chrome::{self, BannerActions};
 use crate::widgets::{self, Properties};
 use crate::workbench::Workbench;
@@ -92,8 +100,12 @@ pub fn scene(
 ) -> (WorkbenchSnapshot, Vec<Frame>, f32) {
     let (view, _) = session.view(surfaces);
     let registry = session.registry();
+    // Saved Docked/Floating presentations stay out of the normal frames (`visible`); their
+    // panels arrive with the presentation layer.
+    let panels = panel_ids(&view);
     let frames: Vec<Frame> = active_placements(&view, true)
         .into_iter()
+        .filter(|p| !panels.contains(&p.id))
         .filter_map(|p| {
             let fixture = view
                 .type_of(&p.id)
@@ -115,20 +127,35 @@ pub fn scene(
     (view, frames, sidebar_world)
 }
 
-fn zones_for(region: Region) -> &'static [Direction] {
-    match region {
-        Region::Sidebar => &[Direction::N, Direction::S],
-        Region::Bottom => &[Direction::E, Direction::W],
-        Region::Main => &[
-            Direction::N,
-            Direction::E,
-            Direction::S,
-            Direction::W,
-            Direction::Ne,
-            Direction::Nw,
-            Direction::Se,
-            Direction::Sw,
-        ],
+/// The resize zones a frame offers: the directions its region constraint allows
+/// (`allowsResize`).
+fn zones_for(c: &Constraint) -> Vec<Direction> {
+    [
+        Direction::N,
+        Direction::E,
+        Direction::S,
+        Direction::W,
+        Direction::Ne,
+        Direction::Nw,
+        Direction::Se,
+        Direction::Sw,
+    ]
+    .into_iter()
+    .filter(|d| geppio_core::layout::geometry::allows_resize(*d, c))
+    .collect()
+}
+
+/// `borda superior` … of a resize zone (`LABELS`).
+fn zone_label(d: Direction) -> &'static str {
+    match d {
+        Direction::N => "borda superior",
+        Direction::E => "borda direita",
+        Direction::S => "borda inferior",
+        Direction::W => "borda esquerda",
+        Direction::Ne => "canto superior direito",
+        Direction::Nw => "canto superior esquerdo",
+        Direction::Se => "canto inferior direito",
+        Direction::Sw => "canto inferior esquerdo",
     }
 }
 
@@ -171,23 +198,6 @@ impl Workbench {
             .collect()
     }
 
-    /// Runs a committed action and plays the FLIP of every frame it moved.
-    pub(crate) fn with_flip(
-        &mut self,
-        now: f64,
-        reduced: bool,
-        skip: Option<&str>,
-        action: impl FnOnce(&mut Self) -> Option<&'static str>,
-    ) {
-        let before = self.frame_rects();
-        // A completed action names itself; a refused one shows the session's reason.
-        let done = action(self);
-        let after = self.frame_rects();
-        self.edit.flips = flips_between(&before, &after, now, reduced, skip);
-        let message = done.map_or_else(|| self.session.message().to_owned(), str::to_owned);
-        self.edit.toast(&message, now);
-    }
-
     /// Runs an intention and plays the FLIP of every frame it moved; only a refusal shows a
     /// message (the session's reason), like `tx.action` in the reference.
     pub(crate) fn flip_quietly(
@@ -200,6 +210,36 @@ impl Workbench {
         let done = action(self);
         let after = self.frame_rects();
         self.edit.flips = flips_between(&before, &after, now, reduced, None);
+        if !done {
+            let message = self.session.message().to_owned();
+            self.edit.toast(&message, now);
+        }
+    }
+
+    /// Applies a composition: frames move over 380ms and the new ones fade in, 8px up
+    /// (`{ duration: 380, entering: true }`); only a refusal shows a message.
+    pub(crate) fn flip_applied(
+        &mut self,
+        now: f64,
+        reduced: bool,
+        action: impl FnOnce(&mut Self) -> bool,
+    ) {
+        let before = self.frame_rects();
+        let done = action(self);
+        let after = self.frame_rects();
+        let mut flips = flips_between(&before, &after, now, reduced, None);
+        for f in &mut flips {
+            f.tween.duration_ms = 380.0;
+        }
+        self.edit.flips = flips;
+        let entering: Vec<String> = after
+            .iter()
+            .filter(|(id, _)| !before.iter().any(|(b, _)| b == id))
+            .map(|(id, _)| id.clone())
+            .collect();
+        if !reduced && !entering.is_empty() {
+            self.edit.entering = Some((now, 380.0, entering));
+        }
         if !done {
             let message = self.session.message().to_owned();
             self.edit.toast(&message, now);
@@ -248,11 +288,15 @@ impl Workbench {
     }
 
     /// Chooses (or clears) the slot the catalog fills: the catalog opens on Widgets filtered
-    /// by the slot's region, and the previous filters return when the choice ends.
+    /// by the slot's region with the search focused, and the previous filters return when
+    /// the choice ends.
     pub(crate) fn choose_slot(&mut self, id: Option<String>, cx: &mut Context<Self>) {
         let now = geppui::now(cx);
         let reduced = geppui::appearance(cx).reduced_motion;
         let catalog = &mut self.edit.catalog;
+        catalog.destination = None;
+        catalog.moving = None;
+        catalog.plugin_menu = false;
         match id {
             None => {
                 if catalog.slot.take().is_some()
@@ -263,7 +307,12 @@ impl Workbench {
                         saved: None,
                         ..*saved
                     };
+                    let text = catalog.search.clone();
+                    self.edit
+                        .search
+                        .update(cx, |field, cx| field.set_text(&text, cx));
                 }
+                self.edit.slot_motion = None;
             }
             Some(id) => {
                 let Some(slot) = self.session.slots().iter().find(|s| s.id == id).cloned() else {
@@ -282,14 +331,25 @@ impl Workbench {
                 catalog.areas = vec![area(slot.region)];
                 catalog.category = None;
                 catalog.plugin = None;
-                catalog.plugin_menu = false;
-                catalog.destination = None;
+                self.edit
+                    .search
+                    .update(cx, |field, cx| field.set_text("", cx));
                 if !self.edit.catalog_open {
                     self.edit.set_catalog(true, now, reduced);
                 }
+                self.edit.focus = Some(FocusRequest::Search);
+                self.edit.slot_motion = (!reduced).then_some(now);
             }
         }
         cx.notify();
+    }
+
+    /// Ends a slot choice from its banner or Escape, returning focus to the slot (`cancelChoice`).
+    pub(crate) fn cancel_slot_choice(&mut self, cx: &mut Context<Self>) {
+        if let Some(id) = self.edit.catalog.slot.clone() {
+            self.choose_slot(None, cx);
+            self.edit.focus = Some(FocusRequest::Control(format!("session-slot-{id}")));
+        }
     }
 
     /// Fills the chosen slot (or `slot`) with a catalog widget (`add` with a target).
@@ -331,6 +391,9 @@ impl Workbench {
         } else if self.session.begin(&self.ports.surfaces).is_ok() {
             self.pending_focus = Some(true);
             self.edit.catalog = Default::default();
+            self.edit
+                .search
+                .update(cx, |field, cx| field.set_text("", cx));
             self.edit.set_catalog(true, now, reduced);
             self.edit.toast("Edite a composição. Salvar edição confirma um checkpoint; Concluir encerra a sessão.", now);
         } else if self.session.recovery() {
@@ -347,6 +410,13 @@ impl Workbench {
     fn leave_edit(&mut self, now: f64, reduced: bool) {
         self.edit.catalog.slot = None;
         self.edit.catalog.saved = None;
+        self.edit.catalog.destination = None;
+        self.edit.catalog.moving = None;
+        self.edit.blocked = None;
+        self.edit.dwell = None;
+        self.edit.insertion = None;
+        self.edit.queued.clear();
+        self.edit.slot_motion = None;
         let library = &mut self.compositions;
         library.options = None;
         library.drag = None;
@@ -366,22 +436,38 @@ impl Workbench {
     pub(crate) fn edit_command(&mut self, command: &str, cx: &mut Context<Self>) {
         let now = geppui::now(cx);
         let reduced = geppui::appearance(cx).reduced_motion;
+        if matches!(command, "undo" | "redo") {
+            // Refused while a gesture or a splitter drag runs; a pending keyboard resize is
+            // its own intention first; during a drop flight it waits for the landing.
+            if self.edit.gesture.is_some() || self.regions.dragging() {
+                return;
+            }
+            self.settle_splitter_keyboard(cx);
+            if self.edit.flight.is_some() {
+                self.edit
+                    .queued
+                    .push(if command == "undo" { "undo" } else { "redo" });
+                return;
+            }
+            let before = self.frame_rects();
+            let done = if command == "undo" {
+                self.session.undo()
+            } else {
+                self.session.redo()
+            };
+            let after = self.frame_rects();
+            self.edit.flips = flips_between(&before, &after, now, reduced, None);
+            if done {
+                self.edit.blocked = None;
+                self.apply_local_state(cx);
+            }
+            cx.notify();
+            return;
+        }
         if self.edit.gesture.is_some() || self.edit.flight.is_some() {
             return;
         }
         match command {
-            "undo" => {
-                self.with_flip(now, reduced, None, |w| {
-                    w.session.undo().then_some("Ação desfeita.")
-                });
-                self.apply_local_state(cx);
-            }
-            "redo" => {
-                self.with_flip(now, reduced, None, |w| {
-                    w.session.redo().then_some("Ação refeita.")
-                });
-                self.apply_local_state(cx);
-            }
             "save" => {
                 let surfaces = self.ports.surfaces;
                 let _ = self.session.save(&surfaces, &mut self.store);
@@ -410,11 +496,13 @@ impl Workbench {
 
     // ---- pointer gestures -------------------------------------------------------------------
 
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn frame_down(
         &mut self,
         id: String,
         fixture: String,
         kind: GestureKind,
+        grip: bool,
         pos: (f32, f32),
         cx: &mut Context<Self>,
     ) {
@@ -427,6 +515,7 @@ impl Workbench {
             return;
         };
         let origin = self.window_rect(frame);
+        let scroll0 = self.scroll(frame.region);
         self.edit.selected = Some(id.clone());
         let mut gesture = UiGesture {
             kind: kind.clone(),
@@ -440,6 +529,13 @@ impl Workbench {
             origin,
             zones: Vec::new(),
             guides: Vec::new(),
+            tile: None,
+            moving: None,
+            grip,
+            scroll0,
+            extension: 0.0,
+            dir_x: 0.0,
+            hover_slot: None,
         };
         if let GestureKind::Resize(d) = kind {
             // Resizes solve from the first move, without a lift threshold or picture.
@@ -466,24 +562,64 @@ impl Workbench {
             return;
         }
         self.settle_splitter_keyboard(cx);
-        let fixture = self
-            .session
-            .registry()
+        self.edit.suppress_click = false;
+        let registry = self.session.registry();
+        let Some(ty) = registry.get(type_id) else {
+            return;
+        };
+        let fixture = ty.fixture.clone().unwrap_or_default();
+        let single = ty.presence == Presence::SingleView;
+        let z = self.metrics.zoom;
+        let tile = self
+            .edit
+            .tile_anchors
             .get(type_id)
-            .and_then(|t| t.fixture.clone())
-            .unwrap_or_default();
+            .and_then(|a| a.bounds())
+            .map(|b| {
+                Rect::new(
+                    f32::from(b.origin.x) / z,
+                    f32::from(b.origin.y) / z,
+                    f32::from(b.size.width) / z,
+                    f32::from(b.size.height) / z,
+                )
+            });
+        // A single-view widget that is already placed moves: the picture is its frame.
+        let (_, frames, _) = scene(&self.session, &self.ports.surfaces);
+        let draft = self.session.draft();
+        let source = single
+            .then(|| {
+                frames
+                    .iter()
+                    .find(|f| draft.type_of(&f.id) == Some(type_id))
+                    .cloned()
+            })
+            .flatten();
+        let (origin, region, moving) = match &source {
+            Some(f) => (self.window_rect(f), Some(f.region), Some(f.id.clone())),
+            None => {
+                let at = tile.map_or((pos.0 - 40.0, pos.1 - 30.0), |t| (t.x, t.y));
+                (Rect::new(at.0, at.1, 238.0, 200.0), None, None)
+            }
+        };
         self.edit.gesture = Some(UiGesture {
             kind: GestureKind::Catalog(type_id.to_owned()),
             id: type_id.to_owned(),
             fixture,
-            region: None,
+            region,
             down: pos,
             pointer: pos,
             lifted: false,
             lifted_at: 0.0,
-            origin: Rect::new(pos.0 - 40.0, pos.1 - 30.0, 238.0, 200.0),
+            origin,
             zones: Vec::new(),
             guides: Vec::new(),
+            tile,
+            moving,
+            grip: false,
+            scroll0: (0.0, 0.0),
+            extension: 0.0,
+            dir_x: 0.0,
+            hover_slot: None,
         });
         cx.notify();
     }
@@ -495,11 +631,63 @@ impl Workbench {
         })
     }
 
-    pub(crate) fn edit_move(&mut self, pos: (f32, f32), cx: &mut Context<Self>) -> bool {
+    /// The region element under a drop (`[data-region]`, the port with its padding).
+    fn region_under(&self, pos: (f32, f32)) -> Option<Region> {
+        Region::ALL.into_iter().find(|r| {
+            let p = self.ports.port(*r);
+            Rect::new(p.x - 12.0, p.y - 12.0, p.w + 24.0, p.h + 24.0).contains(pos.0, pos.1)
+        })
+    }
+
+    /// Content coordinates of a window point inside a region's port.
+    fn content_at(&self, region: Region, pos: (f32, f32)) -> (f64, f64) {
+        let port = self.ports.port(region);
+        let (sx, sy) = self.scroll(region);
+        ((pos.0 - port.x + sx) as f64, (pos.1 - port.y + sy) as f64)
+    }
+
+    /// The regions a catalog type can be dropped into now.
+    fn catalog_zones(&self, type_id: &str) -> Vec<Region> {
+        self.tiles()
+            .into_iter()
+            .find(|t| t.id == type_id)
+            .map(|t| t.available.iter().map(|a| region(*a)).collect())
+            .unwrap_or_default()
+    }
+
+    /// Whether a slot accepts the running drag (`hoverReservation`).
+    fn slot_takes(&self, slot: &str, g: &UiGesture) -> bool {
+        let intention = match &g.kind {
+            GestureKind::Move => SlotIntention::Move {
+                view_id: g.id.clone(),
+                source_bar: self.session.draft().organization.active_bar.clone(),
+            },
+            GestureKind::Catalog(type_id) => SlotIntention::Catalog(type_id.clone()),
+            GestureKind::Resize(_) => return false,
+        };
+        self.session
+            .slot_accepts(slot, &intention, &self.ports.surfaces, &[])
+    }
+
+    /// Pointer move during an edit gesture. `pressed`: the left button is still down (a
+    /// release the window never saw ends the gesture like a lost pointer capture).
+    pub(crate) fn edit_move(
+        &mut self,
+        pos: (f32, f32),
+        pressed: bool,
+        cx: &mut Context<Self>,
+    ) -> bool {
         let Some(mut g) = self.edit.gesture.clone() else {
             return false;
         };
+        if !pressed {
+            self.edit_cancel_gesture(cx);
+            return true;
+        }
         let now = geppui::now(cx);
+        if pos.0 != g.pointer.0 {
+            g.dir_x = (pos.0 - g.pointer.0).signum();
+        }
         g.pointer = pos;
         if !g.lifted && g.distance() >= 5.0 {
             match &g.kind {
@@ -519,14 +707,15 @@ impl Workbench {
                     }
                 },
                 GestureKind::Catalog(type_id) => {
-                    let zones: Vec<Region> = self
-                        .tiles()
-                        .into_iter()
-                        .find(|t| t.id == type_id.as_str())
-                        .map(|t| t.available.iter().map(|a| region(*a)).collect())
-                        .unwrap_or_default();
+                    self.edit.suppress_click = true;
+                    let zones = self.catalog_zones(type_id);
                     if zones.is_empty() {
+                        // A refused lift shakes the tile (`rejection`).
                         self.edit.gesture = None;
+                        if !geppui::appearance(cx).reduced_motion {
+                            let id = self.intern(type_id);
+                            self.edit.shake = Some((id, now));
+                        }
                         self.edit.toast(
                             "Não há área compatível com espaço disponível para este widget.",
                             now,
@@ -534,6 +723,7 @@ impl Workbench {
                         cx.notify();
                         return true;
                     }
+                    self.session.begin_catalog_drag();
                     g.zones = zones;
                     g.lifted = true;
                     g.lifted_at = now;
@@ -542,6 +732,18 @@ impl Workbench {
             }
         }
         if g.lifted {
+            let resize = matches!(g.kind, GestureKind::Resize(_));
+            if !resize {
+                // Hovering another rail bar for 250 ms switches to it (`hoverBar`).
+                let bar = self.rail_bar_at(pos);
+                if bar.as_deref() != self.edit.dwell.as_ref().map(|(b, _)| b.as_str()) {
+                    let active = self.session.draft().organization.active_bar.clone();
+                    self.edit.dwell = bar.map(|b| {
+                        let at = if b == active { f64::INFINITY } else { now };
+                        (b, at)
+                    });
+                }
+            }
             let over = self.region_at(pos, &g.zones);
             for r in Region::ALL {
                 let target = if over == Some(r) { 1.0 } else { 0.0 };
@@ -549,7 +751,28 @@ impl Workbench {
                 self.edit.zone_over[zone_index(r)].request(target, d, motion::EASE);
             }
             self.edit.over = over;
-            let (dx, dy) = ((pos.0 - g.down.0) as f64, (pos.1 - g.down.1) as f64);
+            // The slot under the pointer is highlighted only when it accepts the drag.
+            let slot = if resize { None } else { self.slot_at(pos) };
+            g.hover_slot = match (slot, g.hover_slot.take()) {
+                (Some(s), Some(prev)) if prev.0 == s.id => Some(prev),
+                (Some(s), _) => {
+                    let takes = self.slot_takes(&s.id, &g);
+                    Some((s.id, takes))
+                }
+                (None, _) => None,
+            };
+            self.edit.insertion =
+                if over == Some(Region::Sidebar) && g.hover_slot.is_none() && !resize {
+                    let (_, y) = self.content_at(Region::Sidebar, pos);
+                    Some(self.session.sidebar_insertion_line(y) as f32)
+                } else {
+                    None
+                };
+            let (sx, sy) = g.region.map_or((0.0, 0.0), |r| self.scroll(r));
+            let (dx, dy) = (
+                (pos.0 - g.down.0 + sx - g.scroll0.0 + g.extension) as f64,
+                (pos.1 - g.down.1 + sy - g.scroll0.1) as f64,
+            );
             let over_origin = over.is_none() || over == g.region;
             let frame = PointerFrame {
                 dx,
@@ -566,6 +789,10 @@ impl Workbench {
                     .ok(),
                 _ => None,
             };
+            if let Some(p) = &preview {
+                self.edit.blocked =
+                    (p.status == geppio_core::layout::Status::Blocked).then(|| g.id.clone());
+            }
             g.guides = preview.map(|p| p.guides).unwrap_or_default();
         }
         self.edit.gesture = Some(g);
@@ -573,38 +800,198 @@ impl Workbench {
         true
     }
 
-    pub(crate) fn edit_up(&mut self, cx: &mut Context<Self>) -> bool {
-        let Some(g) = self.edit.gesture.take() else {
+    /// Per frame while a drag is lifted: the 250 ms bar switch, the Sidebar edge scroll
+    /// (28px band, 7px) and the expanded Main edge scroll (30px band, up to 20px). Returns
+    /// whether it scrolled, so the host keeps requesting frames.
+    pub(crate) fn edit_tick(&mut self, cx: &mut Context<Self>) -> bool {
+        let Some(g) = self.edit.gesture.clone().filter(|g| g.lifted) else {
             return false;
         };
         let now = geppui::now(cx);
+        if let Some((bar, since)) = self.edit.dwell.clone()
+            && since.is_finite()
+            && now - since >= 250.0
+        {
+            self.edit.dwell = Some((bar.clone(), f64::INFINITY));
+            if self.session.hover_bar(&bar) {
+                let zones = match &g.kind {
+                    GestureKind::Move => self.session.move_zones(&self.ports.surfaces),
+                    GestureKind::Catalog(type_id) => self.catalog_zones(type_id),
+                    GestureKind::Resize(_) => g.zones.clone(),
+                };
+                if let Some(live) = &mut self.edit.gesture {
+                    live.zones = zones;
+                }
+                self.edit_move(g.pointer, true, cx);
+            }
+        }
+        let resize = matches!(g.kind, GestureKind::Resize(_));
+        let m = self.metrics;
+        if !resize && self.edit.over == Some(Region::Sidebar) && g.hover_slot.is_none() {
+            let port = self.ports.sidebar;
+            let (top, bottom) = (
+                port.y - shell::SPACE_Y as f32,
+                port.bottom() + shell::SPACE_Y as f32,
+            );
+            let delta = if g.pointer.1 < top + 28.0 {
+                -7.0
+            } else if g.pointer.1 > bottom - 28.0 {
+                7.0
+            } else {
+                0.0
+            };
+            if delta != 0.0 {
+                let max = m.css(self.sidebar_scroll.max_offset().y).max(0.0);
+                let current = -m.css(self.sidebar_scroll.offset().y);
+                let next = (current + delta).clamp(0.0, max);
+                if (next - current).abs() > 0.01 {
+                    self.sidebar_scroll
+                        .set_offset(gpui::point(gpui::px(0.0), -m.px(next)));
+                    self.edit_move(g.pointer, true, cx);
+                    return true;
+                }
+            }
+        }
+        let horizontal = match &g.kind {
+            GestureKind::Move => true,
+            GestureKind::Resize(d) => d.as_str().contains(['e', 'w']),
+            GestureKind::Catalog(_) => false,
+        };
+        if self.ports.surfaces.expanded && g.region == Some(Region::Main) && horizontal {
+            let r = self.ports.main;
+            let (x, y) = g.pointer;
+            if y >= r.y && y <= r.bottom() {
+                let right = r.right();
+                let delta = if x > right - 30.0 && x <= right + 30.0 {
+                    ((x - right + 30.0) / 2.0).min(20.0)
+                } else if x < r.x + 30.0 && x >= r.x - 30.0 {
+                    -((r.x + 30.0 - x) / 2.0).min(20.0)
+                } else {
+                    0.0
+                };
+                if delta != 0.0 && delta.signum() == g.dir_x {
+                    let max = m.css(self.main_scroll.max_offset().x).max(0.0);
+                    let current = -m.css(self.main_scroll.offset().x);
+                    let next = (current + delta).clamp(0.0, max);
+                    let unscrolled = delta - (next - current);
+                    let y_offset = self.main_scroll.offset().y;
+                    self.main_scroll
+                        .set_offset(gpui::point(-m.px(next), y_offset));
+                    let limit = geppio_core::layout::policy::MAX_COORDINATE as f32;
+                    if let Some(live) = &mut self.edit.gesture {
+                        live.extension = (live.extension + unscrolled).clamp(-limit, limit);
+                    }
+                    let before = self.frame_rects();
+                    self.edit_move(g.pointer, true, cx);
+                    let moved = self.frame_rects() != before;
+                    return (next - current).abs() > 0.01 || moved;
+                }
+            }
+        }
+        false
+    }
+
+    /// The flight of a drag that ends: to its frame when accepted, back otherwise (a
+    /// catalog insertion shrinks into its tile).
+    fn fly(&mut self, g: &UiGesture, accepted: Option<(String, Rect)>, now: f64, reduced: bool) {
+        if reduced {
+            return;
+        }
+        let from = g.picture(now, reduced);
+        let (view, to, shrink) = match accepted {
+            Some((id, rect)) => (Some(id), rect, false),
+            None if matches!(g.kind, GestureKind::Catalog(_)) && g.moving.is_none() => {
+                let tile = g.tile.unwrap_or(Rect::new(
+                    from.x + from.w / 2.0,
+                    from.y + from.h / 2.0,
+                    1.0,
+                    1.0,
+                ));
+                let k = (tile.w / from.w).min(tile.h / from.h).max(0.01);
+                (
+                    None,
+                    Rect::new(tile.x, tile.y, from.w * k, from.h * k),
+                    true,
+                )
+            }
+            None => (
+                g.moving.clone().or_else(|| Some(g.id.clone())),
+                g.origin,
+                false,
+            ),
+        };
+        let compact = view
+            .as_deref()
+            .is_some_and(|id| self.frame_region(id) == Some(Region::Bottom));
+        self.edit.flight = Some(Flight {
+            view,
+            fixture: g.fixture.clone(),
+            compact,
+            tween: geppui::Tween {
+                from,
+                to,
+                start_ms: now,
+                duration_ms: if shrink {
+                    220.0
+                } else {
+                    motion::duration::FLIGHT
+                },
+                easing: motion::FLIGHT,
+            },
+            shrink,
+        });
+    }
+
+    /// The window rectangle of a view after an action, or of the frame a drop added.
+    fn landed(&self, before: &[String], id: Option<&str>) -> Option<(String, Rect)> {
+        self.frame_rects()
+            .into_iter()
+            .find(|(v, _)| id.map_or(!before.contains(v), |id| v == id))
+    }
+
+    /// Pointer release of an edit gesture at `pos` (window CSS px; the release point decides
+    /// the drop, also outside the window).
+    pub(crate) fn edit_up(&mut self, pos: (f32, f32), cx: &mut Context<Self>) -> bool {
+        let Some(mut g) = self.edit.gesture.take() else {
+            return false;
+        };
+        if g.lifted {
+            g.pointer = pos;
+        }
+        let now = geppui::now(cx);
         let reduced = geppui::appearance(cx).reduced_motion;
         self.edit.over = None;
+        self.edit.insertion = None;
+        self.edit.dwell = None;
         for z in &mut self.edit.zone_over {
             z.jump(0.0);
         }
         if !g.lifted {
-            if matches!(g.kind, GestureKind::Catalog(_)) {
-                self.edit.catalog.destination = self
-                    .tiles()
-                    .into_iter()
-                    .find(|t| t.id == g.id.as_str())
-                    .map(|t| t.id);
+            // A short click on the grip opens the catalog's move mode (`select`); a tile's
+            // click is handled by the tile itself.
+            if g.kind == GestureKind::Move && g.grip {
+                self.select_for_move(&g.id, cx);
             }
             cx.notify();
             return true;
         }
-        let from = g.picture(now, reduced);
-        let target = self.region_at(g.pointer, &g.zones);
+        let before: Vec<String> = self.frame_rects().into_iter().map(|(id, _)| id).collect();
+        let slot = g
+            .hover_slot
+            .as_ref()
+            .and_then(|(id, _)| self.session_slots().into_iter().find(|s| s.id == *id));
         match &g.kind {
             GestureKind::Resize(_) => {
                 let _ = self.session.commit_gesture();
+                self.edit.blocked = None;
+                let message = self.session.message().to_owned();
+                self.edit.rearm(&message, now);
             }
-            GestureKind::Move if self.slot_at(g.pointer).is_some() => {
-                let slot = self.slot_at(g.pointer).expect("slot under the pointer");
+            GestureKind::Move if slot.is_some() => {
+                let slot = slot.expect("slot under the pointer");
                 let _ = self.session.cancel_gesture();
                 let source_bar = self.session.draft().organization.active_bar.clone();
-                if !self.fill_chosen(
+                let ok = self.fill_chosen(
                     &slot.id,
                     SlotIntention::Move {
                         view_id: g.id.clone(),
@@ -612,145 +999,163 @@ impl Workbench {
                     },
                     None,
                     cx,
-                ) {
-                    self.edit.toast(
+                );
+                if !ok {
+                    self.edit.rearm(
                         "Destino incompatível. A composição anterior foi preservada.",
                         now,
                     );
                 }
+                let landed = if ok {
+                    self.landed(&before, Some(&g.id))
+                } else {
+                    None
+                };
+                self.fly(&g, landed, now, reduced);
             }
-            GestureKind::Catalog(type_id) if self.slot_at(g.pointer).is_some() => {
-                let slot = self.slot_at(g.pointer).expect("slot under the pointer");
-                let _ =
+            GestureKind::Catalog(type_id) if slot.is_some() => {
+                let slot = slot.expect("slot under the pointer");
+                let ok =
                     self.fill_chosen(&slot.id, SlotIntention::Catalog(type_id.clone()), None, cx);
+                self.session.finish_catalog_drag(ok);
+                let landed = if ok {
+                    self.landed(&before, g.moving.as_deref())
+                } else {
+                    None
+                };
+                self.fly(&g, landed, now, reduced);
             }
             GestureKind::Move => {
                 let surfaces = self.ports.surfaces;
+                let target = self
+                    .region_under(g.pointer)
+                    .filter(|r| Some(*r) != g.region || *r == Region::Sidebar);
                 let result = match target {
-                    Some(r) if Some(r) != g.region || r == Region::Sidebar => {
-                        let port = self.ports.port(r);
-                        let (sx, sy) = self.scroll(r);
-                        let at = ((from.x - port.x + sx) as f64, (from.y - port.y + sy) as f64);
-                        let before = self.frame_rects();
+                    Some(r) => {
+                        let at = self.content_at(r, g.pointer);
+                        let rects = self.frame_rects();
                         let result = self.session.drop_into(r, at, &surfaces);
                         let after = self.frame_rects();
-                        self.edit.flips = flips_between(&before, &after, now, reduced, Some(&g.id));
+                        self.edit.flips = flips_between(&rects, &after, now, reduced, Some(&g.id));
                         result
                     }
-                    _ => self.session.commit_gesture(),
+                    None => self.session.commit_gesture(),
                 };
+                self.edit.blocked = result.is_err().then(|| g.id.clone());
                 let message = self.session.message().to_owned();
-                self.edit.toast(&message, now);
-                let to = self
-                    .frame_rects()
-                    .into_iter()
-                    .find(|(id, _)| *id == g.id)
-                    .map(|(_, r)| r)
-                    .unwrap_or(g.origin);
-                let compact = self.frame_region(&g.id) == Some(Region::Bottom);
-                if !reduced {
-                    self.edit.flight = Some(Flight {
-                        view: Some(g.id.clone()),
-                        fixture: g.fixture.clone(),
-                        compact,
-                        tween: geppui::Tween {
-                            from,
-                            to: if result.is_ok() { to } else { g.origin },
-                            start_ms: now,
-                            duration_ms: motion::duration::FLIGHT,
-                            easing: motion::FLIGHT,
-                        },
-                        shrink: false,
-                    });
-                }
+                self.edit.rearm(&message, now);
+                let landed = if result.is_ok() {
+                    self.landed(&before, Some(&g.id))
+                } else {
+                    None
+                };
+                self.fly(&g, landed, now, reduced);
             }
             GestureKind::Catalog(type_id) => {
-                let added = match target {
+                let target = self.region_at(g.pointer, &g.zones);
+                let ok = match target {
                     Some(r) => {
-                        let port = self.ports.port(r);
-                        let (sx, sy) = self.scroll(r);
-                        let at = ((from.x - port.x + sx) as f64, (from.y - port.y + sy) as f64);
-                        let before: Vec<String> =
-                            self.frame_rects().into_iter().map(|(id, _)| id).collect();
+                        let at = self.content_at(r, g.pointer);
                         let surfaces = self.ports.surfaces;
-                        let ok = self
-                            .session
+                        self.session
                             .add_widget(type_id, r, Some(at), &surfaces, &[])
-                            .is_ok();
-                        let message = self.session.message().to_owned();
-                        self.edit.toast(&message, now);
-                        ok.then(|| {
-                            self.frame_rects()
-                                .into_iter()
-                                .find(|(id, _)| !before.contains(id))
-                        })
+                            .is_ok()
                     }
-                    None => None,
-                }
-                .flatten();
-                if !reduced {
-                    let (view, to, shrink) = match added {
-                        Some((id, rect)) => (Some(id), rect, false),
-                        None => (
-                            None,
-                            Rect::new(from.x + from.w / 2.0, from.y + from.h / 2.0, 1.0, 1.0),
-                            true,
-                        ),
-                    };
-                    self.edit.flight = Some(Flight {
-                        view,
-                        fixture: g.fixture.clone(),
-                        compact: false,
-                        tween: geppui::Tween {
-                            from,
-                            to,
-                            start_ms: now,
-                            duration_ms: if shrink {
-                                220.0
-                            } else {
-                                motion::duration::FLIGHT
-                            },
-                            easing: motion::FLIGHT,
-                        },
-                        shrink,
-                    });
-                }
+                    None => false,
+                };
+                self.session.finish_catalog_drag(ok);
+                let message = self.session.message().to_owned();
+                self.edit.rearm(&message, now);
+                let landed = if ok {
+                    self.landed(&before, g.moving.as_deref())
+                } else {
+                    None
+                };
+                self.fly(&g, landed, now, reduced);
             }
         }
         cx.notify();
         true
     }
 
-    /// Escape: cancel a gesture (flying back), then close the search, the peek, and leave Edit.
-    pub(crate) fn edit_escape(&mut self, cx: &mut Context<Self>) -> bool {
+    /// Ends a gesture without a drop (Escape, lost capture, window blur, a window, catalog
+    /// or expansion change): the preview is restored and a lifted picture flies back.
+    pub(crate) fn edit_cancel_gesture(&mut self, cx: &mut Context<Self>) -> bool {
+        let Some(g) = self.edit.gesture.take() else {
+            return false;
+        };
         let now = geppui::now(cx);
         let reduced = geppui::appearance(cx).reduced_motion;
-        if let Some(g) = self.edit.gesture.take() {
-            if g.lifted && !matches!(g.kind, GestureKind::Catalog(_)) {
-                let _ = self.session.cancel_gesture();
-                self.edit
-                    .toast("Gesto cancelado. A prévia anterior foi restaurada.", now);
-                if !reduced && matches!(g.kind, GestureKind::Move) {
-                    self.edit.flight = Some(Flight {
-                        view: Some(g.id.clone()),
-                        fixture: g.fixture.clone(),
-                        compact: g.region == Some(Region::Bottom),
-                        tween: geppui::Tween {
-                            from: g.picture(now, reduced),
-                            to: g.origin,
-                            start_ms: now,
-                            duration_ms: motion::duration::FLIGHT,
-                            easing: motion::FLIGHT,
-                        },
-                        shrink: false,
-                    });
+        self.edit.over = None;
+        self.edit.insertion = None;
+        self.edit.dwell = None;
+        for z in &mut self.edit.zone_over {
+            z.jump(0.0);
+        }
+        if g.lifted {
+            match &g.kind {
+                GestureKind::Catalog(_) => {
+                    self.session.finish_catalog_drag(false);
+                    if let Some((message, _)) = self.edit.toast.clone() {
+                        self.edit.rearm(&message, now);
+                    }
+                    self.fly(&g, None, now, reduced);
+                }
+                GestureKind::Move | GestureKind::Resize(_) => {
+                    let _ = self.session.cancel_gesture();
+                    self.edit
+                        .rearm("Gesto cancelado. A prévia anterior foi restaurada.", now);
+                    if g.kind == GestureKind::Move {
+                        self.fly(&g, None, now, reduced);
+                    }
                 }
             }
-            cx.notify();
+            self.edit.blocked = None;
+        }
+        cx.notify();
+        true
+    }
+
+    /// A short click on a frame's grip: the catalog opens on Widgets with the destination
+    /// box moving this view (`select`, `moveRequest`).
+    pub(crate) fn select_for_move(&mut self, view: &str, cx: &mut Context<Self>) {
+        let now = geppui::now(cx);
+        let reduced = geppui::appearance(cx).reduced_motion;
+        let Some(type_id) = self.session.draft().type_of(view).map(str::to_owned) else {
+            return;
+        };
+        if self.edit.catalog.slot.is_some() {
+            self.choose_slot(None, cx);
+        }
+        if !self.edit.catalog_open {
+            self.edit.set_catalog(true, now, reduced);
+        }
+        let id = self.intern(&type_id);
+        let catalog = &mut self.edit.catalog;
+        catalog.tab = CatalogTab::Widgets;
+        catalog.plugin_menu = false;
+        catalog.destination = Some(id);
+        catalog.moving = Some(view.to_owned());
+        self.edit.focus = Some(FocusRequest::Destination);
+        cx.notify();
+    }
+
+    /// Escape: cancel a gesture (flying back), then the search, the plugin filter, the
+    /// slot choice, the destination box and the peek, and finally leave Edit.
+    pub(crate) fn edit_escape(&mut self, cx: &mut Context<Self>) -> bool {
+        if self.edit_cancel_gesture(cx) {
             return true;
         }
         if self.edit.search_focused {
-            self.edit.search_focused = false;
+            // `input[type=search]`: Escape clears the text first, then leaves the field.
+            if self.edit.search.read(cx).text().is_empty() {
+                self.edit.focus = Some(FocusRequest::Workbench);
+            } else {
+                self.edit
+                    .search
+                    .update(cx, |field, cx| field.set_text("", cx));
+                self.edit.catalog.search.clear();
+            }
             cx.notify();
             return true;
         }
@@ -760,11 +1165,12 @@ impl Workbench {
             return true;
         }
         if self.edit.catalog.slot.is_some() {
-            self.choose_slot(None, cx);
+            self.cancel_slot_choice(cx);
             return true;
         }
         if self.edit.catalog.destination.is_some() {
             self.edit.catalog.destination = None;
+            self.edit.catalog.moving = None;
             cx.notify();
             return true;
         }
@@ -778,28 +1184,14 @@ impl Workbench {
         false
     }
 
-    /// Keyboard of edit mode. Returns true when the key was handled.
+    /// Keyboard of edit mode. Returns true when the key was handled. Text fields keep their
+    /// own Ctrl+Z.
     pub(crate) fn edit_key(&mut self, e: &KeyDownEvent, cx: &mut Context<Self>) -> bool {
         let k = &e.keystroke;
         if !self.editing() {
             return false;
         }
         let ctrl = k.modifiers.control || k.modifiers.platform;
-        if self.edit.search_focused && !ctrl {
-            match k.key.as_str() {
-                "backspace" => {
-                    self.edit.catalog.search.pop();
-                }
-                "escape" => self.edit.search_focused = false,
-                _ => {
-                    if let Some(ch) = k.key_char.as_deref() {
-                        self.edit.catalog.search.push_str(ch);
-                    }
-                }
-            }
-            cx.notify();
-            return true;
-        }
         match (k.key.as_str(), ctrl, k.modifiers.shift) {
             ("z", true, false) => self.edit_command("undo", cx),
             ("y", true, _) | ("z", true, true) => self.edit_command("redo", cx),
@@ -818,81 +1210,137 @@ impl Workbench {
 
     // ---- catalog ----------------------------------------------------------------------------
 
-    /// Catalog entries of the demonstration widgets with live availability per area.
+    /// Catalog entries of the demonstration widgets with live availability per area, the
+    /// presences and the reasons (`EditorPanel.tsx`, `useCatalogAvailability`).
     pub(crate) fn tiles(&self) -> Vec<Tile> {
         let registry = self.session.registry();
+        let surfaces = self.ports.surfaces;
+        let (view, _) = self.session.view(&surfaces);
         let draft = self.session.draft();
-        let slot = self
+        let panel_active = !panel_ids(draft).is_empty();
+        let active_bar = draft.organization.active_bar.clone();
+        let bar_members: Vec<String> = draft
+            .organization
+            .bars
+            .iter()
+            .find(|b| b.id == active_bar)
+            .map(|b| b.members.clone())
+            .unwrap_or_default();
+        let slots = self.session.slots().to_vec();
+        let chosen = self
             .edit
             .catalog
             .slot
             .as_ref()
             .and_then(|id| self.session_slots().into_iter().find(|s| s.id == *id));
+        let placements = geppio_core::workbench::model::surface_placements(&view);
         registry
             .types()
             .iter()
-            .filter(|t| t.fixture.is_some() && !t.retired)
-            .filter(|t| slot.as_ref().is_none_or(|s| t.constraint.allows(s.region)))
+            .filter(|t| t.fixture.is_some() && !t.retired && !t.missing)
+            .filter(|t| chosen.as_ref().is_none_or(|s| t.constraint.allows(s.region)))
             .map(|t| {
-                let placed: Vec<Area> = Region::ALL
+                let allowed: Vec<Area> = Region::ALL
                     .into_iter()
-                    .filter(|r| {
-                        draft
-                            .placements
-                            .iter()
-                            .any(|p| p.region == *r && draft.type_of(&p.id) == Some(t.id.as_str()))
-                    })
+                    .filter(|r| t.constraint.allows(*r))
                     .map(area)
                     .collect();
+                let mut presences: Vec<(String, Area)> = placements
+                    .iter()
+                    .filter(|p| {
+                        view.type_of(&p.id) == Some(t.id.as_str())
+                            && (p.region != Region::Sidebar || bar_members.contains(&t.id))
+                    })
+                    .map(|p| (p.id.clone(), area(p.region)))
+                    .collect();
+                presences.sort_by_key(|(_, a)| *a);
                 let available: Vec<Area> = Region::ALL
                     .into_iter()
+                    .filter(|r| !(panel_active && *r == Region::Main))
                     .filter(|r| {
-                        self.session
-                            .clone()
-                            .add_widget(&t.id, *r, None, &self.ports.surfaces, &[])
-                            .is_ok()
+                        geppio_core::workbench::commands::add_widget(
+                            &view,
+                            registry,
+                            &t.id,
+                            &surfaces.surface(*r),
+                            None,
+                            &[],
+                            None,
+                        )
+                        .is_some()
+                            || slots.iter().any(|s| {
+                                s.region == *r
+                                    && self.session.slot_accepts(
+                                        &s.id,
+                                        &SlotIntention::Catalog(t.id.clone()),
+                                        &surfaces,
+                                        &[],
+                                    )
+                            })
                     })
                     .map(area)
                     .collect();
-                let leak = |s: &str| -> &'static str { Box::leak(s.to_owned().into_boxed_str()) };
-                let reason = slot.as_ref().and_then(|s| {
-                    let fits = self.session.slot_accepts(
-                        &s.id,
-                        &SlotIntention::Catalog(t.id.clone()),
-                        &self.ports.surfaces,
-                        &[],
-                    );
-                    if fits {
-                        return None;
-                    }
+                let eval = |r: Region| {
+                    evaluate_placement(&view, registry, &t.id, r, Operation::Catalog, &[], &[])
+                };
+                let limit = Region::ALL
+                    .into_iter()
+                    .filter(|r| t.constraint.allows(*r))
+                    .any(|r| eval(r) == Err(PlacementRefusal::Limit));
+                let occupied = !Region::ALL
+                    .into_iter()
+                    .filter(|r| t.constraint.allows(*r))
+                    .any(|r| eval(r).is_ok());
+                let unavailable = crate::i18n::t(if limit {
+                    "Limite de views atingido. Reutilize uma view existente."
+                } else if occupied {
+                    "Este widget já está em todas as áreas permitidas. Mova o widget existente para reorganizar."
+                } else {
+                    "Não há área compatível com espaço disponível para este widget."
+                });
+                let reason = chosen.as_ref().and_then(|s| {
                     let min =
                         geppio_core::freeform::constraint_in_region(&t.constraint, s.region).min;
-                    let here = draft.placements.iter().any(|p| {
-                        p.region == s.region && draft.type_of(&p.id) == Some(t.id.as_str())
-                    });
-                    Some(crate::i18n::t(if here {
-                        "Este widget já está nesta área."
-                    } else if min.width > s.width || min.height > s.height {
-                        "O espaço é menor que o mínimo deste widget."
-                    } else {
-                        "Não há espaço disponível para os mínimos deste widget."
-                    }))
+                    let text = match eval(s.region) {
+                        Err(PlacementRefusal::Paused) => "Plugin pausado",
+                        Err(PlacementRefusal::Limit) => {
+                            "Limite de views atingido. Reutilize uma view existente."
+                        }
+                        Err(_) => "Este widget já está nesta área.",
+                        Ok(()) if min.width > s.width || min.height > s.height => {
+                            "O espaço é menor que o mínimo deste widget."
+                        }
+                        Ok(()) => {
+                            if self.session.slot_accepts(
+                                &s.id,
+                                &SlotIntention::Catalog(t.id.clone()),
+                                &surfaces,
+                                &[],
+                            ) {
+                                return None;
+                            }
+                            "Não há espaço disponível para os mínimos deste widget."
+                        }
+                    };
+                    Some(crate::i18n::t(text))
                 });
                 Tile {
-                    id: self.static_id(&t.id),
-                    title: leak(&t.title),
-                    category: leak(&t.category),
-                    owner: self.static_id(&t.owner),
+                    id: self.intern(&t.id),
+                    title: self.intern(&t.title),
+                    category: self.intern(&t.category),
+                    owner: self.intern(&t.owner),
                     reason,
                     available,
-                    placed,
+                    allowed,
+                    presences,
+                    unavailable,
                 }
             })
             .collect()
     }
 
-    fn static_id(&self, id: &str) -> &'static str {
-        // Type ids are a small fixed set (the demo registry); intern them once.
+    /// Interns the small fixed set of catalog strings (the demo registry) once.
+    pub(crate) fn intern(&self, id: &str) -> &'static str {
         thread_local! { static IDS: std::cell::RefCell<HashMap<String, &'static str>> = Default::default(); }
         IDS.with(|ids| {
             *ids.borrow_mut()
@@ -901,14 +1349,138 @@ impl Workbench {
         })
     }
 
+    /// The destination box of the chosen tile or of a view being moved (`destinationReason`).
+    fn destination(&self, tiles: &[Tile]) -> Option<Destination> {
+        let id = self.edit.catalog.destination?;
+        let tile = tiles.iter().find(|t| t.id == id)?;
+        let registry = self.session.registry();
+        let ty = registry.get(id)?;
+        let surfaces = self.ports.surfaces;
+        let (view, _) = self.session.view(&surfaces);
+        let moving = self.edit.catalog.moving.clone();
+        let ignored: Vec<&str> = moving.iter().map(String::as_str).collect();
+        let operation = if moving.is_some() {
+            Operation::Move
+        } else {
+            Operation::Catalog
+        };
+        let reasons = Area::ALL.map(|a| {
+            let r = region(a);
+            let text = match evaluate_placement(&view, registry, id, r, operation, &ignored, &[]) {
+                Err(PlacementRefusal::Paused) => Some("Plugin pausado"),
+                Err(PlacementRefusal::Incompatible) => Some("Widget incompatível com esta área."),
+                Err(PlacementRefusal::Limit) => {
+                    Some("Limite de views atingido. Reutilize uma view existente.")
+                }
+                Err(PlacementRefusal::Occupied) => Some(if r == Region::Sidebar {
+                    "Este widget já está nesta barra."
+                } else {
+                    "Este widget já está nesta área."
+                }),
+                Ok(()) => {
+                    let fits = match &moving {
+                        Some(v) => geppio_core::workbench::commands::move_view(
+                            &view,
+                            registry,
+                            v,
+                            &surfaces.surface(r),
+                            None,
+                            None,
+                            None,
+                            &[],
+                        )
+                        .is_some(),
+                        None => tile.available.contains(&a),
+                    };
+                    (!fits).then_some("Não há espaço disponível para os mínimos deste widget.")
+                }
+            };
+            text.map(crate::i18n::t)
+        });
+        Some(Destination {
+            title: crate::i18n::t("Onde colocar {0}?")
+                .replace("{0}", &crate::i18n::t(tile.title))
+                .into(),
+            policy: crate::i18n::t(if moving.is_some() || ty.presence == Presence::SingleView {
+                "Este widget tem uma única presença. Escolha para onde mover."
+            } else {
+                "Este widget compartilha os dados entre presenças em áreas diferentes."
+            }),
+            reasons,
+        })
+    }
+
+    /// The first enabled destination area (focus goes there when the box opens).
+    pub(crate) fn first_destination(&self, tiles: &[Tile]) -> Option<Area> {
+        let d = self.destination(tiles)?;
+        Area::ALL
+            .into_iter()
+            .zip(d.reasons)
+            .find(|(_, reason)| reason.is_none())
+            .map(|(a, _)| a)
+    }
+
+    /// Places the destination's widget (`add`) or moves the selected view (`transferTo`).
+    /// A refusal keeps the box open with the reason.
+    fn place_destination(&mut self, a: Area, cx: &mut Context<Self>) {
+        let Some(id) = self.edit.catalog.destination else {
+            return;
+        };
+        let now = geppui::now(cx);
+        let reduced = geppui::appearance(cx).reduced_motion;
+        let surfaces = self.ports.surfaces;
+        let r = region(a);
+        let moving = self.edit.catalog.moving.clone();
+        let before = self.frame_rects();
+        let result = match &moving {
+            Some(view) => self.session.transfer_view(view, r, None, &surfaces),
+            None => self.session.add_widget(id, r, None, &surfaces, &[]),
+        };
+        let after = self.frame_rects();
+        self.edit.flips = flips_between(&before, &after, now, reduced, None);
+        match result {
+            Ok(()) => {
+                self.edit.catalog.destination = None;
+                self.edit.catalog.moving = None;
+                if let Some(view) = &moving {
+                    self.edit.blocked = None;
+                    let message = self.session.message().to_owned();
+                    self.edit.toast(&message, now);
+                    // The Sidebar scrolls to the moved frame.
+                    if r == Region::Sidebar
+                        && let Some(f) = scene(&self.session, &self.ports.surfaces)
+                            .1
+                            .into_iter()
+                            .find(|f| f.id == *view)
+                    {
+                        let m = self.metrics;
+                        self.sidebar_scroll
+                            .set_offset(gpui::point(gpui::px(0.0), -m.px(f.rect.y)));
+                    }
+                }
+            }
+            Err(_) => {
+                if let Some(view) = moving {
+                    self.edit.blocked = Some(view);
+                }
+                let message = self.session.message().to_owned();
+                self.edit.toast(&message, now);
+            }
+        }
+        cx.notify();
+    }
+
     fn catalog_actions(&self, cx: &mut Context<Self>) -> CatalogActions {
         let view = cx.entity().downgrade();
-        let v1 = view.clone();
-        let v2 = view.clone();
-        let v3 = view.clone();
-        let v4 = view.clone();
-        let v5 = view.clone();
-        let (t1, t2, t3, t4, t5) = (
+        let w = |f: fn(&mut Workbench, &mut Context<Workbench>)| -> catalog::Click {
+            let view = view.clone();
+            Rc::new(move |_, _, cx| {
+                let _ = view.update(cx, f);
+            })
+        };
+        let (v1, v2, v3, v4, v5, v6, v7) = (
+            view.clone(),
+            view.clone(),
             view.clone(),
             view.clone(),
             view.clone(),
@@ -917,7 +1489,10 @@ impl Workbench {
         );
         CatalogActions {
             select_tab: Rc::new(move |tab, _, cx| {
-                let _ = t1.update(cx, |this, cx| {
+                let _ = v1.update(cx, |this, cx| {
+                    if let Some(saved) = &mut this.edit.catalog.saved {
+                        saved.tab = tab;
+                    }
                     if this.edit.catalog.slot.is_some() {
                         this.choose_slot(None, cx);
                     }
@@ -926,97 +1501,88 @@ impl Workbench {
                     cx.notify();
                 });
             }),
-            toggle_plugin_menu: Rc::new(move |_, _, cx| {
-                let _ = t2.update(cx, |this, cx| {
-                    this.edit.catalog.plugin_menu = !this.edit.catalog.plugin_menu;
-                    cx.notify();
-                });
+            toggle_plugin_menu: w(|this, cx| {
+                this.edit.catalog.plugin_menu = !this.edit.catalog.plugin_menu;
+                cx.notify();
             }),
-            explore: Rc::new(move |_, _, cx| {
-                let _ = t3.update(cx, |this, cx| {
-                    this.set_menu(Some(crate::panels::Menu::Plugins), None, None, cx)
-                });
+            explore: w(|this, cx| {
+                this.set_menu(Some(crate::panels::Menu::Plugins), None, None, cx)
             }),
-            cancel_slot: Rc::new(move |_, _, cx| {
-                let _ = t4.update(cx, |this, cx| this.choose_slot(None, cx));
-            }),
-            clear_filters: Rc::new(move |_, _, cx| {
-                let _ = t5.update(cx, |this, cx| {
-                    let region = this
-                        .edit
-                        .catalog
-                        .slot
-                        .as_ref()
-                        .and_then(|id| this.session.slots().iter().find(|s| s.id == *id))
-                        .map(|s| area(s.region));
-                    let c = &mut this.edit.catalog;
-                    c.search.clear();
-                    c.areas = region.into_iter().collect();
-                    c.plugin = None;
-                    c.category = None;
-                    cx.notify();
-                });
+            cancel_slot: w(|this, cx| this.cancel_slot_choice(cx)),
+            clear_filters: w(|this, cx| {
+                let region = this
+                    .edit
+                    .catalog
+                    .slot
+                    .as_ref()
+                    .and_then(|id| this.session.slots().iter().find(|s| s.id == *id))
+                    .map(|s| area(s.region));
+                let c = &mut this.edit.catalog;
+                c.search.clear();
+                c.areas = region.into_iter().collect();
+                c.plugin = None;
+                c.category = None;
+                this.edit
+                    .search
+                    .update(cx, |field, cx| field.set_text("", cx));
+                cx.notify();
             }),
             toggle_area: Rc::new(move |a, _, cx| {
-                let _ = v1.update(cx, |this, cx| {
+                let _ = v2.update(cx, |this, cx| {
                     let areas = &mut this.edit.catalog.areas;
-                    if let Some(i) = areas.iter().position(|x| *x == a) {
-                        areas.remove(i);
-                    } else {
-                        areas.push(a);
-                    }
-                    if areas.len() == 3 {
-                        areas.clear();
+                    match a {
+                        None => areas.clear(),
+                        Some(a) => {
+                            if let Some(i) = areas.iter().position(|x| *x == a) {
+                                areas.remove(i);
+                            } else {
+                                areas.push(a);
+                            }
+                            if areas.len() == 3 {
+                                areas.clear();
+                            }
+                        }
                     }
                     cx.notify();
                 });
             }),
             choose_category: Rc::new(move |c, _, cx| {
-                let _ = v2.update(cx, |this, cx| {
+                let _ = v3.update(cx, |this, cx| {
                     this.edit.catalog.category = c;
                     cx.notify();
                 });
             }),
             choose_tile: Rc::new(move |id, _, cx| {
-                let _ = v3.update(cx, |this, cx| {
+                let _ = v4.update(cx, |this, cx| {
+                    // The click that ends a drag (or a refused lift) is not a choice.
+                    if std::mem::take(&mut this.edit.suppress_click) {
+                        return;
+                    }
                     if let Some(slot) = this.edit.catalog.slot.clone() {
                         this.fill_chosen(&slot, SlotIntention::Catalog(id.to_owned()), None, cx);
                         return;
                     }
-                    let available = this
-                        .tiles()
-                        .into_iter()
-                        .find(|t| t.id == id)
-                        .is_some_and(|t| !t.available.is_empty());
-                    if available {
-                        this.edit.catalog.destination = Some(id);
-                    } else {
-                        let now = geppui::now(cx);
-                        this.edit.toast(
-                            "Não há área compatível com espaço disponível para este widget.",
-                            now,
-                        );
+                    let tile = this.tiles().into_iter().find(|t| t.id == id);
+                    match tile {
+                        Some(t) if !t.available.is_empty() => {
+                            this.edit.catalog.destination = Some(id);
+                            this.edit.catalog.moving = None;
+                            this.edit.focus = Some(FocusRequest::Destination);
+                        }
+                        Some(t) => {
+                            let now = geppui::now(cx);
+                            this.edit.toast(&t.unavailable, now);
+                        }
+                        None => {}
                     }
                     cx.notify();
                 });
             }),
-            place: Rc::new(move |id, a, _, cx| {
-                let _ = v4.update(cx, |this, cx| {
-                    let now = geppui::now(cx);
-                    let reduced = geppui::appearance(cx).reduced_motion;
-                    let surfaces = this.ports.surfaces;
-                    this.with_flip(now, reduced, None, |w| {
-                        w.session
-                            .add_widget(id, region(a), None, &surfaces, &[])
-                            .ok()
-                            .map(|()| "Widget adicionado. Salve ou cancele.")
-                    });
-                    this.edit.catalog.destination = None;
-                    cx.notify();
-                });
+            place: Rc::new(move |a, _, cx| {
+                let _ = v5.update(cx, |this, cx| this.place_destination(a, cx));
             }),
             press_tile: Rc::new(move |id, e: &MouseDownEvent, _, cx| {
-                let _ = v5.update(cx, |this, cx| {
+                let _ = v6.update(cx, |this, cx| {
                     let z = this.metrics.zoom;
                     this.tile_down(
                         id,
@@ -1025,13 +1591,32 @@ impl Workbench {
                     );
                 });
             }),
-            focus_search: Rc::new({
+            remove_presence: Rc::new(move |id, _, cx| {
+                let _ = v7.update(cx, |this, cx| {
+                    if let Some(saved) = &mut this.edit.catalog.saved {
+                        saved.tab = CatalogTab::Widgets;
+                    }
+                    if this.edit.catalog.slot.is_some() {
+                        this.choose_slot(None, cx);
+                    }
+                    this.removing = Some(id);
+                    cx.notify();
+                });
+            }),
+            inside: {
                 let view = view.clone();
-                move |_, _, cx| {
-                    let _ = view.update(cx, |this, cx| {
-                        this.edit.search_focused = true;
-                        cx.notify();
-                    });
+                Rc::new(move |_, cx| {
+                    let _ = view.update(cx, |this, _| this.edit.keep_destination = true);
+                })
+            },
+            close_destination: w(|this, cx| {
+                if std::mem::take(&mut this.edit.keep_destination) {
+                    return;
+                }
+                if this.edit.catalog.destination.is_some() {
+                    this.edit.catalog.destination = None;
+                    this.edit.catalog.moving = None;
+                    cx.notify();
                 }
             }),
         }
@@ -1142,6 +1727,7 @@ impl Workbench {
         region: Region,
         m: Metrics,
         t: Theme,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Vec<AnyElement> {
         if !self.editing() {
@@ -1149,13 +1735,26 @@ impl Workbench {
         }
         let tr = crate::i18n::tr(cx);
         let chosen = self.edit.catalog.slot.clone();
+        // A slot under a drag is highlighted only when it accepts it (`data-drag-hover`).
         let over = self
             .edit
             .gesture
             .as_ref()
-            .filter(|g| g.lifted && !matches!(g.kind, GestureKind::Resize(_)))
-            .and_then(|g| self.slot_at(g.pointer))
-            .map(|s| s.id);
+            .filter(|g| g.lifted)
+            .and_then(|g| g.hover_slot.clone())
+            .filter(|(_, takes)| *takes)
+            .map(|(id, _)| id);
+        let now = geppui::now(cx);
+        // The chosen slot pulses once (box-shadow 0 → 5px → 0 over 520ms).
+        let pulse = self.edit.slot_motion.map(|at| {
+            let p = ((now - at) / 520.0).clamp(0.0, 1.0);
+            let e = motion::REGION.ease(p) as f32;
+            if e < 0.35 {
+                e / 0.35 * 5.0
+            } else {
+                (1.0 - (e - 0.35) / 0.65) * 5.0
+            }
+        });
         let slots: Vec<SessionSlot> = self
             .session_slots()
             .into_iter()
@@ -1176,8 +1775,25 @@ impl Workbench {
                 let id = slot.id.clone();
                 let color = if selected { t.accent } else { t.text_muted };
                 let group = SharedString::from(format!("slot-{id}"));
+                let key = format!("session-slot-{id}");
+                let focus = catalog::control_focus(&key, window, cx);
+                let ring = t.ring;
+                let spread = pulse.filter(|_| chosen.as_deref() == Some(slot.id.as_str()));
                 div()
-                    .id(SharedString::from(format!("session-slot-{id}")))
+                    .id(SharedString::from(key))
+                    .track_focus(&focus)
+                    .focus_visible(move |s| {
+                        s.shadow(vec![
+                            gpui::BoxShadow::new(gpui::px(0.0), gpui::px(0.0), ring)
+                                .spread_radius(gpui::px(2.0)),
+                        ])
+                    })
+                    .when_some(spread, |el, spread| {
+                        el.shadow(vec![
+                            gpui::BoxShadow::new(m.px(0.0), m.px(0.0), t.accent_soft)
+                                .spread_radius(m.px(spread)),
+                        ])
+                    })
                     .group(group.clone())
                     .absolute()
                     .left(p.left)
@@ -1257,6 +1873,7 @@ impl Workbench {
             .collect()
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn region_frames(
         &mut self,
         region: Region,
@@ -1264,27 +1881,44 @@ impl Workbench {
         t: Theme,
         now: f64,
         editing: bool,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Vec<AnyElement> {
         let (_, frames, _) = scene(&self.session, &self.ports.surfaces);
+        // The picture owns the view while it is lifted (a frame move, or a catalog drag of a
+        // single-view widget that is already placed).
         let ghost = self
             .edit
             .gesture
             .as_ref()
-            .filter(|g| g.lifted && g.kind == GestureKind::Move)
-            .map(|g| g.id.clone());
+            .filter(|g| g.lifted)
+            .and_then(|g| match g.kind {
+                GestureKind::Move => Some(g.id.clone()),
+                GestureKind::Catalog(_) => g.moving.clone(),
+                GestureKind::Resize(_) => None,
+            });
         let flying = self.edit.flight.as_ref().and_then(|f| f.view.clone());
+        let constraints = editing.then(|| {
+            geppio_core::freeform::constraints_for(
+                &self.ports.surfaces.surface(region),
+                &geppio_core::workbench::model::snapshot_constraints(
+                    self.session.draft(),
+                    self.session.registry(),
+                ),
+            )
+        });
+        let entering = self.edit.entering.clone();
         let mut out = Vec::new();
         for f in frames.into_iter().filter(|f| f.region == region) {
             let port = self.ports.port(region);
             let (sx, sy) = self.scroll(region);
-            let window = Rect::new(
+            let rect = Rect::new(
                 port.x + f.rect.x - sx,
                 port.y + f.rect.y - sy,
                 f.rect.w,
                 f.rect.h,
             );
-            let shown = self.edit.flipped(&f.id, window, now);
+            let shown = self.edit.flipped(&f.id, rect, now);
             let local = Rect::new(
                 shown.x - port.x + sx,
                 shown.y - port.y + sy,
@@ -1295,6 +1929,8 @@ impl Workbench {
                 ghost.as_deref() == Some(f.id.as_str()) || flying.as_deref() == Some(f.id.as_str());
             let scroll = self.scroll_handle(&f.id);
             let props = self.props_handler(cx);
+            let name =
+                (f.fixture == "properties" && !editing).then(|| self.name_field_element(m, t));
             let content = widgets::content(
                 &f.fixture,
                 region == Region::Bottom,
@@ -1302,7 +1938,14 @@ impl Workbench {
                 t,
                 &self.properties,
                 props,
+                name,
+                editing,
             );
+            let look = widgets::FrameLook {
+                selected: editing && self.edit.selected.as_deref() == Some(f.id.as_str()),
+                invalid: editing && self.edit.blocked.as_deref() == Some(f.id.as_str()),
+                locked: editing,
+            };
             let frame = widgets::frame(
                 &f.fixture,
                 region == Region::Bottom,
@@ -1310,19 +1953,27 @@ impl Workbench {
                 t,
                 content,
                 &scroll,
-                editing && self.edit.selected.as_deref() == Some(f.id.as_str()),
+                look,
             );
             let id = f.id.clone();
             let fixture = f.fixture.clone();
             let p = m.place(local);
             let group = SharedString::from(format!("frame-{id}"));
+            // New frames of an applied composition fade in (opacity, 8px up).
+            let enter = entering.as_ref().and_then(|(at, duration, ids)| {
+                ids.contains(&id).then(|| {
+                    let k = motion::FLIGHT.ease(((now - at) / duration).clamp(0.0, 1.0)) as f32;
+                    (k, 8.0 * (1.0 - k))
+                })
+            });
             let mut el = div()
                 .absolute()
                 .left(p.left)
-                .top(p.top)
+                .top(p.top + m.px(enter.map_or(0.0, |(_, dy)| dy)))
                 .w(p.width)
                 .h(p.height)
                 .group(group.clone())
+                .when_some(enter, |el, (k, _)| el.opacity(k))
                 .when(hidden, |el| el.opacity(0.0))
                 .child(frame);
             if editing {
@@ -1344,6 +1995,7 @@ impl Workbench {
                                     move_id.clone(),
                                     move_fixture.clone(),
                                     GestureKind::Move,
+                                    false,
                                     (f32::from(e.position.x) / z, f32::from(e.position.y) / z),
                                     cx,
                                 );
@@ -1351,11 +2003,12 @@ impl Workbench {
                             }),
                         ),
                 );
-                for d in zones_for(region) {
-                    let (zid, zfix, d) = (id.clone(), fixture.clone(), *d);
-                    let mut zone = div()
-                        .id(SharedString::from(format!("resize-{id}-{}", d.as_str())))
-                        .absolute();
+                let constraint = constraints.as_ref().and_then(|cs| cs.get(&id)).cloned();
+                let title = crate::i18n::t(widgets::title(&fixture));
+                for d in constraint.as_ref().map(zones_for).unwrap_or_default() {
+                    let (zid, zfix) = (id.clone(), fixture.clone());
+                    let key = format!("resize-{id}-{}", d.as_str());
+                    let mut zone = div().id(SharedString::from(key.clone())).absolute();
                     zone = match d {
                         Direction::N => zone
                             .top_0()
@@ -1398,7 +2051,7 @@ impl Workbench {
                             .size(m.px(14.0))
                             .cursor_nesw_resize(),
                     };
-                    el = el.child(zone.on_mouse_down(
+                    let zone = zone.on_mouse_down(
                         MouseButton::Left,
                         cx.listener(move |this, e: &MouseDownEvent, _, cx| {
                             let z = this.metrics.zoom;
@@ -1406,21 +2059,28 @@ impl Workbench {
                                 zid.clone(),
                                 zfix.clone(),
                                 GestureKind::Resize(d),
+                                false,
                                 (f32::from(e.position.x) / z, f32::from(e.position.y) / z),
                                 cx,
                             );
                             cx.stop_propagation();
                         }),
-                    ));
+                    );
+                    // `title`: "Redimensionar pela {0}".
+                    let tip: SharedString = crate::i18n::t("Redimensionar pela {0}")
+                        .replace("{0}", &crate::i18n::t(zone_label(d)))
+                        .into();
+                    el = el.child(geppui::titled(zone, key, Some(tip)));
                 }
-            }
-            if editing {
+                let _ = title;
                 let rid = id.clone();
-                let title = widgets::title(&fixture);
-                // Grip (top-left) and local controls (top-right) appear on frame hover.
+                let (grip_id, grip_fixture) = (id.clone(), fixture.clone());
+                // Grip (top-left: drags, and a short click opens the move destination) and
+                // the remove control (top-right) appear on frame hover.
                 el = el
                     .child(
                         div()
+                            .id(SharedString::from(format!("grip-{id}")))
                             .absolute()
                             .top(m.px(9.0))
                             .left(m.px(9.0))
@@ -1432,6 +2092,22 @@ impl Workbench {
                             .bg(t.surface)
                             .opacity(0.0)
                             .group_hover(group.clone(), |s| s.opacity(1.0))
+                            .cursor_grab()
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                cx.listener(move |this, e: &MouseDownEvent, _, cx| {
+                                    let z = this.metrics.zoom;
+                                    this.frame_down(
+                                        grip_id.clone(),
+                                        grip_fixture.clone(),
+                                        GestureKind::Move,
+                                        true,
+                                        (f32::from(e.position.x) / z, f32::from(e.position.y) / z),
+                                        cx,
+                                    );
+                                    cx.stop_propagation();
+                                }),
+                            )
                             .child(geppui::icon("move", m).size(14.0).color(t.text_muted)),
                     )
                     .child(
@@ -1451,9 +2127,6 @@ impl Workbench {
                             .group_hover(group.clone(), |s| s.opacity(1.0))
                             .cursor_pointer()
                             .occlude()
-                            .tooltip(move |_, cx| {
-                                geppui::button::tooltip_view(format!("Remover {title}"), cx)
-                            })
                             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.removing = Some(rid.clone());
@@ -1464,8 +2137,14 @@ impl Workbench {
             }
             out.push(el.into_any_element());
         }
-        out.extend(self.slot_buttons(region, m, t, cx));
+        out.extend(self.slot_buttons(region, m, t, window, cx));
         out
+    }
+
+    /// The live "Nome de exemplo" field of Propriedades.
+    fn name_field_element(&self, m: Metrics, t: Theme) -> AnyElement {
+        let _ = (m, t);
+        self.name_field.clone().into_any_element()
     }
 
     /// Non-interactive frames of the floating Sidebar, projected at the panel width.
@@ -1484,7 +2163,16 @@ impl Workbench {
         for f in frames.into_iter().filter(|f| f.region == Region::Sidebar) {
             let scroll = self.scroll_handle(&format!("floating-{}", f.id));
             let props = self.props_handler(cx);
-            let content = widgets::content(&f.fixture, false, m, t, &self.properties, props);
+            let content = widgets::content(
+                &f.fixture,
+                false,
+                m,
+                t,
+                &self.properties,
+                props,
+                None,
+                false,
+            );
             let p = m.place(f.rect);
             out.push(
                 div()
@@ -1494,7 +2182,13 @@ impl Workbench {
                     .w(p.width)
                     .h(p.height)
                     .child(widgets::frame(
-                        &f.fixture, false, m, t, content, &scroll, false,
+                        &f.fixture,
+                        false,
+                        m,
+                        t,
+                        content,
+                        &scroll,
+                        widgets::FrameLook::default(),
                     ))
                     .into_any_element(),
             );
@@ -1502,7 +2196,8 @@ impl Workbench {
         (out, world)
     }
 
-    /// The remove confirmation ("Remover widget?").
+    /// The remove confirmation ("Remover widget?", `Confirm`): Cancelar and a destructive
+    /// Confirmar; focus returns to the widget's catalog tile, or to the catalog toggle.
     pub(crate) fn remove_dialog(
         &mut self,
         m: Metrics,
@@ -1519,12 +2214,17 @@ impl Workbench {
                     let now = geppui::now(cx);
                     let reduced = geppui::appearance(cx).reduced_motion;
                     this.removing = None;
-                    this.with_flip(now, reduced, None, |w| {
-                        w.session
-                            .remove_view(&id)
-                            .ok()
-                            .map(|()| "Widget removido. Desfazer o restaura nesta sessão.")
-                    });
+                    let type_id = this.session.draft().type_of(&id).map(str::to_owned);
+                    let before = this.frame_rects();
+                    let _ = this.session.remove_view(&id);
+                    let after = this.frame_rects();
+                    this.edit.flips = flips_between(&before, &after, now, reduced, None);
+                    this.edit.focus = Some(FocusRequest::Control(
+                        match type_id.filter(|_| this.edit.catalog_open) {
+                            Some(t) => format!("catalog-tile-{t}"),
+                            None => "catalog-toggle".to_owned(),
+                        },
+                    ));
                     cx.notify();
                 });
             }
@@ -1537,7 +2237,7 @@ impl Workbench {
         };
         let cancel = close.clone();
         Some(
-            geppui::dialog("remove-widget", "Remover widget?")
+            geppui::dialog("remove-widget", crate::i18n::t("Remover widget?"))
                 .on_dismiss(close)
                 .child(
                     div()
@@ -1555,19 +2255,20 @@ impl Workbench {
                         .justify_end()
                         .gap(m.px(9.0))
                         .child(
-                            geppui::button("remove-cancel")
-                                .label(crate::i18n::t("Cancelar"))
-                                .height(36.0, 8.0)
-                                .text(12.0, 600.0)
-                                .on_click(move |_, w, cx| cancel(w, cx)),
+                            geppui::dialog_button(
+                                "remove-cancel",
+                                crate::i18n::t("Cancelar"),
+                                geppui::DialogButtonKind::Secondary,
+                            )
+                            .on_click(move |_, w, cx| cancel(w, cx)),
                         )
                         .child(
-                            geppui::button("remove-confirm")
-                                .label(crate::i18n::t("Remover"))
-                                .height(36.0, 8.0)
-                                .text(12.0, 600.0)
-                                .primary()
-                                .on_click(confirm),
+                            geppui::dialog_button(
+                                "remove-confirm",
+                                crate::i18n::t("Confirmar"),
+                                geppui::DialogButtonKind::Destructive,
+                            )
+                            .on_click(confirm),
                         ),
                 )
                 .into_any_element(),
@@ -1660,9 +2361,39 @@ impl Workbench {
                 }
             }
         }
+        // The Sidebar insertion line while a drag is over the Sidebar (`.sidebar-insertion`).
+        if let Some(line) = self.edit.insertion {
+            let port = self.ports.sidebar;
+            let (_, sy) = self.scroll(Region::Sidebar);
+            let y = port.y + (line - sy).clamp(0.0, port.h) - 5.0;
+            below_header.push(
+                div()
+                    .absolute()
+                    .left(m.px(port.x))
+                    .top(m.px(y))
+                    .w(m.px(port.w))
+                    .h(m.px(3.0))
+                    .rounded(m.px(2.0))
+                    .bg(t.accent)
+                    .into_any_element(),
+            );
+        }
         // Catalog column.
         if s.catalog.w > 0.5 {
             let tiles = self.tiles();
+            if self.edit.catalog.normalize(&tiles) {
+                cx.notify();
+            }
+            let key = self.edit.catalog.filter_key();
+            if key != self.edit.filter_key {
+                self.edit.filter_key = key;
+                self.edit
+                    .grid_scroll
+                    .set_offset(gpui::point(gpui::px(0.0), gpui::px(0.0)));
+            }
+            for tile in &tiles {
+                self.edit.tile_anchors.entry(tile.id).or_default();
+            }
             let actions = self.catalog_actions(cx);
             let compositions = (self.edit.catalog.tab == CatalogTab::Compositions)
                 .then(|| self.compositions_panel(m, t, window, cx));
@@ -1682,19 +2413,69 @@ impl Workbench {
                         ],
                     )
                 });
-            let single_view = self
-                .edit
-                .catalog
-                .destination
-                .and_then(|id| self.session.registry().get(id))
-                .is_some_and(|ty| ty.presence == geppio_core::workbench::Presence::SingleView);
+            let destination = if self.edit.catalog.slot.is_none() {
+                self.destination(&tiles)
+            } else {
+                None
+            };
+            // The slot banner and the grid entering after a slot was chosen (280 / 260ms).
+            let entering = |at: f64, duration: f64, from: f32, offset: f32| {
+                let k = motion::REGION.ease(((now - at) / duration).clamp(0.0, 1.0)) as f32;
+                (from + (1.0 - from) * k, offset * (1.0 - k))
+            };
+            let motion = CatalogMotion {
+                banner: self
+                    .edit
+                    .slot_motion
+                    .map(|at| entering(at, 280.0, 0.25, -6.0)),
+                grid: self
+                    .edit
+                    .slot_motion
+                    .map(|at| entering(at, 260.0, 0.62, 6.0)),
+                shake: self.edit.shake.and_then(|(id, at)| {
+                    catalog::shake_offset(now - at).map(|offset| (id, offset))
+                }),
+            };
+            let search_focused = self.edit.search_focused;
+            let search = div()
+                .id("catalog-search")
+                .flex_1()
+                .flex()
+                .items_center()
+                .gap(m.px(9.0))
+                .h(m.px(36.0))
+                .px(m.px(11.0))
+                .rounded(m.px(8.0))
+                .border(m.border(1.0))
+                .border_color(t.input_border)
+                .bg(t.input)
+                .when(search_focused, |el| {
+                    el.shadow(vec![
+                        gpui::BoxShadow::new(gpui::px(0.0), gpui::px(0.0), t.ring)
+                            .spread_radius(m.px(2.0)),
+                    ])
+                })
+                .cursor_text()
+                .child(
+                    geppui::icon("magnifying-glass", m)
+                        .size(16.0)
+                        .color(t.text_muted),
+                )
+                .child(div().flex_1().min_w_0().child(self.edit.search.clone()))
+                .into_any_element();
             let extra = CatalogExtra {
                 compositions,
                 slot_label,
                 filter_anchor: self.edit.filter_anchor.clone(),
-                single_view,
+                search,
+                destination,
+                grid_scroll: self.edit.grid_scroll.clone(),
+                category_scroll: self.edit.category_scroll.clone(),
+                anchors: self.edit.tile_anchors.clone(),
+                motion,
             };
-            let panel = catalog::render(&self.edit.catalog, &tiles, m, t, actions, extra);
+            let panel =
+                catalog::render(&self.edit.catalog, &tiles, m, t, actions, extra, window, cx);
             let p = m.place(Rect::new(
                 s.catalog.x as f32,
                 s.catalog.y as f32,
@@ -1722,11 +2503,11 @@ impl Workbench {
             );
         }
         if self.editing() {
-            // Catalog toggle at the column edge.
+            // Catalog toggle at the column edge ("Recolher editor" / "Mostrar editor").
             let open = self.edit.catalog_open;
             let toggle_x = s.viewport.w - s.catalog.w - 6.0 - 30.0;
             let toggle_y = s.main.y + (s.status.y - s.main.y) / 2.0 - 15.0;
-            below_header.push(
+            let toggle = catalog::focusable(
                 div()
                     .id("catalog-toggle")
                     .absolute()
@@ -1742,11 +2523,14 @@ impl Workbench {
                     .bg(t.surface)
                     .opacity(0.25)
                     .hover(|s| s.opacity(1.0))
+                    .focus(|s| s.opacity(1.0))
                     .cursor_pointer()
                     .on_click(cx.listener(|this, _, _, cx| {
                         let now = geppui::now(cx);
                         let reduced = geppui::appearance(cx).reduced_motion;
                         let open = !this.edit.catalog_open;
+                        // The column changes the measured regions: a running gesture ends.
+                        this.edit_cancel_gesture(cx);
                         this.edit.set_catalog(open, now, reduced);
                         cx.notify();
                     }))
@@ -1755,8 +2539,24 @@ impl Workbench {
                             .size(16.0)
                             .color(t.text)
                             .rotate_half_turns(if open { 0.0 } else { 1.0 }),
-                    )
-                    .into_any_element(),
+                    ),
+                "catalog-toggle",
+                true,
+                t,
+                window,
+                cx,
+            );
+            below_header.push(
+                geppui::titled(
+                    toggle,
+                    "catalog-toggle",
+                    Some(crate::i18n::t(if open {
+                        "Recolher editor"
+                    } else {
+                        "Mostrar editor"
+                    })),
+                )
+                .into_any_element(),
             );
             top.push(edit_chrome::window_frame(&t, m).into_any_element());
             let view = cx.entity().downgrade();
@@ -1852,9 +2652,27 @@ impl Workbench {
             let r = g.picture(now, reduced);
             let scroll = self.scroll_handle(&format!("picture-{}", g.id));
             let props = self.props_handler(cx);
-            let content = widgets::content(&g.fixture, false, m, t, &self.properties, props);
-            let frame =
-                widgets::frame(&g.fixture, false, m, t, content, &scroll, false).into_any_element();
+            let compact = g.region == Some(Region::Bottom) && g.moving.is_some();
+            let content = widgets::content(
+                &g.fixture,
+                compact,
+                m,
+                t,
+                &self.properties,
+                props,
+                None,
+                true,
+            );
+            let frame = widgets::frame(
+                &g.fixture,
+                compact,
+                m,
+                t,
+                content,
+                &scroll,
+                widgets::FrameLook::default(),
+            )
+            .into_any_element();
             top.push(drag_layer::picture(m, &t, r, frame, false).into_any_element());
             top.push(
                 drag_layer::label(
@@ -1871,9 +2689,26 @@ impl Workbench {
             let r = f.tween.at(now);
             let scroll = self.scroll_handle("flight");
             let props = self.props_handler(cx);
-            let content = widgets::content(&f.fixture, f.compact, m, t, &self.properties, props);
-            let frame = widgets::frame(&f.fixture, f.compact, m, t, content, &scroll, false)
-                .into_any_element();
+            let content = widgets::content(
+                &f.fixture,
+                f.compact,
+                m,
+                t,
+                &self.properties,
+                props,
+                None,
+                true,
+            );
+            let frame = widgets::frame(
+                &f.fixture,
+                f.compact,
+                m,
+                t,
+                content,
+                &scroll,
+                widgets::FrameLook::default(),
+            )
+            .into_any_element();
             let mut el = drag_layer::picture(m, &t, r, frame, true);
             if f.shrink {
                 el = el.opacity(1.0 - 0.85 * f.tween.progress(now));
@@ -1908,6 +2743,108 @@ impl Workbench {
             top.push(geppui::toast(text, (shell::STATUS + 16.0) as f32).into_any_element());
         }
         (below_header, top)
+    }
+}
+
+impl Workbench {
+    /// The edit state for the automated flows (`GEPPIO_NATIVE_TEST_TRACE` only).
+    pub(crate) fn trace_edit_state(
+        &mut self,
+        now: f64,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let tiles = self.tiles();
+        let c = &self.edit.catalog;
+        let visible: Vec<&str> = tiles
+            .iter()
+            .filter(|t| c.matches(t) && c.category.is_none_or(|k| t.category == k))
+            .map(|t| t.id)
+            .collect();
+        let destination = self.destination(&tiles).map(|d| {
+            d.reasons
+                .iter()
+                .map(|r| r.as_ref().map(|r| r.to_string()))
+                .collect::<Vec<_>>()
+        });
+        let mut candidates: Vec<String> = vec!["catalog-toggle".into()];
+        candidates.extend(Area::ALL.map(|a| format!("catalog-place-{}", a.key())));
+        candidates.extend(tiles.iter().map(|t| format!("catalog-tile-{}", t.id)));
+        candidates.extend(
+            self.session_slots()
+                .into_iter()
+                .map(|s| format!("session-slot-{}", s.id)),
+        );
+        candidates.extend([
+            "catalog-tab-widgets".into(),
+            "catalog-tab-compositions".into(),
+        ]);
+        let focused = if self.edit.search_focused {
+            Some("catalog-search".to_owned())
+        } else {
+            candidates
+                .into_iter()
+                .find(|id| catalog::control_focus(id, window, cx).is_focused(window))
+        };
+        let gesture = self.edit.gesture.as_ref().map(|g| {
+            serde_json::json!({
+                "kind": match &g.kind {
+                    GestureKind::Move => "move".to_owned(),
+                    GestureKind::Resize(d) => d.as_str().to_owned(),
+                    GestureKind::Catalog(t) => format!("catalog:{t}"),
+                },
+                "lifted": g.lifted,
+                "zones": g.zones.iter().map(|r| area(*r).key()).collect::<Vec<_>>(),
+                "slot": g.hover_slot,
+                "moving": g.moving,
+            })
+        });
+        let placements: Vec<serde_json::Value> = self
+            .session
+            .draft()
+            .placements
+            .iter()
+            .map(|p| serde_json::json!([p.id, area(p.region).key(), p.x, p.y, p.width, p.height]))
+            .collect();
+        let state = serde_json::json!({
+            "editing": self.editing(),
+            "open": self.edit.catalog_open,
+            "tab": format!("{:?}", c.tab),
+            "search": c.search,
+            "areas": c.areas.iter().map(|a| a.key()).collect::<Vec<_>>(),
+            "category": c.category,
+            "plugin": c.plugin,
+            "slot": c.slot,
+            "destination": c.destination,
+            "moving": c.moving,
+            "reasons": destination,
+            "visible": visible,
+            "available": tiles.iter().map(|t| (t.id, t.available.iter().map(|a| a.key()).collect::<Vec<_>>())).collect::<HashMap<_, _>>(),
+            "gesture": gesture,
+            "blocked": self.edit.blocked,
+            "removing": self.removing,
+            "focused": focused,
+            "toast": self.edit.toast_text(now),
+            "activeBar": self.session.draft().organization.active_bar,
+            "undo": self.session.can_undo(),
+            "redo": self.session.can_redo(),
+            "flight": self.edit.flight.is_some(),
+            "insertion": self.edit.insertion,
+            "sidebarScroll": -self.metrics.css(self.sidebar_scroll.offset().y),
+            "mainScrollX": -self.metrics.css(self.main_scroll.offset().x),
+            "gridScroll": -self.metrics.css(self.edit.grid_scroll.offset().y),
+            "name": self.properties.name,
+            "comfortable": self.properties.comfortable,
+            "placements": placements,
+            "ports": Region::ALL.map(|r| {
+                let p = self.ports.port(r);
+                (area(r).key(), [p.x, p.y, p.w, p.h])
+            }).into_iter().collect::<HashMap<_, _>>(),
+            "frames": self.frame_rects().into_iter().map(|(id, r)| (id, [r.x, r.y, r.w, r.h])).collect::<HashMap<_, _>>(),
+        });
+        if let Some(trace) = self.automation.trace.as_mut() {
+            trace.state(now, &state);
+        }
     }
 }
 

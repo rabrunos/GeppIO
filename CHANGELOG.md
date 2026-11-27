@@ -2,6 +2,36 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.106] — 2026-11-27
+
+- **Native host (Rust + GPUI): edit mode and the widget catalog behave like the reference (Stage P2, #75).**
+  - **Fixes:**
+    - Esc in "Remover widget?" closes only the dialog (it used to cancel the whole edit), and Ctrl+Z no longer undoes under it;
+    - "Todas as áreas" clears the area filters again;
+    - the catalog search is a real text field (caret, selection, paste), so typing elsewhere after one click no longer lands in it; Ctrl+Z inside any text field undoes the text, not the layout;
+    - a widget gesture ends when the button is released outside the window (it is released there, as with pointer capture), when the release never reached the window, when the window loses focus or is resized, and when the catalog or the horizontal expansion changes; it used to stay stuck;
+    - saved Docked or Floating presentations are no longer drawn as normal frames (their panels arrive with Stage C2b).
+  - **Move through the catalog:** a short click on a frame's grip opens the catalog with "Onde colocar {0}?" for that view; the move is one undoable intention ("Widget transferido para … na prévia. Salve ou cancele."), a refusal keeps the box open with the reason and the frame outlined, and the Sidebar scrolls to the moved frame. The heading only drags, as in the reference.
+  - **Catalog:**
+    - the area filters follow the regions a type allows, in the reference order (Principal, Lateral, Inferior); an emptied category or plugin filter falls back to all, and the grid returns to the top when the filters change;
+    - the category list and the grid scroll;
+    - the destination box shows each area's reason ("Este widget já está nesta barra.", "Widget incompatível com esta área.", "Não há espaço disponível…"), focuses the first enabled area, closes on a click elsewhere in the catalog and stays open when placing fails; placing is silent;
+    - presences under each tile ("Remover {0} da área {1}"), the Sidebar only for the active bar;
+    - choosing a format slot focuses the search, the banner and grid enter (280/260 ms) and the slot pulses (520 ms); cancelling returns focus to the slot;
+    - tabs move with ←/→, Home and End; tiles, filters, destinations and presences take focus and click with Enter or Space;
+    - tooltips as the reference's `title`: tiles, area filters, "Cancelar seleção de widget", "Recolher editor" / "Mostrar editor", presences and destinations; disabled controls show none;
+    - an unavailable tile names why ("Limite de views atingido…", "Este widget já está em todas as áreas permitidas…").
+  - **Drag and drop:**
+    - catalog and cross-region drops land at the pointer; a slot is highlighted, and counted as a drop zone, only when it accepts the widget;
+    - a catalog lift with no area shakes the tile (280 ms) and opens nothing; a refused drop shrinks back into its tile (220 ms); the picture starts at the tile, and a placed single-view widget is dragged as its own frame ("Movendo da …");
+    - a frame dropped on a region that refuses it keeps its place with the reason and the outline;
+    - the Sidebar scrolls by itself near its edges (28px, 7px per frame) and shows the insertion line; the expanded Main scrolls near its edges (30px, up to 20px per frame); hovering another rail bar for 250 ms switches to it, and a cancelled drag restores the bar.
+  - **Remove, undo and redo:** "Remover widget?" confirms with a destructive "Confirmar" and returns focus to the widget's tile; undo and redo show no toast, wait for a landing drop, and are refused during a gesture or a splitter drag. The toast stays hidden during a gesture and shows the latest message for 3.2 s when it ends; the same message twice does not restart it.
+  - **Frames:** the resize zones follow each widget's constraints in its region, with "Redimensionar pela {0}" tooltips; the content is inert while editing (its scroll keeps its place and the wheel scrolls the region); the remove control has no tooltip.
+  - **Propriedades:** "Nome de exemplo" is editable and "Visualização" is a select.
+  - **Compositions:** applying one moves the frames over 380 ms and fades the new ones in; a card drag scrolls the library near its edges, counts only inside the visible library and ends on window blur or resize.
+  - **GeppUI:** `titled` gives any element the button tooltip rules; `TextField` keeps its own undo and redo; `ScrollArea::locked` keeps an offset without taking the wheel; `Select::boxed` draws an author-styled box.
+
 ## [0.1.0-alpha.105] — 2026-11-27
 
 - **Native host (Rust + GPUI): regions, rail and bars behave like the reference (Stage P1, #75).**

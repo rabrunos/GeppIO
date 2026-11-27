@@ -638,6 +638,34 @@ impl Workbench {
         true
     }
 
+    /// The rail bar under a window point (CSS px): Home or a custom bar of the column.
+    pub(crate) fn rail_bar_at(&self, pos: (f32, f32)) -> Option<String> {
+        let rail_top = self.rail_top();
+        if pos.0 < 0.0 || pos.0 > geppio_core::shell::RAIL as f32 {
+            return None;
+        }
+        if (7.0..=41.0).contains(&pos.0) && (rail_top + 13.5..=rail_top + 47.5).contains(&pos.1) {
+            return self
+                .bars_now()
+                .organization
+                .bars
+                .first()
+                .map(|b| b.id.clone());
+        }
+        if !self.rail_tools_contains(pos.1, rail_top) || !(8.0..=40.0).contains(&pos.0) {
+            return None;
+        }
+        let y = pos.1 - rail_top - TOOLS_TOP + self.rail_scrolled() - 9.0;
+        if y < 0.0 {
+            return None;
+        }
+        let i = (y / BAR_PITCH) as usize;
+        if y - i as f32 * BAR_PITCH > 32.0 {
+            return None;
+        }
+        self.custom_bars().get(i).map(|b| b.id.clone())
+    }
+
     fn rail_top(&self) -> f32 {
         geppio_core::shell::HEADER as f32
     }

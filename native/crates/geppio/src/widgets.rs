@@ -94,6 +94,18 @@ impl Ink {
     }
 }
 
+/// How a frame is drawn while editing.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct FrameLook {
+    /// The last pointer-downed frame (`.widget-frame.selected`).
+    pub selected: bool,
+    /// Its last preview or drop was refused (`.widget-frame.invalid`).
+    pub invalid: bool,
+    /// Content is inert while editing (`contentLocked`): its scroll keeps its offset and the
+    /// wheel goes to the region; its controls are drawn without interaction.
+    pub locked: bool,
+}
+
 /// The frame of a widget: 1px border, 12px radius, surface background, heading and a
 /// scrolling content area. `compact` is the Bottom heading (28px, 13/18 title).
 pub fn frame(
@@ -103,7 +115,7 @@ pub fn frame(
     t: Theme,
     content: AnyElement,
     scroll: &ScrollHandle,
-    selected: bool,
+    look: FrameLook,
 ) -> Div {
     let (heading_h, pad_y, title_size, title_line) = if compact {
         (28.0, 5.0, 13.0, 18.0)
@@ -117,8 +129,17 @@ pub fn frame(
         .overflow_hidden()
         .rounded(m.px(12.0))
         .border(m.border(1.0))
-        // The last pointer-downed frame while editing (`.widget-frame.selected`).
-        .border_color(if selected { t.accent } else { t.border })
+        .border_color(if look.selected || look.invalid {
+            t.accent
+        } else {
+            t.border
+        })
+        // `--warning` is the accent: a 1px ring outside the border.
+        .when(look.invalid, |el| {
+            el.shadow(vec![
+                gpui::BoxShadow::new(m.px(0.0), m.px(0.0), t.accent).spread_radius(m.px(1.0)),
+            ])
+        })
         .bg(t.surface)
         .child(
             div()
@@ -134,20 +155,27 @@ pub fn frame(
                 .text_color(t.text)
                 .child(crate::i18n::t(title(id))),
         )
-        .child(if compact {
-            // Bottom content clips instead of scrolling (`[data-owner-region="bottom"] .widget-content`).
-            div().flex_1().min_h_0().overflow_hidden().child(content)
-        } else {
-            div().flex_1().min_h_0().child(
-                scroll_area(SharedString::from(format!("widget-scroll-{id}")), scroll)
-                    .thin()
-                    .arrows(true)
-                    .child(content),
-            )
-        })
+        .child(
+            if compact {
+                // Bottom content clips instead of scrolling (`[data-owner-region="bottom"] .widget-content`).
+                div().flex_1().min_h_0().overflow_hidden().child(content)
+            } else {
+                div().flex_1().min_h_0().child(
+                    scroll_area(SharedString::from(format!("widget-scroll-{id}")), scroll)
+                        .thin()
+                        .arrows(true)
+                        .locked(look.locked)
+                        .child(content),
+                )
+            }
+            .relative(),
+        )
 }
 
 /// Widget content by id. `compact` selects the Bottom variants.
+/// `name`: the live "Nome de exemplo" field of the visible frame; copies (drag pictures,
+/// the floating Sidebar) show its text.
+#[allow(clippy::too_many_arguments)]
 pub fn content(
     id: &str,
     compact: bool,
@@ -155,6 +183,8 @@ pub fn content(
     t: Theme,
     props: &Properties,
     on_props: impl Fn(Properties, &mut gpui::App) + Clone + 'static,
+    name: Option<AnyElement>,
+    locked: bool,
 ) -> AnyElement {
     let k = Ink { m, t };
     match id {
@@ -245,7 +275,7 @@ pub fn content(
                     )
             }))
             .into_any_element(),
-        "properties" => properties(&k, props, on_props).into_any_element(),
+        "properties" => properties(&k, props, on_props, name, locked).into_any_element(),
         "chart" => chart(&k, compact).into_any_element(),
         _ => k.text(13.0, 17.0, 400.0, t.text, "Widget de teste").into_any_element(),
     }
@@ -345,9 +375,11 @@ fn properties(
     k: &Ink,
     props: &Properties,
     on_props: impl Fn(Properties, &mut gpui::App) + Clone + 'static,
+    name: Option<AnyElement>,
+    locked: bool,
 ) -> Div {
     let (m, t) = (k.m, k.t);
-    let boxed = |value: SharedString| {
+    let boxed = |value: AnyElement| {
         div()
             .size_full()
             .flex()
@@ -362,12 +394,12 @@ fn properties(
             .text_color(t.text)
             .child(value)
     };
-    let toggle_density = {
+    let choose_density = {
         let (on_props, props) = (on_props.clone(), props.clone());
-        move |_: &gpui::ClickEvent, _: &mut gpui::Window, cx: &mut gpui::App| {
+        move |value: &SharedString, _: &mut gpui::Window, cx: &mut gpui::App| {
             on_props(
                 Properties {
-                    comfortable: !props.comfortable,
+                    comfortable: value.as_ref() == "comfortable",
                     ..props.clone()
                 },
                 cx,
@@ -386,6 +418,11 @@ fn properties(
             )
         }
     };
+    let name = name.unwrap_or_else(|| {
+        div()
+            .child(SharedString::from(props.name.clone()))
+            .into_any_element()
+    });
     div()
         .px(m.px(17.0))
         .py(m.px(13.0))
@@ -400,26 +437,48 @@ fn properties(
             k,
             "Nome de exemplo",
             32.0,
-            boxed(props.name.clone().into()).into_any_element(),
+            boxed(name).into_any_element(),
         ))
         .child(field(
             k,
             "Visualização",
             34.0,
-            div()
-                .id("properties-density")
-                .size_full()
-                .cursor_pointer()
-                .on_click(toggle_density)
-                .child(
-                    boxed(crate::i18n::t(if props.comfortable {
-                        "Confortável"
-                    } else {
-                        "Compacta"
-                    }))
-                    .child(icon("chevron-down", m).size(14.0).color(t.text)),
+            if locked {
+                // Inert while editing: the closed select, without its list.
+                boxed(
+                    div()
+                        .flex_1()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .child(crate::i18n::t(if props.comfortable {
+                            "Confortável"
+                        } else {
+                            "Compacta"
+                        }))
+                        .child(icon("chevron-down", m).size(12.0).color(t.text_muted))
+                        .into_any_element(),
                 )
-                .into_any_element(),
+                .into_any_element()
+            } else {
+                geppui::select(
+                    "properties-density",
+                    vec![
+                        ("compact".into(), crate::i18n::t("Compacta")),
+                        ("comfortable".into(), crate::i18n::t("Confortável")),
+                    ],
+                    if props.comfortable {
+                        "comfortable"
+                    } else {
+                        "compact"
+                    },
+                )
+                .label(crate::i18n::t("Visualização"))
+                .metrics(34.0, 10.0, 14.0)
+                .boxed(5.0, t.canvas, t.border, 8.0)
+                .on_change(choose_density)
+                .into_any_element()
+            },
         ))
         .child(
             div()
@@ -428,8 +487,7 @@ fn properties(
                 .flex()
                 .items_center()
                 .gap(m.px(7.0))
-                .cursor_pointer()
-                .on_click(toggle_details)
+                .when(!locked, |el| el.cursor_pointer().on_click(toggle_details))
                 .child(
                     div()
                         .size(m.px(13.0))

@@ -203,6 +203,8 @@ pub struct Select {
     height: f32,
     text: (f32, f32),
     bordered: bool,
+    /// Author box (radius, background, border, horizontal padding) instead of `.ui-input`.
+    boxed: Option<(f32, Hsla, Hsla, f32)>,
     on_change: Option<Pick>,
     focus: Option<FocusHandle>,
 }
@@ -221,6 +223,7 @@ pub fn select(
         height: 36.0,
         text: (11.0, 15.0),
         bordered: true,
+        boxed: None,
         on_change: None,
         focus: None,
     }
@@ -245,6 +248,11 @@ impl Select {
     }
     pub fn focus(mut self, handle: &FocusHandle) -> Self {
         self.focus = Some(handle.clone());
+        self
+    }
+    /// An author-styled box: radius, background, border colour and horizontal padding.
+    pub fn boxed(mut self, radius: f32, background: Hsla, border: Hsla, padding: f32) -> Self {
+        self.boxed = Some((radius, background, border, padding));
         self
     }
     pub fn on_change(
@@ -350,16 +358,26 @@ impl RenderOnce for Select {
             .gap(m.px(7.0))
             .h(m.px(self.height))
             .w_full()
-            .px(m.px(if self.bordered { 11.0 } else { 4.0 }))
+            .px(m.px(match self.boxed {
+                Some((_, _, _, padding)) => padding,
+                None if self.bordered => 11.0,
+                None => 4.0,
+            }))
             .text_size(m.px(self.text.0))
             .line_height(m.px(self.text.1))
             .font_weight(css_weight(400.0))
             .cursor_pointer()
-            .when(self.bordered, |el| {
+            .when(self.bordered && self.boxed.is_none(), |el| {
                 el.rounded(m.px(7.0))
                     .border(m.border(1.0))
                     .border_color(t.input_border)
                     .bg(t.input)
+            })
+            .when_some(self.boxed, |el, (radius, bg, border, _)| {
+                el.rounded(m.px(radius))
+                    .border(m.border(1.0))
+                    .border_color(border)
+                    .bg(bg)
             })
             .on_click(move |_, _, cx| {
                 toggle.update(cx, |s, cx| {

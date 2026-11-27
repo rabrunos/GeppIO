@@ -2,11 +2,13 @@
 //! 5px lift threshold, the pickup lerp, drop flights, FLIP after committed actions, the
 //! catalog column and transaction toasts. The core owns geometry, transactions and history;
 //! this module only turns pointer input into core calls and frames into motion.
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use geppio_core::layout::{AlignmentGuide, Direction, Region};
 use geppio_core::workbench::WorkbenchStore;
-use geppui::{Rect, Transition, Tween, motion};
+use geppui::{AnchorHandle, Rect, TextField, Transition, Tween, motion};
+use gpui::{Entity, ScrollHandle};
 
 use crate::catalog::{Area, CatalogState};
 
@@ -116,6 +118,21 @@ pub struct UiGesture {
     pub origin: Rect,
     pub zones: Vec<Region>,
     pub guides: Vec<AlignmentGuide>,
+    /// A catalog drag: the tile's rectangle (a refusal shrinks back into it).
+    pub tile: Option<Rect>,
+    /// A catalog drag of a single-view widget that is already placed: that view moves
+    /// (its frame is ghosted and the label names its region).
+    pub moving: Option<String>,
+    /// Pressed on the grip: a short click opens the catalog's move mode.
+    pub grip: bool,
+    /// The region's scroll at the press (scrolling during the gesture moves the frame).
+    pub scroll0: (f32, f32),
+    /// Pointer travel the expanded Main could not scroll (the occupied extent grows).
+    pub extension: f32,
+    /// The last horizontal direction of the pointer (−1, 0, 1).
+    pub dir_x: f32,
+    /// The format slot under the pointer and whether it accepts the drag.
+    pub hover_slot: Option<(String, bool)>,
 }
 
 impl UiGesture {
@@ -139,7 +156,7 @@ impl UiGesture {
     }
     pub fn label(&self) -> &'static str {
         match (&self.kind, self.region) {
-            (GestureKind::Catalog(_), _) => "Adicionando widget",
+            (GestureKind::Catalog(_), _) if self.moving.is_none() => "Adicionando widget",
             (_, Some(Region::Sidebar)) => "Movendo da barra lateral",
             (_, Some(Region::Bottom)) => "Movendo da barra inferior",
             _ => "Movendo da área principal",
@@ -166,35 +183,79 @@ pub struct Flip {
     pub tween: Tween,
 }
 
-#[derive(Debug)]
 pub struct EditUi {
     pub catalog_open: bool,
     pub catalog_track: Transition,
     pub catalog: CatalogState,
+    /// The catalog search (`input[type=search]`).
+    pub search: Entity<TextField>,
+    /// Whether the search field holds focus (read at render).
     pub search_focused: bool,
     pub gesture: Option<UiGesture>,
     pub flight: Option<Flight>,
     pub flips: Vec<Flip>,
     /// The last frame that received a pointer press while editing.
     pub selected: Option<String>,
+    /// The frame whose last preview or drop was refused (`.widget-frame.invalid`).
+    pub blocked: Option<String>,
     pub toast: Option<(String, f64)>,
     pub over: Option<Region>,
     pub zone_over: [Transition; 3],
     /// The catalog's plugin filter button.
     pub filter_anchor: geppui::AnchorHandle,
+    /// Layout bounds of each catalog tile.
+    pub tile_anchors: HashMap<&'static str, AnchorHandle>,
+    pub grid_scroll: ScrollHandle,
+    pub category_scroll: ScrollHandle,
+    /// The filters the grid scroll was last reset for.
+    pub filter_key: String,
+    /// The tile shaking after a refused lift, and since when.
+    pub shake: Option<(&'static str, f64)>,
+    /// When the chosen slot's entry motion started.
+    pub slot_motion: Option<f64>,
+    /// The rail bar hovered during a drag, and since when (`dwell`, 250ms).
+    pub dwell: Option<(String, f64)>,
+    /// The Sidebar insertion line (content y) while a drag is over the Sidebar.
+    pub insertion: Option<f32>,
+    /// Undo/redo pressed during a drop flight run when it lands (`visual.after`).
+    pub queued: Vec<&'static str>,
+    /// Focus requests applied at the next render.
+    pub focus: Option<FocusRequest>,
+    /// A catalog press that moved 5px is a drag: its click must not open the destination.
+    pub suppress_click: bool,
+    /// New frames of an applied composition fading in: start, duration and view ids.
+    pub entering: Option<(f64, f64, Vec<String>)>,
+    /// The current click landed on a tile or the destination box (read by the browser's
+    /// outside-click handler, which runs after it).
+    pub keep_destination: bool,
 }
 
-impl Default for EditUi {
-    fn default() -> Self {
+/// A focus move the edit UI asks for at the next render.
+#[derive(Clone, Debug, PartialEq)]
+pub enum FocusRequest {
+    /// The catalog search (a slot was chosen).
+    Search,
+    /// Back to the workbench (the search was left with Escape).
+    Workbench,
+    /// The first enabled destination button.
+    Destination,
+    /// A catalog control by element id (a tile after a removal, a slot after a cancel).
+    Control(String),
+}
+
+impl EditUi {
+    pub fn new(search: Entity<TextField>) -> Self {
         Self {
             catalog_open: false,
             catalog_track: Transition::new(0.0),
             catalog: CatalogState::default(),
+            search,
             search_focused: false,
             gesture: None,
             flight: None,
             flips: Vec::new(),
             selected: None,
+            blocked: None,
             toast: None,
             over: None,
             filter_anchor: geppui::AnchorHandle::default(),
@@ -203,6 +264,19 @@ impl Default for EditUi {
                 Transition::new(0.0),
                 Transition::new(0.0),
             ],
+            tile_anchors: HashMap::new(),
+            grid_scroll: ScrollHandle::new(),
+            category_scroll: ScrollHandle::new(),
+            filter_key: String::new(),
+            shake: None,
+            slot_motion: None,
+            dwell: None,
+            insertion: None,
+            queued: Vec::new(),
+            focus: None,
+            suppress_click: false,
+            entering: None,
+            keep_destination: false,
         }
     }
 }
@@ -219,12 +293,29 @@ impl EditUi {
     /// Toast lifetime of the reference (3.2s).
     pub const TOAST_MS: f64 = 3200.0;
 
+    /// Shows a transaction message. The same text again does not restart it (the
+    /// reference toast follows changes of `tx.message`).
     pub fn toast(&mut self, message: &str, now: f64) {
+        if message.is_empty() || self.toast.as_ref().is_some_and(|(m, _)| m == message) {
+            return;
+        }
+        self.toast = Some((message.to_owned(), now));
+    }
+    /// Shows `message` again from `now`: a gesture just ended (the toast stays hidden while
+    /// one runs and the latest message appears when it ends).
+    pub fn rearm(&mut self, message: &str, now: f64) {
         if !message.is_empty() {
             self.toast = Some((message.to_owned(), now));
         }
     }
+    /// Whether a pointer gesture or the rejection shake is running (`feedbackActive`).
+    pub fn feedback_active(&self, now: f64) -> bool {
+        self.gesture.is_some() || self.shake.is_some_and(|(_, at)| now - at < 280.0)
+    }
     pub fn toast_text(&self, now: f64) -> Option<&str> {
+        if self.feedback_active(now) {
+            return None;
+        }
         self.toast
             .as_ref()
             .filter(|(_, at)| now - at < Self::TOAST_MS)
@@ -254,6 +345,19 @@ impl EditUi {
     }
     pub fn settle(&mut self, now: f64) {
         self.flips.retain(|f| !f.tween.done(now));
+        if self.shake.is_some_and(|(_, at)| now - at >= 280.0) {
+            self.shake = None;
+        }
+        if self.slot_motion.is_some_and(|at| now - at >= 520.0) {
+            self.slot_motion = None;
+        }
+        if self
+            .entering
+            .as_ref()
+            .is_some_and(|(at, duration, _)| now - at >= *duration)
+        {
+            self.entering = None;
+        }
         if self.flight.as_ref().is_some_and(|f| f.tween.done(now)) {
             self.flight = None;
         }
@@ -262,6 +366,10 @@ impl EditUi {
         !self.flips.is_empty()
             || self.flight.is_some()
             || self.catalog_track.animating(now)
+            || self.shake.is_some()
+            || self.slot_motion.is_some()
+            || self.entering.is_some()
+            || self.dwell.as_ref().is_some_and(|(_, at)| at.is_finite())
             || self.zone_over.iter().any(|z| z.animating(now))
             || self
                 .gesture
@@ -351,6 +459,13 @@ mod tests {
             origin: Rect::new(10.0, 10.0, 50.0, 40.0),
             zones: vec![],
             guides: vec![],
+            tile: None,
+            moving: None,
+            grip: false,
+            scroll0: (0.0, 0.0),
+            extension: 0.0,
+            dir_x: 0.0,
+            hover_slot: None,
         };
         assert_eq!(g.picture(1000.0, false), Rect::new(96.0, 56.0, 50.0, 40.0));
         assert_eq!(g.picture(0.0, false), g.origin);

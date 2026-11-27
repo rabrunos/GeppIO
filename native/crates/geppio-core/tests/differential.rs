@@ -1146,6 +1146,93 @@ fn remove_view_is_one_undoable_intention() {
 }
 
 #[test]
+fn catalog_moves_and_drags_are_whole_intentions() {
+    use geppio_core::layout::Region;
+    use geppio_core::workbench::{EditSession, widget_registry};
+    let surfaces = test_surfaces();
+    let mut session = EditSession::open(widget_registry(&[], true), None, true);
+    // The move mode needs Edit (`transferTo`).
+    let first = session.draft().placements[0].id.clone();
+    assert!(
+        session
+            .transfer_view(&first, Region::Main, None, &surfaces)
+            .is_err()
+    );
+    assert_eq!(
+        session.message(),
+        "Região sem espaço disponível. Reabra ou amplie a região antes de transferir."
+    );
+    session.begin(&surfaces).unwrap();
+    // Every refusal names the region; an accepted move is one undoable intention.
+    let mut accepted = 0;
+    for p in session.draft().placements.clone() {
+        for region in Region::ALL.into_iter().filter(|r| *r != p.region) {
+            let mut trial = session.clone();
+            let label = geppio_core::freeform::region_label(region);
+            match trial.transfer_view(&p.id, region, None, &surfaces) {
+                Ok(()) => {
+                    accepted += 1;
+                    assert_eq!(
+                        trial.message(),
+                        format!("Widget transferido para {label} na prévia. Salve ou cancele.")
+                    );
+                    assert_eq!(trial.draft().placement(&p.id).unwrap().region, region);
+                    assert!(trial.undo());
+                    assert_eq!(trial.draft().placement(&p.id).unwrap().region, p.region);
+                }
+                Err(_) => assert!(
+                    trial
+                        .message()
+                        .starts_with(&format!("Transferência para {label}"))
+                        || trial.message().starts_with("Região sem espaço"),
+                    "{}",
+                    trial.message()
+                ),
+            }
+        }
+    }
+    assert!(accepted > 0, "some demo widget can move to another region");
+    // A catalog drag opens one history gesture: an accepted drop is one intention, a
+    // refused one restores the draft.
+    let registry = session.registry().clone();
+    let (type_id, region) = registry
+        .types()
+        .iter()
+        .flat_map(|t| Region::ALL.map(|r| (t.id.clone(), r)))
+        .find(|(t, r)| {
+            session
+                .clone()
+                .add_widget(t, *r, None, &surfaces, &[])
+                .is_ok()
+        })
+        .expect("a widget that fits");
+    let before = session.draft().clone();
+    let undo_before = session.can_undo();
+    session.begin_catalog_drag();
+    session
+        .add_widget(&type_id, region, None, &surfaces, &[])
+        .unwrap();
+    session.finish_catalog_drag(false);
+    assert_eq!(session.draft(), &before);
+    assert_eq!(session.can_undo(), undo_before);
+    session.begin_catalog_drag();
+    session
+        .add_widget(&type_id, region, None, &surfaces, &[])
+        .unwrap();
+    session.finish_catalog_drag(true);
+    assert_ne!(session.draft(), &before);
+    assert!(session.undo());
+    assert_eq!(session.draft(), &before);
+    // Hovering a bar switches only during a drag, and only to another active bar.
+    let active = session.draft().organization.active_bar.clone();
+    assert!(!session.hover_bar("bar:missing"));
+    session.begin_catalog_drag();
+    assert!(!session.hover_bar(&active));
+    assert!(!session.hover_bar("bar:missing"));
+    session.finish_catalog_drag(false);
+}
+
+#[test]
 fn unreadable_store_opens_in_recovery_and_never_edits() {
     use geppio_core::layout::{PerRegion, Size};
     use geppio_core::workbench::{EditSession, SessionError, SessionSurfaces, widget_registry};

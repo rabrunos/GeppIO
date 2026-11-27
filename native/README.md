@@ -62,7 +62,7 @@ The catalog's Composições tab lists the presets and saved compositions (Favori
 
 ## Edit mode
 
-The edit button opens the session and the 480 px catalog. Widgets move by their heading and resize from edges and corners, with live reflow, spacing guides, drop zones and a flight back on cancel. Undo/redo (buttons, `Ctrl+Z`, `Ctrl+Y`, `Ctrl+Shift+Z`) restores whole intentions. Save edition confirms a checkpoint, Conclude saves and leaves, Cancel discards and `Esc` steps back one level (gesture, dialog, catalog search, catalog, session). Focus returns to the edit button on leave. The widgets are demo fixtures; plugins are out of scope.
+The edit button opens the session and the 480 px catalog. Widgets move by their heading or grip and resize from the edges and corners their constraints allow, with live reflow, spacing guides, drop zones, edge auto-scroll, the Sidebar insertion line and a flight back on cancel; a short click on the grip opens the catalog's move destination. Drops land at the pointer, and a gesture ends on release (also outside the window), on window blur or resize, and when the catalog or the expansion changes. The catalog search is a text field; the destination box names each area's reason; hovering another rail bar for 250 ms during a drag switches to it. Widget content is inert while editing. Undo/redo (buttons, `Ctrl+Z`, `Ctrl+Y`, `Ctrl+Shift+Z`; text fields keep their own) restores whole intentions and waits for a landing drop. Save edition confirms a checkpoint, Conclude saves and leaves, Cancel discards and `Esc` steps back one level (gesture, catalog search, plugin filter, slot choice, destination, session), which is an intentional difference: the reference cancels the whole edit from the search or the destination. Focus returns to the edit button on leave. The widgets are demo fixtures; plugins are out of scope.
 
 ## Automated comparison hooks
 
@@ -77,4 +77,4 @@ Normal use reads none of these. `GEPPIO_NATIVE_TEST_PROFILE` is accepted only fo
 | `GEPPIO_NATIVE_TEST_START` | `collapsed` or `peek` |
 | `GEPPIO_NATIVE_TEST_FREEZE` | `collapse@0.5`, `expand@…`, `peek@…`, `bottom@…`: frozen clock inside a motion |
 | `GEPPIO_NATIVE_TEST_SCRIPT` | `collapse-interrupt`, `collapse-full`, `peek`, `peek-interrupt`, `bottom`, `theme` |
-| `GEPPIO_NATIVE_TEST_TRACE` | File name of a per-frame JSON-lines trace inside the test profile |
+| `GEPPIO_NATIVE_TEST_TRACE` | File name of a JSON-lines trace inside the test profile: region motion per frame, and the edit state (catalog filters, destination, gesture, focus, frames) whenever it changes |

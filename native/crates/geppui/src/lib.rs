@@ -29,7 +29,7 @@ use gpui::{App, Global, Window};
 pub use actions::{DialogButton, DialogButtonKind, TextAction, dialog_button, text_action};
 pub use anchor::{AnchorHandle, anchor_probe};
 pub use assets::GeppuiAssets;
-pub use button::{Button, IconButton, button, icon_button};
+pub use button::{Button, IconButton, Titled, button, icon_button, titled};
 pub use controls::{Checkbox, Select, Switch, checkbox, select, switch};
 pub use dialog::{Dialog, dialog};
 pub use icon::{Icon, icon};

@@ -587,7 +587,7 @@ impl Workbench {
         let now = geppui::now(cx);
         let reduced = geppui::appearance(cx).reduced_motion;
         let surfaces = self.ports.surfaces;
-        self.flip_quietly(now, reduced, |w| {
+        self.flip_applied(now, reduced, |w| {
             w.session.apply_composition(&item, mode, &surfaces).is_ok()
         });
         cx.notify();
@@ -1166,11 +1166,7 @@ impl Workbench {
         if let Some(bounds) = self.compositions.grid.bounds() {
             let m = self.metrics;
             let tile = (m.css(bounds.size.width) - 18.0) / 3.0;
-            let inside = pos.0 >= m.css(bounds.origin.x)
-                && pos.0 <= m.css(bounds.origin.x) + m.css(bounds.size.width)
-                && pos.1 >= m.css(bounds.origin.y)
-                && pos.1 <= m.css(bounds.origin.y) + m.css(bounds.size.height);
-            if inside {
+            if self.library_drop_inside(pos) {
                 let target = cells
                     .iter()
                     .enumerate()
@@ -1249,13 +1245,7 @@ impl Workbench {
             return false;
         }
         let favorites = self.compositions.tab == LibraryTab::Favorites;
-        let inside = self.compositions.grid.bounds().is_some_and(|b| {
-            let m = self.metrics;
-            drag.pos.0 >= m.css(b.origin.x)
-                && drag.pos.0 <= m.css(b.origin.x) + m.css(b.size.width)
-                && drag.pos.1 >= m.css(b.origin.y)
-                && drag.pos.1 <= m.css(b.origin.y) + m.css(b.size.height)
-        });
+        let inside = self.library_drop_inside(drag.pos);
         let now = geppui::now(cx);
         if inside {
             let index = drag.order.iter().position(|o| *o == drag.id).unwrap_or(0);
@@ -1275,6 +1265,65 @@ impl Workbench {
         }
         cx.notify();
         true
+    }
+
+    /// Whether a point is over the card grid and inside the library's visible viewport
+    /// (`inside(root) && inside(viewport)`).
+    fn library_drop_inside(&self, pos: (f32, f32)) -> bool {
+        let m = self.metrics;
+        let within = |b: gpui::Bounds<Pixels>| {
+            pos.0 >= m.css(b.origin.x)
+                && pos.0 <= m.css(b.origin.x) + m.css(b.size.width)
+                && pos.1 >= m.css(b.origin.y)
+                && pos.1 <= m.css(b.origin.y) + m.css(b.size.height)
+        };
+        self.compositions.grid.bounds().is_some_and(within)
+            && within(self.compositions.scroll.bounds())
+    }
+
+    /// While a card drag is held within 24px of the library viewport's edges, scroll it 7px
+    /// per frame and re-run the provisional order (`tick`). Returns whether it scrolled.
+    pub(crate) fn compositions_autoscroll(&mut self, cx: &mut Context<Self>) -> bool {
+        let Some(drag) = self.compositions.drag.clone().filter(|d| d.started) else {
+            return false;
+        };
+        let m = self.metrics;
+        let b = self.compositions.scroll.bounds();
+        let (top, bottom) = (m.css(b.origin.y), m.css(b.origin.y) + m.css(b.size.height));
+        let (left, right) = (m.css(b.origin.x), m.css(b.origin.x) + m.css(b.size.width));
+        if b.size.height <= gpui::px(0.0)
+            || drag.pos.0 < left
+            || drag.pos.0 > right
+            || drag.pos.1 < top
+            || drag.pos.1 > bottom
+        {
+            return false;
+        }
+        let speed = if drag.pos.1 < top + 24.0 {
+            -7.0
+        } else if drag.pos.1 > bottom - 24.0 {
+            7.0
+        } else {
+            return false;
+        };
+        let max = m.css(self.compositions.scroll.max_offset().y).max(0.0);
+        let current = -m.css(self.compositions.scroll.offset().y);
+        let next = (current + speed).clamp(0.0, max);
+        if (next - current).abs() < 0.01 {
+            return false;
+        }
+        self.compositions
+            .scroll
+            .set_offset(gpui::point(gpui::px(0.0), -m.px(next)));
+        self.compositions_move(drag.pos, true, cx);
+        true
+    }
+
+    /// Window blur or resize ends a card drag without moving anything.
+    pub(crate) fn compositions_cancel_drag(&mut self, cx: &mut Context<Self>) {
+        if self.compositions.drag.take().is_some() {
+            cx.notify();
+        }
     }
 
     pub(crate) fn compositions_escape(&mut self, cx: &mut Context<Self>) -> bool {
