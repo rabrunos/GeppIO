@@ -49,6 +49,7 @@ pub struct Popover {
     fixed_height: bool,
     contained: bool,
     menu: Vec<SharedString>,
+    radius: f32,
     children: Vec<AnyElement>,
     on_dismiss: Option<Handler>,
     on_escape: Option<Handler>,
@@ -66,6 +67,7 @@ pub fn popover(id: impl Into<SharedString>, anchor: &AnchorHandle) -> Popover {
         fixed_height: false,
         contained: false,
         menu: Vec::new(),
+        radius: 14.0,
         children: Vec::new(),
         on_dismiss: None,
         on_escape: None,
@@ -110,6 +112,11 @@ impl Popover {
     /// The panel clips instead of scrolling; an inner viewport scrolls (the bars library).
     pub fn contained(mut self) -> Self {
         self.contained = true;
+        self
+    }
+    /// Corner radius (CSS px; 14 by default, `.presentation-menu` uses 6).
+    pub fn radius(mut self, radius: f32) -> Self {
+        self.radius = radius;
         self
     }
     /// Menu item ids, in order, for arrow-key focus cycling and initial focus.
@@ -298,7 +305,7 @@ impl RenderOnce for Popover {
                     )
                     .py(m.px(self.padding.0))
                     .px(m.px(self.padding.1))
-                    .rounded(m.px(14.0))
+                    .rounded(m.px(self.radius))
                     .border(m.border(1.0))
                     .border_color(t.border)
                     .bg(t.elevated)
@@ -383,6 +390,10 @@ pub struct MenuItem {
     trailing: Option<SharedString>,
     checked: bool,
     compact: bool,
+    /// `.presentation-menu .workspace-command`: 26px rows, 11px text, 12px icon.
+    small: bool,
+    /// The icon is a check mark shown only on the chosen row (`visibility: hidden`).
+    mark: Option<bool>,
     /// Accessible name when it differs from the visible label (`aria-label`).
     aria: Option<SharedString>,
     destructive: bool,
@@ -398,6 +409,8 @@ pub fn menu_item(id: impl Into<SharedString>, label: impl Into<SharedString>) ->
         trailing: None,
         checked: false,
         compact: false,
+        small: false,
+        mark: None,
         aria: None,
         destructive: false,
         disabled: false,
@@ -427,6 +440,18 @@ impl MenuItem {
     }
     pub fn compact(mut self) -> Self {
         self.compact = true;
+        self
+    }
+    /// The small rows of the presentation menu.
+    pub fn small(mut self) -> Self {
+        self.small = true;
+        self
+    }
+    /// A `menuitemradio` whose check mark shows only when chosen; the row keeps the plain
+    /// command colours.
+    pub fn mark(mut self, chosen: bool) -> Self {
+        self.icon = Some("check".into());
+        self.mark = Some(chosen);
         self
     }
     /// `.is-destructive` text.
@@ -460,7 +485,9 @@ impl RenderOnce for MenuItem {
             .id(ElementId::Name(self.id.clone()))
             .role(gpui::Role::MenuItem)
             .aria_label(self.aria.clone().unwrap_or_else(|| self.label.clone()))
-            .when(self.checked, |el| el.aria_toggled(gpui::Toggled::True))
+            .when(self.checked || self.mark == Some(true), |el| {
+                el.aria_toggled(gpui::Toggled::True)
+            })
             .when(!self.disabled, |el| {
                 el.track_focus(&crate::button::focus_handle(&self.id, None, window, cx))
             })
@@ -474,13 +501,25 @@ impl RenderOnce for MenuItem {
             })
             .flex()
             .items_center()
-            .gap(m.px(11.0))
             .w_full()
-            .min_h(m.px(if self.compact { 34.0 } else { 38.0 }))
-            .px(m.px(11.0))
-            .py(m.px(9.0))
-            .rounded(m.px(7.0))
-            .line_height(m.px(20.0))
+            .when(!self.small, |el| {
+                el.gap(m.px(11.0))
+                    .min_h(m.px(if self.compact { 34.0 } else { 38.0 }))
+                    .px(m.px(11.0))
+                    .py(m.px(9.0))
+                    .rounded(m.px(7.0))
+                    .line_height(m.px(20.0))
+            })
+            .when(self.small, |el| {
+                el.gap(m.px(6.0))
+                    .h(m.px(26.0))
+                    .px(m.px(6.0))
+                    .py(m.px(3.0))
+                    .rounded(m.px(3.0))
+                    .text_size(m.px(11.0))
+                    .line_height(m.px(16.0))
+                    .whitespace_nowrap()
+            })
             .when(!self.disabled, |el| el.cursor_pointer())
             .when(self.checked, |el| el.bg(t.accent_soft).text_color(t.accent))
             .when(hovered && !self.checked, |el| el.bg(t.control_hover))
@@ -492,7 +531,14 @@ impl RenderOnce for MenuItem {
                 } else {
                     t.text_muted
                 };
-                el.child(icon(&name, m).size(18.0).color(color).scale(scale))
+                let size = if self.small { 12.0 } else { 18.0 };
+                let shown = self.mark != Some(false);
+                el.child(
+                    div()
+                        .flex_none()
+                        .when(!shown, |el| el.opacity(0.0))
+                        .child(icon(&name, m).size(size).color(color).scale(scale)),
+                )
             })
             .child(div().flex_1().child(self.label.clone()))
             .when_some(self.trailing.clone(), |el, name| {

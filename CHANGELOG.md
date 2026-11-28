@@ -2,6 +2,50 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.108] — 2026-11-27
+
+- **Native host (Rust + GPUI): panel presentations, widget swap and pair dividers (Stage C2b, #75).**
+  - **Presentations:**
+    - In Edit, the Main widgets that allow it (Panorama, Fila de trabalho, Propriedades and Atividade) show "Normal ▾" beside the remove control.
+    - The menu offers Normal, Encaixado and Flutuante, then the edges: Topo, Embaixo, Esquerda and Direita, plus "Sem âncora" for Flutuante.
+    - An edge another panel uses shows "· Ocupado" and is disabled.
+    - Each change is one undoable intention, with the reference's refusal messages. Escape closes the menu and returns focus to its control.
+  - **Panels:**
+    - Docked panels reserve their edge of Main, and the arrangement follows the reference: 31px closed bars, 10px gaps, and panels that do not fit close.
+    - While a panel is adapted, the toast says "Painéis com tamanho ou abertura temporários…".
+    - A docked panel's divider ("Altura/Largura de {0}"):
+      - resizes the panel, and collapses it 48px below its minimum;
+      - opens or closes it with a click, Enter or Space;
+      - cancels the drag on Escape, window blur or resize.
+    - A closed docked bar opens with a click.
+    - Outside Edit these changes are saved at once ("Apresentação salva.").
+    - Floating panels reveal 100 ms after the pointer arrives and hide 280 ms after it leaves; they stay revealed while their menu is open.
+    - A free floating panel moves by its heading in Edit.
+    - Panels animate when they reveal (340/120 ms) and when a change is committed (240 ms).
+    - Closed bars on the left and right edges stack their title letters, because GPUI cannot rotate text. This differs from the reference's vertical writing.
+  - **Swap:**
+    - In Edit, Ctrl+click selects widgets. With two or more selected, "Trocar widget de {0}" (34px, centred) swaps two of them in either of two ways:
+      - click it on one widget, then on another;
+      - drag it onto another selected widget (5px threshold, with the widget's name at the pointer).
+    - When the swap is not possible, the toast says "Troca incompatível ou sem espaço.".
+    - Escape and undo clear the selection. Window blur and resize cancel a drag.
+  - **Pair dividers:**
+    - The 10px gap between two adjacent widgets resizes both ("Redimensionar widgets em conjunto"), inside and outside Edit.
+    - With the centre guide on, a drag snaps to the centre within 7px, releases at 14px, and shows the "Centro" guide.
+    - Keys: ←/→ or ↑/↓ move 2% (10% with Shift), Home and End go to the minimums, and Escape cancels.
+    - Outside Edit, the release saves the preview ("Redimensionamento salvo."). This is refused while the composition awaits confirmation.
+    - Inside Edit, each drag or key is one undoable step.
+    - Main pairs pause while panels are shown, and the window shows the resize cursor during a drag.
+  - **Core:**
+    - `presentations.rs` gains `default_presentation`, `change_presentation`, `arrange_presentations` and `return_to_normal`, with 87 differential cases.
+    - `EditSession` gains `present`, the pair methods (`begin_pair`, `pair_preview`, `end_pair`, `step_pair`, `commit_pair`) and `swap`.
+  - **GeppUI:** small menu rows with check marks (`MenuItem::small`, `MenuItem::mark`) and `Popover::radius`.
+  - **Hardened after an independent review:**
+    - a pair drag that outlives a switch into or out of Edit neither previews nor saves, and its preview never reaches the edit draft;
+    - outside Edit, a panel's edge and free position cannot change;
+    - keyboard steps and swaps wait for a running drag;
+    - a swap applies only to the draft it was started on.
+
 ## [0.1.0-alpha.107] — 2026-11-27
 
 - **Native host (Rust + GPUI): shell keyboard, focus and accessibility (Stage P3, #75).**

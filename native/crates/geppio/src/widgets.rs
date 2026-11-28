@@ -104,6 +104,15 @@ pub struct FrameLook {
     /// Content is inert while editing (`contentLocked`): its scroll keeps its offset and the
     /// wheel goes to the region; its controls are drawn without interaction.
     pub locked: bool,
+    /// A closed panel: only its 31px bar (`[data-panel-open="false"]`).
+    pub bar: bool,
+    /// A floating panel's shadow (`box-shadow: 0 15px 50px #0005`).
+    pub floating: bool,
+    /// A closed panel on the left or right edge: a 31px column whose title runs down
+    /// (`writing-mode: vertical-rl`; GPUI cannot rotate text, so the letters stack).
+    pub vertical: bool,
+    /// A closed free panel keeps 105px for its controls (`padding-right: 105px`).
+    pub free_bar: bool,
 }
 
 /// The frame of a widget: 1px border, 12px radius, surface background, heading and a
@@ -117,7 +126,9 @@ pub fn frame(
     scroll: &ScrollHandle,
     look: FrameLook,
 ) -> Div {
-    let (heading_h, pad_y, title_size, title_line) = if compact {
+    let (heading_h, pad_y, title_size, title_line) = if look.bar {
+        (31.0, 6.0, 11.0, 18.0)
+    } else if compact {
         (28.0, 5.0, 13.0, 18.0)
     } else {
         (42.0, 11.0, 16.0, 20.0)
@@ -141,35 +152,73 @@ pub fn frame(
             ])
         })
         .bg(t.surface)
-        .child(
-            div()
-                .flex_none()
-                .flex()
-                .items_center()
-                .min_h(m.px(heading_h))
-                .px(m.px(11.0))
-                .py(m.px(pad_y))
-                .text_size(m.px(title_size))
-                .line_height(m.px(title_line))
-                .font_weight(css_weight(650.0))
-                .text_color(t.text)
-                .child(crate::i18n::t(title(id))),
-        )
-        .child(
-            if compact {
-                // Bottom content clips instead of scrolling (`[data-owner-region="bottom"] .widget-content`).
-                div().flex_1().min_h_0().overflow_hidden().child(content)
-            } else {
-                div().flex_1().min_h_0().child(
-                    scroll_area(SharedString::from(format!("widget-scroll-{id}")), scroll)
-                        .thin()
-                        .arrows(true)
-                        .locked(look.locked)
-                        .child(content),
-                )
-            }
-            .relative(),
-        )
+        .when(look.floating, |el| {
+            el.shadow(vec![
+                gpui::BoxShadow::new(m.px(0.0), m.px(15.0), gpui::hsla(0.0, 0.0, 0.0, 0.33))
+                    .blur_radius(m.px(50.0)),
+            ])
+        })
+        .when(look.vertical, |el| {
+            let name = crate::i18n::t(title(id));
+            el.child(
+                div()
+                    .flex_none()
+                    .w(m.px(31.0))
+                    .h_full()
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .overflow_hidden()
+                    .pt(m.px(9.0))
+                    .pb(m.px(130.0))
+                    .text_size(m.px(11.0))
+                    .line_height(m.px(13.0))
+                    .font_weight(css_weight(650.0))
+                    .text_color(t.text)
+                    .children(name.chars().map(|c| div().child(c.to_string()))),
+            )
+        })
+        .when(!look.vertical, |el| {
+            el.child(
+                div()
+                    .flex_none()
+                    .flex()
+                    .items_center()
+                    .min_h(m.px(heading_h))
+                    .pl(m.px(11.0))
+                    .pr(m.px(if look.free_bar { 105.0 } else { 11.0 }))
+                    .py(m.px(pad_y))
+                    .text_size(m.px(title_size))
+                    .line_height(m.px(title_line))
+                    .font_weight(css_weight(650.0))
+                    .text_color(t.text)
+                    .child(
+                        div()
+                            .min_w_0()
+                            .overflow_hidden()
+                            .whitespace_nowrap()
+                            .text_ellipsis()
+                            .child(crate::i18n::t(title(id))),
+                    ),
+            )
+        })
+        .when(!look.bar, |el| {
+            el.child(
+                if compact {
+                    // Bottom content clips instead of scrolling (`[data-owner-region="bottom"] .widget-content`).
+                    div().flex_1().min_h_0().overflow_hidden().child(content)
+                } else {
+                    div().flex_1().min_h_0().child(
+                        scroll_area(SharedString::from(format!("widget-scroll-{id}")), scroll)
+                            .thin()
+                            .arrows(true)
+                            .locked(look.locked)
+                            .child(content),
+                    )
+                }
+                .relative(),
+            )
+        })
 }
 
 /// Widget content by id. `compact` selects the Bottom variants.

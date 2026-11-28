@@ -164,7 +164,7 @@ impl Workbench {
         self.session.editing()
     }
 
-    fn scroll(&self, region: Region) -> (f32, f32) {
+    pub(crate) fn scroll(&self, region: Region) -> (f32, f32) {
         match region {
             Region::Sidebar => (
                 0.0,
@@ -439,9 +439,14 @@ impl Workbench {
         if matches!(command, "undo" | "redo") {
             // Refused while a gesture or a splitter drag runs; a pending keyboard resize is
             // its own intention first; during a drop flight it waits for the landing.
-            if self.edit.gesture.is_some() || self.regions.dragging() {
+            if self.edit.gesture.is_some()
+                || self.regions.dragging()
+                || self.edit.panel.drag.is_some()
+                || self.pairs_active()
+            {
                 return;
             }
+            self.clear_swap_selection();
             self.settle_splitter_keyboard(cx);
             if self.edit.flight.is_some() {
                 self.edit
@@ -1174,6 +1179,10 @@ impl Workbench {
             cx.notify();
             return true;
         }
+        if self.clear_swap_selection() {
+            cx.notify();
+            return true;
+        }
         if self.regions.peek {
             return false;
         }
@@ -1624,12 +1633,12 @@ impl Workbench {
 
     // ---- rendering --------------------------------------------------------------------------
 
-    fn scroll_handle(&mut self, id: &str) -> ScrollHandle {
+    pub(crate) fn scroll_handle(&mut self, id: &str) -> ScrollHandle {
         self.scrolls.entry(id.to_owned()).or_default().clone()
     }
 
     /// Updates the Propriedades demo model; content is inert while editing.
-    fn props_handler(
+    pub(crate) fn props_handler(
         &self,
         cx: &mut Context<Self>,
     ) -> impl Fn(Properties, &mut gpui::App) + Clone + 'static {
@@ -1945,6 +1954,7 @@ impl Workbench {
                 selected: editing && self.edit.selected.as_deref() == Some(f.id.as_str()),
                 invalid: editing && self.edit.blocked.as_deref() == Some(f.id.as_str()),
                 locked: editing,
+                ..Default::default()
             };
             let frame = widgets::frame(
                 &f.fixture,
@@ -2072,7 +2082,38 @@ impl Workbench {
                         .into();
                     el = el.child(geppui::titled(zone, key, Some(tip)));
                 }
-                let _ = title;
+                // Ctrl+click adds or removes the frame from the swap selection
+                // (`onClickCapture` on the workbench).
+                let sid = id.clone();
+                el = el.capture_any_mouse_down(cx.listener(
+                    move |this, e: &MouseDownEvent, _, cx| {
+                        if e.button == MouseButton::Left
+                            && (e.modifiers.control || e.modifiers.platform)
+                        {
+                            this.toggle_swap_selection(&sid, cx);
+                            cx.stop_propagation();
+                        }
+                    },
+                ));
+                let swap_ring = self.edit.pairs.selected.contains(&id)
+                    || self
+                        .edit
+                        .pairs
+                        .swap
+                        .as_ref()
+                        .is_some_and(|d| d.target.as_deref() == Some(id.as_str()));
+                let swap_control = self.swap_control(&id, &title, m, t, cx);
+                let presentation = if region == Region::Main {
+                    self.presentation_control(&id, false, false, m, t, cx)
+                } else {
+                    None
+                };
+                let menu_open = self
+                    .edit
+                    .panel
+                    .menu
+                    .as_ref()
+                    .is_some_and(|(view, _)| *view == id);
                 let rid = id.clone();
                 let (grip_id, grip_fixture) = (id.clone(), fixture.clone());
                 // Grip (top-left: drags, and a short click opens the move destination) and
@@ -2110,30 +2151,61 @@ impl Workbench {
                             )
                             .child(geppui::icon("move", m).size(14.0).color(t.text_muted)),
                     )
+                    // `.widget-local-controls`: the presentation control of a Main widget
+                    // and the remove control, shown on hover or while the menu is open.
                     .child(
                         div()
-                            .id(SharedString::from(format!("remove-{id}")))
                             .absolute()
                             .top(m.px(9.0))
                             .right(m.px(9.0))
-                            .size(m.px(24.0))
                             .flex()
                             .items_center()
-                            .justify_center()
-                            .rounded(m.px(8.0))
-                            .bg(gpui::rgb(0xd72c42))
-                            .hover(|s| s.bg(gpui::rgb(0xb92639)))
-                            .opacity(0.0)
-                            .group_hover(group.clone(), |s| s.opacity(1.0))
-                            .cursor_pointer()
-                            .occlude()
-                            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.removing = Some(rid.clone());
-                                cx.notify();
-                            }))
-                            .child(geppui::icon("x-mark", m).size(14.0).color(gpui::white())),
+                            .gap(m.px(4.0))
+                            .when(!menu_open, |el| {
+                                el.opacity(0.0)
+                                    .group_hover(group.clone(), |s| s.opacity(1.0))
+                            })
+                            .children(presentation)
+                            .child(
+                                div()
+                                    .id(SharedString::from(format!("remove-{id}")))
+                                    .role(gpui::Role::Button)
+                                    .aria_label(
+                                        crate::i18n::t("Remover {0}").replace("{0}", &title),
+                                    )
+                                    .size(m.px(24.0))
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .rounded(m.px(8.0))
+                                    .bg(gpui::rgb(0xd72c42))
+                                    .hover(|s| s.bg(gpui::rgb(0xb92639)))
+                                    .cursor_pointer()
+                                    .occlude()
+                                    .on_mouse_down(MouseButton::Left, |_, _, cx| {
+                                        cx.stop_propagation()
+                                    })
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        this.removing = Some(rid.clone());
+                                        cx.notify();
+                                    }))
+                                    .child(
+                                        geppui::icon("x-mark", m).size(14.0).color(gpui::white()),
+                                    ),
+                            ),
                     );
+                // `[data-swap-selected]` / `[data-swap-over]`: a 2px accent ring inside.
+                if swap_ring {
+                    el = el.child(
+                        div()
+                            .absolute()
+                            .inset_0()
+                            .rounded(m.px(12.0))
+                            .border(m.border(2.0))
+                            .border_color(t.accent),
+                    );
+                }
+                el = el.children(swap_control);
             }
             out.push(el.into_any_element());
         }
@@ -2290,9 +2362,14 @@ impl Workbench {
     /// Regions below their minimums while they hold widgets (the reference's geometry warning).
     pub(crate) fn geometry_warning(&self) -> bool {
         let (view, feasible) = self.session.view(&self.ports.surfaces);
-        Region::ALL
-            .into_iter()
-            .any(|r| !*feasible.get(r) && view.placements.iter().any(|p| p.region == r))
+        let panels = panel_ids(self.session.shown());
+        Region::ALL.into_iter().any(|r| {
+            !*feasible.get(r)
+                && view
+                    .placements
+                    .iter()
+                    .any(|p| p.region == r && !panels.contains(&p.id))
+        })
     }
 
     pub(crate) fn sidebar_world(&self) -> f32 {
@@ -2722,7 +2799,8 @@ impl Workbench {
         // reference renders `[warning, t(tx.message)]` whenever the toast is visible).
         // In recovery the toast stays up with the latest message (`tx.recovery`).
         let recovery = self.session.recovery() && !self.editing();
-        let latest = if warning.is_some() || recovery {
+        let notice = self.panel_notice();
+        let latest = if warning.is_some() || recovery || notice.is_some() {
             Some(
                 self.edit
                     .toast
@@ -2732,15 +2810,13 @@ impl Workbench {
         } else {
             self.edit.toast_text(now).map(str::to_owned)
         };
-        let text = match (
-            warning.map(crate::i18n::t),
-            latest.as_deref().map(crate::i18n::t),
-        ) {
-            (Some(w), Some(m)) => Some(format!("{w} {m}")),
-            (Some(w), None) => Some(w.to_string()),
-            (None, Some(m)) => Some(m.to_string()),
-            (None, None) => None,
-        };
+        let parts: Vec<String> = [notice, warning, latest.as_deref()]
+            .into_iter()
+            .flatten()
+            .filter(|text| !text.is_empty())
+            .map(|text| crate::i18n::t(text).to_string())
+            .collect();
+        let text = (!parts.is_empty()).then(|| parts.join(" "));
         if let Some(text) = text {
             top.push(geppui::toast(text, (shell::STATUS + 16.0) as f32).into_any_element());
         }
@@ -2875,6 +2951,41 @@ impl Workbench {
             }).into_iter().collect::<HashMap<_, _>>(),
             "frames": self.frame_rects().into_iter().map(|(id, r)| (id, [r.x, r.y, r.w, r.h])).collect::<HashMap<_, _>>(),
         });
+        // C2b fields, outside the macro (its recursion limit).
+        let mut state = state;
+        state["panels"] = self.trace_panels();
+        state["pairs"] = serde_json::json!(
+            self.pairs()
+                .1
+                .iter()
+                .map(|p| format!(
+                    "{}|{}|{}",
+                    p.first,
+                    p.second,
+                    if p.axis == geppio_core::layout::Axis::X {
+                        "x"
+                    } else {
+                        "y"
+                    }
+                ))
+                .collect::<Vec<_>>()
+        );
+        state["pairDrag"] =
+            serde_json::json!(self.edit.pairs.drag.as_ref().map(|d| serde_json::json!({
+                "first": d.pair.first,
+                "second": d.pair.second,
+                "delta": d.delta,
+                "snapped": self.edit.pairs.snapped,
+            })));
+        state["swapSelected"] = serde_json::json!(self.edit.pairs.selected);
+        state["swapSelection"] = serde_json::json!(self.edit.pairs.selection);
+        state["swapDrag"] =
+            serde_json::json!(self.edit.pairs.swap.as_ref().map(|d| serde_json::json!({
+                "id": d.id,
+                "started": d.started,
+                "target": d.target,
+            })));
+        state["preview"] = serde_json::json!(self.session.shown() != self.session.draft());
         if let Some(trace) = self.automation.trace.as_mut() {
             trace.state(now, &state);
         }

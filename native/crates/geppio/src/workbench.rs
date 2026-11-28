@@ -462,6 +462,8 @@ impl Workbench {
         self.bars.restore = None;
         self.edit_cancel_gesture(cx);
         self.compositions_cancel_drag(cx);
+        self.panels_reset();
+        self.pairs_blur(cx);
         cx.notify();
     }
 
@@ -717,6 +719,27 @@ impl Workbench {
                 cx.notify();
             }
             return;
+        }
+        // Escape first closes the presentation menu (`popover="auto"` closes wherever focus
+        // is) and ends a running panel, pair or swap gesture.
+        if event.keystroke.key == "escape" {
+            if let Some((id, _)) = self.edit.panel.menu.clone() {
+                self.close_presentation_menu(&id);
+                cx.notify();
+                return;
+            }
+            if self.edit.panel.drag.take().is_some() {
+                cx.notify();
+                return;
+            }
+            if self.edit.pairs.drag.is_some() {
+                self.pair_end(true, cx);
+                return;
+            }
+            if self.edit.pairs.swap.take().is_some() {
+                cx.notify();
+                return;
+            }
         }
         if self.menu.is_none() && self.edit_key(event, cx) {
             return;
@@ -1540,6 +1563,8 @@ impl Render for Workbench {
             self.splitter_hover[i].sample(now);
         }
         let rail_scrolling = self.rail_autoscroll(cx);
+        self.panels_focus(window, cx);
+        let panels_pending = self.panels_tick(now);
         let edit_scrolling = self.edit_tick(cx) | self.compositions_autoscroll(cx);
         // Undo/redo pressed during a drop flight run when it lands.
         if self.edit.flight.is_none() && !self.edit.queued.is_empty() {
@@ -1548,6 +1573,7 @@ impl Render for Workbench {
             }
         }
         let animating = rail_scrolling
+            || panels_pending
             || edit_scrolling
             || self.regions.animating(now)
             || self.chevron.animating(now)
@@ -1571,6 +1597,16 @@ impl Render for Workbench {
         let s = ShellLayout::compute(w, h, tracks);
         self.ports = Ports::of(&s, self.regions.shown_sidebar_width());
         self.ports.surfaces.expanded = self.prefs.horizontal_expansion;
+        self.edit.panel.full_main = self.ports.main;
+        self.arrange_panels();
+        self.pairs_sync(cx);
+        let main_port = self.ports.main;
+        let main_rect = rect(
+            main_port.x as f64,
+            main_port.y as f64,
+            main_port.w as f64,
+            main_port.h as f64,
+        );
         let editing = self.editing();
         let main_frames = self.region_frames(Region::Main, m, t, now, editing, window, cx);
         let bottom_frames = self.region_frames(Region::Bottom, m, t, now, editing, window, cx);
@@ -1608,20 +1644,17 @@ impl Render for Workbench {
         );
         // Main region.
         layers.push(if main_frames.is_empty() {
-            abs(m, s.main_port.into())
+            abs(m, main_rect)
                 .child(self.empty_region(&c, "main", cx))
                 .into_any_element()
         } else {
             // An infeasible projection keeps reference geometry: Main scrolls on both axes with
             // the thin platform bars of `.placement-port`.
             let (world_w, world_h) = self.main_world();
-            abs(m, s.main_port.into())
+            abs(m, main_rect)
                 .child(
                     geppui::scroll_area("main-port", &self.main_scroll)
-                        .both_axes(
-                            (world_w, world_h),
-                            (s.main_port.w as f32, s.main_port.h as f32),
-                        )
+                        .both_axes((world_w, world_h), (main_port.w, main_port.h))
                         .child(
                             div()
                                 .relative()
@@ -1632,6 +1665,15 @@ impl Render for Workbench {
                 )
                 .into_any_element()
         });
+        let panel_layer = self.panel_layer(m, t, editing, cx);
+        layers.extend(panel_layer);
+        // A reveal or a committed change starts its motion while the panels are laid out,
+        // after this frame's animation check: keep the frames coming.
+        if self.edit.panel.motion.values().any(|tw| !tw.done(now))
+            && !geppui::appearance(cx).clock.frozen()
+        {
+            window.request_animation_frame();
+        }
         // Bottom: fixed-height tray anchored to the top of a shrinking clip (it slides down).
         if s.bottom_clip.h > 0.0 {
             let tray = s.bottom_surface;
@@ -1667,6 +1709,9 @@ impl Render for Workbench {
                     .into_any_element(),
             );
         }
+        // Pair dividers sit above their region's frames (Main 16, Bottom 36).
+        let pair_layer = self.pair_layer(&[Region::Main, Region::Bottom], m, t, window, cx);
+        layers.extend(pair_layer);
         let splitters = self.splitters(&c, &s, now, window, cx);
         // "Ampliar Bottom": Bottom cannot fit its widgets' minimums (`bottom-recovery`).
         let bottom_infeasible = {
@@ -1748,6 +1793,8 @@ impl Render for Workbench {
                     .into_any_element(),
             );
         }
+        let sidebar_pairs = self.pair_layer(&[Region::Sidebar], m, t, window, cx);
+        layers.extend(sidebar_pairs);
         // Floating Sidebar.
         if self.regions.floating && (self.regions.peek || frame.peek_opacity > 0.0) {
             let f = s.floating;
@@ -1796,6 +1843,10 @@ impl Render for Workbench {
         layers.extend(self.overlays(m, t, window, cx));
         layers.extend(self.bar_overlays(m, t, window, cx));
         layers.extend(self.composition_overlays(m, t, window, cx));
+        layers.extend(self.pairs_overlays(m, t, cx));
+        if let Some(menu) = self.presentation_menu(m, t, cx) {
+            layers.push(menu);
+        }
         layers.extend(edit_top);
 
         if let Some(drag) = self.splitter.filter(|_| self.regions.resizing.is_some()) {
@@ -1856,7 +1907,10 @@ impl Render for Workbench {
                 if !geppui::appearance(cx).clock.frozen() {
                     let pos = (m.css(e.position.x), m.css(e.position.y));
                     let pressed = e.pressed_button == Some(MouseButton::Left);
-                    if !this.compositions_move(pos, pressed, cx)
+                    if !this.pair_move(pos, pressed, cx)
+                        && !this.swap_move(pos, pressed, cx)
+                        && !this.panel_move(pos, pressed, cx)
+                        && !this.compositions_move(pos, pressed, cx)
                         && !this.bars_move(pos, cx)
                         && !this.edit_move(pos, pressed, cx)
                     {
@@ -1869,7 +1923,13 @@ impl Render for Workbench {
                 cx.listener(|this, e: &MouseUpEvent, _, cx| {
                     let m = this.metrics;
                     let pos = (m.css(e.position.x), m.css(e.position.y));
-                    if !this.compositions_up(cx) && !this.bars_up(cx) && !this.edit_up(pos, cx) {
+                    if !this.pair_up(pos, cx)
+                        && !this.swap_up(pos, cx)
+                        && !this.panel_up(pos, cx)
+                        && !this.compositions_up(cx)
+                        && !this.bars_up(cx)
+                        && !this.edit_up(pos, cx)
+                    {
                         this.on_mouse_up(cx)
                     }
                 }),
@@ -1881,7 +1941,13 @@ impl Render for Workbench {
                 cx.listener(|this, e: &MouseUpEvent, _, cx| {
                     let m = this.metrics;
                     let pos = (m.css(e.position.x), m.css(e.position.y));
-                    if !this.compositions_up(cx) && !this.bars_up(cx) && !this.edit_up(pos, cx) {
+                    if !this.pair_up(pos, cx)
+                        && !this.swap_up(pos, cx)
+                        && !this.panel_up(pos, cx)
+                        && !this.compositions_up(cx)
+                        && !this.bars_up(cx)
+                        && !this.edit_up(pos, cx)
+                    {
                         this.on_mouse_up(cx)
                     }
                 }),

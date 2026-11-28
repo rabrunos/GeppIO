@@ -11,7 +11,8 @@
 //!   so reversal restores it exactly) → commit, drop into another region, or cancel.
 use super::codec::{parse_workbench, serialize_workbench};
 use super::commands::{
-    add_widget as add_command, move_view, reconcile_bar_heights, remove_presence,
+    ResizePair, add_widget as add_command, move_view, reconcile_bar_heights, remove_presence,
+    resize_pair, swap_views,
 };
 use super::compositions::{
     SlotIntention, apply_to_draft, available_composition, composition_scene, fill_reservation,
@@ -24,7 +25,10 @@ use super::model::{
     WorkbenchSnapshot, active_placements, initial_workbench, sidebar_insertion,
     snapshot_constraints,
 };
-use super::presentations::{panel_ids, validate_presentation_edges};
+use super::presentations::{
+    Presentation, PresentationPatch, change_presentation, panel_ids, presentation_for,
+    return_to_normal, validate_presentation_edges,
+};
 use crate::freeform::{CodecError, constraints_for, project_region, region_label};
 use crate::js;
 use crate::layout::{
@@ -262,6 +266,11 @@ pub struct EditSession {
     gesture: Option<ActiveGesture>,
     message: String,
     demo_fixtures: bool,
+    /// A pair resize outside Edit shows here until it is saved or cancelled (`preview`).
+    preview: Option<WorkbenchSnapshot>,
+    /// The mode a running pair drag started in (`Some(editing)`); a drag that outlives a
+    /// mode change neither previews nor saves.
+    pair_mode: Option<bool>,
 }
 
 impl EditSession {
@@ -305,6 +314,8 @@ impl EditSession {
             gesture: None,
             message: message.to_owned(),
             demo_fixtures,
+            preview: None,
+            pair_mode: None,
         }
     }
 
@@ -368,7 +379,11 @@ impl EditSession {
     }
     /// The visible scene for `surfaces` and each region's feasibility.
     pub fn view(&self, surfaces: &SessionSurfaces) -> (WorkbenchSnapshot, PerRegion<bool>) {
-        project_view(&self.draft.snapshot, &self.registry, surfaces)
+        project_view(self.shown(), &self.registry, surfaces)
+    }
+    /// The document drawn now: a pair preview outside Edit, otherwise the draft.
+    pub fn shown(&self) -> &WorkbenchSnapshot {
+        self.preview.as_ref().unwrap_or(&self.draft.snapshot)
     }
 
     fn put(&mut self, next: WorkbenchSnapshot) -> Result<(), SessionError> {
@@ -435,6 +450,8 @@ impl EditSession {
         if self.recovery && !self.editing {
             return Err(SessionError::Recovery);
         }
+        // A pair preview never becomes the edit draft.
+        self.end_pair_preview();
         let (view, _) = self.view(surfaces);
         let visible = if panel_ids(&self.draft.snapshot).is_empty() {
             view
@@ -760,6 +777,226 @@ impl EditSession {
         Ok(())
     }
 
+    /// Changes a view's presentation (`present`): one undoable intention inside Edit;
+    /// outside it only the open state and panel size, saved at once ("Apresentação salva.").
+    /// `bounds` (Main size, expansion, scrollbar) let a panel return to Normal.
+    pub fn present(
+        &mut self,
+        id: &str,
+        patch: &PresentationPatch,
+        bounds: Option<(Size, bool, f64)>,
+        store: &mut dyn WorkbenchStore,
+    ) -> Result<(), SessionError> {
+        if self.history.active() {
+            return Err(SessionError::GestureActive);
+        }
+        // Outside Edit only the open state and the panel size change; the mode, the edge and
+        // a free panel's position belong to Edit.
+        if !self.editing
+            && (patch.presentation.is_some() || patch.anchor.is_some() || patch.position.is_some())
+        {
+            return Err(SessionError::NotEditing);
+        }
+        let grouped = self
+            .draft
+            .snapshot
+            .organization
+            .groups
+            .as_ref()
+            .is_some_and(|g| {
+                g.entries
+                    .iter()
+                    .any(|group| group.members.iter().any(|m| m == id))
+            });
+        if patch
+            .presentation
+            .is_some_and(|p| p != Presentation::Normal)
+            && grouped
+        {
+            self.message = String::from(
+                "Separe a aba do grupo antes de alterar a apresentação. O grupo foi preservado.",
+            );
+            return Err(SessionError::Rejected);
+        }
+        let refused = "Apresentação incompatível ou borda ocupada. Dados anteriores preservados.";
+        let current = presentation_for(&self.draft.snapshot, id, &self.registry)
+            .map_or(Presentation::Normal, |p| p.presentation);
+        let next = if patch.presentation == Some(Presentation::Normal)
+            && current != Presentation::Normal
+        {
+            let converted = bounds.map(|(size, expanded, scrollbar)| {
+                return_to_normal(
+                    &self.draft.snapshot,
+                    id,
+                    size,
+                    &self.registry,
+                    expanded,
+                    scrollbar,
+                )
+            });
+            match converted {
+                Some(Ok(Some(next))) => next,
+                Some(Err(_)) => {
+                    self.message = String::from(refused);
+                    return Err(SessionError::Rejected);
+                }
+                _ => {
+                    self.message = String::from(
+                        "Libere o local ou reduza o painel antes de voltar a Normal. Dados anteriores preservados.",
+                    );
+                    return Err(SessionError::Rejected);
+                }
+            }
+        } else {
+            match change_presentation(&self.draft.snapshot, patch, &self.registry, id) {
+                Ok(next) => next,
+                Err(_) => {
+                    self.message = String::from(refused);
+                    return Err(SessionError::Rejected);
+                }
+            }
+        };
+        if self.editing {
+            return self.action(next);
+        }
+        if self.recovery || self.normalization_pending || self.draft.snapshot != self.committed {
+            self.message = String::from(
+                "Confirme ou recupere a composição em Editar antes de alterar a apresentação.",
+            );
+            return Err(SessionError::Rejected);
+        }
+        self.commit_with(next, false, store, Some("Apresentação salva."))
+    }
+
+    /// Starts a pair divider drag: inside Edit the history gesture opens; outside, the
+    /// preview starts from the committed document. Refused while another gesture runs.
+    pub fn begin_pair(&mut self) -> bool {
+        if self.history.active() || self.pair_mode.is_some() {
+            return false;
+        }
+        if self.editing {
+            self.history.begin(&self.draft);
+        }
+        self.preview = None;
+        self.pair_mode = Some(self.editing);
+        true
+    }
+
+    /// Drops a pair preview and forgets the running pair drag (mode changes, saves).
+    fn end_pair_preview(&mut self) {
+        self.preview = None;
+        self.pair_mode = None;
+    }
+
+    /// The live result of a pair drag: the draft inside Edit, the preview outside. Ignored
+    /// once the mode changed under the drag.
+    pub fn pair_preview(&mut self, next: WorkbenchSnapshot) {
+        if self.pair_mode != Some(self.editing) {
+            return;
+        }
+        if self.editing {
+            let _ = self.put(next);
+        } else {
+            self.preview = Some(next);
+        }
+    }
+
+    /// Ends a pair drag: inside Edit it is one undoable intention (or nothing when
+    /// cancelled); outside, an accepted travel is saved ("Redimensionamento salvo.").
+    pub fn end_pair(
+        &mut self,
+        cancel: bool,
+        intent: &ResizePair,
+        store: &mut dyn WorkbenchStore,
+    ) -> Result<(), SessionError> {
+        let started = self.pair_mode;
+        self.end_pair_preview();
+        // A drag that outlived a mode change ends with nothing.
+        if started != Some(self.editing) {
+            return Ok(());
+        }
+        if self.editing {
+            if cancel {
+                if let Some(before) = self.history.abort() {
+                    self.apply(before);
+                }
+            } else {
+                self.history.finish(&self.draft);
+            }
+            return Ok(());
+        }
+        if cancel {
+            return Ok(());
+        }
+        self.commit_pair(intent, store)
+    }
+
+    /// One keyboard step of a pair divider: inside Edit an intention over the projected
+    /// view of the draft, outside it saved at once. Refused during any gesture.
+    pub fn step_pair(
+        &mut self,
+        surfaces: &SessionSurfaces,
+        intent: &ResizePair,
+        store: &mut dyn WorkbenchStore,
+    ) -> Result<(), SessionError> {
+        if self.history.active() || self.pair_mode.is_some() {
+            return Err(SessionError::GestureActive);
+        }
+        if self.editing {
+            let (view, _) = self.view(surfaces);
+            let next = resize_pair(&view, &self.registry, intent).ok_or(SessionError::Rejected)?;
+            return self.action(next);
+        }
+        self.commit_pair(intent, store)
+    }
+
+    /// Saves a pair resize outside Edit (`commitPair`).
+    pub fn commit_pair(
+        &mut self,
+        intent: &ResizePair,
+        store: &mut dyn WorkbenchStore,
+    ) -> Result<(), SessionError> {
+        if self.editing || intent.delta == 0.0 {
+            return Err(SessionError::Rejected);
+        }
+        if self.normalization_pending {
+            self.message = String::from(
+                "Confirme a composição em Editar antes de redimensionar pares. Os dados anteriores foram preservados.",
+            );
+            return Err(SessionError::Rejected);
+        }
+        if self.recovery || self.draft.snapshot != self.committed {
+            return Err(SessionError::Rejected);
+        }
+        let next =
+            resize_pair(&self.committed, &self.registry, intent).ok_or(SessionError::Rejected)?;
+        self.commit_with(next, false, store, Some("Redimensionamento salvo."))
+    }
+
+    /// Swaps two views of the projected draft through `action`: one intention in Edit
+    /// (`swapViews`).
+    pub fn swap(
+        &mut self,
+        surfaces: &SessionSurfaces,
+        a: &str,
+        b: &str,
+    ) -> Result<(), SessionError> {
+        if !self.editing {
+            return Err(SessionError::NotEditing);
+        }
+        if self.history.active() || self.pair_mode.is_some() {
+            return Err(SessionError::GestureActive);
+        }
+        let (view, _) = self.view(surfaces);
+        match swap_views(&view, &self.registry, a, b) {
+            Some(next) => self.action(next),
+            None => {
+                self.message = String::from("Troca incompatível ou sem espaço.");
+                Err(SessionError::Rejected)
+            }
+        }
+    }
+
     /// Opens the history gesture of a catalog drag at its lift (`beginGesture`): a bar
     /// switched by hovering and the drop are then one intention.
     pub fn begin_catalog_drag(&mut self) {
@@ -1063,6 +1300,7 @@ impl EditSession {
     /// Opens Edit on a previewed scene without touching the stored document (`preview`):
     /// Save adopts it and leaves recovery; Cancel keeps the previous data (and recovery).
     pub fn preview_scene(&mut self, next: WorkbenchSnapshot, message: &str) {
+        self.end_pair_preview();
         self.gesture = None;
         self.history.clear();
         self.open_checkpoint();
@@ -1194,6 +1432,7 @@ impl EditSession {
         success: Option<&str>,
     ) -> Result<(), SessionError> {
         let validated = self.persist(next, store)?;
+        self.end_pair_preview();
         self.normalization_pending = false;
         let retain_slots = !conclude;
         self.checkpoint = SessionDraft {
@@ -1344,6 +1583,7 @@ impl EditSession {
 
     /// Leaves Edit and restores the last confirmed checkpoint.
     pub fn cancel(&mut self) {
+        self.end_pair_preview();
         self.gesture = None;
         self.history.clear();
         let restored = SessionDraft {

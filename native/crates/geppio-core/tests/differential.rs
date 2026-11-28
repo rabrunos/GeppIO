@@ -2248,3 +2248,340 @@ fn composition_library_runs_inside_the_edit_session() {
     session.cancel();
     assert!(session.format_id().is_none() && session.slots().is_empty());
 }
+
+mod presentations {
+    use super::*;
+    use geppio_core::workbench::presentations::{
+        Edge, Presentation, PresentationPatch, arrange_presentations, change_presentation,
+        return_to_normal,
+    };
+    use geppio_core::workbench::{
+        parse_workbench, serialize_workbench, snapshot_constraints, widget_registry,
+    };
+
+    fn patch(v: &Json) -> PresentationPatch {
+        let object = |key: &str| v.get(key).and_then(Json::as_object).cloned();
+        PresentationPatch {
+            presentation: v
+                .get("presentation")
+                .and_then(Json::as_str)
+                .and_then(Presentation::parse),
+            open: v.get("open").and_then(Json::as_bool),
+            anchor: v.get("anchor").map(|a| a.as_str().and_then(Edge::parse)),
+            preferred: object("preferred"),
+            position: object("position"),
+        }
+    }
+
+    fn same_rect(context: &str, actual: &Bounds, expected: &Json) {
+        for (field, value) in [
+            ("x", actual.x),
+            ("y", actual.y),
+            ("width", actual.width),
+            ("height", actual.height),
+        ] {
+            let e = num(expected, field);
+            assert!(
+                (value - e).abs() <= 1e-6,
+                "{context}: {field} {value} != {e}"
+            );
+        }
+    }
+
+    #[test]
+    fn presentation_cases_match() {
+        let registry = widget_registry(&[], true);
+        let data = fixture("presentations.json");
+        let mut counts = (0, 0, 0);
+        for case in array(&data, "cases") {
+            let name = text(case, "name");
+            let source = parse_workbench(text(case, "document"), &registry)
+                .unwrap_or_else(|e| panic!("{name}: {e}"));
+            let expected = get(case, "expected");
+            match text(case, "kind") {
+                "change" => {
+                    counts.0 += 1;
+                    let result = change_presentation(
+                        &source,
+                        &patch(get(case, "patch")),
+                        &registry,
+                        text(case, "id"),
+                    );
+                    match (result, expected) {
+                        (Err(_), Json::Null) => {}
+                        (Ok(next), Json::String(raw)) => assert_eq!(
+                            &serialize_workbench(&next, &registry).unwrap(),
+                            raw,
+                            "{name}"
+                        ),
+                        (result, _) => panic!("{name}: unexpected {:?}", result.map(|_| ())),
+                    }
+                }
+                "arrange" => {
+                    counts.1 += 1;
+                    let size = get(case, "size");
+                    let layout = arrange_presentations(
+                        &source,
+                        Size::new(num(size, "width"), num(size, "height")),
+                        &snapshot_constraints(&source, &registry),
+                        get(case, "expanded").as_bool().unwrap(),
+                        num(case, "scrollbar"),
+                        true,
+                    );
+                    same_rect(
+                        &format!("{name} normal"),
+                        &layout.normal,
+                        get(expected, "normal"),
+                    );
+                    let r = get(expected, "reservations");
+                    let reserved = layout.reservations;
+                    for (edge, value) in [
+                        ("top", reserved.top),
+                        ("bottom", reserved.bottom),
+                        ("left", reserved.left),
+                        ("right", reserved.right),
+                    ] {
+                        assert!((value - num(r, edge)).abs() <= 1e-6, "{name}: {edge}");
+                    }
+                    assert_eq!(
+                        layout.adapted,
+                        get(expected, "adapted").as_bool().unwrap(),
+                        "{name}: adapted"
+                    );
+                    assert_eq!(
+                        layout.feasible,
+                        get(expected, "feasible").as_bool().unwrap(),
+                        "{name}: feasible"
+                    );
+                    let panels = array(expected, "panels");
+                    assert_eq!(layout.panels.len(), panels.len(), "{name}: panels");
+                    for ((id, p), e) in layout.panels.iter().zip(panels) {
+                        let context = format!("{name} {id}");
+                        assert_eq!(id, text(e, "id"), "{context}");
+                        same_rect(
+                            &format!("{context} expanded"),
+                            &p.expanded,
+                            get(e, "expanded"),
+                        );
+                        same_rect(
+                            &format!("{context} collapsed"),
+                            &p.collapsed,
+                            get(e, "collapsed"),
+                        );
+                        assert_eq!(
+                            p.shown,
+                            get(e, "shown").as_bool().unwrap(),
+                            "{context}: shown"
+                        );
+                        assert_eq!(
+                            p.adapted,
+                            get(e, "adapted").as_bool().unwrap(),
+                            "{context}: adapted"
+                        );
+                    }
+                }
+                "normal" => {
+                    counts.2 += 1;
+                    let size = get(case, "size");
+                    let result = return_to_normal(
+                        &source,
+                        text(case, "id"),
+                        Size::new(num(size, "width"), num(size, "height")),
+                        &registry,
+                        false,
+                        0.0,
+                    );
+                    match (result, expected) {
+                        (Ok(None) | Err(_), Json::Null) => {}
+                        (Ok(Some(next)), Json::String(raw)) => assert_eq!(
+                            &serialize_workbench(&next, &registry).unwrap(),
+                            raw,
+                            "{name}"
+                        ),
+                        (result, _) => {
+                            panic!("{name}: unexpected {:?}", result.map(|n| n.is_some()))
+                        }
+                    }
+                }
+                other => panic!("{name}: unknown kind {other}"),
+            }
+        }
+        assert_eq!(counts, (12, 70, 5));
+    }
+}
+
+#[test]
+fn presentations_pairs_and_swaps_follow_the_transaction() {
+    use geppio_core::layout::{Axis, Region, Size};
+    use geppio_core::workbench::commands::{ResizePair, resize_pair};
+    use geppio_core::workbench::presentations::{PresentationPatch, presentation_for};
+    use geppio_core::workbench::{
+        Edge, EditSession, Presentation, SessionError, model::active_placements, widget_registry,
+    };
+    let surfaces = test_surfaces();
+    let main = Some((Size::new(927.0, 494.0), false, 0.0));
+    let docked = PresentationPatch {
+        presentation: Some(Presentation::Docked),
+        anchor: Some(Some(Edge::Bottom)),
+        ..Default::default()
+    };
+    // A mode change needs Edit; inside it, it is one undoable intention.
+    let mut store = MemoryStore::default();
+    let mut session = EditSession::open(widget_registry(&[], true), None, true);
+    assert!(matches!(
+        session.present("properties", &docked, main, &mut store),
+        Err(SessionError::NotEditing)
+    ));
+    session.begin(&surfaces).unwrap();
+    session
+        .present("properties", &docked, main, &mut store)
+        .unwrap();
+    let state = presentation_for(session.draft(), "properties", session.registry()).unwrap();
+    assert_eq!(
+        (state.presentation, state.anchor),
+        (Presentation::Docked, Some(Edge::Bottom))
+    );
+    assert!(session.can_undo());
+    assert!(session.undo());
+    let state = presentation_for(session.draft(), "properties", session.registry()).unwrap();
+    assert_eq!(state.presentation, Presentation::Normal);
+    // An occupied edge is refused with the reference's message.
+    session
+        .present("properties", &docked, main, &mut store)
+        .unwrap();
+    assert!(
+        session
+            .present("summary", &docked, main, &mut store)
+            .is_err()
+    );
+    assert_eq!(
+        session.message(),
+        "Apresentação incompatível ou borda ocupada. Dados anteriores preservados."
+    );
+    session.conclude(&surfaces, &mut store).unwrap();
+    assert!(!session.editing());
+    // Outside Edit the edge and the free position belong to Edit.
+    let saved = store.raw.clone();
+    let move_edge = PresentationPatch {
+        anchor: Some(Some(Edge::Top)),
+        ..Default::default()
+    };
+    assert!(matches!(
+        session.present("properties", &move_edge, main, &mut store),
+        Err(SessionError::NotEditing)
+    ));
+    assert_eq!(store.raw, saved);
+    // Outside Edit the open state is saved at once.
+    let close = PresentationPatch {
+        open: Some(false),
+        ..Default::default()
+    };
+    session
+        .present("properties", &close, main, &mut store)
+        .unwrap();
+    assert_eq!(session.message(), "Apresentação salva.");
+    assert_ne!(store.raw, saved);
+    assert!(
+        !presentation_for(session.draft(), "properties", session.registry())
+            .unwrap()
+            .open
+    );
+
+    // Pairs: two frames of one region 10px apart.
+    let mut store = MemoryStore::default();
+    let mut session = EditSession::open(widget_registry(&[], true), None, true);
+    let view = session.view(&surfaces).0;
+    let visible = active_placements(&view, true);
+    let (first, second) = visible
+        .iter()
+        .flat_map(|a| visible.iter().map(move |b| (a, b)))
+        .find(|(a, b)| {
+            a.id != b.id
+                && a.region == b.region
+                && a.region != Region::Sidebar
+                && (b.x - a.x - a.width - 10.0).abs() < 0.1
+                && a.y < b.y + b.height
+                && b.y < a.y + a.height
+        })
+        .map(|(a, b)| (a.id.clone(), b.id.clone()))
+        .expect("the initial workbench has a side-by-side pair");
+    let intent = |delta: f64| ResizePair {
+        first: first.clone(),
+        second: second.clone(),
+        axis: Axis::X,
+        delta,
+    };
+    // Outside Edit a drag previews and a cancelled drag writes nothing.
+    assert!(session.begin_pair());
+    assert!(!session.begin_pair());
+    let preview = resize_pair(session.draft(), session.registry(), &intent(-20.0)).unwrap();
+    session.pair_preview(preview);
+    assert_ne!(session.shown(), session.draft());
+    session.end_pair(true, &intent(-20.0), &mut store).unwrap();
+    assert_eq!(session.shown(), session.draft());
+    assert!(store.raw.is_none());
+    // A zero travel saves nothing; an accepted travel is saved.
+    assert!(session.commit_pair(&intent(0.0), &mut store).is_err());
+    assert!(session.begin_pair());
+    session.end_pair(false, &intent(-20.0), &mut store).unwrap();
+    assert_eq!(session.message(), "Redimensionamento salvo.");
+    assert!(store.raw.is_some());
+    // A drag that outlives a mode change neither leaks its preview nor saves.
+    assert!(session.begin_pair());
+    let preview = resize_pair(session.draft(), session.registry(), &intent(-30.0)).unwrap();
+    session.pair_preview(preview);
+    session.begin(&surfaces).unwrap();
+    assert_eq!(session.shown(), session.draft());
+    let saved = store.raw.clone();
+    session.pair_preview(resize_pair(session.draft(), session.registry(), &intent(-30.0)).unwrap());
+    session.end_pair(false, &intent(-30.0), &mut store).unwrap();
+    assert_eq!(store.raw, saved);
+    assert!(!session.can_undo());
+    // Inside Edit a drag is one undoable intention and a key step is another.
+    let before = session.draft().clone();
+    assert!(session.begin_pair());
+    let view = session.view(&surfaces).0;
+    session.pair_preview(resize_pair(&view, session.registry(), &intent(-20.0)).unwrap());
+    session.end_pair(false, &intent(-20.0), &mut store).unwrap();
+    assert!(session.can_undo());
+    session
+        .step_pair(&surfaces, &intent(15.0), &mut store)
+        .unwrap();
+    assert!(session.undo());
+    assert!(session.undo());
+    assert_eq!(session.draft().placements, before.placements);
+    // A cancelled drag in Edit leaves no step; keys and swaps wait for the drag.
+    assert!(session.begin_pair());
+    assert!(matches!(
+        session.step_pair(&surfaces, &intent(15.0), &mut store),
+        Err(SessionError::GestureActive)
+    ));
+    let view = session.view(&surfaces).0;
+    session.pair_preview(resize_pair(&view, session.registry(), &intent(-20.0)).unwrap());
+    session.end_pair(true, &intent(-20.0), &mut store).unwrap();
+    assert_eq!(session.draft().placements, before.placements);
+    assert!(!session.can_undo());
+
+    // Swap: one intention in Edit; an impossible swap keeps the draft.
+    let view = session.view(&surfaces).0;
+    session.swap(&surfaces, &first, &second).unwrap();
+    let a = |s: &EditSession, id: &str| {
+        s.draft()
+            .placements
+            .iter()
+            .find(|p| p.id == id)
+            .map(|p| (p.x, p.y))
+    };
+    assert_eq!(
+        a(&session, &first).map(|p| p.0),
+        view.placements.iter().find(|p| p.id == second).map(|p| p.x)
+    );
+    assert!(session.undo());
+    assert!(session.swap(&surfaces, &first, "missing").is_err());
+    assert_eq!(session.message(), "Troca incompatível ou sem espaço.");
+    session.cancel();
+    assert!(matches!(
+        session.swap(&surfaces, &first, &second),
+        Err(SessionError::NotEditing)
+    ));
+}

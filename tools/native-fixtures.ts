@@ -21,7 +21,8 @@ import { parseWorkbench, serializeWorkbench } from '../src/geppio/src/shared/wor
 import { addWidget, configureBar, deleteBar, fitTargets, moveView, reconcileBarHeights, removePresence, reorderBar, resizePair, swapViews, updateBar } from '../src/geppio/src/shared/workbench/commands.ts'
 import { groupTransferPlan, groupWidgets } from '../src/geppio/src/shared/workbench/groups.ts'
 import { EditHistory, formatSignature } from '../src/geppio/src/shared/workbench/history.ts'
-import { changePresentation, panelIds, validatePresentationEdges } from '../src/geppio/src/shared/workbench/presentations.ts'
+import { arrangePresentations, changePresentation, panelIds, returnToNormal, validatePresentationEdges } from '../src/geppio/src/shared/workbench/presentations.ts'
+import type { PresentationPatch } from '../src/geppio/src/shared/workbench/presentations.ts'
 import { writeWorkbench } from '../src/geppio/src/shared/workbench/storage.ts'
 import { exportPortableComposition, importPortableComposition, parsePortableLayout, parsePortableText, portableDependencies, resolvePortableWidgets, serializePortableLayout,
   storedPortableComposition } from '../src/geppio/src/shared/workbench/portable.ts'
@@ -1106,9 +1107,58 @@ function portableCases(all: FixtureDoc[], load: (name: string) => { registry: Re
   } finally { Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: uuid }) }
 }
 
+/** Presentation changes, the Main panel arrangement and the return to Normal (stage C2b). */
+function presentationFixtures() {
+  const registry = demoRegistry(), cases: Record<string, unknown>[] = []
+  const doc = (snapshot: WorkbenchSnapshot) => serializeWorkbench(snapshot, registry)
+  // Every source goes through the codec, as the Rust port reads it.
+  const read = (snapshot: WorkbenchSnapshot) => parseWorkbench(doc(snapshot), registry)
+  const change = (name: string, input: WorkbenchSnapshot, patch: PresentationPatch, id: string) => {
+    const source = read(input)
+    const result = attempt(() => changePresentation(source, patch, registry, id))
+    cases.push({ kind: 'change', name, document: doc(source), patch, id, expected: result.ok ? doc(result.value) : null, error: result.ok ? null : result.error })
+    return result.ok ? result.value : source
+  }
+  const base = initialWorkbench(true)
+  const bottom = change('docked-bottom', base, { presentation: 'docked', anchor: 'bottom' }, 'properties')
+  const left = change('docked-left-closed', bottom, { anchor: 'left', open: false }, 'properties')
+  const top = change('overlay-top', bottom, { presentation: 'overlay', anchor: 'top' }, 'summary')
+  const free = change('overlay-free', top, { presentation: 'overlay', anchor: null }, 'queue')
+  const two = change('overlay-free-second', free, { presentation: 'overlay', anchor: null, position: { x: 30, y: 40 } }, 'activity')
+  const wide = change('preferred-large', bottom, { preferred: { width: 900, height: 700 } }, 'properties')
+  const right = change('docked-right', base, { presentation: 'docked', anchor: 'right', preferred: { width: 380, height: 260 } }, 'activity')
+  change('occupied-edge', bottom, { presentation: 'docked', anchor: 'bottom' }, 'summary')
+  change('anchor-required', base, { presentation: 'docked' }, 'properties')
+  change('not-in-main', base, { presentation: 'docked', anchor: 'top' }, 'notes')
+  change('back-to-normal', bottom, { presentation: 'normal' }, 'properties')
+  change('open-toggle', bottom, { open: false }, 'properties')
+  const sizes: Size[] = [{ width: 927, height: 494 }, { width: 600, height: 400 }, { width: 400, height: 300 }, { width: 1200, height: 700 }, { width: 200, height: 120 }]
+  const scenes: [string, WorkbenchSnapshot][] = [['bottom', bottom], ['left', left], ['top', top], ['free', free], ['two', two], ['wide', wide], ['right', right]]
+  for (const [name, input] of scenes) for (const size of sizes) {
+    const source = read(input), constraints = constraintsForViews(source, registry)
+    for (const [expanded, scrollbar] of [[false, 0], [true, 10]] as const) {
+      const layout = arrangePresentations(source, size, constraints, expanded, scrollbar)
+      cases.push({ kind: 'arrange', name: `${name}-${size.width}x${size.height}-${expanded ? 'expanded' : 'fit'}`, document: doc(source), size, expanded, scrollbar,
+        expected: { normal: layout.normal, reservations: layout.reservations, adapted: layout.adapted, feasible: layout.feasible,
+          panels: Object.values(layout.panels).map(p => ({ id: p.state.viewId, expanded: p.expanded, collapsed: p.collapsed, shown: p.shown, adapted: p.adapted })) } })
+    }
+  }
+  const back = (name: string, input: WorkbenchSnapshot, id: string, size: Size) => {
+    const source = read(input), result = attempt(() => returnToNormal(source, id, size, registry))
+    cases.push({ kind: 'normal', name, document: doc(source), id, size, expected: result.ok && result.value ? doc(result.value) : null, error: result.ok ? null : result.error })
+  }
+  back('normal-from-bottom', bottom, 'properties', { width: 927, height: 494 })
+  back('normal-from-top', top, 'summary', { width: 927, height: 494 })
+  back('normal-from-free', two, 'activity', { width: 1200, height: 700 })
+  back('normal-small', bottom, 'properties', { width: 400, height: 300 })
+  back('normal-right', right, 'activity', { width: 1200, height: 700 })
+  return document({ cases })
+}
+
 export function buildFixtures(): Record<string, string> {
   return { 'layout.json': layoutFixtures(), 'projection.json': projectionFixtures(), 'registry.json': registryFixtures(), 'codec.json': codecFixtures(),
-    'commands.json': commandFixtures(), 'history.json': historyFixtures(), 'session.json': sessionFixtures(), 'compositions.json': compositionFixtures() }
+    'commands.json': commandFixtures(), 'history.json': historyFixtures(), 'session.json': sessionFixtures(), 'compositions.json': compositionFixtures(),
+    'presentations.json': presentationFixtures() }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {

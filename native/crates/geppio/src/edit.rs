@@ -228,6 +228,10 @@ pub struct EditUi {
     /// The current click landed on a tile or the destination box (read by the browser's
     /// outside-click handler, which runs after it).
     pub keep_destination: bool,
+    /// Docked and Floating panels.
+    pub panel: crate::presentations_view::PanelUi,
+    /// Pair dividers and the swap selection.
+    pub pairs: crate::pairs_view::PairUi,
 }
 
 /// A focus move the edit UI asks for at the next render.
@@ -277,6 +281,8 @@ impl EditUi {
             suppress_click: false,
             entering: None,
             keep_destination: false,
+            panel: Default::default(),
+            pairs: Default::default(),
         }
     }
 }
