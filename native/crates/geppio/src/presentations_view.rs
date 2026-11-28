@@ -986,7 +986,7 @@ impl Workbench {
                 .track_focus(&scope)
                 .child(widgets::content(
                     &fixture,
-                    false,
+                    widgets::Fit::new(false, window.w),
                     m,
                     t,
                     &self.properties,

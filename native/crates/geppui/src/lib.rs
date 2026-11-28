@@ -21,6 +21,7 @@ pub mod text;
 pub mod text_field;
 pub mod theme;
 pub mod toast;
+pub mod validation;
 
 use std::time::Instant;
 
@@ -42,6 +43,7 @@ pub use text::{SpacedText, spaced_text};
 pub use text_field::{TextField, TextFieldEvent};
 pub use theme::{Shadow, Theme, ThemeName};
 pub use toast::{Toast, toast};
+pub use validation::{ValidationBubble, validation_bubble, validation_duration_ms, value_missing};
 
 /// Milliseconds since the host started, or a frozen instant for deterministic captures.
 #[derive(Clone, Copy, Debug)]

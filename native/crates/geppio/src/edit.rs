@@ -14,6 +14,9 @@ use crate::catalog::{Area, CatalogState};
 
 /// The native profile file holding the `geppio:workbench:v1` envelope bytes.
 const FILE: &str = "workbench.json";
+/// The layout of `--geppio-demo-fixtures` sessions: kept apart from the owner's document, so
+/// switching the flag never mixes demo widgets into it (no merge, no conflict, no loss).
+const DEMO_FILE: &str = "workbench-demo.json";
 const MAX_BYTES: u64 = 512 * 1024;
 
 /// File-backed store in the native profile (never the Electron profile). Writes use a
@@ -21,6 +24,29 @@ const MAX_BYTES: u64 = 512 * 1024;
 #[derive(Clone, Debug)]
 pub struct FileStore {
     pub dir: Option<PathBuf>,
+    /// The demo-widget document (`workbench-demo.json`) instead of `workbench.json`.
+    pub demo: bool,
+}
+
+impl FileStore {
+    fn file(&self) -> &'static str {
+        if self.demo { DEMO_FILE } else { FILE }
+    }
+
+    /// The demo document starts as a copy of the owner's document the first time the flag is
+    /// used (then the archived demos return at open); afterwards the two evolve apart.
+    pub fn seed_demo_from_main(&mut self) {
+        if !self.demo || self.dir.is_none() || !matches!(self.get(), Ok(None)) {
+            return;
+        }
+        let main = FileStore {
+            dir: self.dir.clone(),
+            demo: false,
+        };
+        if let Ok(Some(raw)) = main.get() {
+            let _ = self.set(&raw);
+        }
+    }
 }
 
 impl WorkbenchStore for FileStore {
@@ -31,7 +57,7 @@ impl WorkbenchStore for FileStore {
         let Some(dir) = &self.dir else {
             return Ok(None);
         };
-        let file = match std::fs::File::open(dir.join(FILE)) {
+        let file = match std::fs::File::open(dir.join(self.file())) {
             Ok(file) => file,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
             Err(e) => return Err(e.to_string()),
@@ -58,7 +84,11 @@ impl WorkbenchStore for FileStore {
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_nanos())
             .unwrap_or(0);
-        let temp = dir.join(format!("{FILE}.{}-{stamp}.tmp", std::process::id()));
+        let temp = dir.join(format!(
+            "{}.{}-{stamp}.tmp",
+            self.file(),
+            std::process::id()
+        ));
         // `create_new` never opens an existing file; only a file this call created is removed.
         let mut file = std::fs::File::options()
             .write(true)
@@ -70,7 +100,7 @@ impl WorkbenchStore for FileStore {
             file.sync_all()
         })();
         drop(file);
-        let result = result.and_then(|()| std::fs::rename(&temp, dir.join(FILE)));
+        let result = result.and_then(|()| std::fs::rename(&temp, dir.join(self.file())));
         if result.is_err() {
             let _ = std::fs::remove_file(&temp);
         }
@@ -429,6 +459,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         let mut store = FileStore {
             dir: Some(dir.clone()),
+            demo: false,
         };
         assert_eq!(store.get().unwrap(), None);
         store.set("{\"a\":1}").unwrap();
@@ -446,9 +477,39 @@ mod tests {
         assert!(store.get().unwrap().is_some(), "exactly at the cap");
         std::fs::remove_dir_all(&dir).unwrap();
         // Without a profile nothing is read and a save is refused, not reported as done.
-        let mut none = FileStore { dir: None };
+        let mut none = FileStore {
+            dir: None,
+            demo: false,
+        };
         assert_eq!(none.get().unwrap(), None);
         assert!(none.set("{}").is_err());
+    }
+
+    #[test]
+    fn demo_sessions_keep_their_own_document() {
+        let dir = std::env::temp_dir().join(format!(
+            "geppio-native-test-demo-store-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut main = FileStore {
+            dir: Some(dir.clone()),
+            demo: false,
+        };
+        main.set("{\"owner\":1}").unwrap();
+        let mut demo = FileStore {
+            dir: Some(dir.clone()),
+            demo: true,
+        };
+        // The first demo session starts from a copy of the owner's document.
+        demo.seed_demo_from_main();
+        assert_eq!(demo.get().unwrap().as_deref(), Some("{\"owner\":1}"));
+        // Later saves stay apart in both directions; seeding never overwrites.
+        demo.set("{\"demo\":2}").unwrap();
+        demo.seed_demo_from_main();
+        assert_eq!(demo.get().unwrap().as_deref(), Some("{\"demo\":2}"));
+        assert_eq!(main.get().unwrap().as_deref(), Some("{\"owner\":1}"));
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

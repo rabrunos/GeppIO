@@ -116,14 +116,31 @@ fn chip(
     plugin_style: bool,
     m: geppui::Metrics,
     t: geppui::Theme,
+    cx: &mut gpui::App,
 ) -> gpui::Stateful<Div> {
+    let id: SharedString = id.into();
+    let focus = geppui::button::registered_focus(&id, cx);
     let (size, py, px, radius, min_h) = if plugin_style {
         (12.0, 5.0, 9.0, 8.0, 32.0)
     } else {
         (11.0, 5.0, 7.0, 6.0, 0.0)
     };
     div()
-        .id(id.into())
+        .id(id)
+        .role(gpui::Role::Button)
+        .aria_label(label.clone())
+        .aria_toggled(if pressed {
+            gpui::Toggled::True
+        } else {
+            gpui::Toggled::False
+        })
+        .track_focus(&focus)
+        .focus_visible(move |s| {
+            s.shadow(vec![
+                gpui::BoxShadow::new(gpui::px(0.0), gpui::px(0.0), t.ring)
+                    .spread_radius(gpui::px(2.0)),
+            ])
+        })
         .flex()
         .items_center()
         .gap(m.px(if plugin_style { 7.0 } else { 3.0 }))
@@ -233,6 +250,7 @@ impl Workbench {
         if menu == Some(Menu::Rename) {
             let name = self.project_name();
             self.panels.rename_error = false;
+            self.required = None;
             self.panels.rename_field.update(cx, |f, cx| {
                 f.set_text(&name, cx);
                 f.select_all(cx);
@@ -280,6 +298,13 @@ impl Workbench {
 
     fn submit_rename(&mut self, cx: &mut Context<Self>) {
         let text = self.panels.rename_field.read(cx).text().to_owned();
+        // `required`: an empty field is not submitted; the browser shows its bubble.
+        if text.is_empty() {
+            self.panels.rename_error = false;
+            self.pending_text_focus = Some(self.panels.rename_field.clone());
+            self.show_required(crate::workbench::RequiredField::Rename, cx);
+            return;
+        }
         match crate::prefs::valid_name(&text) {
             Some(name) => {
                 self.prefs.project_name = name;
@@ -704,8 +729,8 @@ impl Workbench {
                 geppui::button(id).label(label).text(13.0, 400.0)
             };
             let message = tr.t(self.session.message());
+            let developer = self.panels.developer_mode;
             div()
-                .mt(m.px(9.0))
                 .child(
                     text_action("settings-back", tr.t("Voltar às configurações")).on_click(
                         cx.listener(|this, _, _, cx| {
@@ -716,41 +741,46 @@ impl Workbench {
                 )
                 .child(
                     div()
-                        .mt(m.px(9.0))
+                        .id("settings-development")
+                        .role(gpui::Role::Region)
+                        .aria_label(tr.t("Desenvolvimento"))
                         .pb(m.px(16.0))
                         .border_b(m.border(1.0))
                         .border_color(t.border)
                         .flex()
                         .flex_col()
-                        .gap(m.px(9.0))
                         .child(div().child(tr.t("Desenvolvimento")))
                         .child(
                             div()
                                 .id("settings-expansion-row")
                                 .flex()
                                 .items_center()
-                                .gap(m.px(6.0))
                                 .cursor_pointer()
                                 .on_click(cx.listener(move |this, _, _, cx| {
                                     this.set_expansion(!expanded, cx)
                                 }))
-                                .child(checkbox("settings-expansion", expanded).on_toggle(
-                                    cx.listener(|this, on: &bool, _, cx| this.set_expansion(*on, cx)),
-                                ))
+                                .child(
+                                    checkbox("settings-expansion", expanded)
+                                        .label(tr.t("Ativar expansão horizontal"))
+                                        .on_toggle(cx.listener(|this, on: &bool, _, cx| {
+                                            this.set_expansion(*on, cx)
+                                        })),
+                                )
                                 .child(tr.t("Ativar expansão horizontal")),
                         )
                         .child(
-                            div().text_color(t.text_muted).child(SharedString::from(format!(
+                            div().child(SharedString::from(format!(
                                 "{} {}",
                                 tr.t("A preferência é independente das posições. Sidebar mantém a organização vertical."),
                                 message
                             ))),
                         )
                         .child(
-                            div().flex().flex_wrap().gap(m.px(9.0)).child(
+                            div().flex().child(
                                 tool("settings-reset-preview", tr.t("Prévia da composição inicial"))
                                     .on_click(cx.listener(|this, _, window, cx| {
-                                        this.session.reset_preview(true);
+                                        let demo = this.session.demo_fixtures();
+                                        this.session.reset_preview(demo);
                                         this.set_menu(None, None, Some(window), cx);
                                         this.after_preview(cx);
                                     })),
@@ -779,11 +809,9 @@ impl Workbench {
                                 })
                                 .m(m.px(12.0))
                                 .text_size(m.px(10.0))
-                                .text_color(t.text_muted)
+                                .line_height(m.px(13.0))
                                 .when(!self.editing(), |el| {
-                                    el.cursor_pointer()
-                                        .hover(move |s| s.text_color(t.text))
-                                        .on_click(cx.listener(|this, _, window, cx| {
+                                    el.cursor_pointer().on_click(cx.listener(|this, _, window, cx| {
                                             this.set_menu(None, None, Some(window), cx);
                                             this.import_layout(cx);
                                         }))
@@ -792,11 +820,60 @@ impl Workbench {
                         ),
                 )
                 .child(
+                    // `PluginSettings`: the signed-package install and the local folder arrive
+                    // with the plugin runtime (stage E), as in the Plugins popover.
                     div()
-                        .mt(m.px(16.0))
-                        .text_color(t.text_muted)
-                        .text_size(m.px(12.0))
-                        .child(tr.t("Plugins")),
+                        .id("settings-plugins")
+                        .role(gpui::Role::Region)
+                        .aria_label("Plugins")
+                        .flex()
+                        .flex_col()
+                        .child(div().child("Plugins"))
+                        .child(div().child(tr.t(
+                            "Instale um arquivo .gpp assinado por uma chave autorizada para o plugin.",
+                        )))
+                        .child(
+                            div().flex().child(
+                                tool("settings-plugins-install", tr.t("Instalar arquivo assinado"))
+                                    .primary()
+                                    .disabled(true),
+                            ),
+                        )
+                        .child(
+                            div()
+                                .id("settings-developer-row")
+                                .flex()
+                                .items_center()
+                                .justify_between()
+                                .gap(m.px(11.0))
+                                .min_h(m.px(41.0))
+                                .cursor_pointer()
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.panels.developer_mode = !developer;
+                                    cx.notify();
+                                }))
+                                .child(tr.t("Modo desenvolvedor"))
+                                .child(
+                                    checkbox("settings-developer", developer)
+                                        .label(tr.t("Modo desenvolvedor"))
+                                        .on_toggle(cx.listener(|this, on: &bool, _, cx| {
+                                            this.panels.developer_mode = *on;
+                                            cx.notify();
+                                        })),
+                                ),
+                        )
+                        .child(div().child(tr.t(
+                            "As APIs 1 e 2 executam código local confiável. A API 3 usa superfícies isoladas com permissões de comunicação. Desligar o modo pausa as pastas e preserva seus dados e posições.",
+                        )))
+                        .when(developer, |el| {
+                            el.child(
+                                div().flex().child(
+                                    tool("settings-plugins-folder", tr.t("Carregar pasta local"))
+                                        .disabled(true),
+                                ),
+                            )
+                        })
+                        .child(div().child(tr.t("Nenhum plugin instalado."))),
                 )
                 .into_any_element()
         };
@@ -846,7 +923,7 @@ impl Workbench {
             let dismiss = item.id.clone();
             let title = tr.t(&item.title);
             let params: Vec<&str> = item.params.iter().map(String::as_str).collect();
-            let time = format_time(item.at);
+            let time = format_time(item.at, tr.0 == crate::i18n::Locale::En);
             div()
                 .flex()
                 .gap(m.px(4.0))
@@ -954,6 +1031,9 @@ impl Workbench {
                     .border_color(t.border)
                     .child(
                         div()
+                            .id("notification-filters")
+                            .role(gpui::Role::Group)
+                            .aria_label(tr.t("Filtrar notificações"))
                             .flex()
                             .gap(m.px(4.0))
                             .child(
@@ -965,6 +1045,7 @@ impl Workbench {
                                     false,
                                     m,
                                     t,
+                                    cx,
                                 )
                                 .on_click(cx.listener(
                                     |this, _, _, cx| {
@@ -982,6 +1063,7 @@ impl Workbench {
                                     false,
                                     m,
                                     t,
+                                    cx,
                                 )
                                 .on_click(cx.listener(
                                     |this, _, _, cx| {
@@ -993,6 +1075,7 @@ impl Workbench {
                     )
                     .child(
                         text_action("notifications-read-all", tr.t("Ler todas"))
+                            .aria(tr.t("Marcar todas como lidas"))
                             .icon("check")
                             .disabled(unread_count == 0)
                             .on_click(cx.listener(|this, _, _, cx| {
@@ -1189,7 +1272,12 @@ impl Workbench {
                                         .spread_radius(m.px(2.0)),
                                 ])
                             })
-                            .child(self.panels.rename_field.clone()),
+                            .relative()
+                            .child(self.panels.rename_field.clone())
+                            .children(self.required_bubble(
+                                crate::workbench::RequiredField::Rename,
+                                self.panels.rename_field.read(cx).text().is_empty(),
+                            )),
                     ),
             )
             .when(self.panels.rename_error, |el| {
@@ -1309,8 +1397,13 @@ impl Workbench {
             .plugin_search
             .update(cx, |f, _| f.set_placeholder(tr.t("Buscar plugins…")));
         let filter = self.panels.plugin_filter;
-        let filter_chip = |id: &'static str, label: &str| {
-            chip(
+        let mut filter_chips: Vec<gpui::AnyElement> = Vec::new();
+        for (id, label) in [
+            ("all", "Todos"),
+            ("active", "Ativos"),
+            ("disabled", "Desativados"),
+        ] {
+            let el = chip(
                 SharedString::from(format!("plugin-filter-{id}")),
                 tr.t(label),
                 Some((0, false)),
@@ -1318,13 +1411,17 @@ impl Workbench {
                 true,
                 m,
                 t,
+                cx,
             )
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.panels.plugin_filter = id;
                 cx.notify();
-            }))
-        };
+            }));
+            filter_chips.push(el.into_any_element());
+        }
         let developer = self.panels.developer_mode;
+        let clear_focus =
+            geppui::button::registered_focus(&SharedString::from("plugins-clear-filters"), cx);
         popover("plugins", &self.panels.plugins_anchor)
             .placement(Placement::Below)
             .width(650.0)
@@ -1391,9 +1488,7 @@ impl Workbench {
                     .my(m.px(9.0))
                     .flex()
                     .gap(m.px(4.0))
-                    .child(filter_chip("all", "Todos"))
-                    .child(filter_chip("active", "Ativos"))
-                    .child(filter_chip("disabled", "Desativados")),
+                    .children(filter_chips),
             )
             .child(
                 div()
@@ -1414,6 +1509,15 @@ impl Workbench {
                     .child(
                         div()
                             .id("plugins-clear-filters")
+                            .role(gpui::Role::Button)
+                            .aria_label(tr.t("Limpar filtros"))
+                            .track_focus(&clear_focus)
+                            .focus_visible(move |s| {
+                                s.shadow(vec![
+                                    gpui::BoxShadow::new(gpui::px(0.0), gpui::px(0.0), t.ring)
+                                        .spread_radius(gpui::px(2.0)),
+                                ])
+                            })
                             .px(m.px(6.0))
                             .py(m.px(4.0))
                             .rounded(m.px(6.0))
@@ -1598,10 +1702,45 @@ fn read_layout_file(path: &std::path::Path) -> Result<String, LayoutFileError> {
         .unwrap_or(text))
 }
 
-/// `HH:MM` of an entry. Entries only come from plugin events (stage E), which will record
-/// local wall-clock minutes; this formats what the entry carries.
-fn format_time(at_ms: f64) -> SharedString {
-    let minutes = (at_ms / 60_000.0).floor() as i64;
-    let (h, mi) = ((minutes / 60).rem_euclid(24), minutes.rem_euclid(60));
-    SharedString::from(format!("{h:02}:{mi:02}"))
+/// An entry's time as `Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' })`
+/// shows it: local wall-clock time, `14:05` in Portuguese and `02:05 PM` in English. Without a
+/// local conversion it falls back to UTC.
+fn format_time(at_ms: f64, english: bool) -> SharedString {
+    let (h, mi) = crate::platform::local_hour_minute(at_ms).unwrap_or_else(|| {
+        let minutes = (at_ms / 60_000.0).floor() as i64;
+        (
+            (minutes / 60).rem_euclid(24) as u16,
+            minutes.rem_euclid(60) as u16,
+        )
+    });
+    SharedString::from(clock_text(h, mi, english))
+}
+
+/// `HH:MM` (24-hour) or `hh:MM AM/PM` (12-hour, as V8 prints English with a plain space).
+fn clock_text(hour: u16, minute: u16, english: bool) -> String {
+    if english {
+        let h12 = if hour.is_multiple_of(12) {
+            12
+        } else {
+            hour % 12
+        };
+        let half = if hour < 12 { "AM" } else { "PM" };
+        format!("{h12:02}:{minute:02} {half}")
+    } else {
+        format!("{hour:02}:{minute:02}")
+    }
+}
+
+#[cfg(test)]
+mod clock_tests {
+    use super::clock_text;
+
+    #[test]
+    fn times_follow_the_reference_intl_format() {
+        assert_eq!(clock_text(17, 5, false), "17:05");
+        assert_eq!(clock_text(17, 5, true), "05:05 PM");
+        assert_eq!(clock_text(0, 0, true), "12:00 AM");
+        assert_eq!(clock_text(12, 30, true), "12:30 PM");
+        assert_eq!(clock_text(9, 7, false), "09:07");
+    }
 }

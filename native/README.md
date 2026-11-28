@@ -70,11 +70,11 @@ Main widgets that allow it can be Docked or Floating from the "Normal ▾" contr
 
 ## Keyboard and accessibility
 
-Tab starts at the header and follows the reference's order; dialogs take focus when they open and keep Tab inside. The default menu accelerators of the reference work: Ctrl+0, Ctrl+= and Ctrl+- (page zoom, kept across launches), F11 (full screen), Ctrl+M (minimize) and Ctrl+W (close the window); reload and the developer tools are left out. The GeppUI primitives and the catalog expose roles, names and states through GPUI's AccessKit support.
+The Sidebar, the bar form's widget list and Main (while expanded or infeasible) are keyboard-scrollable tab stops, as focusable scrollers are in the reference. Splitters, landmarks and groups carry the reference's names. Tab starts at the header and follows the reference's order; dialogs take focus when they open and keep Tab inside. The default menu accelerators of the reference work: Ctrl+0, Ctrl+= and Ctrl+- (page zoom, kept across launches), F11 (full screen), Ctrl+M (minimize) and Ctrl+W (close the window); reload and the developer tools are left out. The GeppUI primitives and the catalog expose roles, names and states through GPUI's AccessKit support.
 
 ## Automated comparison hooks
 
-Normal use reads none of these. `GEPPIO_NATIVE_TEST_PROFILE` is accepted only for a `geppio-native-test-*` directory directly under the system temp folder.
+`--geppio-demo-fixtures` turns on the demonstration widgets in their own document (`workbench-demo.json`, first copied from `workbench.json`); without it the first run is empty and stored demo widgets are retired at load, as in the reference. Normal use reads none of the variables below. `GEPPIO_NATIVE_TEST_PROFILE` is accepted only for a `geppio-native-test-*` directory directly under the system temp folder.
 
 | Variable | Effect |
 | --- | --- |

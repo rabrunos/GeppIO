@@ -129,3 +129,88 @@ pub fn retire_demo_views(
         .retain(|e| !ids.contains(&e.view_id.as_str()));
     Ok(next)
 }
+
+// ---- native round trip of `--geppio-demo-fixtures` (owner decision, #75, C2c) ------------
+// The reference turns the demo widgets on only in test profiles. The native host accepts the
+// flag on the owner's profile and keeps its sessions in a separate document that starts as a
+// copy of the owner's one, so switching the flag never loses data or meets a conflict. The
+// helper returns a snapshot only when the codec accepts it; otherwise the archive stays.
+
+/// With the demo widgets on, the archive returns to the layout (views, placements, bar
+/// memberships and presentations) when every archived type is live, no identity collides and
+/// the result is a valid document.
+pub fn restore_demo_views(
+    source: &WorkbenchSnapshot,
+    registry: &Registry,
+) -> Option<WorkbenchSnapshot> {
+    let archive = source.retired_demos.as_ref()?;
+    if archive
+        .views
+        .iter()
+        .any(|v| registry.get(&v.type_id).is_none_or(|t| t.retired))
+        || archive
+            .views
+            .iter()
+            .any(|v| source.organization.views.iter().any(|w| w.id == v.id))
+    {
+        return None;
+    }
+    let mut next = source.clone();
+    next.retired_demos = None;
+    next.organization
+        .views
+        .extend(archive.views.iter().cloned());
+    // Archived placements were stored against the archive's reference sizes; a document saved
+    // since then may have new ones, so they are projected into the current reference.
+    let placements = if archive.reference == source.reference {
+        archive.placements.clone()
+    } else {
+        let constraints = super::model::snapshot_constraints(&next, registry);
+        let mut moved = Vec::new();
+        for region in crate::layout::Region::ALL {
+            if !archive.placements.iter().any(|p| p.region == region) {
+                continue;
+            }
+            let projected = crate::freeform::project_region(
+                &archive.placements,
+                &archive.reference,
+                region,
+                *source.reference.get(region),
+                false,
+                &constraints,
+            );
+            if !projected.feasible {
+                return None;
+            }
+            moved.extend(projected.placements);
+        }
+        moved
+    };
+    next.placements.extend(placements);
+    for (bar_id, members, positions) in &archive.bars {
+        let bar = next
+            .organization
+            .bars
+            .iter_mut()
+            .find(|b| b.id == *bar_id)?;
+        for member in members {
+            if !bar.members.contains(member) {
+                bar.members.push(member.clone());
+            }
+        }
+        for (type_id, y) in positions.iter() {
+            bar.positions.set_default(type_id, y);
+        }
+    }
+    next.organization
+        .presentations
+        .entries
+        .extend(archive.presentations.entries.iter().cloned());
+    validated(&next, registry)
+}
+
+/// The document as the codec accepts it (serialize, then parse), or `None`.
+fn validated(next: &WorkbenchSnapshot, registry: &Registry) -> Option<WorkbenchSnapshot> {
+    let raw = super::codec::serialize_workbench(next, registry).ok()?;
+    super::codec::parse_workbench(&raw, registry).ok()
+}

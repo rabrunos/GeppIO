@@ -221,13 +221,45 @@ pub fn frame(
         })
 }
 
-/// Widget content by id. `compact` selects the Bottom variants.
+/// The frame a widget's content is drawn in. Every reference frame (and drag picture) is an
+/// inline-size container, and two container queries adapt the fixtures to its content box
+/// (the width minus the 1px border): `@container (max-width: 220px)` (freeform.css) and
+/// `@container (max-width: 209px)` (host.css, which wins where both apply).
+#[derive(Clone, Copy, Debug)]
+pub struct Fit {
+    /// The Bottom variants (`[data-owner-region="bottom"]`).
+    pub bottom: bool,
+    /// The frame's width in CSS pixels, border included.
+    pub width: f64,
+}
+
+impl Fit {
+    pub fn new(bottom: bool, width: impl Into<f64>) -> Self {
+        Self {
+            bottom,
+            width: width.into(),
+        }
+    }
+    fn within(self, max: f64) -> bool {
+        self.width - 2.0 <= max
+    }
+    /// `@container (max-width: 220px)`.
+    fn narrow(self) -> bool {
+        self.within(220.0)
+    }
+    /// `@container (max-width: 209px)`.
+    fn tight(self) -> bool {
+        self.within(209.0)
+    }
+}
+
+/// Widget content by id. `fit.bottom` selects the Bottom variants.
 /// `name`: the live "Nome de exemplo" field of the visible frame; copies (drag pictures,
 /// the floating Sidebar) show its text.
 #[allow(clippy::too_many_arguments)]
 pub fn content(
     id: &str,
-    compact: bool,
+    fit: Fit,
     m: Metrics,
     t: Theme,
     props: &Properties,
@@ -236,15 +268,24 @@ pub fn content(
     locked: bool,
 ) -> AnyElement {
     let k = Ink { m, t };
+    let compact = fit.bottom;
     match id {
         "summary" => {
-            // Bottom: 4px 8px padding, a 14px statement and 3px gaps.
-            let (px, py, size, gap) = if compact { (8.0, 4.0, 14.0, 3.0) } else { (17.0, 13.0, 20.0, 7.0) };
+            // Bottom: 4px 8px padding, a 14px statement and 3px gaps. A tight container: 10px
+            // padding, a 16px statement and a 10/12 block eyebrow.
+            let (px, py, size, gap) = if compact {
+                (8.0, 4.0, 14.0, 3.0)
+            } else if fit.tight() {
+                (10.0, 10.0, 16.0, 7.0)
+            } else {
+                (17.0, 13.0, 20.0, 7.0)
+            };
             let line = (size * 1.2f32 * 100.0).round() / 100.0;
+            let (eyebrow, eyebrow_line) = if fit.tight() && !compact { (10.0, 12.0) } else { (13.0, 17.0) };
             div()
                 .px(m.px(px))
                 .py(m.px(py))
-                .child(k.text(13.0, 17.0, 400.0, t.text, "ESPAÇO EM CONSTRUÇÃO"))
+                .child(k.text(eyebrow, eyebrow_line, 400.0, t.text, "ESPAÇO EM CONSTRUÇÃO"))
                 .child(
                     div()
                         .my(m.px(gap))
@@ -255,21 +296,31 @@ pub fn content(
                 .into_any_element()
         }
         "queue" => queue(&k).into_any_element(),
-        "library" => div()
-            .p(m.px(14.0))
+        "library" => {
+            // Two columns; one in a narrow container; two again, denser, in a tight one.
+            let (pad, gap, basis, min_h, tile_x, tile_y, tile_gap) = if fit.tight() {
+                (8.0, 7.0, 0.45, 76.0, 6.0, 10.0, 7.0)
+            } else if fit.narrow() {
+                (14.0, 9.0, 1.0, 82.0, 11.0, 16.0, 12.0)
+            } else {
+                (14.0, 9.0, 0.45, 82.0, 11.0, 16.0, 12.0)
+            };
+            div()
+            .p(m.px(pad))
             .flex()
             .flex_wrap()
-            .gap(m.px(9.0))
+            .gap(m.px(gap))
             .children([("archive-box", "Coleções"), ("cube", "Componentes"), ("photo", "Referências"), ("document-text", "Documentos")].map(|(glyph, label)| {
                 div()
-                    .flex_basis(gpui::relative(0.45))
+                    .flex_basis(gpui::relative(basis))
                     .flex_grow(1.0)
-                    .min_h(m.px(82.0))
-                    .px(m.px(11.0))
-                    .py(m.px(16.0))
+                    .min_w_0()
+                    .min_h(m.px(min_h))
+                    .px(m.px(tile_x))
+                    .py(m.px(tile_y))
                     .flex()
                     .flex_col()
-                    .gap(m.px(12.0))
+                    .gap(m.px(tile_gap))
                     .rounded(m.px(7.0))
                     .border(m.border(1.0))
                     .border_color(t.border)
@@ -277,15 +328,16 @@ pub fn content(
                     .child(icon(glyph, m).size(20.0).color(t.text_muted))
                     .child(k.text(9.0, 12.0, 400.0, t.text, label))
             }))
-            .into_any_element(),
+            .into_any_element()
+        }
         "notes" => div()
-            .p(m.px(18.0))
+            .p(m.px(if fit.narrow() { 10.0 } else { 18.0 }))
             .child(k.text(13.0, 17.0, 400.0, t.text, "NOTAS DE LABORATÓRIO"))
             .child(
                 div()
                     .my(m.px(9.0))
-                    .text_size(m.px(19.0))
-                    .line_height(m.px(26.6))
+                    .text_size(m.px(if fit.tight() { 16.0 } else { 19.0 }))
+                    .line_height(m.px(if fit.tight() { 22.4 } else { 26.6 }))
                     .font_weight(css_weight(500.0))
                     .text_color(t.text)
                     .child(crate::i18n::t("Uma base, antes das ferramentas.")),
@@ -324,8 +376,8 @@ pub fn content(
                     )
             }))
             .into_any_element(),
-        "properties" => properties(&k, props, on_props, name, locked).into_any_element(),
-        "chart" => chart(&k, compact).into_any_element(),
+        "properties" => properties(&k, fit, props, on_props, name, locked).into_any_element(),
+        "chart" => chart(&k, compact, fit.tight()).into_any_element(),
         _ => k.text(13.0, 17.0, 400.0, t.text, "Widget de teste").into_any_element(),
     }
 }
@@ -404,24 +456,38 @@ fn queue(k: &Ink) -> Div {
         )))
 }
 
-fn field(k: &Ink, label: &'static str, height: f32, control: AnyElement) -> Div {
+/// A labelled row (`grid-template-columns: 105px 1fr`); `stacked` is the narrow container's
+/// single column with that gap.
+fn field(
+    k: &Ink,
+    label: &'static str,
+    height: f32,
+    stacked: Option<f32>,
+    control: AnyElement,
+) -> Div {
     let m = k.m;
-    div()
-        .flex()
-        .items_center()
-        .gap(m.px(10.0))
-        .my(m.px(9.0))
-        .child(
-            div()
-                .w(m.px(105.0))
-                .flex_none()
-                .child(k.text(10.0, 14.0, 400.0, k.t.text, label)),
-        )
-        .child(div().flex_1().h(m.px(height)).child(control))
+    let text = k.text(10.0, 14.0, 400.0, k.t.text, label);
+    match stacked {
+        Some(gap) => div()
+            .flex()
+            .flex_col()
+            .gap(m.px(gap))
+            .my(m.px(9.0))
+            .child(text)
+            .child(div().w_full().h(m.px(height)).child(control)),
+        None => div()
+            .flex()
+            .items_center()
+            .gap(m.px(10.0))
+            .my(m.px(9.0))
+            .child(div().w(m.px(105.0)).flex_none().child(text))
+            .child(div().flex_1().h(m.px(height)).child(control)),
+    }
 }
 
 fn properties(
     k: &Ink,
+    fit: Fit,
     props: &Properties,
     on_props: impl Fn(Properties, &mut gpui::App) + Clone + 'static,
     name: Option<AnyElement>,
@@ -472,9 +538,21 @@ fn properties(
             .child(SharedString::from(props.name.clone()))
             .into_any_element()
     });
+    let stacked = if fit.tight() {
+        Some(5.0)
+    } else if fit.narrow() {
+        Some(4.0)
+    } else {
+        None
+    };
+    let (px, py) = if fit.tight() {
+        (10.0, 10.0)
+    } else {
+        (17.0, 13.0)
+    };
     div()
-        .px(m.px(17.0))
-        .py(m.px(13.0))
+        .px(m.px(px))
+        .py(m.px(py))
         .child(div().mb(m.px(11.0)).child(k.text(
             10.0,
             14.0,
@@ -486,12 +564,14 @@ fn properties(
             k,
             "Nome de exemplo",
             32.0,
+            stacked,
             boxed(name).into_any_element(),
         ))
         .child(field(
             k,
             "Visualização",
             34.0,
+            stacked,
             if locked {
                 // Inert while editing: the closed select, without its list.
                 boxed(
@@ -565,13 +645,15 @@ fn properties(
         )))
 }
 
-fn chart(k: &Ink, compact: bool) -> Div {
+fn chart(k: &Ink, compact: bool, tight: bool) -> Div {
     let (m, t) = (k.m, k.t);
     let heights = [
         30.0, 45.0, 37.0, 63.0, 52.0, 81.0, 74.0, 92.0, 64.0, 85.0, 97.0, 78.0,
     ];
     let (pad_y, pad_x, bars) = if compact {
         (4.0, 8.0, 79.31)
+    } else if tight {
+        (10.0, 10.0, 62.0)
     } else {
         (12.0, 16.0, 62.0)
     };
@@ -604,4 +686,21 @@ fn chart(k: &Ink, compact: bool) -> Div {
             "Não representa memória, CPU nem métricas reais.",
             if compact { 11.7 } else { 14.4 },
         ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Fit;
+
+    #[test]
+    fn fit_follows_the_reference_container_queries() {
+        // The content box is the frame minus its 1px border.
+        assert!(!Fit::new(false, 223.0).narrow());
+        assert!(Fit::new(false, 222.0).narrow() && !Fit::new(false, 222.0).tight());
+        assert!(!Fit::new(false, 212.0).tight());
+        assert!(Fit::new(false, 211.0).tight() && Fit::new(false, 211.0).narrow());
+        // The floating Sidebar's frames (238px panel) are tight; the docked default is not.
+        assert!(Fit::new(false, 205.0).tight());
+        assert!(!Fit::new(false, 250.0).narrow());
+    }
 }

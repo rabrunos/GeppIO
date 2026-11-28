@@ -61,11 +61,12 @@ impl AssetSource for Assets {
 }
 
 fn main() {
-    let options = Options::from_env(
+    let mut options = Options::from_env(
         |key| std::env::var(key).ok(),
         &std::env::temp_dir(),
         options::canonical_dir,
     );
+    options.demo_fixtures = options::demo_requested(std::env::args_os());
     let prefs = Prefs::load(options.profile.as_deref());
     let mut appearance = Appearance::new(options.theme.unwrap_or(prefs.theme()));
     // The emulated comparison zoom times the user's page zoom (View → Zoom).

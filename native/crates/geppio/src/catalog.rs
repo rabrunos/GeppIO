@@ -331,7 +331,7 @@ pub fn render(
     extra: CatalogExtra,
     window: &mut Window,
     cx: &mut App,
-) -> Div {
+) -> gpui::Stateful<Div> {
     let tab_ids = ["catalog-tab-widgets", "catalog-tab-compositions"];
     let tab_handles = [
         control_focus(tab_ids[0], window, cx),
@@ -409,6 +409,9 @@ pub fn render(
         tab_button(CatalogTab::Compositions, "Composições", 1),
     ];
     let root = div()
+        .id("editor-panel")
+        .role(gpui::Role::Complementary)
+        .aria_label(crate::i18n::t("Editor de layout"))
         .size_full()
         .flex()
         .flex_col()
@@ -633,6 +636,11 @@ pub fn render(
             titled(focusable(el, &pid, true, t, window, cx), pid, Some(label))
         });
         let presence_row = div()
+            .id(SharedString::from(format!("catalog-presences-{}", tile.id)))
+            .role(gpui::Role::Group)
+            .aria_label(
+                crate::i18n::t("Presenças de {0}").replace("{0}", &crate::i18n::t(tile.title)),
+            )
             .absolute()
             .left(m.px(5.0))
             .right(m.px(5.0))
@@ -957,7 +965,15 @@ pub fn render(
             })
             .child(text(11.0, 15.0, 600.0, t.text, d.title).mb(m.px(9.0)))
             .child(text(11.0, 16.0, 400.0, t.text_muted, d.policy).mb(m.px(9.0)))
-            .child(div().flex().gap(m.px(6.0)).children(buttons))
+            .child(
+                div()
+                    .id("catalog-destination-areas")
+                    .role(gpui::Role::Group)
+                    .aria_label(crate::i18n::t("Área de destino"))
+                    .flex()
+                    .gap(m.px(6.0))
+                    .children(buttons),
+            )
     });
     let close_destination = a.close_destination.clone();
     root.child(
@@ -1013,7 +1029,13 @@ pub fn render(
                             .border_r(m.border(1.0))
                             .border_color(t.border)
                             .child(
-                                div().flex_1().min_h_0().child(
+                                div()
+                                    .id("catalog-categories-nav")
+                                    .role(gpui::Role::Navigation)
+                                    .aria_label(crate::i18n::t("Categorias de widgets"))
+                                    .flex_1()
+                                    .min_h_0()
+                                    .child(
                                     geppui::scroll_area(
                                         "catalog-categories",
                                         &extra.category_scroll,

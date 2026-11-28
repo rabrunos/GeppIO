@@ -113,6 +113,7 @@ impl RenderOnce for Switch {
 pub struct Checkbox {
     id: SharedString,
     checked: bool,
+    label: Option<SharedString>,
     disabled: bool,
     size: f32,
     on_toggle: Option<Toggle>,
@@ -124,6 +125,7 @@ pub fn checkbox(id: impl Into<SharedString>, checked: bool) -> Checkbox {
     Checkbox {
         id: id.into(),
         checked,
+        label: None,
         disabled: false,
         size: 13.0,
         on_toggle: None,
@@ -132,6 +134,11 @@ pub fn checkbox(id: impl Into<SharedString>, checked: bool) -> Checkbox {
 }
 
 impl Checkbox {
+    /// The accessible name (the reference's wrapping `<label>` or `aria-label`).
+    pub fn label(mut self, label: impl Into<SharedString>) -> Self {
+        self.label = Some(label.into());
+        self
+    }
     pub fn disabled(mut self, disabled: bool) -> Self {
         self.disabled = disabled;
         self
@@ -167,6 +174,7 @@ impl RenderOnce for Checkbox {
         div()
             .id(ElementId::Name(self.id.clone()))
             .role(gpui::Role::CheckBox)
+            .when_some(self.label.clone(), |el, label| el.aria_label(label))
             .aria_toggled(if on {
                 gpui::Toggled::True
             } else {

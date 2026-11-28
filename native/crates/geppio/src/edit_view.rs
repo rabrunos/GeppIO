@@ -1942,7 +1942,7 @@ impl Workbench {
                 (f.fixture == "properties" && !editing).then(|| self.name_field_element(m, t));
             let content = widgets::content(
                 &f.fixture,
-                region == Region::Bottom,
+                widgets::Fit::new(region == Region::Bottom, local.w),
                 m,
                 t,
                 &self.properties,
@@ -2237,7 +2237,7 @@ impl Workbench {
             let props = self.props_handler(cx);
             let content = widgets::content(
                 &f.fixture,
-                false,
+                widgets::Fit::new(false, f.rect.w),
                 m,
                 t,
                 &self.properties,
@@ -2360,6 +2360,11 @@ impl Workbench {
     }
 
     /// Regions below their minimums while they hold widgets (the reference's geometry warning).
+    /// Whether Main fits its widgets' minimums (`projection.feasible`).
+    pub(crate) fn main_feasible(&self) -> bool {
+        self.session.view(&self.ports.surfaces).1.main
+    }
+
     pub(crate) fn geometry_warning(&self) -> bool {
         let (view, feasible) = self.session.view(&self.ports.surfaces);
         let panels = panel_ids(self.session.shown());
@@ -2732,7 +2737,7 @@ impl Workbench {
             let compact = g.region == Some(Region::Bottom) && g.moving.is_some();
             let content = widgets::content(
                 &g.fixture,
-                compact,
+                widgets::Fit::new(compact, r.w),
                 m,
                 t,
                 &self.properties,
@@ -2768,7 +2773,7 @@ impl Workbench {
             let props = self.props_handler(cx);
             let content = widgets::content(
                 &f.fixture,
-                f.compact,
+                widgets::Fit::new(f.compact, r.w),
                 m,
                 t,
                 &self.properties,
@@ -2838,6 +2843,8 @@ impl Workbench {
             ("trigger:more", &self.triggers.more),
             ("edit-layout", &self.edit_focus),
             ("save-layout", &self.save_focus),
+            ("sidebar-scroll", &self.sidebar_scroll_focus),
+            ("main-port", &self.main_port_focus),
             ("root", &self.focus),
         ];
         if let Some((name, _)) = triggers.iter().find(|(_, h)| h.is_focused(window)) {
@@ -2938,6 +2945,7 @@ impl Workbench {
             "redo": self.session.can_redo(),
             "flight": self.edit.flight.is_some(),
             "insertion": self.edit.insertion,
+            "peek": self.regions.peek,
             "sidebarScroll": -self.metrics.css(self.sidebar_scroll.offset().y),
             "mainScrollX": -self.metrics.css(self.main_scroll.offset().x),
             "gridScroll": -self.metrics.css(self.edit.grid_scroll.offset().y),
@@ -2986,6 +2994,18 @@ impl Workbench {
                 "target": d.target,
             })));
         state["preview"] = serde_json::json!(self.session.shown() != self.session.draft());
+        state["required"] = serde_json::json!(self.required.map(|(field, _)| format!("{field:?}")));
+        let rename_empty = self.panels.rename_field.read(cx).text().is_empty();
+        let name_empty = self.compositions.name_field.read(cx).text().is_empty();
+        state["requiredShown"] = serde_json::json!([
+            self.required_bubble(crate::workbench::RequiredField::Rename, rename_empty)
+                .is_some(),
+            self.required_bubble(crate::workbench::RequiredField::CompositionName, name_empty)
+                .is_some(),
+        ]);
+        state["demo"] = serde_json::json!(self.session.demo_fixtures());
+        state["catalogTypes"] =
+            serde_json::json!(self.tiles().iter().map(|t| t.id).collect::<Vec<_>>());
         if let Some(trace) = self.automation.trace.as_mut() {
             trace.state(now, &state);
         }

@@ -716,6 +716,7 @@ impl Workbench {
     }
 
     fn open_save_form(&mut self, cx: &mut Context<Self>) {
+        self.required = None;
         let chrome = self.session.draft().organization.chrome;
         self.compositions.form = Some(SaveForm {
             scopes: if chrome.bottom.visible {
@@ -738,6 +739,12 @@ impl Workbench {
         let Some(form) = self.compositions.form.clone() else {
             return;
         };
+        // `required`: an empty name is not submitted; the browser shows its bubble.
+        if self.compositions.name_field.read(cx).text().is_empty() {
+            self.pending_text_focus = Some(self.compositions.name_field.clone());
+            self.show_required(crate::workbench::RequiredField::CompositionName, cx);
+            return;
+        }
         let name: String = self
             .compositions
             .name_field
@@ -1433,13 +1440,18 @@ fn tool_button(
 fn tile_control(
     id: SharedString,
     glyph: &'static str,
-    pressed: bool,
+    pressed: Option<bool>,
     boxed: bool,
     rotate: f32,
     filled: bool,
+    label: SharedString,
     m: Metrics,
     t: Theme,
+    cx: &mut gpui::App,
 ) -> gpui::Stateful<Div> {
+    let focus = geppui::button::registered_focus(&id, cx);
+    let toggled = pressed;
+    let pressed = pressed.unwrap_or(false);
     let color = if glyph == "pin" || pressed {
         t.accent
     } else {
@@ -1447,6 +1459,22 @@ fn tile_control(
     };
     div()
         .id(id)
+        .role(gpui::Role::Button)
+        .aria_label(label)
+        .when_some(toggled, |el, on| {
+            el.aria_toggled(if on {
+                gpui::Toggled::True
+            } else {
+                gpui::Toggled::False
+            })
+        })
+        .track_focus(&focus)
+        .focus_visible(move |s| {
+            s.shadow(vec![
+                gpui::BoxShadow::new(gpui::px(0.0), gpui::px(0.0), t.ring)
+                    .spread_radius(gpui::px(2.0)),
+            ])
+        })
         .size(m.px(24.0))
         .flex()
         .items_center()
@@ -1607,6 +1635,33 @@ impl Workbench {
                     cx,
                 );
                 let saved_panel = !favorites_tab;
+                // `IconButton` names: `aria-label` and `title`.
+                let pin_label: SharedString = tr
+                    .t(if is_default {
+                        "Remover {0} como padrão"
+                    } else {
+                        "Tornar {0} padrão"
+                    })
+                    .replace("{0}", &name)
+                    .into();
+                let star_label: SharedString = tr
+                    .t(if is_favorite {
+                        "Remover {0} dos favoritos"
+                    } else {
+                        "Adicionar {0} aos favoritos"
+                    })
+                    .replace("{0}", &name)
+                    .into();
+                let options_label: SharedString =
+                    tr.t("Opções de {0}").replace("{0}", &name).into();
+                let pin_key = format!("composition-pin-tip-{id}");
+                let star_key = format!("composition-star-tip-{id}");
+                let options_key = format!("composition-options-tip-{id}");
+                let options_open = self
+                    .compositions
+                    .options
+                    .as_ref()
+                    .is_some_and(|(o, _)| *o == id);
                 let pin_opacity = if is_default { 1.0 } else { controls_opacity };
                 let star_opacity = if saved_panel && is_favorite {
                     1.0
@@ -1647,6 +1702,8 @@ impl Workbench {
                     .child(
                         div()
                             .id(SharedString::from(format!("composition-tile-{tile_id}")))
+                            .role(gpui::Role::Button)
+                            .aria_label(tr.t("Aplicar formato de {0}").replace("{0}", &name))
                             .w_full()
                             .flex()
                             .flex_col()
@@ -1752,8 +1809,10 @@ impl Workbench {
                                     SharedString::from(format!("composition-format-{format_id_a}")),
                                     tr.t("Formato"),
                                     false,
+                                    tr.t("Aplicar formato de {0}").replace("{0}", &name).into(),
                                     m,
                                     t,
+                                    cx,
                                 )
                                 .on_click(cx.listener(
                                     move |this, _, _, cx| {
@@ -1770,8 +1829,12 @@ impl Workbench {
                                         )),
                                         tr.t("Widgets"),
                                         disabled,
+                                        tr.t("Restaurar widgets de {0}")
+                                            .replace("{0}", &name)
+                                            .into(),
                                         m,
                                         t,
+                                        cx,
                                     )
                                     .when(!disabled, |b| {
                                         b.on_click(cx.listener(move |this, _, _, cx| {
@@ -1798,37 +1861,43 @@ impl Workbench {
                         let pin = div()
                             .opacity(pin_opacity)
                             .when(pin_opacity < 0.01, |el| el.invisible())
-                            .child(
+                            .child(geppui::titled(
                                 tile_control(
                                     SharedString::from(format!("composition-pin-{pin_id}")),
                                     "pin",
-                                    is_default,
+                                    Some(is_default),
                                     saved_panel || controls_opacity > 0.5,
                                     45.0,
                                     false,
+                                    pin_label.clone(),
                                     m,
                                     t,
+                                    cx,
                                 )
                                 .on_click(cx.listener(
                                     move |this, _, _, cx| this.favorite(&pin_id, true, None, cx),
                                 )),
-                            );
+                                pin_key,
+                                Some(pin_label),
+                            ));
                         let star = div()
                             .opacity(star_opacity)
                             .when(star_opacity < 0.01, |el| el.invisible())
-                            .child(
+                            .child(geppui::titled(
                                 tile_control(
                                     SharedString::from(format!(
                                         "composition-star-{}",
                                         star_item.id
                                     )),
                                     "star",
-                                    is_favorite,
+                                    Some(is_favorite),
                                     true,
                                     0.0,
                                     is_favorite,
+                                    star_label.clone(),
                                     m,
                                     t,
+                                    cx,
                                 )
                                 .on_click(cx.listener(
                                     move |this, _, _, cx| {
@@ -1836,7 +1905,9 @@ impl Workbench {
                                         this.toggle_favorite(&star_item, tr, cx)
                                     },
                                 )),
-                            );
+                                star_key,
+                                Some(star_label),
+                            ));
                         let markers = div()
                             .absolute()
                             .top(m.px(5.0))
@@ -1877,19 +1948,22 @@ impl Workbench {
                                             },
                                         ),
                                     )
-                                    .child(
+                                    .child(geppui::titled(
                                         tile_control(
                                             SharedString::from(format!(
                                                 "composition-options-{options_id}"
                                             )),
                                             "ellipsis-horizontal",
-                                            false,
+                                            None,
                                             true,
                                             90.0,
                                             false,
+                                            options_label.clone(),
                                             m,
                                             t,
+                                            cx,
                                         )
+                                        .aria_expanded(options_open)
                                         .on_click(
                                             cx.listener(move |this, _, _, cx| {
                                                 let m = this.metrics;
@@ -1918,7 +1992,9 @@ impl Workbench {
                                                 cx.notify();
                                             }),
                                         ),
-                                    ),
+                                        options_key,
+                                        Some(options_label),
+                                    )),
                             )
                         },
                     )
@@ -2428,7 +2504,14 @@ impl Workbench {
                             .flex_col()
                             .gap(m.px(9.0))
                             .child(div().font_weight(css_weight(600.0)).child(tr.t("Nome")))
-                            .child(text_input(&self.compositions.name_field, focused, m, t)),
+                            .child(
+                                text_input(&self.compositions.name_field, focused, m, t)
+                                    .relative()
+                                    .children(self.required_bubble(
+                                        crate::workbench::RequiredField::CompositionName,
+                                        self.compositions.name_field.read(cx).text().is_empty(),
+                                    )),
+                            ),
                     )
                     .child(
                         div()
@@ -2491,8 +2574,27 @@ impl Workbench {
                 let pressed = replace.selected.as_deref() == Some(item.id.as_str());
                 let id = item.id.clone();
                 let pin = org.default_composition.as_deref() == Some(item.id.as_str());
+                let key = SharedString::from(format!("composition-replace-{id}"));
+                let focus = geppui::button::registered_focus(&key, cx);
                 div()
-                    .id(SharedString::from(format!("composition-replace-{id}")))
+                    .id(key)
+                    .role(gpui::Role::Button)
+                    .aria_label(
+                        tr.t("Substituir {0}")
+                            .replace("{0}", &display_name(item, tr)),
+                    )
+                    .aria_toggled(if pressed {
+                        gpui::Toggled::True
+                    } else {
+                        gpui::Toggled::False
+                    })
+                    .track_focus(&focus)
+                    .focus_visible(move |s| {
+                        s.shadow(vec![
+                            gpui::BoxShadow::new(gpui::px(0.0), gpui::px(0.0), t.ring)
+                                .spread_radius(gpui::px(2.0)),
+                        ])
+                    })
                     .relative()
                     .flex_1()
                     .min_w_0()
@@ -2911,11 +3013,23 @@ fn restore_button(
     id: SharedString,
     label: SharedString,
     disabled: bool,
+    aria: SharedString,
     m: Metrics,
     t: Theme,
+    cx: &mut gpui::App,
 ) -> gpui::Stateful<Div> {
+    let focus = geppui::button::registered_focus(&id, cx);
     div()
         .id(id)
+        .role(gpui::Role::Button)
+        .aria_label(aria)
+        .when(!disabled, |el| el.track_focus(&focus))
+        .focus_visible(move |s| {
+            s.shadow(vec![
+                gpui::BoxShadow::new(gpui::px(0.0), gpui::px(0.0), t.ring)
+                    .spread_radius(gpui::px(2.0)),
+            ])
+        })
         .flex_1()
         .min_w_0()
         .h(m.px(22.0))

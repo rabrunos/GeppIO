@@ -30,6 +30,8 @@ pub struct TextAction {
     destructive: bool,
     on_click: Option<ClickHandler>,
     focus: Option<FocusHandle>,
+    /// Accessible name when it differs from the visible label (`aria-label`).
+    aria: Option<SharedString>,
 }
 
 pub fn text_action(id: impl Into<SharedString>, label: impl Into<SharedString>) -> TextAction {
@@ -44,6 +46,7 @@ pub fn text_action(id: impl Into<SharedString>, label: impl Into<SharedString>) 
         destructive: false,
         on_click: None,
         focus: None,
+        aria: None,
     }
 }
 
@@ -77,6 +80,11 @@ impl TextAction {
         self.destructive = true;
         self
     }
+    /// Accessible name when it differs from the visible label (`aria-label`).
+    pub fn aria(mut self, label: impl Into<SharedString>) -> Self {
+        self.aria = Some(label.into());
+        self
+    }
     pub fn focus(mut self, handle: &FocusHandle) -> Self {
         self.focus = Some(handle.clone());
         self
@@ -106,7 +114,7 @@ impl RenderOnce for TextAction {
         div()
             .id(ElementId::Name(self.id.clone()))
             .role(gpui::Role::Button)
-            .aria_label(self.label.clone())
+            .aria_label(self.aria.clone().unwrap_or_else(|| self.label.clone()))
             .when(!self.disabled, |el| el.track_focus(&focus))
             .focus_visible(move |s| s.shadow(vec![ring(t, m)]))
             .flex()

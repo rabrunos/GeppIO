@@ -444,7 +444,9 @@ impl Button {
         self.width = Some(width);
         self
     }
-    /// Caps the width and lets the button shrink, truncating its label with an ellipsis.
+    /// Caps the width and lets the button shrink. As in the reference's flex `.tool-button`,
+    /// `text-overflow: ellipsis` never reaches the label (an anonymous flex item): a longer
+    /// label stays centred and is clipped at both edges.
     pub fn max_width(mut self, width: f32) -> Self {
         self.max_width = Some(width);
         self
@@ -592,17 +594,14 @@ impl RenderOnce for Button {
                 )
             })
             .when_some(self.max_width, |el, w| {
-                el.max_w(m.px(w)).flex_shrink(1.0).min_w_0()
+                el.max_w(m.px(w))
+                    .flex_shrink(1.0)
+                    .min_w_0()
+                    .overflow_hidden()
             })
             .when_some(self.label.clone(), |el, label| {
                 if self.max_width.is_some() {
-                    el.child(
-                        div()
-                            .min_w_0()
-                            .overflow_hidden()
-                            .text_ellipsis()
-                            .child(label),
-                    )
+                    el.child(div().flex_none().whitespace_nowrap().child(label))
                 } else {
                     el.child(label)
                 }

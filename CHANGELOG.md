@@ -2,6 +2,49 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.109] — 2026-11-28
+
+- **Native host (Rust + GPUI): shell closure (Stage C2c, #75).**
+  - **First run as in the reference:**
+    - Without `--geppio-demo-fixtures` the workbench starts empty, and stored demo widgets are retired into the document's archive at load, as in Electron. The next save writes the archive.
+    - `--geppio-demo-fixtures` turns the demo widgets on; the automated flows and captures use it.
+    - **Native round trip (owner decision).** Electron enables its demos only in test profiles; the native host also accepts the flag on the owner's profile, so switching it is safe:
+      - sessions with the flag keep their own document, `workbench-demo.json`;
+      - that document starts as a copy of the owner's `workbench.json`, with the archived demos restored and projected into the current region sizes when the layout allows;
+      - the owner's document is never written by a flag session.
+      - Switching never loses data or meets a conflict, and the codec still matches the reference.
+  - **Accessibility and keyboard:**
+    - The Sidebar and Bottom splitters expose their role, name ("Largura da Sidebar", "Altura da Bottom"), orientation and value range.
+    - Landmarks and groups carry the reference's names:
+      - "Caminho do projeto", "Controles da janela", "Barras do usuário", "Barra lateral";
+      - "Área de widgets: {region}", "Editor de layout", "Categorias de widgets";
+      - "Presenças de {0}", "Área de destino", "Filtrar notificações".
+    - "Ler todas" is announced as "Marcar todas como lidas".
+    - These controls take focus, with names, states and the reference's tooltips:
+      - on composition cards: Formato, Widgets, the default pin, the favourite star and the options;
+      - "Substituir {0}" in the favourites-full grid;
+      - in the bar library: the filters, Editar/Restaurar, the drag grip and the options;
+      - the notification and plugin filters, "Limpar filtros" and "Escolher widgets".
+    - The Sidebar, the widget list of the bar form and Main take focus and scroll by keyboard: 40px arrows, 87.5% pages, Home/End and Space. Main does so while it is expanded or does not fit.
+  - **Notification times** use the local wall-clock time: "14:05" in Portuguese, "02:05 PM" in English. They come from a read-only time-zone query in `platform.rs`.
+  - **Defect parity:** an empty "Nome do projeto" or composition name is not submitted. The browser's "Preencha este campo." bubble shows instead, following the system language; it hides on typing or after five seconds.
+  - **Found by the new captures:**
+    - "Desenvolvimento e recuperação" matches the reference page: flat 17px lines in the text colour, no extra gaps, "Importar layout" in the text colour, and the Plugins section. That section has the description, "Instalar arquivo assinado", "Modo desenvolvedor", the API note and "Nenhum plugin instalado.". The install button stays disabled until the plugin runtime, as in the Plugins popover.
+    - Collapsing the Sidebar from its header pin no longer blocks the next rail hover. In the reference the hidden content's `pointerleave` clears the block.
+    - Widget fixtures follow the reference's container queries (`max-width: 220px` and `209px`). Narrow frames and the floating Sidebar use the denser notes, library, properties, summary and chart variants.
+    - In a narrow window the project title ends with "…", and "Projeto / arquivo avulso" keeps its label centred and clipped at both edges, as the reference's flex button does.
+  - **GeppUI:**
+    - `ScrollArea::keyboard`;
+    - `TextAction::aria`;
+    - `Checkbox::label`;
+    - the validation bubble (`validation_bubble`, `value_missing`, `validation_duration_ms`).
+  - **Hardened after an independent review:**
+    - "Prévia da composição inicial" follows the demo setting, so it keeps the bars, compositions and archive the reference keeps;
+    - a field inside a keyboard scroller keeps Space and the arrows;
+    - the flag is read from the raw OS arguments;
+    - a reopened form starts without the previous bubble.
+  - **Comparison baseline:** every Electron state S01–S35 was captured again on this build, Electron captures were added for surfaces never captured before (S36–S46), and all were compared side by side.
+
 ## [0.1.0-alpha.108] — 2026-11-27
 
 - **Native host (Rust + GPUI): panel presentations, widget swap and pair dividers (Stage C2b, #75).**

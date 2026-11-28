@@ -284,6 +284,12 @@ impl EditSession {
                 "Modo de uso · layout livre protegido.",
             ),
             Some(raw) => match parse_workbench(raw, &registry) {
+                // With the demo widgets on, archived demos return (native round trip).
+                Ok(snapshot) if demo_fixtures => (
+                    super::retirement::restore_demo_views(&snapshot, &registry).unwrap_or(snapshot),
+                    false,
+                    "Composição protegida.",
+                ),
                 Ok(snapshot) => (snapshot, false, "Composição protegida."),
                 Err(_) => (
                     initial_workbench(false),
@@ -322,8 +328,8 @@ impl EditSession {
     /// Opens over a stored document that exists but could not be read (too large, invalid
     /// UTF-8, an I/O error): the same recovery as an invalid document, and nothing observed,
     /// so edit stays closed and the file is never replaced.
-    pub fn open_unreadable(registry: Registry) -> Self {
-        let mut session = Self::open(registry, Some(""), false);
+    pub fn open_unreadable(registry: Registry, demo_fixtures: bool) -> Self {
+        let mut session = Self::open(registry, Some(""), demo_fixtures);
         session.observed = None;
         session.initial_raw = None;
         session

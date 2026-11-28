@@ -1244,7 +1244,7 @@ fn unreadable_store_opens_in_recovery_and_never_edits() {
         },
         expanded: false,
     };
-    let mut session = EditSession::open_unreadable(widget_registry(&[], true));
+    let mut session = EditSession::open_unreadable(widget_registry(&[], true), true);
     assert!(session.recovery());
     assert_eq!(session.stored(), None);
     assert!(matches!(
@@ -2584,4 +2584,44 @@ fn presentations_pairs_and_swaps_follow_the_transaction() {
         session.swap(&surfaces, &first, &second),
         Err(SessionError::NotEditing)
     ));
+}
+
+#[test]
+fn demo_flag_round_trip_never_loses_data() {
+    use geppio_core::workbench::{
+        EditSession, initial_workbench, serialize_workbench, widget_registry,
+    };
+    let (demo, plain) = (widget_registry(&[], true), widget_registry(&[], false));
+    let demo_count = |s: &EditSession| {
+        s.committed()
+            .organization
+            .views
+            .iter()
+            .filter(|v| demo.get(&v.type_id).is_some_and(|t| t.fixture.is_some()))
+            .count()
+    };
+    // A profile saved with the demo widgets.
+    let stored = serialize_workbench(&initial_workbench(true), &demo).unwrap();
+    // Without the flag they are archived (the reference's retirement).
+    let off = EditSession::open(plain.clone(), Some(&stored), false);
+    assert!(!off.recovery());
+    assert_eq!(demo_count(&off), 0);
+    assert!(off.committed().retired_demos.is_some());
+    let archived = serialize_workbench(off.committed(), &plain).unwrap();
+    // With the flag they come back from the archive (native round trip).
+    let on = EditSession::open(demo.clone(), Some(&archived), true);
+    assert!(!on.recovery());
+    assert_eq!(demo_count(&on), 7);
+    assert!(on.committed().retired_demos.is_none());
+    // A save after the retirement may change the document's reference sizes; the archived
+    // placements are projected into them.
+    let mut resized = off.committed().clone();
+    resized.reference.main.width += 40.0;
+    let resized = serialize_workbench(&resized, &plain).unwrap();
+    let on = EditSession::open(demo.clone(), Some(&resized), true);
+    assert!(!on.recovery());
+    assert_eq!(demo_count(&on), 7);
+    // The flag's sessions use their own document (see `FileStore`), so the owner's document
+    // never holds live demos next to an archive.
+    assert!(on.committed().retired_demos.is_none());
 }

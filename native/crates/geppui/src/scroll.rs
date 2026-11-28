@@ -6,9 +6,10 @@
 //! and end arrows. [`ScrollArea::both_axes`] scrolls horizontally too, with the same thin
 //! bars on the right and bottom edges.
 use gpui::{
-    AnyElement, App, Bounds, ElementId, Hsla, InteractiveElement, IntoElement, ParentElement,
-    PathBuilder, Pixels, RenderOnce, ScrollHandle, SharedString, StatefulInteractiveElement,
-    Styled, Window, canvas, div, point, px, size,
+    AnyElement, App, Bounds, ElementId, FocusHandle, Hsla, InteractiveElement, IntoElement,
+    KeyDownEvent, ParentElement, PathBuilder, Pixels, RenderOnce, ScrollHandle, SharedString,
+    StatefulInteractiveElement, Styled, Window, canvas, div, point, prelude::FluentBuilder, px,
+    size,
 };
 
 use crate::{Metrics, metrics};
@@ -26,6 +27,8 @@ pub struct ScrollArea {
     bars: Option<(bool, bool)>,
     /// Keeps the offset but takes no wheel or drag (inert content while editing).
     locked: bool,
+    /// A focusable scroller (`tabIndex=0`) that scrolls by keyboard, with its role and name.
+    keyboard: Option<(FocusHandle, gpui::Role, SharedString)>,
     children: Vec<AnyElement>,
 }
 
@@ -41,8 +44,38 @@ pub fn scroll_area(id: impl Into<SharedString>, handle: &ScrollHandle) -> Scroll
         both: false,
         bars: None,
         locked: false,
+        keyboard: None,
         children: Vec::new(),
     }
+}
+
+/// Chromium's keyboard scrolling of a focused scroller: arrows move 40px, Page Up/Down and
+/// Space move 87.5% of the viewport, Home/End go to the ends. Returns the new offset
+/// (`ScrollHandle` offsets are zero or negative) or `None` when the key does not scroll.
+pub fn keyboard_offset(
+    key: &str,
+    shift: bool,
+    offset: (f32, f32),
+    max: (f32, f32),
+    viewport: (f32, f32),
+    step: f32,
+) -> Option<(f32, f32)> {
+    let page = |extent: f32| (extent * 0.875).max(1.0);
+    let (x, y) = offset;
+    let next = match key {
+        "up" => (x, y + step),
+        "down" => (x, y - step),
+        "left" => (x + step, y),
+        "right" => (x - step, y),
+        "pageup" => (x, y + page(viewport.1)),
+        "pagedown" => (x, y - page(viewport.1)),
+        "space" if shift => (x, y + page(viewport.1)),
+        "space" => (x, y - page(viewport.1)),
+        "home" => (x, 0.0),
+        "end" => (x, -max.1),
+        _ => return None,
+    };
+    Some((next.0.clamp(-max.0, 0.0), next.1.clamp(-max.1, 0.0)))
 }
 
 impl ScrollArea {
@@ -66,6 +99,17 @@ impl ScrollArea {
     /// Keeps the current offset and bars but ignores the wheel (`inert` content).
     pub fn locked(mut self, locked: bool) -> Self {
         self.locked = locked;
+        self
+    }
+    /// Makes the scroller a tab stop that scrolls by keyboard (`tabIndex=0` on a scrolling
+    /// element), exposed with `role` and `label`.
+    pub fn keyboard(
+        mut self,
+        focus: &FocusHandle,
+        role: gpui::Role,
+        label: impl Into<SharedString>,
+    ) -> Self {
+        self.keyboard = Some((focus.clone(), role, label.into()));
         self
     }
     /// Thin bars on both axes for `content` inside a `viewport` (CSS pixels, width and
@@ -285,8 +329,41 @@ impl RenderOnce for ScrollArea {
                 t.scroll_arrow_disabled
             },
         };
+        let keys = self.handle.clone();
         let base = div()
             .id(ElementId::Name(self.id.clone()))
+            .when_some(self.keyboard.clone(), |el, (focus, role, label)| {
+                let step = f32::from(m.px(40.0));
+                let own = focus.clone();
+                el.track_focus(&focus.tab_stop(true))
+                    .role(role)
+                    .aria_label(label)
+                    .on_key_down(move |e: &KeyDownEvent, window, cx| {
+                        let k = &e.keystroke;
+                        if !own.is_focused(window)
+                            || k.modifiers.control
+                            || k.modifiers.alt
+                            || k.modifiers.platform
+                        {
+                            return;
+                        }
+                        let o = keys.offset();
+                        let max = keys.max_offset();
+                        let view = keys.bounds().size;
+                        if let Some((x, y)) = keyboard_offset(
+                            k.key.as_str(),
+                            k.modifiers.shift,
+                            (f32::from(o.x), f32::from(o.y)),
+                            (f32::from(max.x), f32::from(max.y)),
+                            (f32::from(view.width), f32::from(view.height)),
+                            step,
+                        ) {
+                            keys.set_offset(point(px(x), px(y)));
+                            cx.stop_propagation();
+                            window.refresh();
+                        }
+                    })
+            })
             .size_full()
             .pr(if reserve { m.px(self.gutter) } else { px(0.0) })
             .pb(if reserve_x {
@@ -342,7 +419,22 @@ impl RenderOnce for ScrollArea {
 
 #[cfg(test)]
 mod tests {
-    use super::{bars_needed, thumb_geometry};
+    use super::{bars_needed, keyboard_offset, thumb_geometry};
+
+    #[test]
+    fn keyboard_scrolls_like_a_focused_scroller() {
+        let at = |key, shift, y| {
+            keyboard_offset(key, shift, (0.0, y), (0.0, 600.0), (300.0, 400.0), 40.0)
+        };
+        assert_eq!(at("down", false, 0.0), Some((0.0, -40.0)));
+        assert_eq!(at("up", false, 0.0), Some((0.0, 0.0)));
+        assert_eq!(at("pagedown", false, 0.0), Some((0.0, -350.0)));
+        assert_eq!(at("space", false, -350.0), Some((0.0, -600.0)));
+        assert_eq!(at("space", true, -350.0), Some((0.0, 0.0)));
+        assert_eq!(at("end", false, 0.0), Some((0.0, -600.0)));
+        assert_eq!(at("home", false, -600.0), Some((0.0, 0.0)));
+        assert_eq!(at("a", false, 0.0), None);
+    }
 
     #[test]
     fn bars_appear_only_for_real_overflow() {

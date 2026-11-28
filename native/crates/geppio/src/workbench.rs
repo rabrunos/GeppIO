@@ -85,7 +85,19 @@ pub struct Workbench {
     splitter_focus: [FocusHandle; 2],
     /// Focus inside the floating Sidebar keeps the peek open.
     pub(crate) peek_focus: FocusHandle,
+    /// The Sidebar scroller ("Barra lateral", `tabIndex=0`) and the Main port while it
+    /// scrolls (expanded or infeasible): keyboard-scrollable tab stops.
+    pub(crate) sidebar_scroll_focus: FocusHandle,
+    pub(crate) main_port_focus: FocusHandle,
+    /// The browser's `required` bubble on a form submitted empty: the field and a
+    /// generation, so a newer bubble outlives an older timer.
+    pub(crate) required: Option<(RequiredField, u64)>,
+    /// Bubble generations never repeat, so an older timer never hides a newer bubble.
+    pub(crate) required_seq: u64,
     peek_focused: bool,
+    /// The pointer is over the docked Sidebar content (`.host-sidebar-content`). Collapsing
+    /// from its pin hides it under the pointer; the next move is its `pointerleave`.
+    sidebar_docked_hovered: bool,
     /// The confirmed chrome the regions last adopted.
     last_chrome: WorkbenchChrome,
     last_viewport: (f64, f64),
@@ -178,14 +190,18 @@ impl Workbench {
                 system: crate::i18n::system_locale(),
             },
         );
-        // The layout envelope lives in the native profile; demonstration widgets are on.
-        let store = FileStore {
+        // The layout envelope lives in the native profile. The demonstration widgets are
+        // on only with `--geppio-demo-fixtures`; otherwise the first run is empty.
+        let demo = options.demo_fixtures;
+        let mut store = FileStore {
             dir: options.profile.clone(),
+            demo,
         };
+        store.seed_demo_from_main();
         // An unreadable file is kept and opens in recovery; only a missing one starts fresh.
         let mut session = match store.get() {
-            Ok(stored) => EditSession::open(widget_registry(&[], true), stored.as_deref(), true),
-            Err(_) => EditSession::open_unreadable(widget_registry(&[], true)),
+            Ok(stored) => EditSession::open(widget_registry(&[], demo), stored.as_deref(), demo),
+            Err(_) => EditSession::open_unreadable(widget_registry(&[], demo), demo),
         };
         // Region chrome lives in the layout document (`organization.chrome`). The regions an
         // older host kept in preferences.json seed a document that still shows the default
@@ -291,7 +307,12 @@ impl Workbench {
             splitter_hovered: [false, false],
             splitter_focus,
             peek_focus: cx.focus_handle(),
+            sidebar_scroll_focus: cx.focus_handle(),
+            main_port_focus: cx.focus_handle(),
+            required: None,
+            required_seq: 0,
             peek_focused: false,
+            sidebar_docked_hovered: false,
             last_chrome: chrome,
             last_viewport: (1280.0, 800.0),
             viewport: (1280.0, 800.0),
@@ -594,6 +615,15 @@ impl Workbench {
         }));
     }
 
+    /// `pointerleave` of the docked Sidebar content: `regions.hover(false)`, which acts only
+    /// while the Sidebar is collapsed (it clears the collapse's peek block).
+    fn sidebar_docked_leave(&mut self, cx: &mut Context<Self>) {
+        self.sidebar_docked_hovered = false;
+        if self.regions.sidebar_hidden() {
+            self.peek_hover(false, cx);
+        }
+    }
+
     pub(crate) fn peek_hover(&mut self, hovered: bool, cx: &mut Context<Self>) {
         if hovered {
             self.peek_timer = None;
@@ -771,6 +801,58 @@ impl Workbench {
 
 // ---- rendering --------------------------------------------------------------------------
 
+/// A text field with `required` (`valueMissing` on an empty submit).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum RequiredField {
+    /// "Nome do projeto" in "Renomear layout".
+    Rename,
+    /// "Nome" in "Salvar nova composição".
+    CompositionName,
+}
+
+impl Workbench {
+    /// Shows the `required` bubble under `field` and hides it after Chromium's duration.
+    pub(crate) fn show_required(&mut self, field: RequiredField, cx: &mut Context<Self>) {
+        self.required_seq += 1;
+        let generation = self.required_seq;
+        self.required = Some((field, generation));
+        let message = geppui::value_missing(crate::platform::portuguese_ui());
+        let wait = geppui::validation_duration_ms(message);
+        cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(wait as u64))
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                if this.required.is_some_and(|(_, g)| g == generation) {
+                    this.required = None;
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+
+    /// The bubble for `field` while it shows and the field is still empty (typing hides it).
+    pub(crate) fn required_bubble(
+        &self,
+        field: RequiredField,
+        empty: bool,
+    ) -> Option<geppui::ValidationBubble> {
+        (empty && self.required.is_some_and(|(f, _)| f == field)).then(|| {
+            geppui::validation_bubble(geppui::value_missing(crate::platform::portuguese_ui()))
+        })
+    }
+}
+
+/// The accessible name of a region's widget area (`Área de widgets: {region}`, with the
+/// region key as the reference passes it).
+fn region_label(region: &str) -> SharedString {
+    crate::i18n::t("Área de widgets: {0}")
+        .replace("{0}", region)
+        .into()
+}
+
 struct Ctx {
     m: Metrics,
     t: geppui::Theme,
@@ -834,6 +916,9 @@ impl Workbench {
             .justify_between()
             .child(
                 div()
+                    .id("breadcrumbs")
+                    .role(gpui::Role::Navigation)
+                    .aria_label(crate::i18n::t("Caminho do projeto"))
                     .flex()
                     .items_center()
                     .gap(m.px(11.0))
@@ -1032,6 +1117,9 @@ impl Workbench {
                     .child(separator())
                     .child(
                         div()
+                            .id("window-controls")
+                            .role(gpui::Role::Group)
+                            .aria_label(crate::i18n::t("Controles da janela"))
                             .flex()
                             .items_center()
                             .h_full()
@@ -1090,13 +1178,16 @@ impl Workbench {
                     .min_w_0()
                     .overflow_hidden()
                     .mt(m.half_pixel_nudge(56.5))
+                    // A row, so the title shrinks horizontally and ends with "…".
                     .child(
-                        spaced_text(self.project_name(), m)
-                            .size(18.0, 22.0)
-                            .weight(css_weight(700.0))
-                            .color(t.text)
-                            .letter_spacing_em(-0.25 / 18.0)
-                            .truncate(),
+                        div().flex().min_w_0().child(
+                            spaced_text(self.project_name(), m)
+                                .size(18.0, 22.0)
+                                .weight(css_weight(700.0))
+                                .color(t.text)
+                                .letter_spacing_em(-0.25 / 18.0)
+                                .truncate(),
+                        ),
                     )
                     .child(
                         div()
@@ -1190,6 +1281,8 @@ impl Workbench {
     fn empty_region(&self, c: &Ctx, id: &'static str, cx: &mut Context<Self>) -> Div {
         let (m, t) = (c.m, c.t);
         let disabled = self.session.recovery() && !self.editing();
+        let choose_focus =
+            geppui::button::registered_focus(&SharedString::from(format!("{id}-choose")), cx);
         div()
             .size_full()
             .flex()
@@ -1214,6 +1307,15 @@ impl Workbench {
             .child(
                 div()
                     .id(SharedString::from(format!("{id}-choose")))
+                    .role(gpui::Role::Button)
+                    .aria_label(crate::i18n::t("Escolher widgets"))
+                    .when(!disabled, |el| el.track_focus(&choose_focus))
+                    .focus_visible(move |s| {
+                        s.shadow(vec![
+                            gpui::BoxShadow::new(gpui::px(0.0), gpui::px(0.0), t.ring)
+                                .spread_radius(gpui::px(2.0)),
+                        ])
+                    })
                     .flex()
                     .items_start()
                     .min_h(m.px(28.0))
@@ -1331,8 +1433,16 @@ impl Workbench {
                             },
                             &self.sidebar_scroll,
                         )
+                        .keyboard(
+                            &self.sidebar_scroll_focus,
+                            gpui::Role::Complementary,
+                            crate::i18n::t("Barra lateral"),
+                        )
                         .child(
                             div()
+                                .id("sidebar-port")
+                                .role(gpui::Role::Region)
+                                .aria_label(region_label("sidebar"))
                                 .relative()
                                 .w(m.px(width - 30.0))
                                 .h(m.px(world.max(port_h)))
@@ -1396,6 +1506,7 @@ impl Workbench {
             }
         };
         let docked = self.regions.mode() == SidebarMode::Docked;
+        let (sidebar_aria, bottom_aria) = (self.regions.aria(Axis::X), self.regions.aria(Axis::Y));
         if docked || self.splitter.is_some_and(|d| d.axis == Axis::X) {
             out.push(
                 abs(
@@ -1408,6 +1519,12 @@ impl Workbench {
                     ),
                 )
                 .id("sidebar-splitter")
+                .role(gpui::Role::Splitter)
+                .aria_label(crate::i18n::t("Largura da Sidebar"))
+                .aria_orientation(gpui::Orientation::Vertical)
+                .aria_numeric_value(sidebar_aria.0)
+                .aria_min_numeric_value(sidebar_aria.1)
+                .aria_max_numeric_value(sidebar_aria.2)
                 .track_focus(&self.splitter_focus[0].clone().tab_stop(docked))
                 .cursor_col_resize()
                 .on_hover(cx.listener(|this, h: &bool, _, cx| this.splitter_hover(0, *h, cx)))
@@ -1447,6 +1564,12 @@ impl Workbench {
         out.push(
             abs(m, rect(s.bottom_clip.x, y, s.bottom_clip.w, 9.0))
                 .id("bottom-splitter")
+                .role(gpui::Role::Splitter)
+                .aria_label(crate::i18n::t("Altura da Bottom"))
+                .aria_orientation(gpui::Orientation::Horizontal)
+                .aria_numeric_value(bottom_aria.0)
+                .aria_min_numeric_value(bottom_aria.1)
+                .aria_max_numeric_value(bottom_aria.2)
                 .track_focus(&self.splitter_focus[1].clone().tab_stop(true))
                 .cursor_row_resize()
                 .on_hover(cx.listener(|this, h: &bool, _, cx| this.splitter_hover(1, *h, cx)))
@@ -1651,17 +1774,31 @@ impl Render for Workbench {
             // An infeasible projection keeps reference geometry: Main scrolls on both axes with
             // the thin platform bars of `.placement-port`.
             let (world_w, world_h) = self.main_world();
+            let keyboard = self.prefs.horizontal_expansion || !self.main_feasible();
+            let port = geppui::scroll_area("main-port", &self.main_scroll)
+                .both_axes((world_w, world_h), (main_port.w, main_port.h));
+            let port = if keyboard {
+                port.keyboard(
+                    &self.main_port_focus,
+                    gpui::Role::Region,
+                    region_label("main"),
+                )
+            } else {
+                port
+            };
             abs(m, main_rect)
+                .id("main-region")
+                .when(!keyboard, |el| {
+                    el.role(gpui::Role::Region).aria_label(region_label("main"))
+                })
                 .child(
-                    geppui::scroll_area("main-port", &self.main_scroll)
-                        .both_axes((world_w, world_h), (main_port.w, main_port.h))
-                        .child(
-                            div()
-                                .relative()
-                                .w(m.px(world_w))
-                                .h(m.px(world_h))
-                                .children(main_frames),
-                        ),
+                    port.child(
+                        div()
+                            .relative()
+                            .w(m.px(world_w))
+                            .h(m.px(world_h))
+                            .children(main_frames),
+                    ),
                 )
                 .into_any_element()
         });
@@ -1700,6 +1837,9 @@ impl Render for Workbench {
                                 self.empty_region(&c, "bottom", cx).into_any_element()
                             } else {
                                 div()
+                                    .id("bottom-port")
+                                    .role(gpui::Role::Region)
+                                    .aria_label(region_label("bottom"))
                                     .relative()
                                     .size_full()
                                     .children(bottom_frames)
@@ -1778,9 +1918,17 @@ impl Render for Workbench {
             let height = s.sidebar_clip.h as f32;
             layers.push(
                 abs(m, s.sidebar_clip.into())
+                    .id("sidebar-docked")
                     .tab_group()
                     .tab_index(-1)
                     .overflow_hidden()
+                    .on_hover(cx.listener(|this, hovered: &bool, _, cx| {
+                        if *hovered {
+                            this.sidebar_docked_hovered = true;
+                        } else {
+                            this.sidebar_docked_leave(cx);
+                        }
+                    }))
                     .child(self.sidebar_contents(
                         &c,
                         self.regions.shown_sidebar_width() as f32,
@@ -1828,6 +1976,9 @@ impl Render for Workbench {
         }
         layers.push(
             self.rail(m, t, s.rail, cx)
+                .id("rail-nav")
+                .role(gpui::Role::Navigation)
+                .aria_label(crate::i18n::t("Barras do usuário"))
                 .tab_group()
                 .tab_index(-2)
                 .into_any_element(),
@@ -1904,6 +2055,10 @@ impl Render for Workbench {
                 this.on_key(e, window, cx)
             }))
             .on_mouse_move(cx.listener(move |this, e: &MouseMoveEvent, _, cx| {
+                // The content collapsed under the pointer no longer holds it.
+                if this.sidebar_docked_hovered && this.regions.sidebar_hidden() {
+                    this.sidebar_docked_leave(cx);
+                }
                 if !geppui::appearance(cx).clock.frozen() {
                     let pos = (m.css(e.position.x), m.css(e.position.y));
                     let pressed = e.pressed_button == Some(MouseButton::Left);

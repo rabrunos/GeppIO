@@ -1243,10 +1243,51 @@ impl Workbench {
                 })
                 .count()
         };
+        let card_focus: Vec<(String, [gpui::FocusHandle; 3])> = filtered
+            .iter()
+            .map(|bar| {
+                let mut handle = |kind: &str| {
+                    geppui::button::registered_focus(
+                        &SharedString::from(format!("bar-card-{kind}-{}", bar.id)),
+                        cx,
+                    )
+                };
+                (
+                    bar.id.clone(),
+                    [handle("action"), handle("grip"), handle("more")],
+                )
+            })
+            .collect();
+        let filter_focus: Vec<(&'static str, gpui::FocusHandle)> = ["all", "active", "archived"]
+            .into_iter()
+            .map(|id| {
+                let key = SharedString::from(format!("bar-filter-{id}"));
+                (id, geppui::button::registered_focus(&key, cx))
+            })
+            .collect();
         let filter_button = |id: &'static str, label: &str| {
             let pressed = filter == id;
+            let focus = filter_focus
+                .iter()
+                .find(|(f, _)| *f == id)
+                .map(|(_, h)| h.clone())
+                .expect("a focus handle per filter");
             div()
                 .id(SharedString::from(format!("bar-filter-{id}")))
+                .role(gpui::Role::Button)
+                .aria_label(format!("{} {}", tr.t(label), count(id)))
+                .aria_toggled(if pressed {
+                    gpui::Toggled::True
+                } else {
+                    gpui::Toggled::False
+                })
+                .track_focus(&focus)
+                .focus_visible(move |s| {
+                    s.shadow(vec![
+                        gpui::BoxShadow::new(gpui::px(0.0), gpui::px(0.0), t.ring)
+                            .spread_radius(gpui::px(2.0)),
+                    ])
+                })
                 .flex_1()
                 .flex()
                 .items_center()
@@ -1301,6 +1342,17 @@ impl Workbench {
                 let more_id = bar.id.clone();
                 let grip_id = bar.id.clone();
                 let grip_label = label.clone();
+                let more_label = label.clone();
+                let [action_focus, grip_focus, more_focus] = card_focus
+                    .iter()
+                    .find(|(id, _)| *id == bar.id)
+                    .map(|(_, h)| h.clone())
+                    .expect("focus handles per card");
+                let more_open = self
+                    .bars
+                    .library_menu
+                    .as_ref()
+                    .is_some_and(|(id, _)| *id == bar.id);
                 let archived = bar.archived;
                 let preview = bar.members.iter().take(3).map(|member| {
                     let _ = registry.get(member);
@@ -1308,8 +1360,18 @@ impl Workbench {
                         .size(13.0)
                         .color(t.text_muted)
                 });
+                let action_enabled = !archived || can_restore;
                 let action = div()
                     .id(SharedString::from(format!("bar-card-action-{}", bar.id)))
+                    .role(gpui::Role::Button)
+                    .aria_label(tr.t(if archived { "Restaurar" } else { "Editar" }))
+                    .when(action_enabled, |el| el.track_focus(&action_focus))
+                    .focus_visible(move |s| {
+                        s.shadow(vec![
+                            gpui::BoxShadow::new(gpui::px(0.0), gpui::px(0.0), t.ring)
+                                .spread_radius(gpui::px(2.0)),
+                        ])
+                    })
                     .flex_1()
                     .flex()
                     .items_center()
@@ -1395,6 +1457,12 @@ impl Workbench {
                     .when(archived && editing, |el| {
                         el.child(
                             small_button(format!("bar-card-grip-{grip_id}"))
+                                .role(gpui::Role::Button)
+                                .aria_label(
+                                    tr.t("Arrastar {0} para a barrinha")
+                                        .replace("{0}", &grip_label),
+                                )
+                                .when(can_restore, |el| el.track_focus(&grip_focus))
                                 .cursor_grab()
                                 .on_mouse_down(
                                     MouseButton::Left,
@@ -1419,6 +1487,10 @@ impl Workbench {
                     .when(bar.id != HOME, |el| {
                         el.child(
                             small_button(format!("bar-card-more-{more_id}"))
+                                .role(gpui::Role::Button)
+                                .aria_label(tr.t("Opções de {0}").replace("{0}", &more_label))
+                                .aria_expanded(more_open)
+                                .track_focus(&more_focus)
                                 .relative()
                                 .cursor_pointer()
                                 .on_click(cx.listener(move |this, _, _, cx| {
@@ -1716,6 +1788,9 @@ impl Workbench {
     ) -> AnyElement {
         let name_focused = self.bars.name_field.read(cx).is_focused(window);
         let search_focused = self.bars.widget_search.read(cx).is_focused(window);
+        // `.custom-bar-widget-viewport` takes focus (`tabIndex=0`) and scrolls by keyboard.
+        let viewport_focus =
+            geppui::button::registered_focus(&SharedString::from("bar-widget-viewport"), cx);
         let name_empty = self.bars.name_field.read(cx).text().trim().is_empty();
         let search = normalize(self.bars.widget_search.read(cx).text());
         let sidebar_width = self.ports.surfaces.sizes.sidebar.width;
@@ -2125,6 +2200,11 @@ impl Workbench {
                                     .child(
                                         div().flex_1().min_h_0().relative().child(
                                             geppui::scroll_area("bar-widget-viewport", &self.bars.form_scroll)
+                                                .keyboard(
+                                                    &viewport_focus,
+                                                    gpui::Role::Group,
+                                                    tr.t("Widgets disponíveis para esta barra"),
+                                                )
                                                 .gutter(11.0, 5.0)
                                                 .arrows(true)
                                                 .child(

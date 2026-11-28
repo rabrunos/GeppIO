@@ -24,6 +24,18 @@ pub struct Options {
     pub script: Option<Script>,
     /// JSON-lines trace file (inside the test profile).
     pub trace: Option<PathBuf>,
+    /// `--geppio-demo-fixtures`: the demonstration widgets. Without it the first run is
+    /// empty and stored demo widgets are retired, as in the reference, which keeps the demos
+    /// for its test profiles only.
+    pub demo_fixtures: bool,
+}
+
+/// Whether the command line asks for the demonstration widgets (`--geppio-demo-fixtures`).
+/// Raw OS arguments: a non-Unicode argument never panics and simply does not match.
+pub fn demo_requested(args: impl IntoIterator<Item = std::ffi::OsString>) -> bool {
+    args.into_iter()
+        .skip(1)
+        .any(|a| a == "--geppio-demo-fixtures")
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -264,6 +276,7 @@ impl Options {
                 .and_then(trace_name)
                 .map(|name| test_profile.join(name)),
             profile: Some(test_profile),
+            demo_fixtures: false,
         }
     }
 }
@@ -271,6 +284,30 @@ impl Options {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn demo_fixtures_need_the_exact_argument() {
+        let args = |list: &[&str]| {
+            list.iter()
+                .map(std::ffi::OsString::from)
+                .collect::<Vec<_>>()
+        };
+        assert!(!demo_requested(args(&["geppio.exe"])));
+        assert!(demo_requested(args(&[
+            "geppio.exe",
+            "--geppio-demo-fixtures"
+        ])));
+        // The program name never counts, and near misses are ignored.
+        assert!(!demo_requested(args(&["--geppio-demo-fixtures"])));
+        assert!(!demo_requested(args(&[
+            "geppio.exe",
+            "--geppio-demo-fixtures=1"
+        ])));
+        assert!(!demo_requested(args(&[
+            "geppio.exe",
+            "--GEPPIO-DEMO-FIXTURES"
+        ])));
+    }
 
     fn identity(p: &Path) -> Option<PathBuf> {
         Some(p.to_path_buf())

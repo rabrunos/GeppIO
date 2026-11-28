@@ -155,6 +155,27 @@ impl Regions {
         (min.min(max), max)
     }
 
+    /// The splitter's accessible value: now, min and max (`aria-valuenow/min/max`). The
+    /// Sidebar reports 0 while hidden; Bottom's minimum is 0 while collapsed or revealing.
+    pub fn aria(&self, axis: Axis) -> (f64, f64, f64) {
+        let (min, max) = self.bounds(axis);
+        match axis {
+            Axis::X => (
+                if self.sidebar_hidden() {
+                    0.0
+                } else {
+                    self.shown_sidebar_width()
+                },
+                min,
+                max,
+            ),
+            Axis::Y => {
+                let open = !(self.bottom_collapsed && !self.forced) && self.bottom_reveal.is_none();
+                (self.shown_bottom(), if open { min } else { 0.0 }, max)
+            }
+        }
+    }
+
     /// `regionSize`.
     fn clamp(&self, axis: Axis, value: f64) -> f64 {
         let (min, max) = self.bounds(axis);
