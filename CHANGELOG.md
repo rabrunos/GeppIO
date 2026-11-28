@@ -2,6 +2,26 @@
 
 Integrated source changes, not a publication ledger. Version comes from package.json.
 
+## [0.1.0-alpha.107] — 2026-11-27
+
+- **Native host (Rust + GPUI): shell keyboard, focus and accessibility (Stage P3, #75).**
+  - **Keyboard and focus:**
+    - Tab starts at the header and follows the reference's order (header, context bar, rail, Sidebar, then the other regions);
+    - the window buttons run Minimizar / Maximizar / Fechar with Enter or Space (the pointer still uses the system caption buttons, Snap Layouts included);
+    - the project name in the header, the Settings theme options, "Voltar ao trabalho", the notifications and "Importar layout" take focus;
+    - dialogs move focus inside when they open (Settings on the selected theme; a form keeps the field it focused) and Tab cycles inside them;
+    - focus returns to the trigger after a demo item of the project menu and after a rename; the plugins search takes focus when the popover opens;
+    - selects work by keyboard: arrows change the value while closed; with the list open, arrows, Home and End move, Enter picks and Escape closes only the list.
+  - **Default menu accelerators the reference keeps:** Ctrl+0, Ctrl+= and Ctrl+- zoom the page, and the level is kept in `preferences.json` across launches, as Chromium keeps it; F11 toggles full screen; Ctrl+M minimizes; Ctrl+W closes the window. Reload and the developer tools are left out on purpose.
+  - **Messages:**
+    - in recovery the toast stays up with the recovery message, and Editar no longer shows a native-only text;
+    - "Laboratório" follows the language;
+    - "Informações do projeto" counts the widgets of the edit draft;
+    - a failed write of the horizontal expansion or the zoom says the preference holds for this session only.
+  - **Window:** it opens centred on the work area (a window larger than the work area starts at its top-left, keeping the header on screen).
+  - **Accessibility:** the GeppUI primitives expose roles, names and states to assistive technology through GPUI's AccessKit support (buttons, menu items, switches, checkboxes, selects, text fields, dialogs and the toast as a status), and the catalog's tiles, tabs, filters, presences and destinations do too; the profile button and "Configurações" use the reference's names ("Abrir menu do perfil", "Abrir configurações").
+  - **GeppUI:** `Dialog::initial_focus`, `TextField::label`, `MenuItem::aria`, `registered_focus` and `focused_control`.
+
 ## [0.1.0-alpha.106] — 2026-11-27
 
 - **Native host (Rust + GPUI): edit mode and the widget catalog behave like the reference (Stage P2, #75).**

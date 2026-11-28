@@ -39,7 +39,7 @@ The app keeps its own profile in `%APPDATA%\geppio-native`. It never reads or wr
 
 | File | Content | On a corrupt or unknown file |
 | --- | --- | --- |
-| `preferences.json` | Theme, language (`auto`, `pt-BR`, `en`), center guide, horizontal expansion and the layout name (at most 60 characters). Region sizes and visibility written by 0.1.0-alpha.104 and earlier move once into a workbench document that still shows the default regions, and stay here until that document is saved with them (a document in recovery waits) | Defaults |
+| `preferences.json` | Theme, language (`auto`, `pt-BR`, `en`), center guide, horizontal expansion, the layout name (at most 60 characters) and the page zoom level (Ctrl+0, Ctrl+= and Ctrl+-; factor 1.2^level within Chromium's 25%–500%). Region sizes and visibility written by 0.1.0-alpha.104 and earlier move once into a workbench document that still shows the default regions, and stay here until that document is saved with them (a document in recovery waits) | Defaults |
 | `workbench.json` | The `geppio:workbench:v1` composition, including region sizes and visibility (`organization.chrome`): written by Save edition, Conclude, bar changes and region changes outside Edit (temporary file, flush, rename; 512 KiB cap). A save first re-reads the file and stops if it changed since it was opened | Recovery, also for an oversized, non-UTF-8 or unreadable file: the file is kept untouched and edit mode stays closed until Settings → "Desenvolvimento e recuperação" opens a preview and Save adopts it |
 
 If `geppio-native` exists as a link or junction, or resolves inside the Electron folder, the app runs without persistence.
@@ -63,6 +63,10 @@ The catalog's Composições tab lists the presets and saved compositions (Favori
 ## Edit mode
 
 The edit button opens the session and the 480 px catalog. Widgets move by their heading or grip and resize from the edges and corners their constraints allow, with live reflow, spacing guides, drop zones, edge auto-scroll, the Sidebar insertion line and a flight back on cancel; a short click on the grip opens the catalog's move destination. Drops land at the pointer, and a gesture ends on release (also outside the window), on window blur or resize, and when the catalog or the expansion changes. The catalog search is a text field; the destination box names each area's reason; hovering another rail bar for 250 ms during a drag switches to it. Widget content is inert while editing. Undo/redo (buttons, `Ctrl+Z`, `Ctrl+Y`, `Ctrl+Shift+Z`; text fields keep their own) restores whole intentions and waits for a landing drop. Save edition confirms a checkpoint, Conclude saves and leaves, Cancel discards and `Esc` steps back one level (gesture, catalog search, plugin filter, slot choice, destination, session), which is an intentional difference: the reference cancels the whole edit from the search or the destination. Focus returns to the edit button on leave. The widgets are demo fixtures; plugins are out of scope.
+
+## Keyboard and accessibility
+
+Tab starts at the header and follows the reference's order; dialogs take focus when they open and keep Tab inside. The default menu accelerators of the reference work: Ctrl+0, Ctrl+= and Ctrl+- (page zoom, kept across launches), F11 (full screen), Ctrl+M (minimize) and Ctrl+W (close the window); reload and the developer tools are left out. The GeppUI primitives and the catalog expose roles, names and states through GPUI's AccessKit support.
 
 ## Automated comparison hooks
 

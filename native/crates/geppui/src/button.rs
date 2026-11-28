@@ -28,19 +28,31 @@ pub fn focus_handle(
     _window: &mut Window,
     cx: &mut App,
 ) -> FocusHandle {
-    let handle = external.unwrap_or_else(|| {
-        if let Some(handle) = cx
-            .try_global::<FocusRegistry>()
-            .and_then(|r| r.0.get(id).cloned())
-        {
-            return handle;
-        }
-        let handle = cx.focus_handle();
-        cx.default_global::<FocusRegistry>()
-            .0
-            .insert(id.clone(), handle.clone());
-        handle
-    });
+    external.map_or_else(|| registered_focus(id, cx), |h| h.tab_stop(true))
+}
+
+/// The id of the registered control that holds focus (automation and diagnostics).
+pub fn focused_control(window: &Window, cx: &App) -> Option<SharedString> {
+    cx.try_global::<FocusRegistry>()?
+        .0
+        .iter()
+        .find(|(_, handle)| handle.is_focused(window))
+        .map(|(id, _)| id.clone())
+}
+
+/// The focus handle kept for a control id (a tab stop), for hosts that build focusable
+/// elements of their own.
+pub fn registered_focus(id: &SharedString, cx: &mut App) -> FocusHandle {
+    if let Some(handle) = cx
+        .try_global::<FocusRegistry>()
+        .and_then(|r| r.0.get(id).cloned())
+    {
+        return handle.tab_stop(true);
+    }
+    let handle = cx.focus_handle();
+    cx.default_global::<FocusRegistry>()
+        .0
+        .insert(id.clone(), handle.clone());
     handle.tab_stop(true)
 }
 
@@ -329,6 +341,9 @@ impl RenderOnce for IconButton {
         let ring = t.ring;
         div()
             .id(ElementId::Name(self.id.clone()))
+            .role(gpui::Role::Button)
+            .when_some(self.label.clone(), |el, label| el.aria_label(label))
+            .when(self.selected, |el| el.aria_selected(true))
             .when(!self.disabled, |el| el.track_focus(&focus))
             .focus_visible(move |s| {
                 s.shadow(vec![
@@ -528,6 +543,11 @@ impl RenderOnce for Button {
         let ring = t.ring;
         div()
             .id(ElementId::Name(self.id.clone()))
+            .role(gpui::Role::Button)
+            .when_some(self.label.clone().or(self.tooltip.clone()), |el, label| {
+                el.aria_label(label)
+            })
+            .when(self.pressed, |el| el.aria_toggled(gpui::Toggled::True))
             .when(!self.disabled, |el| el.track_focus(&focus))
             .focus_visible(move |s| {
                 s.shadow(vec![

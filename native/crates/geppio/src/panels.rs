@@ -40,6 +40,8 @@ pub enum Menu {
 
 /// Header panel state that is not the open panel itself.
 pub struct Panels {
+    /// Focus returns to the panel's trigger at the next render.
+    pub return_focus: bool,
     pub settings_advanced: bool,
     pub notifications: Vec<Notification>,
     pub unread_only: bool,
@@ -69,6 +71,7 @@ impl Panels {
         cx.subscribe(&plugin_search, |_, _, _, cx| cx.notify())
             .detach();
         Self {
+            return_focus: false,
             settings_advanced: false,
             notifications: Vec::new(),
             unread_only: false,
@@ -178,10 +181,32 @@ pub fn search_box(
         .child(div().flex_1().min_w_0().child(field.clone()))
 }
 
+/// A panel control built from a div: a button for assistive technology, a tab stop with
+/// the focus ring, clicked by Enter or Space.
+fn as_button(
+    el: gpui::Stateful<Div>,
+    id: &str,
+    label: SharedString,
+    t: geppui::Theme,
+    cx: &mut App,
+) -> gpui::Stateful<Div> {
+    let handle = geppui::button::registered_focus(&SharedString::from(id.to_owned()), cx);
+    let ring = t.ring;
+    el.role(gpui::Role::Button)
+        .aria_label(label)
+        .track_focus(&handle)
+        .focus_visible(move |s| {
+            s.shadow(vec![
+                gpui::BoxShadow::new(gpui::px(0.0), gpui::px(0.0), ring)
+                    .spread_radius(gpui::px(2.0)),
+            ])
+        })
+}
+
 impl Workbench {
     pub(crate) fn project_name(&self) -> SharedString {
         if self.prefs.project_name.is_empty() {
-            "Laboratório".into()
+            crate::i18n::t("Laboratório")
         } else {
             self.prefs.project_name.clone().into()
         }
@@ -219,6 +244,7 @@ impl Workbench {
                 .plugin_search
                 .update(cx, |f, cx| f.set_text("", cx));
             self.panels.plugin_filter = "all";
+            self.pending_text_focus = Some(self.panels.plugin_search.clone());
         }
         self.menu = menu;
         let d = geppui::appearance(cx).duration(geppui::motion::duration::ICON_HOVER);
@@ -261,6 +287,7 @@ impl Workbench {
                     // Inside Edit the name is part of the draft (`changeLocal`).
                     self.record_local(cx);
                     self.menu = None;
+                    self.panels.return_focus = true;
                 } else {
                     self.panels.rename_error = true;
                 }
@@ -366,6 +393,7 @@ impl Workbench {
             )
             .child(
                 menu_item("menu-settings", tr.t("Configurações"))
+                    .aria(tr.t("Abrir configurações"))
                     .icon("cog-6-tooth")
                     .trailing("chevron-right")
                     .on_click(cx.listener(|this, _, window, cx| {
@@ -439,6 +467,7 @@ impl Workbench {
                 cx.listener(|this, _, window, cx| this.set_menu(None, None, Some(window), cx)),
             )
             .child(tr.t("Voltar ao trabalho"));
+        let done = as_button(done, "about-done", tr.t("Voltar ao trabalho"), t, cx);
         dialog("about", tr.t("Sobre o GeppIO"))
             .close_label(tr.t("Fechar"))
             .on_dismiss(self.close_handler(cx))
@@ -520,7 +549,7 @@ impl Workbench {
                 .child(text)
         };
         let body = if !self.panels.settings_advanced {
-            let theme_option = |light: bool| {
+            let theme_card = |light: bool| {
                 let pressed = light != dark;
                 div()
                     .id(if light {
@@ -560,6 +589,31 @@ impl Workbench {
                         el.child(icon("check", m).size(16.0).color(t.accent))
                     })
             };
+            let cards = [theme_card(true), theme_card(false)];
+            let [light_card, dark_card] = cards.map(Some);
+            let mut wrap = |card: Option<gpui::Stateful<Div>>, light: bool| {
+                let id = if light {
+                    "settings-theme-light"
+                } else {
+                    "settings-theme-dark"
+                };
+                let pressed = light == !dark;
+                as_button(
+                    card.expect("theme card"),
+                    id,
+                    tr.t(if light { "Claro" } else { "Escuro" }),
+                    t,
+                    cx,
+                )
+                .role(gpui::Role::RadioButton)
+                .aria_toggled(if pressed {
+                    gpui::Toggled::True
+                } else {
+                    gpui::Toggled::False
+                })
+            };
+            let light_card = wrap(light_card, true);
+            let dark_card = wrap(dark_card, false);
             let snap = self.prefs.snap_center;
             div()
                 .child(description(tr.t("Deixe o GeppIO com a sua cara.")))
@@ -573,8 +627,8 @@ impl Workbench {
                                 .mt(m.px(18.0))
                                 .flex()
                                 .gap(m.px(11.0))
-                                .child(theme_option(true).flex_1())
-                                .child(theme_option(false).flex_1()),
+                                .child(light_card.flex_1())
+                                .child(dark_card.flex_1()),
                         ),
                 )
                 .child(
@@ -705,6 +759,24 @@ impl Workbench {
                         .child(
                             div()
                                 .id("settings-import-layout")
+                                .when(!self.editing(), |el| {
+                                    el.role(gpui::Role::Button)
+                                        .aria_label(tr.t("Importar layout"))
+                                        .track_focus(&geppui::button::registered_focus(
+                                            &"settings-import-layout".into(),
+                                            cx,
+                                        ))
+                                        .focus_visible(move |s| {
+                                            s.shadow(vec![
+                                                gpui::BoxShadow::new(
+                                                    gpui::px(0.0),
+                                                    gpui::px(0.0),
+                                                    t.ring,
+                                                )
+                                                .spread_radius(gpui::px(2.0)),
+                                            ])
+                                        })
+                                })
                                 .m(m.px(12.0))
                                 .text_size(m.px(10.0))
                                 .text_color(t.text_muted)
@@ -729,8 +801,18 @@ impl Workbench {
                 .into_any_element()
         };
         let _ = window;
+        // `autoFocus` on the selected theme.
+        let selected_theme = geppui::button::registered_focus(
+            &SharedString::from(if geppui::theme(cx).name == geppui::ThemeName::Dark {
+                "settings-theme-dark"
+            } else {
+                "settings-theme-light"
+            }),
+            cx,
+        );
         dialog("settings", tr.t("Configurações"))
             .close_label(tr.t("Fechar configurações"))
+            .initial_focus(&selected_theme)
             .on_dismiss(self.close_handler(cx))
             .child(body)
             .into_any_element()
@@ -775,6 +857,18 @@ impl Workbench {
                 .child(
                     div()
                         .id(SharedString::from(format!("notification-{id}")))
+                        .role(gpui::Role::Button)
+                        .aria_label(tr.f("Marcar como lida: {0}", &[&title]))
+                        .track_focus(&geppui::button::registered_focus(
+                            &SharedString::from(format!("notification-{id}")),
+                            cx,
+                        ))
+                        .focus_visible(move |s| {
+                            s.shadow(vec![
+                                gpui::BoxShadow::new(gpui::px(0.0), gpui::px(0.0), t.ring)
+                                    .spread_radius(gpui::px(2.0)),
+                            ])
+                        })
                         .relative()
                         .flex_1()
                         .min_w_0()
@@ -967,6 +1061,7 @@ impl Workbench {
     ) -> AnyElement {
         let demo = |this: &mut Self, text: &str, cx: &mut Context<Self>| {
             this.menu = None;
+            this.panels.return_focus = true;
             let message = text.to_owned();
             this.edit.toast(&message, geppui::now(cx));
             cx.notify();
@@ -1142,7 +1237,8 @@ impl Workbench {
         tr: Tr,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let widgets = active_placements(self.session.committed(), true).len();
+        // The visible scene: the edit draft while editing (`tx.snapshot`).
+        let widgets = active_placements(self.session.draft(), true).len();
         let rows = [
             (tr.t("Nome"), self.project_name()),
             (tr.t("Caminho"), "—".into()),

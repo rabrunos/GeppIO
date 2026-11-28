@@ -15,8 +15,8 @@ use gpui::{
     EntityInputHandler, EventEmitter, FocusHandle, Focusable, Font, FontFeatures, FontStyle,
     FontWeight, GlobalElementId, InspectorElementId, InteractiveElement, IntoElement, KeyDownEvent,
     LayoutId, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement, Pixels,
-    Point, Render, ShapedLine, SharedString, Style, Styled, TextAlign, TextRun, UTF16Selection,
-    Window, div, fill, point, px, relative, size,
+    Point, Render, ShapedLine, SharedString, StatefulInteractiveElement, Style, Styled, TextAlign,
+    TextRun, UTF16Selection, Window, div, fill, point, prelude::FluentBuilder, px, relative, size,
 };
 
 use crate::{appearance, metrics, metrics::UI_FONT};
@@ -43,6 +43,8 @@ pub struct TextField {
     reversed: bool,
     marked: Option<Range<usize>>,
     placeholder: SharedString,
+    /// Accessible name (`aria-label`).
+    label: Option<SharedString>,
     max_utf16: Option<usize>,
     size: f32,
     line_height: f32,
@@ -210,6 +212,7 @@ impl TextField {
             reversed: false,
             marked: None,
             placeholder: SharedString::default(),
+            label: None,
             max_utf16: Some(DEFAULT_MAX),
             size: 13.0,
             line_height: 20.0,
@@ -227,6 +230,11 @@ impl TextField {
     }
     pub fn placeholder(mut self, text: impl Into<SharedString>) -> Self {
         self.placeholder = text.into();
+        self
+    }
+    /// Accessible name (`aria-label`).
+    pub fn label(mut self, label: impl Into<SharedString>) -> Self {
+        self.label = Some(label.into());
         self
     }
     /// The HTML `maxlength` (UTF-16 units).
@@ -664,6 +672,12 @@ impl Render for TextField {
         self.focused = focused;
         div()
             .id(ElementId::Name("geppui-text-field".into()))
+            .role(gpui::Role::TextInput)
+            .when_some(self.label.clone(), |el, label| el.aria_label(label))
+            .aria_value(SharedString::from(self.text.clone()))
+            .when(!self.placeholder.is_empty(), |el| {
+                el.aria_placeholder(self.placeholder.clone())
+            })
             .track_focus(&self.focus)
             .key_context("TextField")
             .w_full()

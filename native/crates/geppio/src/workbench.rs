@@ -63,7 +63,7 @@ struct LocalProperties {
 }
 
 pub struct Workbench {
-    focus: FocusHandle,
+    pub(crate) focus: FocusHandle,
     pub(crate) profile: Option<PathBuf>,
     pub(crate) prefs: Prefs,
     pub(crate) regions: Regions,
@@ -108,6 +108,8 @@ pub struct Workbench {
     pub(crate) removing: Option<String>,
     /// "Nome de exemplo" of the Propriedades demo widget.
     pub(crate) name_field: Entity<TextField>,
+    /// The comparison zoom of the test hooks (1 in normal use); the page zoom multiplies it.
+    base_zoom: f32,
 }
 
 /// Focus handles of the header and context triggers.
@@ -116,6 +118,8 @@ pub struct Triggers {
     pub bell: FocusHandle,
     pub profile: FocusHandle,
     pub more: FocusHandle,
+    /// The header's project name (breadcrumb).
+    pub project: FocusHandle,
 }
 
 fn regions_width(_s: &ShellLayout) -> f64 {
@@ -209,7 +213,8 @@ impl Workbench {
             }
         }
         regions.reduced = geppui::appearance(cx).reduced_motion;
-        let focus = cx.focus_handle();
+        // The root sorts before every tab group, so Tab from it starts at the header.
+        let focus = cx.focus_handle().tab_index(-10);
         window.focus(&focus, cx);
         cx.observe_window_activation(window, |this, window, cx| {
             if !window.is_window_active() {
@@ -235,6 +240,7 @@ impl Workbench {
             TextField::new(cx)
                 .font(12.0, 16.0)
                 .placeholder(crate::i18n::t("Buscar widgets…"))
+                .label(crate::i18n::t("Buscar widgets ou plugins"))
         });
         cx.subscribe(&search, |this, field, event, cx| {
             if *event == geppui::TextFieldEvent::Changed {
@@ -245,7 +251,9 @@ impl Workbench {
         .detach();
         let properties = Properties::default();
         let name_field = cx.new(|cx| {
-            let mut field = TextField::new(cx).font(10.0, 14.0);
+            let mut field = TextField::new(cx)
+                .font(10.0, 14.0)
+                .label(crate::i18n::t("Nome de exemplo"));
             field.set_text(&properties.name, cx);
             field
         });
@@ -274,6 +282,7 @@ impl Workbench {
                 bell: cx.focus_handle(),
                 profile: cx.focus_handle(),
                 more: cx.focus_handle(),
+                project: cx.focus_handle().tab_stop(true),
             },
             pending_text_focus: None,
             peek_timer: None,
@@ -301,6 +310,7 @@ impl Workbench {
             pending_focus: None,
             removing: None,
             name_field,
+            base_zoom: options.zoom,
         };
         this.automation.start(&mut this.regions, cx);
         let local = this.local_json(cx);
@@ -644,7 +654,62 @@ impl Workbench {
         cx.notify();
     }
 
+    /// The default menu's accelerators the reference keeps (View: Actual Size, Zoom In,
+    /// Zoom Out, Toggle Full Screen; Window: Minimize, Close). Reload and the developer tools
+    /// are left out on purpose. Returns whether the key was one of them.
+    fn menu_accelerator(
+        &mut self,
+        event: &KeyDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let k = &event.keystroke;
+        let ctrl = (k.modifiers.control || k.modifiers.platform) && !k.modifiers.alt;
+        let level = self.prefs.zoom_level;
+        let zoom = match (k.key.as_str(), ctrl) {
+            ("0", true) => Some(0.0),
+            ("=" | "+", true) => Some(crate::prefs::zoom_step(level, 0.5)),
+            ("-", true) => Some(crate::prefs::zoom_step(level, -0.5)),
+            ("f11", false) if !k.modifiers.shift => {
+                window.toggle_fullscreen();
+                return true;
+            }
+            ("m", true) if !k.modifiers.shift => {
+                window.minimize_window();
+                return true;
+            }
+            ("w", true) if !k.modifiers.shift => {
+                window.remove_window();
+                return true;
+            }
+            _ => return false,
+        };
+        if let Some(next) = zoom {
+            self.set_zoom(next, cx);
+        }
+        true
+    }
+
+    /// Applies and keeps a page zoom level (Chromium keeps it across launches).
+    fn set_zoom(&mut self, level: f64, cx: &mut Context<Self>) {
+        if level == self.prefs.zoom_level {
+            return;
+        }
+        self.prefs.zoom_level = level;
+        cx.global_mut::<Appearance>().zoom = self.base_zoom * self.prefs.zoom_factor();
+        if self.prefs.save(self.profile.as_ref()).is_err() {
+            self.edit.toast(
+                "Preferência alterada somente nesta sessão.",
+                geppui::now(cx),
+            );
+        }
+        cx.notify();
+    }
+
     fn on_key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        if self.menu_accelerator(event, window, cx) {
+            return;
+        }
         // Keys inside the open "Remover widget?" dialog stay there: Escape closes only it.
         if self.removing.is_some() {
             if event.keystroke.key == "escape" {
@@ -714,6 +779,17 @@ impl Workbench {
             } else {
                 b
             };
+            // The pointer goes through the OS caption buttons (Snap Layouts included);
+            // Enter or Space on the focused button runs the same command.
+            let b = b.on_click(move |e, window, _| {
+                if e.is_keyboard() {
+                    match area {
+                        WindowControlArea::Min => window.minimize_window(),
+                        WindowControlArea::Max => window.zoom_window(),
+                        _ => window.remove_window(),
+                    }
+                }
+            });
             div().occlude().window_control_area(area).child(b)
         };
         let chevron_turn = self.chevron.value(geppui::now(cx)) as f32;
@@ -725,6 +801,10 @@ impl Workbench {
             .w_full()
             .h(m.px(shell::HEADER as f32))
             .bg(t.region)
+            // Tab order follows the reference's DOM: header, context bar, rail, regions,
+            // status bar (GPUI orders by paint; the header is painted late).
+            .tab_group()
+            .tab_index(-4)
             .window_control_area(WindowControlArea::Drag)
             .flex()
             .items_center()
@@ -763,6 +843,15 @@ impl Workbench {
                     .child(
                         div()
                             .id("project-current")
+                            .role(gpui::Role::Button)
+                            .aria_label(self.project_name())
+                            .track_focus(&self.triggers.project)
+                            .focus_visible(move |s| {
+                                s.shadow(vec![
+                                    gpui::BoxShadow::new(gpui::px(0.0), gpui::px(0.0), t.ring)
+                                        .spread_radius(gpui::px(2.0)),
+                                ])
+                            })
                             .occlude()
                             .flex()
                             .items_center()
@@ -770,7 +859,7 @@ impl Workbench {
                             .font_weight(css_weight(700.0))
                             .cursor_pointer()
                             .on_click(cx.listener(|this, _, _, cx| {
-                                let trigger = this.triggers.more.clone();
+                                let trigger = this.triggers.project.clone();
                                 this.set_menu(Some(Menu::Project), Some(trigger), None, cx)
                             }))
                             .child(
@@ -873,6 +962,9 @@ impl Workbench {
                     .child(
                         div()
                             .id("profile")
+                            .role(gpui::Role::Button)
+                            .aria_label(crate::i18n::t("Abrir menu do perfil"))
+                            .aria_expanded(profile_open)
                             .occlude()
                             .relative()
                             .mt(m.half_pixel_nudge(3.5))
@@ -1420,6 +1512,12 @@ impl Render for Workbench {
         if let Some(request) = self.edit.focus.take() {
             self.apply_edit_focus(request, window, cx);
         }
+        // A header panel closed without a window at hand (Enter in a field, a demo item).
+        if std::mem::take(&mut self.panels.return_focus)
+            && let Some(trigger) = self.panels.trigger.take()
+        {
+            window.focus(&trigger, cx);
+        }
         self.edit.search_focused = self.edit.search.read(cx).is_focused(window);
         self.peek_focused = self.peek_focus.contains_focused(window, cx);
         if let Some(field) = self.pending_text_focus.take() {
@@ -1502,7 +1600,12 @@ impl Render for Workbench {
                 .rounded_tl(m.px(shell::WORKSPACE_RADIUS as f32))
                 .into_any_element(),
         );
-        layers.push(self.context(&c, &s, cx).into_any_element());
+        layers.push(
+            self.context(&c, &s, cx)
+                .tab_group()
+                .tab_index(-3)
+                .into_any_element(),
+        );
         // Main region.
         layers.push(if main_frames.is_empty() {
             abs(m, s.main_port.into())
@@ -1630,6 +1733,8 @@ impl Render for Workbench {
             let height = s.sidebar_clip.h as f32;
             layers.push(
                 abs(m, s.sidebar_clip.into())
+                    .tab_group()
+                    .tab_index(-1)
                     .overflow_hidden()
                     .child(self.sidebar_contents(
                         &c,
@@ -1674,7 +1779,12 @@ impl Render for Workbench {
                     .into_any_element(),
             );
         }
-        layers.push(self.rail(m, t, s.rail, cx).into_any_element());
+        layers.push(
+            self.rail(m, t, s.rail, cx)
+                .tab_group()
+                .tab_index(-2)
+                .into_any_element(),
+        );
         if let Some(separator) = self.rail_separator(&c, &s, frame.track) {
             layers.push(separator);
         }

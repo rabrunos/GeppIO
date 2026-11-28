@@ -383,6 +383,8 @@ pub struct MenuItem {
     trailing: Option<SharedString>,
     checked: bool,
     compact: bool,
+    /// Accessible name when it differs from the visible label (`aria-label`).
+    aria: Option<SharedString>,
     destructive: bool,
     disabled: bool,
     on_click: Option<ClickHandler>,
@@ -396,6 +398,7 @@ pub fn menu_item(id: impl Into<SharedString>, label: impl Into<SharedString>) ->
         trailing: None,
         checked: false,
         compact: false,
+        aria: None,
         destructive: false,
         disabled: false,
         on_click: None,
@@ -417,6 +420,11 @@ impl MenuItem {
         self
     }
     /// Context-menu row height (`.ui-context-menu` items, 34px).
+    /// Accessible name when it differs from the visible label (`aria-label`).
+    pub fn aria(mut self, label: impl Into<SharedString>) -> Self {
+        self.aria = Some(label.into());
+        self
+    }
     pub fn compact(mut self) -> Self {
         self.compact = true;
         self
@@ -450,6 +458,9 @@ impl RenderOnce for MenuItem {
         let hovered = hovered && !self.disabled;
         div()
             .id(ElementId::Name(self.id.clone()))
+            .role(gpui::Role::MenuItem)
+            .aria_label(self.aria.clone().unwrap_or_else(|| self.label.clone()))
+            .when(self.checked, |el| el.aria_toggled(gpui::Toggled::True))
             .when(!self.disabled, |el| {
                 el.track_focus(&crate::button::focus_handle(&self.id, None, window, cx))
             })

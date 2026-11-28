@@ -397,9 +397,9 @@ impl Workbench {
             self.edit.set_catalog(true, now, reduced);
             self.edit.toast("Edite a composição. Salvar edição confirma um checkpoint; Concluir encerra a sessão.", now);
         } else if self.session.recovery() {
-            // The reference points to an explicit preview in Settings, which the native host
-            // does not have yet.
-            self.edit.toast("Composição salva incompatível ou ilegível. O arquivo foi preservado e a edição fica bloqueada até a recuperação pelas Configurações.", now);
+            // Edit stays closed: the recovery message keeps showing (`begin` returns).
+            let message = self.session.message().to_owned();
+            self.edit.rearm(&message, now);
         } else {
             let message = self.session.message().to_owned();
             self.edit.toast(&message, now);
@@ -2720,7 +2720,9 @@ impl Workbench {
         // Toast texts are catalogue keys; they are translated as they are shown.
         // While the warning shows, the transaction's latest message stays with it (the
         // reference renders `[warning, t(tx.message)]` whenever the toast is visible).
-        let latest = if warning.is_some() {
+        // In recovery the toast stays up with the latest message (`tx.recovery`).
+        let recovery = self.session.recovery() && !self.editing();
+        let latest = if warning.is_some() || recovery {
             Some(
                 self.edit
                     .toast
@@ -2747,6 +2749,36 @@ impl Workbench {
 }
 
 impl Workbench {
+    /// What holds keyboard focus, by control id (automated flows only).
+    fn focus_name(&self, window: &Window, cx: &gpui::App) -> Option<String> {
+        if let Some(id) = geppui::button::focused_control(window, cx) {
+            return Some(id.to_string());
+        }
+        let triggers = [
+            ("trigger:project", &self.triggers.project),
+            ("trigger:plugins", &self.triggers.plugins),
+            ("trigger:bell", &self.triggers.bell),
+            ("trigger:profile", &self.triggers.profile),
+            ("trigger:more", &self.triggers.more),
+            ("edit-layout", &self.edit_focus),
+            ("save-layout", &self.save_focus),
+            ("root", &self.focus),
+        ];
+        if let Some((name, _)) = triggers.iter().find(|(_, h)| h.is_focused(window)) {
+            return Some((*name).to_owned());
+        }
+        let fields = [
+            ("field:catalog-search", &self.edit.search),
+            ("field:plugin-search", &self.panels.plugin_search),
+            ("field:rename", &self.panels.rename_field),
+            ("field:name", &self.name_field),
+        ];
+        fields
+            .iter()
+            .find(|(_, f)| f.read(cx).is_focused(window))
+            .map(|(name, _)| (*name).to_owned())
+    }
+
     /// The edit state for the automated flows (`GEPPIO_NATIVE_TEST_TRACE` only).
     pub(crate) fn trace_edit_state(
         &mut self,
@@ -2835,6 +2867,7 @@ impl Workbench {
             "gridScroll": -self.metrics.css(self.edit.grid_scroll.offset().y),
             "name": self.properties.name,
             "comfortable": self.properties.comfortable,
+            "focus": self.focus_name(window, cx),
             "placements": placements,
             "ports": Region::ALL.map(|r| {
                 let p = self.ports.port(r);

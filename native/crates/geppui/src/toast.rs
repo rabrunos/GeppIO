@@ -2,8 +2,9 @@
 //! `bottom_offset` CSS pixels above it, surface colours, 10px radius, no hit testing.
 //! The host decides the lifetime (the reference keeps it for 3.2s).
 use gpui::{
-    App, Font, FontFeatures, FontStyle, FontWeight, IntoElement, ParentElement, RenderOnce,
-    SharedString, Styled, TextRun, Window, deferred, div, rgba,
+    App, Font, FontFeatures, FontStyle, FontWeight, InteractiveElement, IntoElement, ParentElement,
+    RenderOnce, SharedString, StatefulInteractiveElement, Styled, TextRun, Window, deferred, div,
+    rgba,
 };
 
 use crate::{Shadow, metrics};
@@ -70,6 +71,10 @@ impl RenderOnce for Toast {
                 .justify_center()
                 .child(
                     div()
+                        // `role="status"`, `aria-live="polite"`.
+                        .id("geppui-toast")
+                        .role(gpui::Role::Status)
+                        .aria_label(self.message.clone())
                         .w(gpui::px(width))
                         .px(m.px(16.0))
                         .py(m.px(10.0))

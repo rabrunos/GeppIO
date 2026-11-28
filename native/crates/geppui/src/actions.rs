@@ -105,6 +105,8 @@ impl RenderOnce for TextAction {
         let handler = self.on_click.clone().filter(|_| !self.disabled);
         div()
             .id(ElementId::Name(self.id.clone()))
+            .role(gpui::Role::Button)
+            .aria_label(self.label.clone())
             .when(!self.disabled, |el| el.track_focus(&focus))
             .focus_visible(move |s| s.shadow(vec![ring(t, m)]))
             .flex()
@@ -213,6 +215,8 @@ impl RenderOnce for DialogButton {
         let handler = self.on_click.clone().filter(|_| !self.disabled);
         div()
             .id(ElementId::Name(self.id.clone()))
+            .role(gpui::Role::Button)
+            .aria_label(self.label.clone())
             .when(!self.disabled, |el| el.track_focus(&focus))
             .focus_visible(move |s| s.shadow(vec![ring(t, m)]))
             .flex()

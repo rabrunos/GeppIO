@@ -66,7 +66,8 @@ fn main() {
     );
     let prefs = Prefs::load(options.profile.as_deref());
     let mut appearance = Appearance::new(options.theme.unwrap_or(prefs.theme()));
-    appearance.zoom = options.zoom;
+    // The emulated comparison zoom times the user's page zoom (View → Zoom).
+    appearance.zoom = options.zoom * prefs.zoom_factor();
     appearance.reduced_motion = options
         .reduced_motion
         .unwrap_or_else(platform::reduced_motion);
@@ -76,9 +77,17 @@ fn main() {
         .run(move |cx: &mut App| {
             geppui::init(cx, appearance.clone());
             let zoom = options.zoom;
-            let bounds = Bounds {
-                origin: point(px(40.0), px(20.0)),
-                size: size(px(width * zoom), px(height * zoom)),
+            // Centred on the work area, as a BrowserWindow without a position; a window
+            // larger than the work area starts at its top-left so the header stays on screen.
+            let wanted = size(px(width * zoom), px(height * zoom));
+            let bounds = match cx.primary_display() {
+                Some(display) => {
+                    let area = display.visible_bounds();
+                    let x = area.origin.x + (area.size.width - wanted.width).max(px(0.0)) / 2.0;
+                    let y = area.origin.y + (area.size.height - wanted.height).max(px(0.0)) / 2.0;
+                    Bounds::new(point(x, y), wanted)
+                }
+                None => Bounds::centered(None, wanted, cx),
             };
             let window = WindowOptions {
                 window_bounds: Some(WindowBounds::Windowed(bounds)),

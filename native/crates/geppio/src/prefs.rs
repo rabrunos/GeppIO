@@ -43,6 +43,9 @@ pub struct Prefs {
     pub horizontal_expansion: bool,
     /// Display name of the layout (`geppio:project-name:v1`); empty shows "Laboratório".
     pub project_name: String,
+    /// Page zoom level of the default menu's Zoom In / Zoom Out / Actual Size (Chromium
+    /// keeps it per origin across launches): factor 1.2^level, 0 is 100%.
+    pub zoom_level: f64,
     /// The file on disk was not a readable v1 document; keep its bytes before replacing it.
     #[serde(skip)]
     pub unrecognized: bool,
@@ -61,6 +64,7 @@ impl Default for Prefs {
             snap_center: true,
             horizontal_expansion: false,
             project_name: String::new(),
+            zoom_level: 0.0,
             unrecognized: false,
         }
     }
@@ -86,6 +90,19 @@ pub fn valid_name(value: &str) -> Option<String> {
     let name = value.trim();
     (!name.is_empty() && name.encode_utf16().count() <= 60 && !name.chars().any(hidden_char))
         .then(|| name.to_owned())
+}
+
+/// Chromium's zoom limits (factor 0.25 to 5) as levels of 1.2.
+pub const ZOOM_LEVELS: (f64, f64) = (-7.6035, 8.8274);
+
+/// Zoom factor of a level (`1.2^level`).
+pub fn zoom_factor(level: f64) -> f32 {
+    1.2f64.powf(level) as f32
+}
+
+/// The next level of the menu's Zoom In (+0.5) / Zoom Out (−0.5), within the limits.
+pub fn zoom_step(level: f64, by: f64) -> f64 {
+    (level + by).clamp(ZOOM_LEVELS.0, ZOOM_LEVELS.1)
 }
 
 fn within(value: f64, min: f64, max: f64, initial: f64) -> f64 {
@@ -122,7 +139,12 @@ impl Prefs {
             self.locale = "auto".into();
         }
         self.project_name = valid_name(&self.project_name).unwrap_or_default();
+        self.zoom_level = within(self.zoom_level, ZOOM_LEVELS.0, ZOOM_LEVELS.1, 0.0);
         self
+    }
+    /// The page zoom factor of the stored level.
+    pub fn zoom_factor(&self) -> f32 {
+        zoom_factor(self.zoom_level)
     }
     pub fn locale(&self) -> crate::i18n::Preference {
         crate::i18n::Preference::parse(&self.locale).unwrap_or_default()
@@ -228,6 +250,28 @@ mod tests {
         ));
         let _ = std::fs::remove_dir_all(&dir);
         dir
+    }
+
+    #[test]
+    fn zoom_level_stays_within_chromium_limits() {
+        assert_eq!(Prefs::default().zoom_level, 0.0);
+        assert_eq!(
+            Prefs::parse(br#"{"version":1,"zoomLevel":1.5}"#).zoom_level,
+            1.5
+        );
+        // Out of range or not a number falls back to 100%.
+        for raw in [
+            br#"{"version":1,"zoomLevel":40}"#.as_slice(),
+            br#"{"version":1,"zoomLevel":-9}"#,
+            br#"{"version":1,"zoomLevel":"big"}"#,
+        ] {
+            let p = Prefs::parse(raw);
+            assert!(p.zoom_level == 0.0 || p.unrecognized, "{p:?}");
+        }
+        assert_eq!(zoom_step(8.5, 0.5), ZOOM_LEVELS.1);
+        assert_eq!(zoom_step(-7.5, -0.5), ZOOM_LEVELS.0);
+        assert!((zoom_factor(1.0) - 1.2).abs() < 1e-6);
+        assert!(zoom_factor(ZOOM_LEVELS.0) >= 0.249 && zoom_factor(ZOOM_LEVELS.1) <= 5.001);
     }
 
     #[test]

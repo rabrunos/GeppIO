@@ -72,6 +72,13 @@ impl RenderOnce for Switch {
         let focus = focus_handle(&self.id, self.focus.clone(), window, cx);
         div()
             .id(ElementId::Name(self.id.clone()))
+            .role(gpui::Role::Switch)
+            .when_some(self.label.clone(), |el, label| el.aria_label(label))
+            .aria_toggled(if on {
+                gpui::Toggled::True
+            } else {
+                gpui::Toggled::False
+            })
             .when(!self.disabled, |el| el.track_focus(&focus))
             .focus_visible(move |s| s.shadow(vec![ring(t.ring, m, 1.0)]))
             .flex_none()
@@ -159,6 +166,12 @@ impl RenderOnce for Checkbox {
         let focus = focus_handle(&self.id, self.focus.clone(), window, cx);
         div()
             .id(ElementId::Name(self.id.clone()))
+            .role(gpui::Role::CheckBox)
+            .aria_toggled(if on {
+                gpui::Toggled::True
+            } else {
+                gpui::Toggled::False
+            })
             .when(!self.disabled, |el| el.track_focus(&focus))
             .focus_visible(move |s| s.shadow(vec![ring(t.ring, m, 1.0)]))
             .flex_none()
@@ -192,6 +205,8 @@ impl RenderOnce for Checkbox {
 #[derive(Default)]
 struct SelectState {
     open: bool,
+    /// The option the keyboard points at while the list is open.
+    highlight: usize,
 }
 
 #[derive(IntoElement)]
@@ -284,6 +299,17 @@ impl RenderOnce for Select {
             .unwrap_or_default();
         let focus = focus_handle(&self.id, self.focus.clone(), window, cx);
         let toggle = state.clone();
+        let selected_index = self
+            .options
+            .iter()
+            .position(|(v, _)| *v == self.selected)
+            .unwrap_or(0);
+        let highlight = state.read(cx).highlight;
+        let values: Vec<SharedString> = self.options.iter().map(|(v, _)| v.clone()).collect();
+        let pick_click = self.on_change.clone();
+        let click_values = values.clone();
+        let keys = state.clone();
+        let pick_key = self.on_change.clone();
         let list: Option<AnyElement> = open.then(|| {
             let close = state.clone();
             let width = anchor
@@ -292,15 +318,20 @@ impl RenderOnce for Select {
             let (left, top) = anchor.bounds().map_or((px(0.0), px(0.0)), |b| {
                 (b.origin.x, b.origin.y + b.size.height + m.px(2.0))
             });
-            let items = self.options.iter().map(|(value, label)| {
+            let items = self.options.iter().enumerate().map(|(i, (value, label))| {
                 let pick = self.on_change.clone();
                 let close = close.clone();
                 let value = value.clone();
                 let chosen = value == self.selected;
+                let pointed = i == highlight;
                 div()
                     .id(ElementId::Name(
                         format!("{}::option::{value}", self.id).into(),
                     ))
+                    .role(gpui::Role::ListBoxOption)
+                    .aria_label(label.clone())
+                    .aria_selected(chosen)
+                    .when(pointed && !chosen, |el| el.bg(t.control_hover))
                     .px(m.px(9.0))
                     .py(m.px(5.0))
                     .rounded(m.px(5.0))
@@ -349,8 +380,57 @@ impl RenderOnce for Select {
         });
         div()
             .id(ElementId::Name(self.id.clone()))
+            .role(gpui::Role::ComboBox)
+            .when_some(self.label.clone(), |el, label| el.aria_label(label))
+            .aria_value(current.clone())
+            .aria_expanded(open)
             .track_focus(&focus)
             .focus_visible(move |s| s.shadow(vec![ring(t.ring, m, 0.0)]))
+            // `<select>` keys: arrows change the value while closed; with the list open they
+            // move the pointed option, Enter (a click) picks it and Escape closes only the list.
+            .on_key_down(move |e: &gpui::KeyDownEvent, w, cx| {
+                let k = e.keystroke.key.as_str();
+                let open = keys.read(cx).open;
+                let last = values.len().saturating_sub(1);
+                if open {
+                    let next = match k {
+                        "escape" | "tab" => {
+                            keys.update(cx, |s, cx| {
+                                s.open = false;
+                                cx.notify();
+                            });
+                            if k == "escape" {
+                                cx.stop_propagation();
+                            }
+                            return;
+                        }
+                        "down" => (keys.read(cx).highlight + 1).min(last),
+                        "up" => keys.read(cx).highlight.saturating_sub(1),
+                        "home" => 0,
+                        "end" => last,
+                        _ => return,
+                    };
+                    keys.update(cx, |s, cx| {
+                        s.highlight = next;
+                        cx.notify();
+                    });
+                    cx.stop_propagation();
+                } else {
+                    let next = match k {
+                        "down" => (selected_index + 1).min(last),
+                        "up" => selected_index.saturating_sub(1),
+                        "home" => 0,
+                        "end" => last,
+                        _ => return,
+                    };
+                    if next != selected_index
+                        && let (Some(pick), Some(value)) = (&pick_key, values.get(next))
+                    {
+                        pick(value, w, cx);
+                    }
+                    cx.stop_propagation();
+                }
+            })
             .relative()
             .flex()
             .items_center()
@@ -379,9 +459,22 @@ impl RenderOnce for Select {
                     .border_color(border)
                     .bg(bg)
             })
-            .on_click(move |_, _, cx| {
+            .on_click(move |e, w, cx| {
+                let (open, highlight) = {
+                    let s = toggle.read(cx);
+                    (s.open, s.highlight)
+                };
+                // Enter on an open list picks the pointed option.
+                if open
+                    && e.is_keyboard()
+                    && highlight != selected_index
+                    && let (Some(pick), Some(value)) = (&pick_click, click_values.get(highlight))
+                {
+                    pick(value, w, cx);
+                }
                 toggle.update(cx, |s, cx| {
-                    s.open = !s.open;
+                    s.open = !open;
+                    s.highlight = selected_index;
                     cx.notify();
                 })
             })

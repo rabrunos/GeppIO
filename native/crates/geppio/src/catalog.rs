@@ -347,6 +347,9 @@ pub fn render(
         let ring = t.ring;
         div()
             .id(ElementId::Name(tab_ids[index].into()))
+            .role(gpui::Role::Tab)
+            .aria_label(crate::i18n::t(label))
+            .aria_selected(selected)
             // A roving tab stop: only the selected tab is in the Tab order.
             .track_focus(&tab_handles[index].clone().tab_stop(selected))
             .focus_visible(move |s| {
@@ -464,6 +467,9 @@ pub fn render(
         let id = format!("catalog-category-{}", key.unwrap_or("all"));
         let el = div()
             .id(ElementId::Name(id.clone().into()))
+            .role(gpui::Role::Button)
+            .aria_label(crate::i18n::t(label))
+            .aria_selected(current)
             .flex()
             .flex_none()
             .items_center()
@@ -538,6 +544,8 @@ pub fn render(
         let anchor = extra.anchors.get(id).cloned().unwrap_or_default();
         let el = div()
             .id(ElementId::Name(key.clone().into()))
+            .role(gpui::Role::Button)
+            .aria_label(title.clone())
             .relative()
             .flex()
             .flex_col()
@@ -607,6 +615,8 @@ pub fn render(
                 .into();
             let el = div()
                 .id(ElementId::Name(pid.clone().into()))
+                .role(gpui::Role::Button)
+                .aria_label(label.clone())
                 .size(m.px(18.0))
                 .flex()
                 .items_center()
@@ -653,6 +663,13 @@ pub fn render(
         };
         let el = div()
             .id(ElementId::Name(id.clone().into()))
+            .role(gpui::Role::Button)
+            .aria_label(label.clone())
+            .aria_toggled(if pressed {
+                gpui::Toggled::True
+            } else {
+                gpui::Toggled::False
+            })
             .size(m.px(28.0))
             .flex()
             .items_center()
@@ -901,6 +918,8 @@ pub fn render(
                 });
                 let el = div()
                     .id(ElementId::Name(id.clone().into()))
+                    .role(gpui::Role::Button)
+                    .aria_label(crate::i18n::t(area.label()))
                     .flex_1()
                     .flex()
                     .items_center()
